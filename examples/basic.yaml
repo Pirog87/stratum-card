@@ -1,0 +1,7 @@
+# examples/basic.yaml
+#
+# Minimalna konfiguracja stratum-card.
+# Wklej do swojego dashboardu jako kartę.
+
+type: custom:stratum-card
+area_id: parter

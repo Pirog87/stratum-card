@@ -1,0 +1,6 @@
+{
+  "name": "Stratum",
+  "render_readme": true,
+  "filename": "stratum-card.js",
+  "homeassistant": "2024.1.0"
+}

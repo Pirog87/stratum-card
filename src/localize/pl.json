@@ -1,0 +1,21 @@
+{
+  "card": {
+    "placeholder_rooms": "Lista pomieszczeń pojawi się tutaj.",
+    "aria_expand": "Rozwiń {name}",
+    "aria_collapse": "Zwiń {name}"
+  },
+  "chips": {
+    "lights_on": "{count} świateł włączonych",
+    "motion_detected": "Wykryto ruch",
+    "windows_open": "{count} otwartych",
+    "no_data": "Brak danych"
+  },
+  "editor": {
+    "area_id": "ID strefy",
+    "name": "Nazwa",
+    "icon": "Ikona",
+    "expanded_default": "Rozwinięta domyślnie",
+    "chips": "Chipy",
+    "rooms": "Pomieszczenia"
+  }
+}

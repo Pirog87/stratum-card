@@ -1,0 +1,33 @@
+{
+  "name": "stratum-card",
+  "version": "0.1.0",
+  "description": "Customowa karta Home Assistant — podsumowanie strefy z rozwijaną listą pomieszczeń",
+  "main": "dist/stratum-card.js",
+  "module": "dist/stratum-card.js",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "home-assistant",
+    "lovelace",
+    "custom-card",
+    "hacs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "lit": "^3.1.4"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "rollup": "^4.18.0",
+    "tslib": "^2.6.3",
+    "typescript": "^5.5.3"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "card": {
+    "placeholder_rooms": "Room list will appear here.",
+    "aria_expand": "Expand {name}",
+    "aria_collapse": "Collapse {name}"
+  },
+  "chips": {
+    "lights_on": "{count} lights on",
+    "motion_detected": "Motion detected",
+    "windows_open": "{count} open",
+    "no_data": "No data"
+  },
+  "editor": {
+    "area_id": "Area ID",
+    "name": "Name",
+    "icon": "Icon",
+    "expanded_default": "Expanded by default",
+    "chips": "Chips",
+    "rooms": "Rooms"
+  }
+}

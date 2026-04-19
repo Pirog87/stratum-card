@@ -1,0 +1,54 @@
+# examples/dom-example.yaml
+#
+# Przykład dla domu z trzema strefami: Parter / Piętro / Ogród.
+# Założenie: w HA masz zdefiniowane area o id `parter`, `pietro`, `ogrod`.
+#
+# Status: część pól (chips, rooms) jest placeholderowa — działa od v0.3/v0.5.
+# Do v0.1 działa tylko header (ikona, nazwa, expander).
+
+type: vertical-stack
+cards:
+  # ==========================================================
+  # Parter
+  # ==========================================================
+  - type: custom:stratum-card
+    area_id: parter
+    name: "Parter"
+    icon: mdi:home-floor-0
+    expanded: true
+    # chips: działa od v0.3
+    # chips:
+    #   - type: lights
+    #   - type: motion
+    #   - type: windows
+    # rooms: działa od v0.5
+    # rooms:
+    #   - name: "Salon"
+    #     icon: mdi:sofa
+    #     entities:
+    #       - light.salon
+    #       - binary_sensor.salon_obecnosc
+    #       - sensor.salon_temperatura
+    #   - name: "Kuchnia"
+    #     icon: mdi:pot-mix
+    #     entities:
+    #       - light.kuchnia
+    #       - binary_sensor.kuchnia_obecnosc
+
+  # ==========================================================
+  # Piętro
+  # ==========================================================
+  - type: custom:stratum-card
+    area_id: pietro
+    name: "Piętro"
+    icon: mdi:home-floor-1
+    expanded: false
+
+  # ==========================================================
+  # Ogród
+  # ==========================================================
+  - type: custom:stratum-card
+    area_id: ogrod
+    name: "Ogród"
+    icon: mdi:pine-tree
+    expanded: false

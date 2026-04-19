@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "declaration": false,
+    "outDir": "./dist",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "importHelpers": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
