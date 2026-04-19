@@ -35,16 +35,30 @@ export interface StratumCardConfig {
   debug?: boolean;
 
   /**
-   * [v0.3] Lista chipów do wyświetlenia w headerze.
-   * Typowane w przyszłości jako `ChipConfig[]`.
+   * Lista chipów do wyświetlenia w headerze. Jeśli nie podane — domyślny set:
+   * lights, motion, windows, doors. Każdy chip pokazuje liczbę encji w stanie on.
    */
-  chips?: unknown[];
+  chips?: ChipConfig[];
 
   /**
    * [v0.5] Lista pomieszczeń w body expandera.
    * Jeśli brak, karta spróbuje auto-inferencji z `hass.entities` po area_id.
    */
   rooms?: RoomRefConfig[];
+}
+
+/** Wbudowane typy chipów agregujących encje area/floor. */
+export type BuiltInChipType = 'lights' | 'motion' | 'occupancy' | 'windows' | 'doors';
+
+export interface ChipConfig {
+  /** Wbudowany typ (wtedy ikonę/kolor/counting mamy out-of-the-box). */
+  type: BuiltInChipType;
+  /** Override ikony MDI (np. `mdi:ceiling-light`). */
+  icon?: string;
+  /** Override koloru chipu — nazwa HA lub hex (np. `amber`, `#ff9b42`). */
+  color?: string;
+  /** Czy pokazać chip nawet gdy licznik = 0 (domyślnie: ukryj). */
+  show_when_zero?: boolean;
 }
 
 export interface RoomRefConfig {

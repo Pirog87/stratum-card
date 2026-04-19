@@ -12,9 +12,16 @@ import {
   filterByDomain,
   filterBinarySensorDeviceClass,
 } from './area-entities.js';
+import {
+  DEFAULT_CHIPS,
+  countChip,
+  resolveChipColor,
+  resolveChipIcon,
+} from './chip-defaults.js';
+import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -106,6 +113,21 @@ export class StratumCard extends LitElement {
     return [];
   }
 
+  private _renderChips(): TemplateResult[] {
+    if (!this.hass) return [];
+    const entries = this._getEntries();
+    const chips = this._config?.chips ?? DEFAULT_CHIPS;
+    return chips.map(
+      (chip) =>
+        html`<stratum-card-chip
+          .icon=${resolveChipIcon(chip)}
+          .count=${countChip(this.hass!, entries, chip)}
+          .color=${resolveChipColor(chip)}
+          .showWhenZero=${chip.show_when_zero ?? false}
+        ></stratum-card-chip>`,
+    );
+  }
+
   private _debugLog(): void {
     if (!this.hass) return;
     const entries = this._getEntries();
@@ -153,8 +175,7 @@ export class StratumCard extends LitElement {
           <ha-icon class="area-icon" part="area-icon" .icon=${icon}></ha-icon>
           <span class="title" part="title">${name}</span>
           <div class="chips" part="chips">
-            <!-- v0.3: tu renderujemy chipy z config.chips -->
-            <span class="chip placeholder">—</span>
+            ${this._renderChips()}
           </div>
           <ha-icon
             class="expander ${this._expanded ? 'open' : ''}"
@@ -235,18 +256,6 @@ export class StratumCard extends LitElement {
       gap: 6px;
       align-items: center;
       flex-shrink: 0;
-    }
-
-    .chip {
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 999px;
-      background: var(--area-chip-background, rgba(255, 255, 255, 0.06));
-      color: var(--area-chip-color, var(--secondary-text-color));
-    }
-
-    .chip.placeholder {
-      opacity: 0.4;
     }
 
     .expander {
