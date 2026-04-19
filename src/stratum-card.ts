@@ -30,7 +30,7 @@ import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 import './stratum-room-card.js';
 
-const VERSION = '0.13.0';
+const VERSION = '0.14.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -43,6 +43,44 @@ export class StratumCard extends LitElement {
   /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
   private _templates = new TemplateRenderer(() => this.requestUpdate());
 
+  /** Timer auto-collapse — wołany gdy karta rozwinięta i nic nie klikniemy. */
+  private _autoCollapseTimer?: number;
+
+  private _autoCollapseSeconds(): number {
+    const v = this._config?.auto_collapse;
+    return typeof v === 'number' ? v : 60;
+  }
+
+  private _scheduleAutoCollapse(): void {
+    this._clearAutoCollapse();
+    const seconds = this._autoCollapseSeconds();
+    if (seconds <= 0 || !this._expanded) return;
+    this._autoCollapseTimer = window.setTimeout(() => {
+      this._autoCollapseTimer = undefined;
+      if (this._expanded) {
+        this._expanded = false;
+        this.dispatchEvent(
+          new CustomEvent('stratum-card-toggle', {
+            detail: { expanded: false, reason: 'auto-collapse' },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      }
+    }, seconds * 1000);
+  }
+
+  private _clearAutoCollapse(): void {
+    if (this._autoCollapseTimer !== undefined) {
+      window.clearTimeout(this._autoCollapseTimer);
+      this._autoCollapseTimer = undefined;
+    }
+  }
+
+  private _onInteraction = (): void => {
+    if (this._expanded) this._scheduleAutoCollapse();
+  };
+
   /** HA wymaga żeby karta miała metodę `setConfig` — rzuci tu przy błędnej konfiguracji. */
   public setConfig(config: StratumCardConfig): void {
     if (!config) {
@@ -53,6 +91,7 @@ export class StratumCard extends LitElement {
     }
     this._config = config;
     this._expanded = Boolean(config.expanded);
+    if (this._expanded) this._scheduleAutoCollapse();
   }
 
   /** HA używa tego do kalkulacji layoutu masonry. */
@@ -81,11 +120,13 @@ export class StratumCard extends LitElement {
     this._expanded = !this._expanded;
     this.dispatchEvent(
       new CustomEvent('stratum-card-toggle', {
-        detail: { expanded: this._expanded },
+        detail: { expanded: this._expanded, reason: 'user' },
         bubbles: true,
         composed: true,
       }),
     );
+    if (this._expanded) this._scheduleAutoCollapse();
+    else this._clearAutoCollapse();
   };
 
   private _resolveName(): string {
@@ -152,6 +193,7 @@ export class StratumCard extends LitElement {
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     this._templates.destroy();
+    this._clearAutoCollapse();
   }
 
   private _debugLog(): void {
@@ -190,7 +232,7 @@ export class StratumCard extends LitElement {
     if (this._config.debug) this._debugLog();
 
     return html`
-      <ha-card part="card">
+      <ha-card part="card" @pointerdown=${this._onInteraction}>
         <button
           class="header"
           part="header"

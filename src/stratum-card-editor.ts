@@ -37,6 +37,12 @@ const SCHEMA: readonly FormSchemaItem[] = [
       { name: 'debug', selector: { boolean: {} } },
     ],
   },
+  {
+    name: 'auto_collapse',
+    selector: {
+      number: { min: 0, max: 600, step: 5, unit_of_measurement: 's', mode: 'slider' },
+    },
+  },
   { name: 'room_tap_action', selector: { ui_action: {} } },
 ];
 
@@ -47,6 +53,7 @@ const LABELS: Record<string, string> = {
   icon: 'Ikona (override)',
   expanded: 'Rozwinięta domyślnie',
   debug: 'Debug log w konsoli',
+  auto_collapse: 'Auto-zwijanie po (s)',
   room_tap_action: 'Akcja po kliknięciu w wiersz pomieszczenia',
 };
 
@@ -59,6 +66,8 @@ const HELPERS: Record<string, string> = {
   icon: 'Pozostaw puste, żeby użyć ikony piętra/strefy z HA (fallback: mdi:home).',
   expanded: 'Czy expander startuje otwarty.',
   debug: 'Włącza console.log z encjami area — pomocne w configu.',
+  auto_collapse:
+    'Karta zwija się sama po N sekundach bez interakcji. 0 = wyłączone. Domyślnie 60 s.',
   room_tap_action:
     'Navigate z placeholderami {area_id}/{area_name} — np. /dashboard-domek/home#{area_id}.',
 };
