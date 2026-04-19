@@ -120,8 +120,12 @@ export class StratumCardRoomsEditor extends LitElement {
   }
 
   private _isVisible(areaId: string): boolean {
+    // Pusta tablica `rooms` = auto-discover: wszystkie area są widoczne.
+    if (this.rooms.length === 0) return true;
     const found = this.rooms.find((r) => r.area_id === areaId);
-    return Boolean(found && !found.hidden);
+    if (found) return !found.hidden;
+    // Explicit lista ale tej area nie ma — ukryta.
+    return false;
   }
 
   private _getRoom(areaId: string): RoomConfig | undefined {
@@ -129,49 +133,47 @@ export class StratumCardRoomsEditor extends LitElement {
   }
 
   private _emitChange(next: RoomConfig[]): void {
-    // Normalize: jeśli lista zawiera same „default" pozycje (bez override'ów)
-    // i pokrywa wszystkie dostępne area → zwróć pustą tablicę (= auto-discover).
-    const availableIds = this._availableAreas().map((a) => a.area_id);
-    const visible = next.filter((r) => !r.hidden);
-    const isCleanAuto =
-      visible.length === availableIds.length &&
-      visible.every(
-        (r) =>
-          availableIds.includes(r.area_id) &&
-          !r.name &&
-          !r.icon &&
-          !r.tap_action,
-      );
-    const normalized = isCleanAuto ? [] : next;
-
     this.dispatchEvent(
       new CustomEvent('rooms-changed', {
-        detail: { rooms: normalized },
+        detail: { rooms: next },
         bubbles: true,
         composed: true,
       }),
     );
   }
 
+  /** Materializuje obecny stan do explicit listy (używane gdy wychodzimy z auto-discover). */
+  private _materialize(): RoomConfig[] {
+    if (this.rooms.length > 0) return [...this.rooms];
+    return this._availableAreas().map((a) => ({ area_id: a.area_id }));
+  }
+
   private _toggleArea(areaId: string, show: boolean): void {
-    const existing = this._getRoom(areaId);
+    const rooms = this._materialize();
+    const existing = rooms.find((r) => r.area_id === areaId);
     let next: RoomConfig[];
     if (show) {
       if (existing) {
-        next = this.rooms.map((r) =>
+        next = rooms.map((r) =>
           r.area_id === areaId ? { ...r, hidden: false } : r,
         );
       } else {
-        next = [...this.rooms, { area_id: areaId }];
+        next = [...rooms, { area_id: areaId }];
       }
     } else {
       if (existing) {
-        const hasOverrides = existing.name || existing.icon || existing.tap_action;
+        const hasOverrides =
+          existing.name ||
+          existing.icon ||
+          existing.tap_action ||
+          (existing.merge_with && existing.merge_with.length > 0);
         next = hasOverrides
-          ? this.rooms.map((r) => (r.area_id === areaId ? { ...r, hidden: true } : r))
-          : this.rooms.filter((r) => r.area_id !== areaId);
+          ? rooms.map((r) =>
+              r.area_id === areaId ? { ...r, hidden: true } : r,
+            )
+          : rooms.filter((r) => r.area_id !== areaId);
       } else {
-        next = [...this.rooms, { area_id: areaId, hidden: true }];
+        next = [...rooms, { area_id: areaId, hidden: true }];
       }
     }
     this._emitChange(next);
@@ -219,6 +221,15 @@ export class StratumCardRoomsEditor extends LitElement {
   }
 
   private _selectAll(): void {
+    // Jeśli nie ma override'ów — wracamy do auto-discover (pusta lista).
+    // Jeśli są — materializujemy pełną listę z hidden:false, żeby zachować overrides.
+    const hasOverrides = this.rooms.some(
+      (r) => r.name || r.icon || r.tap_action || r.merge_with?.length,
+    );
+    if (!hasOverrides) {
+      this._emitChange([]);
+      return;
+    }
     const floorAreas = this._availableAreas();
     const existingById = new Map(this.rooms.map((r) => [r.area_id, r]));
     const next = floorAreas.map(
@@ -228,11 +239,14 @@ export class StratumCardRoomsEditor extends LitElement {
   }
 
   private _deselectAll(): void {
-    // Zachowujemy pokoje z override'ami jako hidden (żeby settings przetrwały),
-    // resztę wyrzucamy.
-    const next = this.rooms
-      .filter((r) => r.name || r.icon || r.tap_action || r.merge_with?.length)
-      .map((r) => ({ ...r, hidden: true }));
+    // Explicitnie: pełna lista z hidden:true (zero widocznych pokojów).
+    // Bez tego pusta lista byłaby traktowana jako auto-discover = wszystkie widoczne.
+    const floorAreas = this._availableAreas();
+    const existingById = new Map(this.rooms.map((r) => [r.area_id, r]));
+    const next = floorAreas.map((a) => ({
+      ...(existingById.get(a.area_id) ?? { area_id: a.area_id }),
+      hidden: true,
+    }));
     this._emitChange(next);
   }
 
@@ -261,7 +275,11 @@ export class StratumCardRoomsEditor extends LitElement {
       </div>`;
     }
 
-    const selectedCount = this.rooms.filter((r) => !r.hidden).length;
+    // Auto-discover (pusta lista rooms) pokazuje wszystkie area jako zaznaczone.
+    const selectedCount =
+      this.rooms.length === 0
+        ? areas.length
+        : this.rooms.filter((r) => !r.hidden).length;
 
     return html`
       <div class="toolbar">
