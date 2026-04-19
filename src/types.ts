@@ -55,6 +55,41 @@ export interface StratumCardConfig {
   chips?: ChipConfig[];
 }
 
+/**
+ * Konfiguracja karty stratum-room-card — widok pojedynczego pomieszczenia
+ * z auto-generowanymi sekcjami (Światła, Rolety, Okna, Klimat…).
+ */
+export interface StratumRoomCardConfig {
+  /** Zawsze `"custom:stratum-room-card"`. */
+  type: string;
+  /** ID primary area. Wymagane. */
+  area_id: string;
+  /** Dodatkowe area których encje doliczamy do sekcji (garderoba, łazienka). */
+  merge_with?: string[];
+  /** Override nazwy (default: `area.name`). */
+  name?: string;
+  /** Override ikony (default: `area.icon`). */
+  icon?: string;
+  /** Chipy w headerze. Default: `motion`, entity(temp), entity(humidity). */
+  chips?: ChipConfig[];
+  /** Lista sekcji do wyświetlenia. Default: auto-discover po typach encji. */
+  sections?: RoomSectionType[];
+  /** Debug log do konsoli. */
+  debug?: boolean;
+}
+
+/** Typy sekcji w room card. Każda mapuje na domain + ew. device_class. */
+export type RoomSectionType =
+  | 'lights'
+  | 'covers'
+  | 'windows'
+  | 'doors'
+  | 'climate'
+  | 'media'
+  | 'fans'
+  | 'switches'
+  | 'scenes';
+
 /** Wbudowane typy chipów agregujących encje area/floor. */
 export type BuiltInChipType = 'lights' | 'motion' | 'occupancy' | 'windows' | 'doors';
 
