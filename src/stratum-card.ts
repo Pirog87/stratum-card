@@ -5,8 +5,13 @@
 
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { StratumCardConfig, HomeAssistant } from './types.js';
+import type {
+  HassEntityRegistryEntry,
+  HomeAssistant,
+  StratumCardConfig,
+} from './types.js';
 import {
+  getAreasInFloor,
   getEntitiesInArea,
   getEntitiesInFloor,
   filterByDomain,
@@ -20,8 +25,9 @@ import {
 } from './chip-defaults.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
+import './stratum-card-room-row.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -184,18 +190,81 @@ export class StratumCard extends LitElement {
           ></ha-icon>
         </button>
 
-        ${this._expanded
-          ? html`
-              <div class="body" part="body">
-                <!-- v0.5: lista pomieszczeń -->
-                <div class="placeholder">
-                  Lista pomieszczeń pojawi się tutaj (v0.5).
-                </div>
-              </div>
-            `
-          : nothing}
+        <div
+          class="body-wrap ${this._expanded ? 'open' : ''}"
+          part="body"
+          aria-hidden=${!this._expanded}
+        >
+          <div class="body">${this._renderRooms()}</div>
+        </div>
       </ha-card>
     `;
+  }
+
+  private _renderRooms(): TemplateResult | typeof nothing {
+    if (!this.hass || !this._config) return nothing;
+
+    if (this._config.floor_id) {
+      const areas = getAreasInFloor(this.hass, this._config.floor_id);
+      if (areas.length === 0) {
+        return html`<div class="placeholder">
+          Brak stref przypisanych do tego piętra.<br />
+          Przypisz area do floor w Settings → Areas & Zones.
+        </div>`;
+      }
+      return html`${areas.map((area) => this._renderRoomRow(area.area_id, area.name, area.icon ?? undefined))}`;
+    }
+
+    if (this._config.area_id) {
+      const area = this.hass.areas?.[this._config.area_id];
+      const name = area?.name ?? this._config.area_id;
+      return this._renderRoomRow(this._config.area_id, name, area?.icon ?? undefined);
+    }
+
+    return nothing;
+  }
+
+  private _renderRoomRow(
+    areaId: string,
+    name: string,
+    icon: string | undefined,
+  ): TemplateResult {
+    const entries = getEntitiesInArea(this.hass!, areaId);
+    const lightsOn = filterByDomain(entries, 'light').reduce(
+      (n, e) => n + (this.hass!.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
+      0,
+    );
+    const motion =
+      filterBinarySensorDeviceClass(this.hass!, entries, 'motion').some(
+        (e) => this.hass!.states?.[e.entity_id]?.state === 'on',
+      ) ||
+      filterBinarySensorDeviceClass(this.hass!, entries, 'occupancy').some(
+        (e) => this.hass!.states?.[e.entity_id]?.state === 'on',
+      );
+    const temperature = this._firstTemperature(entries);
+
+    return html`<stratum-card-room-row
+      .name=${name}
+      .icon=${icon ?? 'mdi:floor-plan'}
+      .lightsOn=${lightsOn}
+      .motion=${motion}
+      .temperature=${temperature}
+    ></stratum-card-room-row>`;
+  }
+
+  private _firstTemperature(entries: HassEntityRegistryEntry[]): string | undefined {
+    if (!this.hass) return undefined;
+    for (const entry of entries) {
+      if (!entry.entity_id.startsWith('sensor.')) continue;
+      const state = this.hass.states?.[entry.entity_id];
+      if (!state) continue;
+      if (state.attributes?.device_class !== 'temperature') continue;
+      const value = parseFloat(state.state);
+      if (Number.isNaN(value)) continue;
+      const unit = (state.attributes?.unit_of_measurement as string | undefined) ?? '°C';
+      return `${value.toFixed(1)} ${unit}`;
+    }
+    return undefined;
   }
 
   static styles = css`
@@ -269,10 +338,26 @@ export class StratumCard extends LitElement {
       transform: rotate(180deg);
     }
 
+    .body-wrap {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows var(--stratum-card-expander-duration, 280ms)
+        cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .body-wrap.open {
+      grid-template-rows: 1fr;
+    }
+
     .body {
-      padding: 0 16px 14px;
+      overflow: hidden;
+      padding: 0 16px;
       border-top: 0.5px solid
         var(--stratum-card-divider-color, var(--divider-color, rgba(255, 255, 255, 0.08)));
+    }
+
+    .body-wrap.open .body {
+      padding: 4px 16px 12px;
     }
 
     .placeholder {
@@ -280,6 +365,12 @@ export class StratumCard extends LitElement {
       color: var(--secondary-text-color);
       font-size: 13px;
       text-align: center;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .body-wrap {
+        transition: none;
+      }
     }
   `;
 }
