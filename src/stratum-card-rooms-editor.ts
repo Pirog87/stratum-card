@@ -11,22 +11,19 @@ import { customElement, property } from 'lit/decorators.js';
 import { getAreasInFloor } from './area-entities.js';
 import type { HomeAssistant, RoomConfig, TapActionConfig } from './types.js';
 
-const ROOM_FIELD_SCHEMA = [
-  {
-    type: 'grid',
-    name: '',
-    schema: [
-      { name: 'name', selector: { text: {} } },
-      { name: 'icon', selector: { icon: {} } },
-    ],
-  },
-  { name: 'tap_action', selector: { ui_action: {} } },
-];
-
 const ROOM_LABELS: Record<string, string> = {
   name: 'Nazwa (override)',
   icon: 'Ikona (override)',
   tap_action: 'Akcja po kliknięciu (override)',
+  merge_with: 'Połącz z innymi pomieszczeniami',
+  aggregate: 'Sposób agregacji',
+};
+
+const ROOM_HELPERS: Record<string, string> = {
+  merge_with:
+    'Wybrane pomieszczenia znikną jako osobne wiersze; ich encje doliczą się do tego.',
+  aggregate:
+    '„Suma" — światła/motion/temperatura liczone łącznie. „Tylko główne" — tylko encje primary, merge jest hierarchiczny.',
 };
 
 @customElement('stratum-card-rooms-editor')
@@ -41,6 +38,52 @@ export class StratumCardRoomsEditor extends LitElement {
 
   private _computeRoomLabel = (schema: { name: string }): string =>
     ROOM_LABELS[schema.name] ?? schema.name;
+
+  private _computeRoomHelper = (schema: { name: string }): string =>
+    ROOM_HELPERS[schema.name] ?? '';
+
+  private _roomSchemaFor(currentAreaId: string) {
+    const floorAreas = this._availableAreas();
+    const otherAreaIds = floorAreas
+      .filter((a) => a.area_id !== currentAreaId)
+      .map((a) => a.area_id);
+    return [
+      {
+        type: 'grid',
+        name: '',
+        schema: [
+          { name: 'name', selector: { text: {} } },
+          { name: 'icon', selector: { icon: {} } },
+        ],
+      },
+      { name: 'tap_action', selector: { ui_action: {} } },
+      {
+        name: 'merge_with',
+        selector: {
+          select: {
+            multiple: true,
+            mode: 'list',
+            options: otherAreaIds.map((id) => ({
+              value: id,
+              label: this.hass?.areas?.[id]?.name ?? id,
+            })),
+          },
+        },
+      },
+      {
+        name: 'aggregate',
+        selector: {
+          select: {
+            mode: 'dropdown',
+            options: [
+              { value: 'sum', label: 'Suma (default)' },
+              { value: 'primary_only', label: 'Tylko główne' },
+            ],
+          },
+        },
+      },
+    ];
+  }
 
   private _availableAreas() {
     if (!this.hass) return [];
@@ -119,6 +162,12 @@ export class StratumCardRoomsEditor extends LitElement {
     if (!merged.tap_action || (merged.tap_action as TapActionConfig).action === 'none') {
       delete merged.tap_action;
     }
+    if (!merged.merge_with || merged.merge_with.length === 0) {
+      delete merged.merge_with;
+    }
+    if (!merged.aggregate || merged.aggregate === 'sum') {
+      delete merged.aggregate;
+    }
     const next = existing
       ? this.rooms.map((r) => (r.area_id === areaId ? merged : r))
       : [...this.rooms, merged];
@@ -151,6 +200,10 @@ export class StratumCardRoomsEditor extends LitElement {
           const hasOverrides = Boolean(
             room && (room.name || room.icon || room.tap_action),
           );
+          const mergeCount = room?.merge_with?.length ?? 0;
+          const mergedAwayInto = this.rooms.find((r) =>
+            r.merge_with?.includes(area.area_id),
+          );
           return html`
             <div class="room">
               <label class="row">
@@ -162,6 +215,16 @@ export class StratumCardRoomsEditor extends LitElement {
                 />
                 <ha-icon .icon=${area.icon ?? 'mdi:floor-plan'}></ha-icon>
                 <span class="name">${area.name}</span>
+                ${mergeCount > 0
+                  ? html`<span class="badge merge">+${mergeCount}</span>`
+                  : nothing}
+                ${mergedAwayInto
+                  ? html`<span class="badge sub"
+                      >scalone z
+                      ${this.hass?.areas?.[mergedAwayInto.area_id]?.name ??
+                      mergedAwayInto.area_id}</span
+                    >`
+                  : nothing}
                 ${hasOverrides
                   ? html`<span class="badge">custom</span>`
                   : nothing}
@@ -172,8 +235,9 @@ export class StratumCardRoomsEditor extends LitElement {
                       <ha-form
                         .hass=${this.hass}
                         .data=${room ?? { area_id: area.area_id }}
-                        .schema=${ROOM_FIELD_SCHEMA}
+                        .schema=${this._roomSchemaFor(area.area_id)}
                         .computeLabel=${this._computeRoomLabel}
+                        .computeHelper=${this._computeRoomHelper}
                         @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
                           this._onFieldChange(area.area_id, ev)}
                       ></ha-form>
@@ -241,6 +305,18 @@ export class StratumCardRoomsEditor extends LitElement {
       color: #fff;
       text-transform: uppercase;
       font-weight: 600;
+    }
+
+    .badge.merge {
+      background: #42a5f5;
+    }
+
+    .badge.sub {
+      background: transparent;
+      color: var(--secondary-text-color);
+      border: 1px solid var(--divider-color);
+      text-transform: none;
+      font-style: italic;
     }
 
     .sub {

@@ -114,12 +114,12 @@ export type ChipConfig =
   | TemplateChipConfig;
 
 /**
- * Jedna pozycja na liście pomieszczeń — wskazanie area z HA plus opcjonalne
- * override'y wyświetlania. Merge z innymi area (hierarchia primary/secondary)
- * trafi tutaj w v0.10 jako pole `merge_with`.
+ * Jedna pozycja na liście pomieszczeń. `area_id` to primary; `merge_with`
+ * lista secondary area_ids — ich encje dolicza się do wiersza i są pomijane
+ * jako osobne pozycje.
  */
 export interface RoomConfig {
-  /** ID area z HA. Wymagane. */
+  /** ID area z HA (primary). Wymagane. */
   area_id: string;
   /** Override nazwy. Jeśli brak — `area.name` z HA. */
   name?: string;
@@ -129,6 +129,19 @@ export interface RoomConfig {
   tap_action?: TapActionConfig;
   /** Ukryj ten wiersz (użyteczne w edytorze jako „wyłącz bez usuwania"). */
   hidden?: boolean;
+  /**
+   * Dodatkowe area_id których encje zliczamy w tym wierszu (np. spiżarnia
+   * dopisana do kuchni). Te area znikają z listy głównej jako osobne wiersze.
+   */
+  merge_with?: string[];
+  /**
+   * Jak agregować liczniki z primary + merge_with:
+   * - `sum` (default) — suma świateł on, motion z dowolnej area, temperatura
+   *   z pierwszego sensora w primary → merge_with
+   * - `primary_only` — liczymy tylko z primary, merge_with jest tylko do
+   *   hierarchii (np. detail view w v1.0+)
+   */
+  aggregate?: 'sum' | 'primary_only';
 }
 
 /** Zachowane dla kompatybilności — alias do nowego typu. */

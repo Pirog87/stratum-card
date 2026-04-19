@@ -29,7 +29,7 @@ import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 
-const VERSION = '0.9.0';
+const VERSION = '0.10.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -225,12 +225,24 @@ export class StratumCard extends LitElement {
 
     // Jawna konfiguracja rooms — użyj jej z override'ami per room.
     if (this._config.rooms && this._config.rooms.length > 0) {
-      const visible = this._config.rooms.filter((r) => !r.hidden);
+      // Area które są scalone do innego wiersza — nie pokazuj ich jako osobne.
+      const mergedInto = new Set<string>();
+      for (const r of this._config.rooms) {
+        for (const child of r.merge_with ?? []) mergedInto.add(child);
+      }
+      const visible = this._config.rooms.filter(
+        (r) => !r.hidden && !mergedInto.has(r.area_id),
+      );
       return html`${visible.map((room) => {
         const area = this.hass!.areas?.[room.area_id];
         const name = room.name ?? area?.name ?? room.area_id;
         const icon = room.icon ?? area?.icon ?? undefined;
-        return this._renderRoomRow(room.area_id, name, icon, room.tap_action);
+        const aggregate = room.aggregate ?? 'sum';
+        const areaIds =
+          aggregate === 'sum' && room.merge_with?.length
+            ? [room.area_id, ...room.merge_with]
+            : [room.area_id];
+        return this._renderRoomRow(areaIds, name, icon, room.tap_action);
       })}`;
     }
 
@@ -243,26 +255,37 @@ export class StratumCard extends LitElement {
           Przypisz area do floor w Settings → Areas & Zones.
         </div>`;
       }
-      return html`${areas.map((area) => this._renderRoomRow(area.area_id, area.name, area.icon ?? undefined))}`;
+      return html`${areas.map((area) => this._renderRoomRow([area.area_id], area.name, area.icon ?? undefined))}`;
     }
 
     // Pojedyncza strefa — wiersz tej area.
     if (this._config.area_id) {
       const area = this.hass.areas?.[this._config.area_id];
       const name = area?.name ?? this._config.area_id;
-      return this._renderRoomRow(this._config.area_id, name, area?.icon ?? undefined);
+      return this._renderRoomRow([this._config.area_id], name, area?.icon ?? undefined);
     }
 
     return nothing;
   }
 
   private _renderRoomRow(
-    areaId: string,
+    areaIds: string[],
     name: string,
     icon: string | undefined,
     perRoomTapAction?: import('./types.js').TapActionConfig,
   ): TemplateResult {
-    const entries = getEntitiesInArea(this.hass!, areaId);
+    const primary = areaIds[0];
+    // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
+    const seen = new Set<string>();
+    const entries: HassEntityRegistryEntry[] = [];
+    for (const id of areaIds) {
+      for (const e of getEntitiesInArea(this.hass!, id)) {
+        if (seen.has(e.entity_id)) continue;
+        seen.add(e.entity_id);
+        entries.push(e);
+      }
+    }
+
     const lightsOn = filterByDomain(entries, 'light').reduce(
       (n, e) => n + (this.hass!.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
       0,
@@ -279,7 +302,7 @@ export class StratumCard extends LitElement {
     const clickable = Boolean(effectiveTap && effectiveTap.action !== 'none');
 
     return html`<stratum-card-room-row
-      .areaId=${areaId}
+      .areaId=${primary}
       .name=${name}
       .icon=${icon ?? 'mdi:floor-plan'}
       .lightsOn=${lightsOn}
