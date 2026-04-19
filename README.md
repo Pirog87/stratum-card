@@ -4,6 +4,8 @@
 ![License](https://img.shields.io/github/license/Pirog87/stratum-card?style=flat-square)
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=flat-square)
 
+![Stratum card preview](docs/images/preview.svg)
+
 > Customowa karta Home Assistant — podsumowanie strefy z rozwijaną listą pomieszczeń.
 
 **Stratum** (łac. _warstwa_) — metafora jest dokładna: dom ma warstwy (piętra,
