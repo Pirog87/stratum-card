@@ -57,16 +57,60 @@ export interface StratumCardConfig {
 /** Wbudowane typy chipów agregujących encje area/floor. */
 export type BuiltInChipType = 'lights' | 'motion' | 'occupancy' | 'windows' | 'doors';
 
-export interface ChipConfig {
-  /** Wbudowany typ (wtedy ikonę/kolor/counting mamy out-of-the-box). */
-  type: BuiltInChipType;
-  /** Override ikony MDI (np. `mdi:ceiling-light`). */
+/** Wspólne pola dla wszystkich typów chipów. */
+interface BaseChipConfig {
+  /** Override ikony MDI. */
   icon?: string;
-  /** Override koloru chipu — nazwa HA lub hex (np. `amber`, `#ff9b42`). */
+  /** Override koloru — nazwa semantyczna (`amber`, `green`, `blue`) albo hex. */
   color?: string;
-  /** Czy pokazać chip nawet gdy licznik = 0 (domyślnie: ukryj). */
+  /** Czy chip pokazuje swoją wartość nawet gdy jest "pusty"/zero. */
   show_when_zero?: boolean;
+  /** Akcja po kliknięciu chipu. */
+  tap_action?: TapActionConfig;
 }
+
+export interface BuiltInChipConfig extends BaseChipConfig {
+  type: BuiltInChipType;
+}
+
+/** Chip pokazujący stan jednej encji albo wartość atrybutu. */
+export interface EntityChipConfig extends BaseChipConfig {
+  type: 'entity';
+  entity: string;
+  /** `state` (default) — stan encji; `attribute` — wartość atrybutu. */
+  format?: 'state' | 'attribute';
+  attribute?: string;
+  /** Tekst dodawany po wartości (np. `°C`). */
+  suffix?: string;
+  /** Wartości traktowane jako "aktywny stan" (podświetla chip). Default: ['on']. */
+  active_states?: string[];
+}
+
+/** Chip zliczający encje area/floor pasujące do filtra. */
+export interface FilterChipConfig extends BaseChipConfig {
+  type: 'filter';
+  /** Domena (np. `light`, `switch`). */
+  domain?: string;
+  /** `device_class` dla binary_sensor (np. `motion`, `window`). */
+  device_class?: string;
+  /** Stan uznawany za aktywny (domyślnie `on`). */
+  state?: string;
+}
+
+/** Chip z dowolnym Jinja2 template renderowanym live przez HA. */
+export interface TemplateChipConfig extends BaseChipConfig {
+  type: 'template';
+  /** Jinja2 template (np. `{{ states('sensor.x') }}°C`). */
+  value: string;
+  /** Template zwracający prawdę/fałsz do wyróżnienia chipa. */
+  active_template?: string;
+}
+
+export type ChipConfig =
+  | BuiltInChipConfig
+  | EntityChipConfig
+  | FilterChipConfig
+  | TemplateChipConfig;
 
 export interface RoomRefConfig {
   /** Nazwa widoczna w UI. */
@@ -115,6 +159,13 @@ export interface HomeAssistant {
     service: string,
     data?: Record<string, unknown>
   ) => Promise<void>;
+  /** WebSocket connection — używamy do subskrypcji render_template. */
+  connection?: {
+    subscribeMessage: <T>(
+      callback: (msg: T) => void,
+      subscribeMessage: Record<string, unknown>,
+    ) => Promise<() => void>;
+  };
 }
 
 export interface HassEntity {
