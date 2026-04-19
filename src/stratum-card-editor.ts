@@ -18,7 +18,8 @@ interface FormSchemaItem {
 }
 
 const SCHEMA: readonly FormSchemaItem[] = [
-  { name: 'area_id', required: true, selector: { area: {} } },
+  { name: 'floor_id', selector: { floor: {} } },
+  { name: 'area_id', selector: { area: {} } },
   {
     type: 'grid',
     name: '',
@@ -38,7 +39,8 @@ const SCHEMA: readonly FormSchemaItem[] = [
 ];
 
 const LABELS: Record<string, string> = {
-  area_id: 'Area (strefa)',
+  floor_id: 'Piętro (floor)',
+  area_id: 'Pojedyncza strefa (area) — alternatywa',
   name: 'Nazwa (override)',
   icon: 'Ikona (override)',
   expanded: 'Rozwinięta domyślnie',
@@ -46,9 +48,12 @@ const LABELS: Record<string, string> = {
 };
 
 const HELPERS: Record<string, string> = {
-  area_id: 'Wybierz strefę z rejestru Home Assistant.',
-  name: 'Pozostaw puste, żeby użyć nazwy area z HA.',
-  icon: 'Pozostaw puste, żeby użyć ikony area z HA (fallback: mdi:home).',
+  floor_id:
+    'Główny tryb — karta agreguje wszystkie strefy tego piętra. Wymaga HA 2024.3+.',
+  area_id:
+    'Użyj zamiast floor_id gdy chcesz kartę na jeden pokój. Wybierz JEDNO z pól.',
+  name: 'Pozostaw puste, żeby użyć nazwy piętra/strefy z HA.',
+  icon: 'Pozostaw puste, żeby użyć ikony piętra/strefy z HA (fallback: mdi:home).',
   expanded: 'Czy expander startuje otwarty.',
   debug: 'Włącza console.log z encjami area — pomocne w configu.',
 };
