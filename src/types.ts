@@ -35,6 +35,13 @@ export interface StratumCardConfig {
   debug?: boolean;
 
   /**
+   * Akcja wyzwalana kliknięciem w wiersz pomieszczenia. Wspiera placeholdery
+   * `{area_id}` i `{area_name}` w `navigation_path`.
+   * Przy braku: wiersz nie reaguje na klik.
+   */
+  room_tap_action?: TapActionConfig;
+
+  /**
    * Lista chipów do wyświetlenia w headerze. Jeśli nie podane — domyślny set:
    * lights, motion, windows, doors. Każdy chip pokazuje liczbę encji w stanie on.
    */
@@ -66,11 +73,28 @@ export interface RoomRefConfig {
   name: string;
   /** Ikona MDI. */
   icon?: string;
-  /** Akcja po tapnięciu — do rozwinięcia w v0.6. */
-  tap_action?: unknown;
+  /** Akcja po tapnięciu wiersza. */
+  tap_action?: TapActionConfig;
   /** Lista encji pomieszczenia (światła, czujki). Na razie surowe stringi. */
   entities?: string[];
 }
+
+/**
+ * Prosty kontrakt tap_action kompatybilny z konwencją HA/Mushroom/Bubble.
+ * Placeholdery `{area_id}` i `{area_name}` w `navigation_path` zostaną
+ * podmienione na odpowiednie wartości klikniętego pomieszczenia.
+ */
+export type TapActionConfig =
+  | { action: 'none' }
+  | { action: 'navigate'; navigation_path: string }
+  | { action: 'more-info'; entity?: string }
+  | { action: 'url'; url_path: string; new_tab?: boolean }
+  | {
+      action: 'call-service';
+      service: string;
+      service_data?: Record<string, unknown>;
+      target?: Record<string, unknown>;
+    };
 
 /**
  * Minimalny stub obiektu `hass` wstrzykiwanego przez Home Assistant do kart.
