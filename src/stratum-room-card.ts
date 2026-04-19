@@ -16,8 +16,9 @@ import { getEntitiesInArea, filterByDomain, filterBinarySensorDeviceClass } from
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
+import './stratum-room-tile.js';
 
-const VERSION = '0.12.0'; // bumpujemy razem z main card
+const VERSION = '0.13.0';
 
 /** Auto-wybór chipów dla room card: lights + motion + temp + humidity (jeśli są). */
 function autoRoomChips(
@@ -76,6 +77,19 @@ const SECTION_ICON: Record<RoomSectionType, string> = {
   fans: 'mdi:fan',
   switches: 'mdi:toggle-switch',
   scenes: 'mdi:palette',
+};
+
+/** Klasa CSS sterująca liczbą kolumn w grid tiles. */
+const SECTION_LAYOUT: Record<RoomSectionType, string> = {
+  scenes: 'grid-3',
+  lights: 'grid-2',
+  switches: 'grid-2',
+  fans: 'grid-2',
+  windows: 'grid-2',
+  doors: 'grid-2',
+  covers: 'grid-1',
+  climate: 'grid-1',
+  media: 'grid-1',
 };
 
 /** Filtry per sekcja — jakie encje do niej należą. */
@@ -217,17 +231,19 @@ export class StratumRoomCard extends LitElement {
             ? html`<div class="placeholder">
                 Brak encji do wyświetlenia — sprawdź przypisanie area.
               </div>`
-            : sections.map((s) => this._renderSectionPlaceholder(s, entries))}
+            : sections.map((s) => this._renderSection(s, entries))}
         </div>
       </ha-card>
     `;
   }
 
-  private _renderSectionPlaceholder(
+  private _renderSection(
     section: RoomSectionType,
     entries: HassEntityRegistryEntry[],
   ): TemplateResult {
     const items = entitiesForSection(this.hass!, entries, section);
+    if (items.length === 0) return html``;
+    const layout = SECTION_LAYOUT[section];
     return html`
       <div class="section" part="section">
         <div class="section-header" part="section-header">
@@ -235,8 +251,14 @@ export class StratumRoomCard extends LitElement {
           <span>${SECTION_LABEL[section]}</span>
           <span class="count">${items.length}</span>
         </div>
-        <div class="section-placeholder">
-          Sekcja zostanie wypełniona mini-kartami encji w v1.0 (2/3).
+        <div class="tiles ${layout}">
+          ${items.map(
+            (e) =>
+              html`<stratum-room-tile
+                .hass=${this.hass}
+                .entity=${e.entity_id}
+              ></stratum-room-tile>`,
+          )}
         </div>
       </div>
     `;
@@ -316,11 +338,27 @@ export class StratumRoomCard extends LitElement {
       font-weight: 400;
     }
 
-    .section-placeholder {
-      color: var(--secondary-text-color);
-      font-size: 12px;
-      font-style: italic;
-      padding: 6px 0;
+    .tiles {
+      display: grid;
+      gap: 8px;
+    }
+
+    .tiles.grid-1 {
+      grid-template-columns: 1fr;
+    }
+
+    .tiles.grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .tiles.grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    @media (max-width: 480px) {
+      .tiles.grid-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     .placeholder {
