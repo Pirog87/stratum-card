@@ -1,9 +1,11 @@
-// Helpers do czytania encji powiązanych z area Home Assistant.
+// Helpers do czytania encji powiązanych z area / floor Home Assistant.
 //
 // Encja może mieć `area_id` ustawione bezpośrednio (override) albo dziedziczyć je
 // po urządzeniu (`hass.devices[device_id].area_id`). Sprawdzamy obie ścieżki.
+// Floor (HA 2024.3+) zawiera wiele area — agregujemy encje po wszystkich.
 
 import type {
+  HassArea,
   HassEntity,
   HassEntityRegistryEntry,
   HomeAssistant,
@@ -31,6 +33,37 @@ export function getEntitiesInArea(
 
     return false;
   });
+}
+
+/** Lista area należących do podanego floor-a. */
+export function getAreasInFloor(
+  hass: HomeAssistant,
+  floorId: string,
+): HassArea[] {
+  if (!hass?.areas) return [];
+  return Object.values(hass.areas).filter((area) => area.floor_id === floorId);
+}
+
+/**
+ * Zwraca wszystkie encje ze wszystkich area należących do floor-a.
+ * Deduplikuje (encja z urządzeniem przypisanym może wylądować w wielu area
+ * jeśli inconsistent — ale w praktyce area_id jest flat per device).
+ */
+export function getEntitiesInFloor(
+  hass: HomeAssistant,
+  floorId: string,
+): HassEntityRegistryEntry[] {
+  const areas = getAreasInFloor(hass, floorId);
+  const seen = new Set<string>();
+  const result: HassEntityRegistryEntry[] = [];
+  for (const area of areas) {
+    for (const entry of getEntitiesInArea(hass, area.area_id)) {
+      if (seen.has(entry.entity_id)) continue;
+      seen.add(entry.entity_id);
+      result.push(entry);
+    }
+  }
+  return result;
 }
 
 /** Filtruje wpisy registry po domenie (prefiks `entity_id` przed kropką). */
@@ -65,3 +98,4 @@ export function getState(
 ): HassEntity | undefined {
   return hass.states?.[entityId];
 }
+

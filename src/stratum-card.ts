@@ -1,19 +1,20 @@
-// stratum-card — v0.1
+// stratum-card
 //
-// Customowa karta Home Assistant: podsumowanie area z rozwijanym body.
-// Zobacz docs/roadmap.md dla kolejnych milestone'ów.
+// Customowa karta Home Assistant: podsumowanie warstwy (floor lub area)
+// z rozwijanym body. Zobacz docs/roadmap.md dla kolejnych milestone'ów.
 
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { StratumCardConfig, HomeAssistant } from './types.js';
 import {
   getEntitiesInArea,
+  getEntitiesInFloor,
   filterByDomain,
   filterBinarySensorDeviceClass,
 } from './area-entities.js';
 import './stratum-card-editor.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.4.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -28,8 +29,8 @@ export class StratumCard extends LitElement {
     if (!config) {
       throw new Error('Konfiguracja jest wymagana.');
     }
-    if (!config.area_id && !config.name) {
-      throw new Error('Podaj `area_id` lub `name`.');
+    if (!config.floor_id && !config.area_id && !config.name) {
+      throw new Error('Podaj `floor_id`, `area_id` lub `name`.');
     }
     this._config = config;
     this._expanded = Boolean(config.expanded);
@@ -47,11 +48,14 @@ export class StratumCard extends LitElement {
 
   /** Sensowny default gdy user dodaje kartę przez wizard „Add card". */
   public static getStubConfig(
-    _hass: HomeAssistant,
+    hass: HomeAssistant,
     _entities: string[],
     _entitiesFallback: string[],
   ): Partial<StratumCardConfig> {
-    return { area_id: '' };
+    const firstFloor = hass?.floors && Object.keys(hass.floors)[0];
+    if (firstFloor) return { floor_id: firstFloor };
+    const firstArea = hass?.areas && Object.keys(hass.areas)[0];
+    return { area_id: firstArea ?? '' };
   }
 
   private _toggleExpand = (): void => {
@@ -65,25 +69,56 @@ export class StratumCard extends LitElement {
     );
   };
 
-  private _resolveAreaName(): string {
+  private _resolveName(): string {
     if (this._config?.name) return this._config.name;
+    if (this._config?.floor_id && this.hass?.floors) {
+      const floor = this.hass.floors[this._config.floor_id];
+      if (floor?.name) return floor.name;
+    }
     if (this._config?.area_id && this.hass?.areas) {
       const area = this.hass.areas[this._config.area_id];
       if (area?.name) return area.name;
     }
-    return this._config?.area_id ?? 'Area';
+    return this._config?.floor_id ?? this._config?.area_id ?? 'Stratum';
   }
 
-  private _debugLogAreaEntities(): void {
-    if (!this.hass || !this._config?.area_id) return;
-    const entries = getEntitiesInArea(this.hass, this._config.area_id);
+  private _resolveIcon(): string {
+    if (this._config?.icon) return this._config.icon;
+    if (this._config?.floor_id && this.hass?.floors) {
+      const floor = this.hass.floors[this._config.floor_id];
+      if (floor?.icon) return floor.icon;
+    }
+    if (this._config?.area_id && this.hass?.areas) {
+      const area = this.hass.areas[this._config.area_id];
+      if (area?.icon) return area.icon;
+    }
+    return 'mdi:home';
+  }
+
+  private _getEntries() {
+    if (!this.hass) return [];
+    if (this._config?.floor_id) {
+      return getEntitiesInFloor(this.hass, this._config.floor_id);
+    }
+    if (this._config?.area_id) {
+      return getEntitiesInArea(this.hass, this._config.area_id);
+    }
+    return [];
+  }
+
+  private _debugLog(): void {
+    if (!this.hass) return;
+    const entries = this._getEntries();
+    const scope = this._config?.floor_id
+      ? `floor=${this._config.floor_id}`
+      : `area=${this._config?.area_id}`;
     const lights = filterByDomain(entries, 'light');
     const motion = filterBinarySensorDeviceClass(this.hass, entries, 'motion');
     const occupancy = filterBinarySensorDeviceClass(this.hass, entries, 'occupancy');
     const windows = filterBinarySensorDeviceClass(this.hass, entries, 'window');
     const doors = filterBinarySensorDeviceClass(this.hass, entries, 'door');
     // eslint-disable-next-line no-console
-    console.groupCollapsed(`[stratum-card] area=${this._config.area_id} (${entries.length} entities)`);
+    console.groupCollapsed(`[stratum-card] ${scope} (${entries.length} entities)`);
     // eslint-disable-next-line no-console
     console.table({
       lights: lights.length,
@@ -98,22 +133,13 @@ export class StratumCard extends LitElement {
     console.groupEnd();
   }
 
-  private _resolveIcon(): string {
-    if (this._config?.icon) return this._config.icon;
-    if (this._config?.area_id && this.hass?.areas) {
-      const area = this.hass.areas[this._config.area_id];
-      if (area?.icon) return area.icon;
-    }
-    return 'mdi:home';
-  }
-
   protected render(): TemplateResult | typeof nothing {
     if (!this._config) return nothing;
 
-    const name = this._resolveAreaName();
+    const name = this._resolveName();
     const icon = this._resolveIcon();
 
-    if (this._config.debug) this._debugLogAreaEntities();
+    if (this._config.debug) this._debugLog();
 
     return html`
       <ha-card part="card">

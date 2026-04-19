@@ -10,13 +10,22 @@ export interface StratumCardConfig {
   /** Obowiązkowe pole dyskryminujące dla HA — zawsze `"custom:stratum-card"`. */
   type: string;
 
-  /** ID area z rejestru HA (np. `"parter"`, `"pietro"`, `"ogrod"`). */
+  /**
+   * Piętro z rejestru HA (HA 2024.3+). Karta agreguje wszystkie areas należące
+   * do tego floor-a oraz ich encje. Główny tryb działania Stratum.
+   */
+  floor_id?: string;
+
+  /**
+   * Pojedyncza strefa — alternatywa do `floor_id` gdy user chce kartę na
+   * jeden pokój (np. dom parterowy bez floor-ów w HA). Jedno z dwóch wymagane.
+   */
   area_id?: string;
 
-  /** Override nazwy wyświetlanej. Jeśli brak, bierze `area.name` z HA. */
+  /** Override nazwy wyświetlanej. Jeśli brak, bierze nazwę floor-a / area. */
   name?: string;
 
-  /** Override ikony. Fallback: `area.icon` z HA, potem `mdi:home`. */
+  /** Override ikony. Fallback: ikona floor-a / area; potem `mdi:home`. */
   icon?: string;
 
   /** Czy karta startuje rozwinięta (pamiętana tylko w sesji). */
@@ -57,6 +66,8 @@ export interface RoomRefConfig {
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
   areas: Record<string, HassArea>;
+  /** HA 2024.3+ registry of floors. Starsze wersje: obiekt pusty lub undefined. */
+  floors?: Record<string, HassFloor>;
   entities: Record<string, HassEntityRegistryEntry>;
   devices: Record<string, HassDevice>;
   language: string;
@@ -81,6 +92,17 @@ export interface HassArea {
   name: string;
   icon?: string | null;
   picture?: string | null;
+  /** HA 2024.3+: piętro do którego area należy. */
+  floor_id?: string | null;
+}
+
+export interface HassFloor {
+  floor_id: string;
+  name: string;
+  icon?: string | null;
+  /** Kolejność pięter: 0 = parter, 1 = pierwsze piętro, -1 = piwnica itd. */
+  level?: number | null;
+  aliases?: string[];
 }
 
 export interface HassEntityRegistryEntry {
