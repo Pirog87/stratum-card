@@ -30,7 +30,7 @@ import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 import './stratum-room-card.js';
 
-const VERSION = '0.14.2';
+const VERSION = '1.0.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
