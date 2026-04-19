@@ -69,7 +69,7 @@ const HELPERS: Record<string, string> = {
   auto_collapse:
     'Karta zwija się sama po N sekundach bez interakcji. 0 = wyłączone. Domyślnie 60 s.',
   room_tap_action:
-    'Navigate z placeholderami {area_id}/{area_name} — np. /dashboard-domek/home#{area_id}.',
+    'Określa co się dzieje po kliknięciu wiersza pomieszczenia. Bez ustawienia klik nic nie robi. Dla "Przejdź" wypełnij pole „Ścieżka", np. /dashboard-domek/home#{area_id} — {area_id} i {area_name} są podmieniane automatycznie.',
 };
 
 @customElement('stratum-card-editor')
@@ -123,10 +123,16 @@ export class StratumCardEditor extends LitElement {
 
   protected render(): TemplateResult {
     if (!this.hass || !this._config) return html``;
+    // Merge defaults tak, żeby slider auto_collapse pokazywał 60 gdy config
+    // nie ma tego pola (default = włączone 60s). Config-przesłania wygrywa.
+    const formData = {
+      auto_collapse: 60,
+      ...this._config,
+    };
     return html`
       <ha-form
         .hass=${this.hass}
-        .data=${this._config}
+        .data=${formData}
         .schema=${SCHEMA}
         .computeLabel=${this._computeLabel}
         .computeHelper=${this._computeHelper}
