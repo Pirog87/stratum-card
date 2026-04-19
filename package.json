@@ -1,6 +1,6 @@
 {
   "name": "stratum-card",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Customowa karta Home Assistant — podsumowanie strefy z rozwijaną listą pomieszczeń",
   "main": "dist/stratum-card.js",
   "module": "dist/stratum-card.js",

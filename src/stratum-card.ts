@@ -19,16 +19,17 @@ import {
 } from './area-entities.js';
 import {
   DEFAULT_CHIPS,
-  countChip,
+  evaluateChip,
   resolveChipColor,
   resolveChipIcon,
 } from './chip-defaults.js';
 import { runTapAction } from './tap-action.js';
+import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -37,6 +38,9 @@ export class StratumCard extends LitElement {
 
   @state() private _config?: StratumCardConfig;
   @state() private _expanded = false;
+
+  /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
+  private _templates = new TemplateRenderer(() => this.requestUpdate());
 
   /** HA wymaga żeby karta miała metodę `setConfig` — rzuci tu przy błędnej konfiguracji. */
   public setConfig(config: StratumCardConfig): void {
@@ -122,17 +126,31 @@ export class StratumCard extends LitElement {
 
   private _renderChips(): TemplateResult[] {
     if (!this.hass) return [];
+    this._templates.setHass(this.hass);
     const entries = this._getEntries();
     const chips = this._config?.chips ?? DEFAULT_CHIPS;
-    return chips.map(
-      (chip) =>
-        html`<stratum-card-chip
-          .icon=${resolveChipIcon(chip)}
-          .count=${countChip(this.hass!, entries, chip)}
-          .color=${resolveChipColor(chip)}
-          .showWhenZero=${chip.show_when_zero ?? false}
-        ></stratum-card-chip>`,
-    );
+    return chips.map((chip) => {
+      const { label, active } = evaluateChip(this.hass!, entries, chip, this._templates);
+      const hasTap = Boolean(chip.tap_action && chip.tap_action.action !== 'none');
+      return html`<stratum-card-chip
+        .icon=${resolveChipIcon(chip)}
+        .label=${label}
+        .active=${active}
+        .color=${resolveChipColor(chip)}
+        .showWhenZero=${chip.show_when_zero ?? false}
+        .clickable=${hasTap}
+        @chip-tap=${() => this._onChipTap(chip)}
+      ></stratum-card-chip>`;
+    });
+  }
+
+  private _onChipTap(chip: { tap_action?: unknown }): void {
+    void runTapAction(this.hass, chip.tap_action as never, { source: this });
+  }
+
+  public disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._templates.destroy();
   }
 
   private _debugLog(): void {
