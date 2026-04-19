@@ -6,6 +6,11 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { StratumCardConfig, HomeAssistant } from './types.js';
+import {
+  getEntitiesInArea,
+  filterByDomain,
+  filterBinarySensorDeviceClass,
+} from './area-entities.js';
 
 const VERSION = '0.1.0';
 
@@ -54,6 +59,30 @@ export class StratumCard extends LitElement {
     return this._config?.area_id ?? 'Area';
   }
 
+  private _debugLogAreaEntities(): void {
+    if (!this.hass || !this._config?.area_id) return;
+    const entries = getEntitiesInArea(this.hass, this._config.area_id);
+    const lights = filterByDomain(entries, 'light');
+    const motion = filterBinarySensorDeviceClass(this.hass, entries, 'motion');
+    const occupancy = filterBinarySensorDeviceClass(this.hass, entries, 'occupancy');
+    const windows = filterBinarySensorDeviceClass(this.hass, entries, 'window');
+    const doors = filterBinarySensorDeviceClass(this.hass, entries, 'door');
+    // eslint-disable-next-line no-console
+    console.groupCollapsed(`[stratum-card] area=${this._config.area_id} (${entries.length} entities)`);
+    // eslint-disable-next-line no-console
+    console.table({
+      lights: lights.length,
+      motion: motion.length,
+      occupancy: occupancy.length,
+      windows: windows.length,
+      doors: doors.length,
+    });
+    // eslint-disable-next-line no-console
+    console.log('all entries:', entries.map((e) => e.entity_id));
+    // eslint-disable-next-line no-console
+    console.groupEnd();
+  }
+
   private _resolveIcon(): string {
     if (this._config?.icon) return this._config.icon;
     if (this._config?.area_id && this.hass?.areas) {
@@ -68,6 +97,8 @@ export class StratumCard extends LitElement {
 
     const name = this._resolveAreaName();
     const icon = this._resolveIcon();
+
+    if (this._config.debug) this._debugLogAreaEntities();
 
     return html`
       <ha-card part="card">
