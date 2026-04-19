@@ -35,6 +35,12 @@ export interface StratumCardConfig {
   debug?: boolean;
 
   /**
+   * Liczba sekund bez interakcji po których rozwinięta karta sama się zwija.
+   * Default: 60. Ustaw `0` żeby wyłączyć auto-collapse.
+   */
+  auto_collapse?: number;
+
+  /**
    * Akcja wyzwalana kliknięciem w wiersz pomieszczenia. Wspiera placeholdery
    * `{area_id}` i `{area_name}` w `navigation_path`.
    * Przy braku: wiersz nie reaguje na klik.
