@@ -29,7 +29,7 @@ import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -223,6 +223,18 @@ export class StratumCard extends LitElement {
   private _renderRooms(): TemplateResult | typeof nothing {
     if (!this.hass || !this._config) return nothing;
 
+    // Jawna konfiguracja rooms — użyj jej z override'ami per room.
+    if (this._config.rooms && this._config.rooms.length > 0) {
+      const visible = this._config.rooms.filter((r) => !r.hidden);
+      return html`${visible.map((room) => {
+        const area = this.hass!.areas?.[room.area_id];
+        const name = room.name ?? area?.name ?? room.area_id;
+        const icon = room.icon ?? area?.icon ?? undefined;
+        return this._renderRoomRow(room.area_id, name, icon, room.tap_action);
+      })}`;
+    }
+
+    // Auto-discover: wszystkie area z floor-a w kolejności HA.
     if (this._config.floor_id) {
       const areas = getAreasInFloor(this.hass, this._config.floor_id);
       if (areas.length === 0) {
@@ -234,6 +246,7 @@ export class StratumCard extends LitElement {
       return html`${areas.map((area) => this._renderRoomRow(area.area_id, area.name, area.icon ?? undefined))}`;
     }
 
+    // Pojedyncza strefa — wiersz tej area.
     if (this._config.area_id) {
       const area = this.hass.areas?.[this._config.area_id];
       const name = area?.name ?? this._config.area_id;
@@ -247,6 +260,7 @@ export class StratumCard extends LitElement {
     areaId: string,
     name: string,
     icon: string | undefined,
+    perRoomTapAction?: import('./types.js').TapActionConfig,
   ): TemplateResult {
     const entries = getEntitiesInArea(this.hass!, areaId);
     const lightsOn = filterByDomain(entries, 'light').reduce(
@@ -261,7 +275,8 @@ export class StratumCard extends LitElement {
         (e) => this.hass!.states?.[e.entity_id]?.state === 'on',
       );
     const temperature = this._firstTemperature(entries);
-    const clickable = Boolean(this._config?.room_tap_action && this._config.room_tap_action.action !== 'none');
+    const effectiveTap = perRoomTapAction ?? this._config?.room_tap_action;
+    const clickable = Boolean(effectiveTap && effectiveTap.action !== 'none');
 
     return html`<stratum-card-room-row
       .areaId=${areaId}
@@ -271,17 +286,21 @@ export class StratumCard extends LitElement {
       .motion=${motion}
       .temperature=${temperature}
       .clickable=${clickable}
-      @row-tap=${this._onRoomTap}
+      @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
+        this._onRoomTap(ev, effectiveTap)}
     ></stratum-card-room-row>`;
   }
 
-  private _onRoomTap = (ev: CustomEvent<{ area_id: string; area_name: string }>): void => {
-    void runTapAction(this.hass, this._config?.room_tap_action, {
+  private _onRoomTap(
+    ev: CustomEvent<{ area_id: string; area_name: string }>,
+    action: import('./types.js').TapActionConfig | undefined,
+  ): void {
+    void runTapAction(this.hass, action ?? this._config?.room_tap_action, {
       source: this,
       area_id: ev.detail.area_id,
       area_name: ev.detail.area_name,
     });
-  };
+  }
 
   private _firstTemperature(entries: HassEntityRegistryEntry[]): string | undefined {
     if (!this.hass) return undefined;
