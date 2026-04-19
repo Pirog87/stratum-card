@@ -22,6 +22,9 @@ export interface StratumCardConfig {
   /** Czy karta startuje rozwinięta (pamiętana tylko w sesji). */
   expanded?: boolean;
 
+  /** Włącza `console.log` listy encji area przy każdym renderze. Tylko dev. */
+  debug?: boolean;
+
   /**
    * [v0.3] Lista chipów do wyświetlenia w headerze.
    * Typowane w przyszłości jako `ChipConfig[]`.
