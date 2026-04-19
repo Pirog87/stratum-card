@@ -7,7 +7,7 @@
 // Emituje `rooms-changed` z pełną listą RoomConfig[] kiedy user cokolwiek zmienia.
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { getAreasInFloor } from './area-entities.js';
 import type { HomeAssistant, RoomConfig, TapActionConfig } from './types.js';
 
@@ -36,6 +36,22 @@ export class StratumCardRoomsEditor extends LitElement {
 
   @property({ attribute: false }) public rooms: RoomConfig[] = [];
 
+  /** Zbior area_id których edytor jest otwarty. Reset przy zmianie floor/area. */
+  @state() private _openRooms = new Set<string>();
+
+  private _toggleEdit(areaId: string): void {
+    const next = new Set(this._openRooms);
+    if (next.has(areaId)) next.delete(areaId);
+    else next.add(areaId);
+    this._openRooms = next;
+  }
+
+  protected willUpdate(changed: Map<string, unknown>): void {
+    if (changed.has('floorId') || changed.has('areaId')) {
+      this._openRooms = new Set();
+    }
+  }
+
   private _computeRoomLabel = (schema: { name: string }): string =>
     ROOM_LABELS[schema.name] ?? schema.name;
 
@@ -58,29 +74,37 @@ export class StratumCardRoomsEditor extends LitElement {
       },
       { name: 'tap_action', selector: { ui_action: {} } },
       {
-        name: 'merge_with',
-        selector: {
-          select: {
-            multiple: true,
-            mode: 'list',
-            options: otherAreaIds.map((id) => ({
-              value: id,
-              label: this.hass?.areas?.[id]?.name ?? id,
-            })),
+        type: 'expandable',
+        name: '',
+        title: 'Połącz z innymi pomieszczeniami',
+        icon: 'mdi:link-variant',
+        schema: [
+          {
+            name: 'merge_with',
+            selector: {
+              select: {
+                multiple: true,
+                mode: 'list',
+                options: otherAreaIds.map((id) => ({
+                  value: id,
+                  label: this.hass?.areas?.[id]?.name ?? id,
+                })),
+              },
+            },
           },
-        },
-      },
-      {
-        name: 'aggregate',
-        selector: {
-          select: {
-            mode: 'dropdown',
-            options: [
-              { value: 'sum', label: 'Suma (default)' },
-              { value: 'primary_only', label: 'Tylko główne' },
-            ],
+          {
+            name: 'aggregate',
+            selector: {
+              select: {
+                mode: 'dropdown',
+                options: [
+                  { value: 'sum', label: 'Suma (default)' },
+                  { value: 'primary_only', label: 'Tylko główne' },
+                ],
+              },
+            },
           },
-        },
+        ],
       },
     ];
   }
@@ -260,9 +284,10 @@ export class StratumCardRoomsEditor extends LitElement {
           const mergedAwayInto = this.rooms.find((r) =>
             r.merge_with?.includes(area.area_id),
           );
+          const editOpen = this._openRooms.has(area.area_id);
           return html`
-            <div class="room">
-              <label class="row">
+            <div class="room ${editOpen ? 'open' : ''}">
+              <div class="row">
                 <input
                   type="checkbox"
                   .checked=${visible}
@@ -287,9 +312,10 @@ export class StratumCardRoomsEditor extends LitElement {
                 ${visible
                   ? (() => {
                       const pos = this._getPosition(area.area_id);
-                      return html`<div class="reorder">
+                      return html`<div class="actions">
                         <button
                           type="button"
+                          class="icon-btn"
                           title="Przesuń w górę"
                           ?disabled=${pos.index <= 0}
                           @click=${(ev: Event) => {
@@ -302,6 +328,7 @@ export class StratumCardRoomsEditor extends LitElement {
                         </button>
                         <button
                           type="button"
+                          class="icon-btn"
                           title="Przesuń w dół"
                           ?disabled=${pos.index === -1 || pos.index >= pos.total - 1}
                           @click=${(ev: Event) => {
@@ -312,11 +339,25 @@ export class StratumCardRoomsEditor extends LitElement {
                         >
                           <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
                         </button>
+                        <button
+                          type="button"
+                          class="icon-btn edit ${editOpen ? 'active' : ''}"
+                          title=${editOpen ? 'Zwiń' : 'Edytuj'}
+                          @click=${(ev: Event) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            this._toggleEdit(area.area_id);
+                          }}
+                        >
+                          <ha-icon
+                            .icon=${editOpen ? 'mdi:chevron-up' : 'mdi:pencil'}
+                          ></ha-icon>
+                        </button>
                       </div>`;
                     })()
                   : nothing}
-              </label>
-              ${visible
+              </div>
+              ${visible && editOpen
                 ? html`
                     <div class="sub">
                       <ha-form
@@ -369,7 +410,6 @@ export class StratumCardRoomsEditor extends LitElement {
       display: flex;
       align-items: center;
       gap: 10px;
-      cursor: pointer;
       user-select: none;
       padding: 4px 0;
     }
@@ -450,34 +490,43 @@ export class StratumCardRoomsEditor extends LitElement {
       border-color: var(--primary-color, #ff9b42);
     }
 
-    .reorder {
+    .actions {
       display: flex;
       gap: 2px;
       margin-left: auto;
     }
 
-    .reorder button {
+    .icon-btn {
       background: transparent;
       border: 0;
-      padding: 2px;
+      padding: 4px;
       cursor: pointer;
       color: var(--secondary-text-color);
       border-radius: 4px;
       display: inline-flex;
     }
 
-    .reorder button:hover:not(:disabled) {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
+    .icon-btn:hover:not(:disabled) {
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
       color: var(--primary-text-color);
     }
 
-    .reorder button:disabled {
+    .icon-btn:disabled {
       opacity: 0.3;
       cursor: not-allowed;
     }
 
-    .reorder ha-icon {
-      --mdc-icon-size: 16px;
+    .icon-btn.edit.active {
+      background: var(--primary-color, #ff9b42);
+      color: #fff;
+    }
+
+    .icon-btn ha-icon {
+      --mdc-icon-size: 18px;
+    }
+
+    .room.open {
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
     }
   `;
 }
