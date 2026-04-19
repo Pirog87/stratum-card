@@ -12,6 +12,8 @@ export class StratumCardRoomRow extends LitElement {
 
   @property({ type: String }) public icon = 'mdi:floor-plan';
 
+  @property({ type: String, attribute: 'area-id' }) public areaId = '';
+
   @property({ type: Number, attribute: 'lights-on' }) public lightsOn = 0;
 
   @property({ type: Boolean, attribute: 'motion' }) public motion = false;
@@ -19,9 +21,38 @@ export class StratumCardRoomRow extends LitElement {
   /** Sformatowana temperatura do wyświetlenia (np. "22.4 °C"). Opcjonalne. */
   @property({ type: String }) public temperature?: string;
 
+  /** Czy wiersz ma reagować na klik (pokazać cursor:pointer + hover). */
+  @property({ type: Boolean, reflect: true }) public clickable = false;
+
+  private _onClick = (): void => {
+    if (!this.clickable) return;
+    this.dispatchEvent(
+      new CustomEvent('row-tap', {
+        detail: { area_id: this.areaId, area_name: this.name },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+
+  private _onKey = (ev: KeyboardEvent): void => {
+    if (!this.clickable) return;
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      this._onClick();
+    }
+  };
+
   protected render(): TemplateResult {
     return html`
-      <div class="row" part="room">
+      <div
+        class="row"
+        part="room"
+        role=${this.clickable ? 'button' : 'group'}
+        tabindex=${this.clickable ? '0' : '-1'}
+        @click=${this._onClick}
+        @keydown=${this._onKey}
+      >
         <ha-icon class="icon" .icon=${this.icon}></ha-icon>
         <span class="name">${this.name}</span>
         <div class="info">
@@ -58,6 +89,21 @@ export class StratumCardRoomRow extends LitElement {
       padding: 10px 4px;
       border-bottom: 0.5px solid
         var(--stratum-card-room-divider, var(--divider-color, rgba(255, 255, 255, 0.06)));
+      transition: background 0.15s ease;
+    }
+
+    :host([clickable]) .row {
+      cursor: pointer;
+      border-radius: 6px;
+    }
+
+    :host([clickable]) .row:hover {
+      background: var(--stratum-card-room-hover, rgba(255, 255, 255, 0.04));
+    }
+
+    :host([clickable]) .row:focus-visible {
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+      outline-offset: -2px;
     }
 
     :host(:last-of-type) .row {

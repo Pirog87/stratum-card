@@ -36,6 +36,7 @@ const SCHEMA: readonly FormSchemaItem[] = [
       { name: 'debug', selector: { boolean: {} } },
     ],
   },
+  { name: 'room_tap_action', selector: { ui_action: {} } },
 ];
 
 const LABELS: Record<string, string> = {
@@ -45,6 +46,7 @@ const LABELS: Record<string, string> = {
   icon: 'Ikona (override)',
   expanded: 'Rozwinięta domyślnie',
   debug: 'Debug log w konsoli',
+  room_tap_action: 'Akcja po kliknięciu w wiersz pomieszczenia',
 };
 
 const HELPERS: Record<string, string> = {
@@ -56,6 +58,8 @@ const HELPERS: Record<string, string> = {
   icon: 'Pozostaw puste, żeby użyć ikony piętra/strefy z HA (fallback: mdi:home).',
   expanded: 'Czy expander startuje otwarty.',
   debug: 'Włącza console.log z encjami area — pomocne w configu.',
+  room_tap_action:
+    'Navigate z placeholderami {area_id}/{area_name} — np. /dashboard-domek/home#{area_id}.',
 };
 
 @customElement('stratum-card-editor')

@@ -23,11 +23,12 @@ import {
   resolveChipColor,
   resolveChipIcon,
 } from './chip-defaults.js';
+import { runTapAction } from './tap-action.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -242,15 +243,27 @@ export class StratumCard extends LitElement {
         (e) => this.hass!.states?.[e.entity_id]?.state === 'on',
       );
     const temperature = this._firstTemperature(entries);
+    const clickable = Boolean(this._config?.room_tap_action && this._config.room_tap_action.action !== 'none');
 
     return html`<stratum-card-room-row
+      .areaId=${areaId}
       .name=${name}
       .icon=${icon ?? 'mdi:floor-plan'}
       .lightsOn=${lightsOn}
       .motion=${motion}
       .temperature=${temperature}
+      .clickable=${clickable}
+      @row-tap=${this._onRoomTap}
     ></stratum-card-room-row>`;
   }
+
+  private _onRoomTap = (ev: CustomEvent<{ area_id: string; area_name: string }>): void => {
+    void runTapAction(this.hass, this._config?.room_tap_action, {
+      source: this,
+      area_id: ev.detail.area_id,
+      area_name: ev.detail.area_name,
+    });
+  };
 
   private _firstTemperature(entries: HassEntityRegistryEntry[]): string | undefined {
     if (!this.hass) return undefined;
