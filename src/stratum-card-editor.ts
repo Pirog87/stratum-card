@@ -7,7 +7,8 @@
 
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { HomeAssistant, StratumCardConfig } from './types.js';
+import type { HomeAssistant, RoomConfig, StratumCardConfig } from './types.js';
+import './stratum-card-rooms-editor.js';
 
 interface FormSchemaItem {
   name: string;
@@ -86,9 +87,25 @@ export class StratumCardEditor extends LitElement {
       ...ev.detail.value,
       type: this._config.type ?? 'custom:stratum-card',
     };
+    this._emitConfig(next);
+  }
+
+  private _roomsChanged(ev: CustomEvent<{ rooms: RoomConfig[] }>): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const next: StratumCardConfig = { ...this._config };
+    if (ev.detail.rooms.length === 0) {
+      delete next.rooms;
+    } else {
+      next.rooms = ev.detail.rooms;
+    }
+    this._emitConfig(next);
+  }
+
+  private _emitConfig(config: StratumCardConfig): void {
     this.dispatchEvent(
       new CustomEvent('config-changed', {
-        detail: { config: next },
+        detail: { config },
         bubbles: true,
         composed: true,
       }),
@@ -106,6 +123,21 @@ export class StratumCardEditor extends LitElement {
         .computeHelper=${this._computeHelper}
         @value-changed=${this._valueChanged}
       ></ha-form>
+      <div class="rooms-section">
+        <h3>Pomieszczenia</h3>
+        <p class="hint">
+          Zaznacz pomieszczenia które mają się pokazać na liście. Możesz nadpisać
+          nazwę, ikonę i akcję klik per pomieszczenie. Brak zaznaczeń = wszystkie
+          pomieszczenia floor-a (auto-discover).
+        </p>
+        <stratum-card-rooms-editor
+          .hass=${this.hass}
+          .floorId=${this._config.floor_id ?? ''}
+          .areaId=${this._config.area_id ?? ''}
+          .rooms=${this._config.rooms ?? []}
+          @rooms-changed=${this._roomsChanged}
+        ></stratum-card-rooms-editor>
+      </div>
     `;
   }
 
@@ -115,6 +147,21 @@ export class StratumCardEditor extends LitElement {
     }
     ha-form {
       display: block;
+    }
+    .rooms-section {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--divider-color);
+    }
+    .rooms-section h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .hint {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--secondary-text-color);
     }
   `;
 }

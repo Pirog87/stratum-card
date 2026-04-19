@@ -143,25 +143,153 @@ ich listę w body.
 
 ---
 
-## v1.0 — HACS publication ⬜
+## v0.9 — explicit rooms config + per-room overrides ⬜
 
-- GitHub release workflow (już jest — tag `v1.0.0` → build → asset)
-- HACS submission: PR do `hacs/default` repo z dodaniem naszego repo
-- Full README po polsku i angielsku (osobne sekcje)
-- Video demo / GIF w README
-- Screenshot galeria w `docs/screenshots/`
-- Retrospektywa w `docs/lessons-learned.md`
+- `rooms: []` w configu — jawna lista pomieszczeń zamiast auto-discover
+  ```yaml
+  rooms:
+    - area_id: salon
+      name: "Salon główny"   # override
+      icon: mdi:sofa         # override
+      tap_action:             # per-room override globalnego room_tap_action
+        action: navigate
+        navigation_path: /dashboard/salon
+  ```
+- Jeśli `rooms` brak — nadal auto-discover (kompatybilność wsteczna)
+- Kolejność w configu = kolejność wyświetlania (drag&drop w v0.11)
+- **Editor**: po wyborze `floor_id` pokazujemy listę area z tego floor-a z
+  checkboxami „Pokaż na liście". Dla każdej zaznaczonej — expandable z name,
+  icon, tap_action.
 
-**Commit:** `chore: 1.0.0 release`
+**Commit:** `feat: explicit rooms config with per-room overrides`
 
 ---
 
-## Post-v1.0 — pomysły
+## v0.10 — merge rooms (hierarchia pomieszczeń) ⬜
 
-- **v1.1**: Performance — virtual scroll dla area z 20+ pokojami
-- **v1.1**: Sections view compat — `grid-layout-options`
-- **v1.2**: Grupy area (Parter zawiera Kuchnię która zawiera X) — hierarchia
-- **v1.3**: Presets — zapisane zestawy chipów („home monitoring",
-  „security overview") wybierane jednym polem
-- **v2.0**: Companion integration Python — expose agregaty jako sensory
-- **v2.0**: Multi-area w jednej karcie (dashboard „Cały dom" z każdą area jako sekcją)
+- `merge_with: [area_id, ...]` w `RoomConfig` — łączy agregaty podrzędne
+  do głównego wiersza
+  ```yaml
+  rooms:
+    - area_id: kuchnia
+      merge_with: [spizarnia]
+  ```
+- Wiersz pokazuje sumaryczne liczniki z obu area, motion z każdej zapala
+  indicator, temperatura bierze z primary
+- `primary` implicit = `area_id` roota, sub = `merge_with`
+- Flag `aggregate: sum | primary_only` — czy chipy mini-chipa w wierszu są
+  sumą (sum) czy tylko primary
+- Scope v0.10 dotyczy tylko głównej karty (floor) — detail view dziedziczy
+  merge info w v1.0+
+
+**Commit:** `feat(rooms): merge multiple areas into a single row`
+
+---
+
+## v0.11 — UX polish rooms selection ⬜
+
+- Drag&drop w editorze rooms (zmiana kolejności)
+- Przycisk „Dodaj wszystkie z floor" / „Wyklucz wybrane"
+- Pole `excluded: []` jako alternatywa do jawnej listy (gdy user chce
+  „wszystkie oprócz")
+
+**Commit:** `feat(rooms): reorder + bulk actions in editor`
+
+---
+
+## v1.0 — room detail view (stratum-room-card) ⬜
+
+Nowy custom element `stratum-room-card` — widok pojedynczego pomieszczenia.
+Automatycznie generuje sekcje na podstawie encji area (i ich merge children):
+
+- Header: ikona + nazwa area + mini-chipy (temp / motion / wilgotność)
+- Sekcja **Światła**: każde światło jako mini-karta (slider, toggle)
+- Sekcja **Rolety**: cover entities z przyciskami ↑/■/↓
+- Sekcja **Okna/Drzwi**: binary_sensor device_class=window|door — status
+- Sekcja **Klimat**: climate entities — mini-card
+- Sekcja **Inne**: media_player, fan itd.
+
+Wzorzec: karta Sypialnia z ekranu użytkownika (sekcje, mini-karty).
+
+Config:
+```yaml
+type: custom:stratum-room-card
+area_id: sypialnia
+merge_with: [sypialnia_garderoba, sypialnia_lazienka]
+sections:              # opcjonalne, domyślnie auto
+  - lights
+  - covers
+  - windows
+```
+
+Rejestracja jako drugi card type (obok `stratum-card`).
+
+**Commits:** `feat: stratum-room-card auto-generated room detail view`
+(rozłożymy na 2–3 PR: szkielet + sekcje + styl).
+
+---
+
+## v1.1 — sceny per pomieszczenie ⬜
+
+- `scenes:` w `stratum-room-card` i `RoomConfig`
+  ```yaml
+  scenes:
+    - entity: scene.sypialnia_jasne
+      name: Jasne
+      image: /local/img/HUE_Jasne.png
+    - entity: scene.sypialnia_odpoczynek
+      image: /local/img/HUE_Odpoczynek.png
+  ```
+- Renderowane jako grid nad sekcją Światła (3 kolumny, aspect-ratio)
+- Auto-discover jeśli `scenes` brak: pola scene z prefixem area_id
+
+**Commit:** `feat(rooms): scenes section in room detail view`
+
+---
+
+## v1.2 — room navigation from floor card ⬜
+
+- Gdy user kliknie row pomieszczenia w głównej karcie — zamiast `navigate`
+  do innego dashboardu otwieramy **stratum-room-card** w popup (`more-info`
+  dialog) albo sub-route `/stratum/<area_id>`
+- Flag `room_open_mode: navigate | popup | inline` (inline = karta rozwija
+  się w miejsce wiersza)
+
+**Commit:** `feat: open room detail as popup/navigate from floor card`
+
+---
+
+## v1.3 — stylizacja finalna (ex-v0.9 z pierwszego planu) ⬜
+
+- Pełna lista CSS variables w `docs/styling.md`
+- Kompatybilność z Minimalist / Mushroom / default HA
+- `card-mod` snippety w docs
+
+**Commit:** `docs: styling guide + card-mod examples`
+
+---
+
+## v2.0 — HACS publication + dashboard generator ⬜
+
+- GitHub release (już jest — tagi `vX.Y.Z` → auto-release)
+- HACS submission — PR do `hacs/default`
+- README PL + EN (osobne sekcje)
+- Video/GIF demo
+- Screenshot galeria
+- **Dashboard generator** — nowy service: karta Stratum eksponuje metodę
+  generującą YAML view dla całego piętra (każde pomieszczenie jako
+  stratum-room-card) — user kliknie „Wygeneruj dashboard piętra" i dostaje
+  gotowy YAML do wklejenia
+
+**Commit:** `chore: 2.0.0 release + dashboard generator`
+
+---
+
+## Post-v2.0 — pomysły
+
+- Performance — virtual scroll dla floor z 20+ pokojami
+- Sections view compat — `grid-layout-options`
+- Presets — zapisane zestawy chipów
+- Companion integration Python — expose agregaty jako sensory
+- Multi-floor dashboard (cały dom)
+

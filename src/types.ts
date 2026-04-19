@@ -42,16 +42,17 @@ export interface StratumCardConfig {
   room_tap_action?: TapActionConfig;
 
   /**
+   * Jawna lista pomieszczeń do wyświetlenia. Jeśli podana — pokazujemy tylko
+   * te area, w tej kolejności, z per-room override'ami. Jeśli pusta lub brak —
+   * auto-discover wszystkich area z floor-a.
+   */
+  rooms?: RoomConfig[];
+
+  /**
    * Lista chipów do wyświetlenia w headerze. Jeśli nie podane — domyślny set:
    * lights, motion, windows, doors. Każdy chip pokazuje liczbę encji w stanie on.
    */
   chips?: ChipConfig[];
-
-  /**
-   * [v0.5] Lista pomieszczeń w body expandera.
-   * Jeśli brak, karta spróbuje auto-inferencji z `hass.entities` po area_id.
-   */
-  rooms?: RoomRefConfig[];
 }
 
 /** Wbudowane typy chipów agregujących encje area/floor. */
@@ -112,16 +113,26 @@ export type ChipConfig =
   | FilterChipConfig
   | TemplateChipConfig;
 
-export interface RoomRefConfig {
-  /** Nazwa widoczna w UI. */
-  name: string;
-  /** Ikona MDI. */
+/**
+ * Jedna pozycja na liście pomieszczeń — wskazanie area z HA plus opcjonalne
+ * override'y wyświetlania. Merge z innymi area (hierarchia primary/secondary)
+ * trafi tutaj w v0.10 jako pole `merge_with`.
+ */
+export interface RoomConfig {
+  /** ID area z HA. Wymagane. */
+  area_id: string;
+  /** Override nazwy. Jeśli brak — `area.name` z HA. */
+  name?: string;
+  /** Override ikony. Jeśli brak — `area.icon` z HA, potem `mdi:floor-plan`. */
   icon?: string;
-  /** Akcja po tapnięciu wiersza. */
+  /** Per-room tap_action. Nadpisuje globalny `room_tap_action` karty. */
   tap_action?: TapActionConfig;
-  /** Lista encji pomieszczenia (światła, czujki). Na razie surowe stringi. */
-  entities?: string[];
+  /** Ukryj ten wiersz (użyteczne w edytorze jako „wyłącz bez usuwania"). */
+  hidden?: boolean;
 }
+
+/** Zachowane dla kompatybilności — alias do nowego typu. */
+export type RoomRefConfig = RoomConfig;
 
 /**
  * Prosty kontrakt tap_action kompatybilny z konwencją HA/Mushroom/Bubble.
