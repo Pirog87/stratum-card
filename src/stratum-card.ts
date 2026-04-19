@@ -11,6 +11,7 @@ import {
   filterByDomain,
   filterBinarySensorDeviceClass,
 } from './area-entities.js';
+import './stratum-card-editor.js';
 
 const VERSION = '0.1.0';
 
@@ -37,6 +38,20 @@ export class StratumCard extends LitElement {
   /** HA używa tego do kalkulacji layoutu masonry. */
   public getCardSize(): number {
     return this._expanded ? 4 : 1;
+  }
+
+  /** Powiązuje wizualny editor z kartą — UI dashboardu HA wywoła to przy „Edit". */
+  public static async getConfigElement(): Promise<HTMLElement> {
+    return document.createElement('stratum-card-editor');
+  }
+
+  /** Sensowny default gdy user dodaje kartę przez wizard „Add card". */
+  public static getStubConfig(
+    _hass: HomeAssistant,
+    _entities: string[],
+    _entitiesFallback: string[],
+  ): Partial<StratumCardConfig> {
+    return { area_id: '' };
   }
 
   private _toggleExpand = (): void => {
