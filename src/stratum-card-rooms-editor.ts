@@ -182,8 +182,53 @@ export class StratumCardRoomsEditor extends LitElement {
     this._updateRoom(areaId, ev.detail.value);
   }
 
+  /** Sortuje area: najpierw zaznaczone w kolejności z config.rooms, potem reszta z floor. */
+  private _sortedAreas() {
+    const floorAreas = this._availableAreas();
+    const floorById = new Map(floorAreas.map((a) => [a.area_id, a]));
+    const selectedInOrder = this.rooms
+      .map((r) => floorById.get(r.area_id))
+      .filter(<T,>(a: T | undefined): a is T => a !== undefined);
+    const selectedIds = new Set(selectedInOrder.map((a) => a.area_id));
+    const rest = floorAreas.filter((a) => !selectedIds.has(a.area_id));
+    return [...selectedInOrder, ...rest];
+  }
+
+  private _selectAll(): void {
+    const floorAreas = this._availableAreas();
+    const existingById = new Map(this.rooms.map((r) => [r.area_id, r]));
+    const next = floorAreas.map(
+      (a) => ({ ...(existingById.get(a.area_id) ?? { area_id: a.area_id }), hidden: false }),
+    );
+    this._emitChange(next);
+  }
+
+  private _deselectAll(): void {
+    // Zachowujemy pokoje z override'ami jako hidden (żeby settings przetrwały),
+    // resztę wyrzucamy.
+    const next = this.rooms
+      .filter((r) => r.name || r.icon || r.tap_action || r.merge_with?.length)
+      .map((r) => ({ ...r, hidden: true }));
+    this._emitChange(next);
+  }
+
+  private _moveRoom(areaId: string, direction: -1 | 1): void {
+    const idx = this.rooms.findIndex((r) => r.area_id === areaId);
+    if (idx === -1) return;
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= this.rooms.length) return;
+    const next = [...this.rooms];
+    [next[idx], next[targetIdx]] = [next[targetIdx]!, next[idx]!];
+    this._emitChange(next);
+  }
+
+  private _getPosition(areaId: string): { index: number; total: number } {
+    const idx = this.rooms.findIndex((r) => r.area_id === areaId);
+    return { index: idx, total: this.rooms.length };
+  }
+
   protected render(): TemplateResult | typeof nothing {
-    const areas = this._availableAreas();
+    const areas = this._sortedAreas();
     if (!this.hass) return nothing;
     if (areas.length === 0) {
       return html`<div class="empty">
@@ -192,7 +237,18 @@ export class StratumCardRoomsEditor extends LitElement {
       </div>`;
     }
 
+    const selectedCount = this.rooms.filter((r) => !r.hidden).length;
+
     return html`
+      <div class="toolbar">
+        <span class="count">${selectedCount} / ${areas.length} zaznaczonych</span>
+        <button type="button" class="bulk" @click=${this._selectAll}>
+          Zaznacz wszystkie
+        </button>
+        <button type="button" class="bulk" @click=${this._deselectAll}>
+          Odznacz wszystkie
+        </button>
+      </div>
       <div class="wrap">
         ${areas.map((area) => {
           const visible = this._isVisible(area.area_id);
@@ -227,6 +283,37 @@ export class StratumCardRoomsEditor extends LitElement {
                   : nothing}
                 ${hasOverrides
                   ? html`<span class="badge">custom</span>`
+                  : nothing}
+                ${visible
+                  ? (() => {
+                      const pos = this._getPosition(area.area_id);
+                      return html`<div class="reorder">
+                        <button
+                          type="button"
+                          title="Przesuń w górę"
+                          ?disabled=${pos.index <= 0}
+                          @click=${(ev: Event) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            this._moveRoom(area.area_id, -1);
+                          }}
+                        >
+                          <ha-icon .icon=${'mdi:chevron-up'}></ha-icon>
+                        </button>
+                        <button
+                          type="button"
+                          title="Przesuń w dół"
+                          ?disabled=${pos.index === -1 || pos.index >= pos.total - 1}
+                          @click=${(ev: Event) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            this._moveRoom(area.area_id, 1);
+                          }}
+                        >
+                          <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
+                        </button>
+                      </div>`;
+                    })()
                   : nothing}
               </label>
               ${visible
@@ -330,6 +417,67 @@ export class StratumCardRoomsEditor extends LitElement {
       height: 18px;
       margin: 0;
       accent-color: var(--primary-color, #ff9b42);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.02));
+      font-size: 12px;
+    }
+
+    .toolbar .count {
+      flex: 1;
+      color: var(--secondary-text-color);
+    }
+
+    .bulk {
+      background: transparent;
+      border: 1px solid var(--divider-color);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--primary-text-color);
+      cursor: pointer;
+    }
+
+    .bulk:hover {
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
+      border-color: var(--primary-color, #ff9b42);
+    }
+
+    .reorder {
+      display: flex;
+      gap: 2px;
+      margin-left: auto;
+    }
+
+    .reorder button {
+      background: transparent;
+      border: 0;
+      padding: 2px;
+      cursor: pointer;
+      color: var(--secondary-text-color);
+      border-radius: 4px;
+      display: inline-flex;
+    }
+
+    .reorder button:hover:not(:disabled) {
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
+      color: var(--primary-text-color);
+    }
+
+    .reorder button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .reorder ha-icon {
+      --mdc-icon-size: 16px;
     }
   `;
 }
