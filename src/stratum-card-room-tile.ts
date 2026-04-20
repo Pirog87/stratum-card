@@ -6,7 +6,7 @@
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import type { DisplayConfig, TileField } from './types.js';
+import type { TileDisplayConfig, TileField } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
@@ -37,7 +37,7 @@ export class StratumCardRoomTile extends LitElement {
   @property({ type: Number, attribute: 'doors-open' }) public doorsOpen = 0;
 
   /** Globalna konfiguracja wyglądu (aspect, pola, kolor akcentu, tło). */
-  @property({ attribute: false }) public displayConfig?: DisplayConfig;
+  @property({ attribute: false }) public displayConfig?: TileDisplayConfig;
 
   /** Per-pokój CSS override (wstrzykiwane jako style na .tile). */
   @property({ type: String, attribute: 'style-override' }) public styleOverride?: string;

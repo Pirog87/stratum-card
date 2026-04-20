@@ -5,14 +5,17 @@
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type {
-  DisplayConfig,
   HoverEffect,
   IconPosition,
   IconStyle,
+  TileDisplayConfig,
   TileField,
 } from './types.js';
 import { SCENE_PRESETS } from './scene-presets.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+
+/** Typ edytora — zwykły kontrakt wyglądu, bez conditions (te są top-level). */
+export type DisplayEditorMode = 'row' | 'tile';
 
 const FIELD_META: Array<{ key: TileField; icon: string; label: string }> = [
   { key: 'temperature', icon: 'mdi:thermometer', label: 'Temperatura' },
@@ -68,9 +71,12 @@ const DEFAULT_FIELDS: TileField[] = ['temperature', 'lights', 'motion'];
 
 @customElement('stratum-display-editor')
 export class StratumDisplayEditor extends LitElement {
-  @property({ attribute: false }) public config: DisplayConfig = {};
+  @property({ attribute: false }) public config: TileDisplayConfig = {};
 
-  private _emit(next: DisplayConfig): void {
+  /** Tryb edytora — `tile` pokazuje wszystkie pola, `row` ukrywa tile-only. */
+  @property({ type: String }) public mode: DisplayEditorMode = 'tile';
+
+  private _emit(next: TileDisplayConfig): void {
     this.dispatchEvent(
       new CustomEvent('display-config-changed', {
         detail: { config: next },
@@ -80,7 +86,7 @@ export class StratumDisplayEditor extends LitElement {
     );
   }
 
-  private _patch(patch: Partial<DisplayConfig>): void {
+  private _patch(patch: Partial<TileDisplayConfig>): void {
     this._emit({ ...this.config, ...patch });
   }
 
@@ -157,9 +163,9 @@ export class StratumDisplayEditor extends LitElement {
     }
   }
 
-  private _onSlider(key: keyof DisplayConfig, ev: Event): void {
+  private _onSlider(key: keyof TileDisplayConfig, ev: Event): void {
     const value = parseFloat((ev.target as HTMLInputElement).value);
-    this._patch({ [key]: value } as Partial<DisplayConfig>);
+    this._patch({ [key]: value } as Partial<TileDisplayConfig>);
   }
 
   private _setIconStyle(value: IconStyle): void {
@@ -218,29 +224,33 @@ export class StratumDisplayEditor extends LitElement {
         </p>
       </div>
 
-      <div class="group">
-        <label class="group-label">Proporcje kafla</label>
-        <div class="chip-row">
-          ${ASPECT_PRESETS.map(
-            (p) => html`<button
-              type="button"
-              class="chip aspect-chip ${aspect === p.value ? 'on' : ''}"
-              @click=${() => this._setAspect(p.value)}
-            >
-              <span class="aspect-preview" style="aspect-ratio:${p.value};"></span>
-              ${p.label}
-            </button>`,
-          )}
-          <input
-            type="text"
-            class="custom-input"
-            placeholder="np. 270/150"
-            .value=${customAspect}
-            @change=${this._onCustomAspect}
-          />
-        </div>
-        <p class="group-hint">Dotyczy tylko kafla. Wiersz ignoruje.</p>
-      </div>
+      ${this.mode === 'tile'
+        ? html`<div class="group">
+            <label class="group-label">Proporcje kafla</label>
+            <div class="chip-row">
+              ${ASPECT_PRESETS.map(
+                (p) => html`<button
+                  type="button"
+                  class="chip aspect-chip ${aspect === p.value ? 'on' : ''}"
+                  @click=${() => this._setAspect(p.value)}
+                >
+                  <span
+                    class="aspect-preview"
+                    style="aspect-ratio:${p.value};"
+                  ></span>
+                  ${p.label}
+                </button>`,
+              )}
+              <input
+                type="text"
+                class="custom-input"
+                placeholder="np. 270/150"
+                .value=${customAspect}
+                @change=${this._onCustomAspect}
+              />
+            </div>
+          </div>`
+        : nothing}
 
       <div class="group">
         <label class="group-label">Kolor akcentu</label>
@@ -273,40 +283,45 @@ export class StratumDisplayEditor extends LitElement {
         </div>
       </div>
 
-      <div class="group">
-        <label class="group-label">Obrazek tła kafla</label>
-        <div class="bg-row">
-          <select
-            class="native-select"
-            .value=${bgIsPreset ? bg : customBgUrl ? '__custom__' : ''}
-            @change=${this._onBgPreset}
-          >
-            <option value="">— Brak —</option>
-            <optgroup label="Presety Stratum">
-              ${SCENE_PRESETS.map(
-                (p) => html`<option
-                  value=${`stratum:${p.id}`}
-                  ?selected=${bg === `stratum:${p.id}`}
+      ${this.mode === 'tile'
+        ? html`<div class="group">
+            <label class="group-label">Obrazek tła kafla</label>
+            <div class="bg-row">
+              <select
+                class="native-select"
+                .value=${bgIsPreset ? bg : customBgUrl ? '__custom__' : ''}
+                @change=${this._onBgPreset}
+              >
+                <option value="">— Brak —</option>
+                <optgroup label="Presety Stratum">
+                  ${SCENE_PRESETS.map(
+                    (p) => html`<option
+                      value=${`stratum:${p.id}`}
+                      ?selected=${bg === `stratum:${p.id}`}
+                    >
+                      ${p.label}
+                    </option>`,
+                  )}
+                </optgroup>
+                <option
+                  value="__custom__"
+                  ?selected=${!bgIsPreset && Boolean(customBgUrl)}
                 >
-                  ${p.label}
-                </option>`,
-              )}
-            </optgroup>
-            <option value="__custom__" ?selected=${!bgIsPreset && Boolean(customBgUrl)}>
-              Custom URL…
-            </option>
-          </select>
-          ${!bgIsPreset
-            ? html`<input
-                type="text"
-                class="custom-input grow"
-                placeholder="/local/img/salon.jpg lub https://..."
-                .value=${customBgUrl}
-                @change=${this._onCustomBgUrl}
-              />`
-            : nothing}
-        </div>
-      </div>
+                  Custom URL…
+                </option>
+              </select>
+              ${!bgIsPreset
+                ? html`<input
+                    type="text"
+                    class="custom-input grow"
+                    placeholder="/local/img/salon.jpg lub https://..."
+                    .value=${customBgUrl}
+                    @change=${this._onCustomBgUrl}
+                  />`
+                : nothing}
+            </div>
+          </div>`
+        : nothing}
 
       <div class="group toggles-row">
         <label class="toggle">
@@ -335,7 +350,9 @@ export class StratumDisplayEditor extends LitElement {
         <div class="stratum-collapsible-body">
           ${this._renderSlider('Zaokrąglenie rogów', 'border_radius', radius, 0, 40, 1, 'px')}
           ${this._renderSlider('Wewnętrzny padding', 'padding', padding, 0, 40, 1, 'px')}
-          ${this._renderSlider('Min. wysokość kafla', 'min_height', minHeight, 40, 260, 2, 'px')}
+          ${this.mode === 'tile'
+            ? this._renderSlider('Min. wysokość kafla', 'min_height', minHeight, 40, 260, 2, 'px')
+            : this._renderSlider('Min. wysokość wiersza', 'min_height', minHeight, 30, 120, 2, 'px')}
         </div>
       </details>
 
@@ -359,20 +376,24 @@ export class StratumDisplayEditor extends LitElement {
               </button>`,
             )}
           </div>
-          <label class="group-label sub">Pozycja ikony na kaflu</label>
-          <div class="icon-position-grid">
-            ${ICON_POSITIONS.map(
-              (p) => html`<button
-                type="button"
-                class="pos-cell ${iconPos === p.value ? 'on' : ''}"
-                title=${p.label}
-                @click=${() => this._setIconPosition(p.value)}
-              >
-                <span class="pos-glyph">${p.preview}</span>
-                <span class="pos-label">${p.label}</span>
-              </button>`,
-            )}
-          </div>
+          ${this.mode === 'tile'
+            ? html`
+                <label class="group-label sub">Pozycja ikony na kaflu</label>
+                <div class="icon-position-grid">
+                  ${ICON_POSITIONS.map(
+                    (p) => html`<button
+                      type="button"
+                      class="pos-cell ${iconPos === p.value ? 'on' : ''}"
+                      title=${p.label}
+                      @click=${() => this._setIconPosition(p.value)}
+                    >
+                      <span class="pos-glyph">${p.preview}</span>
+                      <span class="pos-label">${p.label}</span>
+                    </button>`,
+                  )}
+                </div>
+              `
+            : nothing}
         </div>
       </details>
 
@@ -402,7 +423,7 @@ export class StratumDisplayEditor extends LitElement {
 
   private _renderSlider(
     label: string,
-    key: keyof DisplayConfig,
+    key: keyof TileDisplayConfig,
     value: number,
     min: number,
     max: number,

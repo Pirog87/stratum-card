@@ -9,11 +9,12 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
   DisplayConditionConfig,
-  DisplayConfig,
   HomeAssistant,
   RoomConfig,
+  RowDisplayConfig,
   SceneBarConfig,
   StratumCardConfig,
+  TileDisplayConfig,
 } from './types.js';
 import './stratum-card-rooms-editor.js';
 import './stratum-scene-editor.js';
@@ -142,58 +143,75 @@ export class StratumCardEditor extends LitElement {
     this._emitConfig(next);
   }
 
-  private _displayConfigChanged(
-    ev: CustomEvent<{ config: DisplayConfig }>,
-  ): void {
-    ev.stopPropagation();
-    if (!this._config) return;
-    const raw = ev.detail.config ?? {};
-    const cleaned: DisplayConfig = {};
-
-    if (raw.fields && raw.fields.length > 0) cleaned.fields = raw.fields;
-    if (raw.aspect && raw.aspect.trim() !== '' && raw.aspect !== '1/1') {
-      cleaned.aspect = raw.aspect;
-    }
+  /** Oczyszcza raw z defaults. Wspólna logika dla row/tile. */
+  private _cleanStyle(raw: TileDisplayConfig, isTile: boolean): TileDisplayConfig {
+    const out: TileDisplayConfig = {};
+    if (raw.fields && raw.fields.length > 0) out.fields = raw.fields;
     if (raw.accent_color && raw.accent_color.trim() !== '') {
-      cleaned.accent_color = raw.accent_color;
+      out.accent_color = raw.accent_color;
     }
-    if (raw.background_image && raw.background_image.trim() !== '') {
-      cleaned.background_image = raw.background_image;
+    if (raw.show_icon === false) out.show_icon = false;
+    if (raw.show_name === false) out.show_name = false;
+    const defaultRadius = isTile ? 14 : 6;
+    const defaultPadding = isTile ? 12 : 10;
+    const defaultMinH = isTile ? 110 : 0;
+    if (typeof raw.border_radius === 'number' && raw.border_radius !== defaultRadius) {
+      out.border_radius = raw.border_radius;
     }
-    if (raw.show_icon === false) cleaned.show_icon = false;
-    if (raw.show_name === false) cleaned.show_name = false;
-
-    if (typeof raw.border_radius === 'number' && raw.border_radius !== 14) {
-      cleaned.border_radius = raw.border_radius;
+    if (typeof raw.padding === 'number' && raw.padding !== defaultPadding) {
+      out.padding = raw.padding;
     }
-    if (typeof raw.padding === 'number' && raw.padding !== 12) {
-      cleaned.padding = raw.padding;
-    }
-    if (typeof raw.min_height === 'number' && raw.min_height !== 110) {
-      cleaned.min_height = raw.min_height;
+    if (typeof raw.min_height === 'number' && raw.min_height !== defaultMinH) {
+      out.min_height = raw.min_height;
     }
     if (typeof raw.icon_size === 'number' && raw.icon_size !== 22) {
-      cleaned.icon_size = raw.icon_size;
+      out.icon_size = raw.icon_size;
     }
     if (raw.icon_style && raw.icon_style !== 'bubble') {
-      cleaned.icon_style = raw.icon_style;
+      out.icon_style = raw.icon_style;
     }
-    if (raw.icon_position && raw.icon_position !== 'top-left') {
-      cleaned.icon_position = raw.icon_position;
-    }
-    if (raw.hover_effect && raw.hover_effect !== 'subtle') {
-      cleaned.hover_effect = raw.hover_effect;
+    const defaultHover = isTile ? 'lift' : 'subtle';
+    if (raw.hover_effect && raw.hover_effect !== defaultHover) {
+      out.hover_effect = raw.hover_effect;
     }
     if (typeof raw.press_scale === 'number' && raw.press_scale !== 0.98) {
-      cleaned.press_scale = raw.press_scale;
+      out.press_scale = raw.press_scale;
     }
-    if (raw.conditions && raw.conditions.length > 0) {
-      cleaned.conditions = raw.conditions;
+    // Tile-only fields
+    if (isTile) {
+      if (raw.aspect && raw.aspect.trim() !== '' && raw.aspect !== '1/1') {
+        out.aspect = raw.aspect;
+      }
+      if (raw.background_image && raw.background_image.trim() !== '') {
+        out.background_image = raw.background_image;
+      }
+      if (raw.icon_position && raw.icon_position !== 'top-left') {
+        out.icon_position = raw.icon_position;
+      }
     }
+    return out;
+  }
 
+  private _rowConfigChanged(ev: CustomEvent<{ config: RowDisplayConfig }>): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const cleaned = this._cleanStyle(ev.detail.config ?? {}, false);
     const next: StratumCardConfig = { ...this._config };
-    if (Object.keys(cleaned).length === 0) delete next.display_config;
-    else next.display_config = cleaned;
+    // Po pierwszym saveuj migracja display_config → row/tile_config
+    delete next.display_config;
+    if (Object.keys(cleaned).length === 0) delete next.row_config;
+    else next.row_config = cleaned;
+    this._emitConfig(next);
+  }
+
+  private _tileConfigChanged(ev: CustomEvent<{ config: TileDisplayConfig }>): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const cleaned = this._cleanStyle(ev.detail.config ?? {}, true);
+    const next: StratumCardConfig = { ...this._config };
+    delete next.display_config;
+    if (Object.keys(cleaned).length === 0) delete next.tile_config;
+    else next.tile_config = cleaned;
     this._emitConfig(next);
   }
 
@@ -204,12 +222,43 @@ export class StratumCardEditor extends LitElement {
     if (!this._config) return;
     const next: StratumCardConfig = { ...this._config };
     const list = ev.detail.conditions;
-    const current: DisplayConfig = { ...(next.display_config ?? {}) };
-    if (list.length === 0) delete current.conditions;
-    else current.conditions = list;
-    if (Object.keys(current).length === 0) delete next.display_config;
-    else next.display_config = current;
+    delete next.display_config; // migracja — conditions wędruje na top-level
+    if (list.length === 0) delete next.conditions;
+    else next.conditions = list;
     this._emitConfig(next);
+  }
+
+  /** Zwraca aktualne wartości row/tile config z uwzględnieniem migracji. */
+  private _effectiveRowConfig(): RowDisplayConfig {
+    const c = this._config;
+    if (c?.row_config) return c.row_config;
+    if (c?.display_config) {
+      const { conditions: _c, aspect: _a, background_image: _bg, icon_position: _ip, ...rest } =
+        c.display_config;
+      void _c;
+      void _a;
+      void _bg;
+      void _ip;
+      return rest;
+    }
+    return {};
+  }
+
+  private _effectiveTileConfig(): TileDisplayConfig {
+    const c = this._config;
+    if (c?.tile_config) return c.tile_config;
+    if (c?.display_config) {
+      const { conditions: _c, ...rest } = c.display_config;
+      void _c;
+      return rest;
+    }
+    return {};
+  }
+
+  private _effectiveConditions(): DisplayConditionConfig[] {
+    const c = this._config;
+    if (c?.conditions) return c.conditions;
+    return c?.display_config?.conditions ?? [];
   }
 
   private _roomsChanged(ev: CustomEvent<{ rooms: RoomConfig[] }>): void {
@@ -279,21 +328,45 @@ export class StratumCardEditor extends LitElement {
 
       <div class="stratum-panel">
         <div class="stratum-panel-header">
-          <span class="stratum-panel-avatar">
-            <ha-icon .icon=${'mdi:image-outline'}></ha-icon>
+          <span class="stratum-panel-avatar row-avatar">
+            <ha-icon .icon=${'mdi:format-list-bulleted'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Wygląd pomieszczeń (globalny)</h3>
+            <h3>Wygląd — Wiersz (row)</h3>
             <p class="stratum-panel-hint">
-              Jedno ustawienie dla całej karty — dotyczy zarówno wiersza jak i
-              kafla. Per-pomieszczenie wybierzesz tylko formę i ewentualny CSS.
+              Konfiguracja kompaktowej formy. Dotyczy pokoi z
+              <code>display: row</code> oraz domyślnej gdy
+              <code>rooms_display: row</code>.
             </p>
           </div>
         </div>
         <div class="stratum-panel-body">
           <stratum-display-editor
-            .config=${this._config.display_config ?? {}}
-            @display-config-changed=${this._displayConfigChanged}
+            mode="row"
+            .config=${this._effectiveRowConfig()}
+            @display-config-changed=${this._rowConfigChanged}
+          ></stratum-display-editor>
+        </div>
+      </div>
+
+      <div class="stratum-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar tile-avatar">
+            <ha-icon .icon=${'mdi:view-grid-outline'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Wygląd — Kafel (tile)</h3>
+            <p class="stratum-panel-hint">
+              Pełna karta z licznikami. Dodaje proporcje kafla, obrazek tła
+              i pozycję ikony poza schemat wspólny z wierszem.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <stratum-display-editor
+            mode="tile"
+            .config=${this._effectiveTileConfig()}
+            @display-config-changed=${this._tileConfigChanged}
           ></stratum-display-editor>
         </div>
       </div>
@@ -306,15 +379,15 @@ export class StratumCardEditor extends LitElement {
           <div class="stratum-panel-title">
             <h3>Warunki — styl zależny od encji</h3>
             <p class="stratum-panel-hint">
-              Reguły zmieniające border, akcent lub tło w zależności od stanu.
-              Pierwsza spełniona reguła wygrywa.
+              Wspólne reguły dla wiersza i kafla. Pierwsza spełniona reguła
+              wygrywa.
             </p>
           </div>
         </div>
         <div class="stratum-panel-body">
           <stratum-conditions-editor
             .hass=${this.hass}
-            .conditions=${this._config.display_config?.conditions ?? []}
+            .conditions=${this._effectiveConditions()}
             @conditions-changed=${this._conditionsChanged}
           ></stratum-conditions-editor>
         </div>
@@ -368,6 +441,16 @@ export class StratumCardEditor extends LitElement {
 
   static styles = [
     editorSharedStyles,
+    css`
+      .stratum-panel-avatar.row-avatar {
+        background: color-mix(in srgb, #2196f3 22%, transparent);
+        color: #64b5f6;
+      }
+      .stratum-panel-avatar.tile-avatar {
+        background: color-mix(in srgb, #ff9800 22%, transparent);
+        color: #ffb74d;
+      }
+    `,
     css`
       :host {
         display: block;

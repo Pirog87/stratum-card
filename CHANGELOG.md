@@ -4,6 +4,36 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.21.0] — 2026-04-20
+
+### Changed
+- **Rozdzielona konfiguracja wyglądu dla wiersza i kafla.** Nowe klucze
+  top-level `row_config` i `tile_config` (oba schema `TileDisplayConfig`).
+  Reguły warunkowe `conditions` przeniesione na top-level (wspólne dla
+  obu form). Dotychczasowe `display_config` jest automatycznie migrowane
+  przy pierwszym zapisaniu (backward-compat).
+- Edytor „Wygląd — Wiersz" pokazuje tylko pola istotne dla formy
+  kompaktowej (bez `aspect`, `background_image`, `icon_position`).
+  Edytor „Wygląd — Kafel" ma pełny zestaw.
+- Nowa struktura paneli edytora:
+  1. Karta (podstawy + zachowanie)
+  2. Wygląd — Wiersz
+  3. Wygląd — Kafel
+  4. Warunki stylu
+  5. Pomieszczenia
+  6. Sceny
+
+### Fixed
+- **Podgląd karty nie zwija się przy każdej edycji.** `setConfig`
+  zachowuje stan `_expanded` między re-renderami edytora — resetuje tylko
+  gdy config explicit zmienia flagę `expanded` albo przy pierwszym setConfig.
+
+### Migration
+Stare YAML działa bez zmian — migracja zachodzi automatycznie w runtime.
+Przy pierwszej edycji w visual editorze config zostanie zapisany
+w nowej strukturze (`display_config` usunięte, `row_config` + `tile_config`
++ top-level `conditions` wstawione).
+
 ## [1.20.0] — 2026-04-20
 
 ### Changed
