@@ -23,7 +23,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 
 interface SummaryDatum {
   label: string;
@@ -105,6 +105,7 @@ function entitiesForSection(
     case 'scenes':
       return filterByDomain(entries, 'scene');
     case 'summary':
+    case 'custom':
       return [];
   }
 }
@@ -267,11 +268,20 @@ export class StratumRoomCard extends LitElement {
     const iconName = section.icon ?? SECTION_ICON[type];
 
     if (type === 'summary') return this._renderSummary(section, entries, title, iconName);
+    if (type === 'custom') return this._renderCustomCard(section, title, iconName);
 
-    let items = entitiesForSection(this.hass!, entries, type);
+    let items: HassEntityRegistryEntry[];
     if (section.entities && section.entities.length > 0) {
-      const allow = new Set(section.entities);
-      items = items.filter((e) => allow.has(e.entity_id));
+      // User podał jawne entities — bierzemy je z hass.entities registry niezależnie
+      // od area scope. Encja może być grupą/template'm bez area_id i powinna działać.
+      items = section.entities
+        .map(
+          (id) =>
+            this.hass!.entities?.[id] ?? ({ entity_id: id } as HassEntityRegistryEntry),
+        )
+        .filter((e) => Boolean(this.hass!.states?.[e.entity_id]));
+    } else {
+      items = entitiesForSection(this.hass!, entries, type);
     }
     if (items.length === 0) return html``;
 
@@ -303,6 +313,52 @@ export class StratumRoomCard extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  private _renderCustomCard(
+    section: RoomSectionConfig,
+    title: string,
+    iconName: string,
+  ): TemplateResult {
+    if (!section.card) {
+      return html`
+        <div class="section" part="section">
+          <div class="section-header" part="section-header">
+            <ha-icon .icon=${iconName}></ha-icon>
+            <span>${title}</span>
+          </div>
+          <div class="placeholder">Sekcja custom bez configu karty.</div>
+        </div>
+      `;
+    }
+    const card = this._mountCustomCard(section.card);
+    return html`
+      <div class="section" part="section">
+        ${section.title
+          ? html`<div class="section-header" part="section-header">
+              <ha-icon .icon=${iconName}></ha-icon>
+              <span>${title}</span>
+            </div>`
+          : null}
+        <div class="custom-card-slot">${card}</div>
+      </div>
+    `;
+  }
+
+  /** Kreuje / re-używa element dowolnej karty HA (`<hui-card>`). */
+  private _customCards = new Map<string, HTMLElement>();
+
+  private _mountCustomCard(config: Record<string, unknown>): HTMLElement {
+    const key = JSON.stringify(config);
+    let el = this._customCards.get(key);
+    if (!el) {
+      el = document.createElement('hui-card');
+      this._customCards.set(key, el);
+    }
+    // Always refresh hass + config (Lit will re-run render, card element is cached).
+    (el as unknown as { hass?: HomeAssistant }).hass = this.hass;
+    (el as unknown as { config?: Record<string, unknown> }).config = config;
+    return el;
   }
 
   private _renderSummary(
@@ -641,6 +697,15 @@ export class StratumRoomCard extends LitElement {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
+    }
+
+    .custom-card-slot {
+      display: block;
+    }
+
+    .custom-card-slot > * {
+      display: block;
+      width: 100%;
     }
 
     .tiles.grid-1 {

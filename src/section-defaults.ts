@@ -14,6 +14,7 @@ export const SECTION_LABEL: Record<RoomSectionType, string> = {
   fans: 'Wentylacja',
   switches: 'Przełączniki',
   scenes: 'Sceny',
+  custom: 'Karta custom',
 };
 
 export const SECTION_ICON: Record<RoomSectionType, string> = {
@@ -27,6 +28,7 @@ export const SECTION_ICON: Record<RoomSectionType, string> = {
   fans: 'mdi:fan',
   switches: 'mdi:toggle-switch',
   scenes: 'mdi:palette',
+  custom: 'mdi:card-bulleted-outline',
 };
 
 export const SECTION_LAYOUT: Record<RoomSectionType, string> = {
@@ -40,4 +42,5 @@ export const SECTION_LAYOUT: Record<RoomSectionType, string> = {
   covers: 'grid-1',
   climate: 'grid-1',
   media: 'grid-1',
+  custom: 'grid-1',
 };
