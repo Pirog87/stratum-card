@@ -38,6 +38,13 @@ export class StratumRoomTile extends LitElement {
    */
   @property({ type: String }) public mode = 'tile';
 
+  /**
+   * Template configu merge'owany z auto-configiem gdy `mode: 'custom:xxx'`.
+   * Pozwala przekazać dodatkowe pola (np. `fill_container: true` dla
+   * mushroom-light-card) które odnoszą się do wszystkich encji w sekcji.
+   */
+  @property({ attribute: false }) public cardTemplate?: Record<string, unknown>;
+
   private _state(): HassEntity | undefined {
     return this.hass?.states?.[this.entity];
   }
@@ -196,7 +203,13 @@ export class StratumRoomTile extends LitElement {
   private _customKey?: string;
 
   private _renderCustomCardMode(): TemplateResult {
-    const config = buildDefaultCustomConfig(this.mode, this.entity);
+    const base = buildDefaultCustomConfig(this.mode, this.entity);
+    // Template merge'uje się POD auto-config — `type` i `entity` z base
+    // zawsze wygrywają żeby template nie mógł przypadkiem wyłamać iteracji.
+    const config: Record<string, unknown> =
+      this.cardTemplate && Object.keys(this.cardTemplate).length > 0
+        ? { ...this.cardTemplate, ...base }
+        : base;
     const key = JSON.stringify(config);
     if (!this._customEl || this._customKey !== key) {
       this._customEl = document.createElement('hui-card');

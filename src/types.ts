@@ -281,6 +281,17 @@ export interface RoomSectionConfig {
    * Jeśli karta custom nie jest jeszcze załadowana, HA zrobi to sam.
    */
   card?: Record<string, unknown>;
+  /**
+   * Template configu karty custom gdy `mode: 'custom:xxx'` — merge'owany
+   * z auto-configem per encja. Przykład dla `mode: 'custom:mushroom-light-card'`:
+   *   card_template:
+   *     fill_container: true
+   *     icon_color: amber
+   *     use_light_color: true
+   * → każda żarówka dostaje taki config + `entity: light.<własny>`.
+   * Pola `type` i `entity` z auto-configu zawsze wygrywają nad template.
+   */
+  card_template?: Record<string, unknown>;
   /** Wyłącz sekcję bez usuwania configu. */
   hidden?: boolean;
 }

@@ -266,6 +266,9 @@ export class StratumSectionsEditor extends LitElement {
     if (!merged.mode) delete merged.mode;
     if (!merged.columns || merged.columns === 'auto') delete merged.columns;
     if (merged.card && Object.keys(merged.card).length === 0) delete merged.card;
+    if (merged.card_template && Object.keys(merged.card_template).length === 0) {
+      delete merged.card_template;
+    }
     next[index] = merged;
     this._emit(next);
   }
@@ -406,6 +409,28 @@ export class StratumSectionsEditor extends LitElement {
                             @value-changed=${(ev: CustomEvent<{ value: Record<string, unknown>; isValid: boolean }>) =>
                               ev.detail.isValid &&
                               this._updateAt(idx, { card: ev.detail.value })}
+                          ></ha-yaml-editor>
+                        </div>`
+                      : nothing}
+                    ${section.type !== 'custom' &&
+                    section.type !== 'summary' &&
+                    (section.mode ?? '').startsWith('custom:')
+                      ? html`<div class="card-yaml">
+                          <label>Template karty (YAML)</label>
+                          <p class="card-hint">
+                            Extra pola merge'owane z auto-configiem per encja.
+                            Np. dla <code>custom:mushroom-light-card</code>:
+                            <code>fill_container: true</code>,
+                            <code>icon_color: amber</code>,
+                            <code>use_light_color: true</code>. Nie wpisuj
+                            <code>type</code> ani <code>entity</code> — wygrywa
+                            auto-config.
+                          </p>
+                          <ha-yaml-editor
+                            .defaultValue=${section.card_template ?? {}}
+                            @value-changed=${(ev: CustomEvent<{ value: Record<string, unknown>; isValid: boolean }>) =>
+                              ev.detail.isValid &&
+                              this._updateAt(idx, { card_template: ev.detail.value })}
                           ></ha-yaml-editor>
                         </div>`
                       : nothing}
