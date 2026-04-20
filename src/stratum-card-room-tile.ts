@@ -45,6 +45,12 @@ export class StratumCardRoomTile extends LitElement {
   /** Overrides wyliczone z `display_config.conditions`. */
   @property({ attribute: false }) public conditionOverride?: ConditionOverride;
 
+  /** Kolor akcentu wyliczony z aktywnego światła (accent_mode=lights). */
+  @property({ type: String, attribute: 'lights-accent' }) public lightsAccent?: string;
+
+  /** Jasność światła (0-1) — wpływa na intensywność accentu z lights. */
+  @property({ type: Number, attribute: 'lights-brightness' }) public lightsBrightness?: number;
+
   private _onClick = (): void => {
     if (!this.clickable) return;
     this.dispatchEvent(
@@ -71,10 +77,18 @@ export class StratumCardRoomTile extends LitElement {
     const showIcon = cfg.show_icon !== false;
     const showName = cfg.show_name !== false;
     const ovr = this.conditionOverride;
+    // Priorytety: conditionOverride.accent > lightsAccent (dynamiczne) > cfg.accent_color > default amber.
     const accent =
       resolveColor(ovr?.accent_color) ??
+      this.lightsAccent ??
       resolveColor(cfg.accent_color) ??
       'var(--stratum-chip-lights-color, #ffc107)';
+    // Gdy accent pochodzi z lights, używamy brightness jako intensywność
+    // ring/underline (klamrzemy do min 0.35 żeby efekt był widoczny).
+    const lightsActive = Boolean(this.lightsAccent);
+    const accentIntensity = lightsActive
+      ? Math.max(0.35, Math.min(1, this.lightsBrightness ?? 0.8))
+      : 1;
     const borderColorOvr = resolveColor(ovr?.border_color);
     const borderWidthOvr =
       typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
@@ -86,16 +100,20 @@ export class StratumCardRoomTile extends LitElement {
     const hoverEffect = cfg.hover_effect ?? 'lift';
     const pressScale = typeof cfg.press_scale === 'number' ? cfg.press_scale : 0.98;
 
+    // Gdy user ustawia `min_height` explicit, traktujemy to jako wymuszoną
+    // wysokość kafla — nadpisuje aspect-ratio, żeby slider mógł zarówno
+    // zwiększyć jak i zmniejszyć rozmiar.
+    const explicitHeight = typeof cfg.min_height === 'number';
     const cssVars: string[] = [
-      `--stratum-room-tile-aspect: ${cfg.aspect ?? '1/1'};`,
-      active || ovr?.accent_color
+      explicitHeight
+        ? `aspect-ratio: auto; height: ${cfg.min_height}px; min-height: ${cfg.min_height}px;`
+        : `--stratum-room-tile-aspect: ${cfg.aspect ?? '1/1'};`,
+      active || ovr?.accent_color || lightsActive
         ? `--stratum-room-tile-active-color: ${accent};`
         : '',
+      lightsActive ? `--stratum-room-tile-active-intensity: ${accentIntensity};` : '',
       typeof cfg.border_radius === 'number'
         ? `--stratum-room-tile-radius: ${cfg.border_radius}px;`
-        : '',
-      typeof cfg.min_height === 'number'
-        ? `--stratum-room-tile-min-height: ${cfg.min_height}px;`
         : '',
       typeof cfg.padding === 'number'
         ? `--stratum-room-tile-padding: ${cfg.padding}px;`
@@ -114,7 +132,7 @@ export class StratumCardRoomTile extends LitElement {
     ];
     const styles = cssVars.filter(Boolean).join(' ');
 
-    const effectiveActive = active || Boolean(ovr?.accent_color);
+    const effectiveActive = active || Boolean(ovr?.accent_color) || lightsActive;
 
     return html`
       <div
@@ -299,8 +317,18 @@ export class StratumCardRoomTile extends LitElement {
     }
 
     .tile.active {
-      border-color: color-mix(in srgb, var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107)) 40%, transparent);
-      background: color-mix(in srgb, var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107)) 8%, var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03)));
+      border-color: color-mix(
+        in srgb,
+        var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107))
+          calc(40% * var(--stratum-room-tile-active-intensity, 1)),
+        transparent
+      );
+      background: color-mix(
+        in srgb,
+        var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107))
+          calc(10% * var(--stratum-room-tile-active-intensity, 1)),
+        var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03))
+      );
     }
 
     .tile.has-bg { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }

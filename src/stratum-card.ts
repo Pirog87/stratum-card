@@ -33,7 +33,7 @@ import './stratum-card-room-tile.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.22.0';
+const VERSION = '1.23.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -376,9 +376,16 @@ export class StratumCard extends LitElement {
         </div>`
       : null;
 
-    if (position === 'top' && sceneBar) parts.push(sceneBar);
+    const divider = html`<div class="body-divider" part="body-divider"></div>`;
+    if (position === 'top' && sceneBar) {
+      parts.push(sceneBar);
+      if (roomsWrapped) parts.push(divider);
+    }
     if (roomsWrapped) parts.push(roomsWrapped as TemplateResult);
-    if (position === 'bottom' && sceneBar) parts.push(sceneBar);
+    if (position === 'bottom' && sceneBar) {
+      if (roomsWrapped) parts.push(divider);
+      parts.push(sceneBar);
+    }
     return parts;
   }
 
@@ -497,6 +504,16 @@ export class StratumCard extends LitElement {
     const conditions = this._resolveConditions();
     const conditionOverride = evaluateConditions(data, conditions);
 
+    // Dynamiczny accent z świateł — jeśli config to zaznaczył i jakieś światło świeci.
+    const rowLightsAccent =
+      rowConfig?.accent_mode === 'lights' && data.lightsRgb
+        ? data.lightsRgb
+        : undefined;
+    const tileLightsAccent =
+      tileConfig?.accent_mode === 'lights' && data.lightsRgb
+        ? data.lightsRgb
+        : undefined;
+
     // Rozwiązywanie akcji dla klikalności wiersza.
     const isSet = (a: import('./types.js').TapActionConfig | undefined): boolean =>
       Boolean(a && (a as { action?: string }).action && (a as { action: string }).action !== 'default');
@@ -523,6 +540,8 @@ export class StratumCard extends LitElement {
         .doorsOpen=${data.doorsOpen}
         .displayConfig=${tileConfig}
         .conditionOverride=${conditionOverride}
+        .lightsAccent=${tileLightsAccent}
+        .lightsBrightness=${data.lightsBrightness}
         .styleOverride=${styleOverride}
         .clickable=${clickable}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
@@ -542,6 +561,8 @@ export class StratumCard extends LitElement {
       .doorsOpen=${data.doorsOpen}
       .displayConfig=${rowConfig}
       .conditionOverride=${conditionOverride}
+      .lightsAccent=${rowLightsAccent}
+      .lightsBrightness=${data.lightsBrightness}
       .styleOverride=${styleOverride}
       .clickable=${clickable}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
@@ -716,6 +737,13 @@ export class StratumCard extends LitElement {
          rooms_tile_columns (auto albo 1..6). minmax(0, 1fr) chroni
          przed rozpychaniem kolumny ponad dostępną szerokość. */
       gap: 8px;
+    }
+
+    .body-divider {
+      height: 0;
+      margin: 10px 0;
+      border-top: 1px solid
+        var(--stratum-card-divider-color, var(--divider-color, rgba(255, 255, 255, 0.08)));
     }
 
     .rooms-grid .room-item.row-mode {

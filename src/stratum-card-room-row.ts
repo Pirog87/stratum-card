@@ -43,6 +43,12 @@ export class StratumCardRoomRow extends LitElement {
   /** Overrides wyliczone z `display_config.conditions`. */
   @property({ attribute: false }) public conditionOverride?: ConditionOverride;
 
+  /** Dynamiczny accent z aktywnego światła (accent_mode=lights). */
+  @property({ type: String, attribute: 'lights-accent' }) public lightsAccent?: string;
+
+  /** Jasność światła (0-1). */
+  @property({ type: Number, attribute: 'lights-brightness' }) public lightsBrightness?: number;
+
   /** Czy wiersz ma reagować na klik (pokazać cursor:pointer + hover). */
   @property({ type: Boolean, reflect: true }) public clickable = false;
 
@@ -72,9 +78,12 @@ export class StratumCardRoomRow extends LitElement {
     const showName = cfg.show_name !== false;
     const ovr = this.conditionOverride;
     const stateActive = this.lightsOn > 0 || this.motion;
-    const effectiveActive = stateActive || Boolean(ovr?.accent_color);
+    const lightsActive = Boolean(this.lightsAccent);
+    const effectiveActive = stateActive || Boolean(ovr?.accent_color) || lightsActive;
     const accent =
-      resolveColor(ovr?.accent_color) ?? resolveColor(cfg.accent_color);
+      resolveColor(ovr?.accent_color) ??
+      this.lightsAccent ??
+      resolveColor(cfg.accent_color);
     const borderColorOvr = resolveColor(ovr?.border_color);
     const borderWidthOvr =
       typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
