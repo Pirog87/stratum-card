@@ -89,6 +89,12 @@ Szczegóły dev loopu, debug, podłączenie do lokalnej instancji — w
 
 Decyzje projektowe: [`docs/architecture.md`](docs/architecture.md).
 
+## Stylizacja
+
+Stratum ma trzy warstwy customizacji: YAML config, CSS variables, shadow parts.
+Pełna lista zmiennych (`--stratum-*`) i gotowe snippety card-mod:
+[`docs/styling.md`](docs/styling.md).
+
 ## Praca z Claude Code
 
 Projekt ma plik [`CLAUDE.md`](CLAUDE.md) z pełnym kontekstem — konwencje kodu,
