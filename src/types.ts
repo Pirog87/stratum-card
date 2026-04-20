@@ -690,6 +690,14 @@ export interface HassEntityRegistryEntry {
   labels?: string[];
   hidden_by?: string | null;
   disabled_by?: string | null;
+  /**
+   * User override klasy urządzenia (Entity options → „Pokaż jako klasę urządzenia").
+   * Niektóre integracje (np. SATEL) nie aktualizują `state.attributes.device_class`
+   * po zmianie — trzeba czytać override z registry.
+   */
+  device_class?: string | null;
+  /** Native `device_class` z integracji (przed user override). */
+  original_device_class?: string | null;
 }
 
 export interface HassDevice {

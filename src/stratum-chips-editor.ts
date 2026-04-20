@@ -159,17 +159,22 @@ export class StratumChipsEditor extends LitElement {
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
       if (v === '' || v == null) continue;
-      // `show_list: true` to default — nie zapisujemy do YAML, zostaje niepotrzebny szum.
+      // Domyślne wartości `true` — nie zapisujemy do YAML (szum).
       if (k === 'show_list' && v === true) continue;
+      if (k === 'show_when_zero' && v === true) continue;
       cleaned[k] = v;
     }
-    // Kasujemy pola które były ustawione a teraz nie są w value (user cofnął).
-    // Szczególnie: show_list true domyślnie → gdy user wyłączy, value ma show_list:false
-    // → zapiszemy false. Gdy z powrotem włączy, value ma show_list:true → pomijamy, trzeba usunąć istniejące.
+    // Gdy user z powrotem włącza toggle (value === true, a obecnie zapisane
+    // jest false) — pola zostają w configu jako `false`. Musimy jawnie
+    // skasować, żeby powrócić do stanu „default true".
     const existing = this.chips[index];
-    if (existing && 'show_list' in existing && value.show_list !== false) {
-      // explicitnie usuń — trafi do _patch jako undefined (spread go skasuje).
-      (cleaned as { show_list?: undefined }).show_list = undefined;
+    if (existing) {
+      if ('show_list' in existing && value.show_list !== false) {
+        (cleaned as { show_list?: undefined }).show_list = undefined;
+      }
+      if ('show_when_zero' in existing && value.show_when_zero !== false) {
+        (cleaned as { show_when_zero?: undefined }).show_when_zero = undefined;
+      }
     }
     this._patch(index, cleaned as Partial<ChipConfig>);
   }
@@ -178,6 +183,9 @@ export class StratumChipsEditor extends LitElement {
   private _formDataFor(chip: ChipConfig): Record<string, unknown> {
     const listSupported = chip.type !== 'entity' && chip.type !== 'template';
     return {
+      // show_when_zero domyślnie ON — chipy widoczne nawet gdy wartość 0.
+      // User wyłącza aby chip znikał gdy nic się nie dzieje (np. alarm-only).
+      show_when_zero: chip.show_when_zero !== false,
       // show_list domyślnie ON dla typów wspierających listę.
       ...(listSupported ? { show_list: chip.show_list !== false } : {}),
       ...chip,

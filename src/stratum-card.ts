@@ -34,7 +34,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.29.0';
+const VERSION = '1.30.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -300,21 +300,28 @@ export class StratumCard extends LitElement {
     this._templates.setHass(this.hass);
     const entries = this._getEntries();
     const chips = this._config?.chips ?? DEFAULT_CHIPS;
-    return chips.map((chip) => {
+    const rendered: TemplateResult[] = [];
+    for (const chip of chips) {
       const { label, active } = evaluateChip(this.hass!, entries, chip, this._templates);
+      // Domyślnie chipy są zawsze widoczne (show_when_zero true). User może
+      // explicit wyłączyć ten toggle — wtedy chip znika gdy wartość 0 /
+      // nieaktywny (typowy use-case: alarm tylko gdy coś się dzieje).
+      const showWhenZero = chip.show_when_zero !== false;
+      if (!active && !showWhenZero) continue;
       const tapSet = this._isTapActionSet(chip.tap_action);
       const listAvailable = this._chipSupportsList(chip);
       const clickable = tapSet || listAvailable;
-      return html`<stratum-card-chip
+      rendered.push(html`<stratum-card-chip
         .icon=${resolveChipIcon(chip)}
         .label=${label}
         .active=${active}
         .color=${resolveChipColor(chip)}
-        .showWhenZero=${chip.show_when_zero ?? false}
+        .showWhenZero=${showWhenZero}
         .clickable=${clickable}
         @chip-tap=${() => this._onChipTap(chip)}
-      ></stratum-card-chip>`;
-    });
+      ></stratum-card-chip>`);
+    }
+    return rendered;
   }
 
   private _isTapActionSet(
