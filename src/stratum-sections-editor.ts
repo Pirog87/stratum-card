@@ -13,6 +13,7 @@ import type {
   SummaryField,
 } from './types.js';
 import { SECTION_LABEL, SECTION_ICON } from './section-defaults.js';
+import { getCustomCardOptions } from './custom-cards.js';
 
 const TYPE_OPTIONS = [
   { value: 'summary', label: 'Podsumowanie' },
@@ -113,7 +114,17 @@ function buildSchema(section: RoomSectionConfig) {
     },
   ];
 
-  const modeOpts = MODE_OPTIONS_BY_TYPE[section.type];
+  const nativeModeOpts = MODE_OPTIONS_BY_TYPE[section.type];
+  const customCardOpts = nativeModeOpts && section.type !== 'summary' ? getCustomCardOptions() : [];
+  const modeOpts = nativeModeOpts
+    ? customCardOpts.length > 0
+      ? [
+          ...nativeModeOpts,
+          { value: '__sep__', label: '──── Custom cards (HACS) ────', disabled: true },
+          ...customCardOpts,
+        ]
+      : nativeModeOpts
+    : undefined;
   const modeField = modeOpts
     ? [
         {
