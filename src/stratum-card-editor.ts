@@ -7,8 +7,14 @@
 
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { HomeAssistant, RoomConfig, StratumCardConfig } from './types.js';
+import type {
+  HomeAssistant,
+  RoomConfig,
+  SceneBarConfig,
+  StratumCardConfig,
+} from './types.js';
 import './stratum-card-rooms-editor.js';
+import './stratum-scene-editor.js';
 
 interface FormSchemaItem {
   name: string;
@@ -111,6 +117,16 @@ export class StratumCardEditor extends LitElement {
     this._emitConfig(next);
   }
 
+  private _scenesChanged(ev: CustomEvent<{ scenes: SceneBarConfig }>): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const next: StratumCardConfig = { ...this._config };
+    const items = ev.detail.scenes.items ?? [];
+    if (items.length === 0) delete next.scenes;
+    else next.scenes = ev.detail.scenes;
+    this._emitConfig(next);
+  }
+
   private _emitConfig(config: StratumCardConfig): void {
     this.dispatchEvent(
       new CustomEvent('config-changed', {
@@ -153,6 +169,19 @@ export class StratumCardEditor extends LitElement {
           @rooms-changed=${this._roomsChanged}
         ></stratum-card-rooms-editor>
       </div>
+
+      <div class="scenes-section">
+        <h3>Sceny</h3>
+        <p class="hint">
+          Pasek scen w karcie — ponad lub pod listą pomieszczeń. Każda scena
+          może mieć obrazek, własną ikonę i kolor.
+        </p>
+        <stratum-scene-editor
+          .hass=${this.hass}
+          .config=${this._config.scenes ?? { items: [] }}
+          @scenes-changed=${this._scenesChanged}
+        ></stratum-scene-editor>
+      </div>
     `;
   }
 
@@ -168,10 +197,16 @@ export class StratumCardEditor extends LitElement {
       padding-top: 12px;
       border-top: 1px solid var(--divider-color);
     }
-    .rooms-section h3 {
+    .rooms-section h3,
+    .scenes-section h3 {
       margin: 0 0 4px;
       font-size: 14px;
       font-weight: 600;
+    }
+    .scenes-section {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--divider-color);
     }
     .hint {
       margin: 0 0 10px;

@@ -5,7 +5,12 @@
 
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { HomeAssistant, StratumRoomCardConfig } from './types.js';
+import type {
+  HomeAssistant,
+  SceneBarConfig,
+  StratumRoomCardConfig,
+} from './types.js';
+import './stratum-scene-editor.js';
 
 interface FormSchemaItem {
   name: string;
@@ -121,6 +126,22 @@ export class StratumRoomCardEditor extends LitElement {
     );
   }
 
+  private _scenesChanged(ev: CustomEvent<{ scenes: SceneBarConfig }>): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const next: StratumRoomCardConfig = { ...this._config };
+    const items = ev.detail.scenes.items ?? [];
+    if (items.length === 0) delete next.scenes;
+    else next.scenes = ev.detail.scenes;
+    this.dispatchEvent(
+      new CustomEvent('config-changed', {
+        detail: { config: next },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   protected render(): TemplateResult {
     if (!this.hass || !this._config) return html``;
     return html`
@@ -132,6 +153,17 @@ export class StratumRoomCardEditor extends LitElement {
         .computeHelper=${this._computeHelper}
         @value-changed=${this._valueChanged}
       ></ha-form>
+      <div class="scenes-section">
+        <h3>Sceny</h3>
+        <p class="hint">
+          Pasek scen w widoku pokoju — zastępuje automatyczną sekcję „Sceny".
+        </p>
+        <stratum-scene-editor
+          .hass=${this.hass}
+          .config=${this._config.scenes ?? { items: [] }}
+          @scenes-changed=${this._scenesChanged}
+        ></stratum-scene-editor>
+      </div>
     `;
   }
 
@@ -141,6 +173,21 @@ export class StratumRoomCardEditor extends LitElement {
     }
     ha-form {
       display: block;
+    }
+    .scenes-section {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--divider-color);
+    }
+    .scenes-section h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .hint {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--secondary-text-color);
     }
   `;
 }
