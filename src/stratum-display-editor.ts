@@ -24,6 +24,7 @@ const FIELD_META: Array<{ key: TileField; icon: string; label: string }> = [
   { key: 'motion', icon: 'mdi:motion-sensor', label: 'Obecność' },
   { key: 'windows', icon: 'mdi:window-open-variant', label: 'Okna' },
   { key: 'doors', icon: 'mdi:door-open', label: 'Drzwi' },
+  { key: 'leak', icon: 'mdi:water-alert', label: 'Wyciek' },
 ];
 
 const ASPECT_PRESETS: Array<{ value: string; label: string }> = [

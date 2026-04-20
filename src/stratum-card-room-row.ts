@@ -34,6 +34,9 @@ export class StratumCardRoomRow extends LitElement {
   /** Liczba otwartych drzwi. */
   @property({ type: Number, attribute: 'doors-open' }) public doorsOpen = 0;
 
+  /** Liczba aktywnych czujek wycieku. */
+  @property({ type: Number, attribute: 'leak-active' }) public leakActive = 0;
+
   /** Globalna konfiguracja wyglądu (fields, accent_color, show_icon/show_name). */
   @property({ attribute: false }) public displayConfig?: RowDisplayConfig;
 
@@ -197,6 +200,13 @@ export class StratumCardRoomRow extends LitElement {
             ? html`<span class="field doors">
                 <ha-icon .icon=${'mdi:door-open'}></ha-icon>
                 ${this.doorsOpen}
+              </span>`
+            : nothing;
+        case 'leak':
+          return this.leakActive > 0
+            ? html`<span class="field leak">
+                <ha-icon .icon=${'mdi:water-alert'}></ha-icon>
+                ${this.leakActive}
               </span>`
             : nothing;
         default:
@@ -382,6 +392,15 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .lights ha-icon {
+      --mdc-icon-size: 16px;
+    }
+
+    .leak {
+      color: var(--stratum-chip-leak-color, #f44336);
+      font-weight: 600;
+    }
+
+    .leak ha-icon {
       --mdc-icon-size: 16px;
     }
   `;

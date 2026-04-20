@@ -33,12 +33,22 @@ interface SummaryDatum {
   color: string;
 }
 
-/** Auto-wybór chipów dla room card: lights + motion + temp + humidity (jeśli są). */
+/**
+ * Auto-wybór chipów dla room card: lights + motion zawsze (nawet gdy 0),
+ * windows/doors/leak tylko gdy coś aktywne. Plus entity-chipy temperatury
+ * i wilgotności jeśli są sensory.
+ */
 function autoRoomChips(
   hass: HomeAssistant,
   entries: HassEntityRegistryEntry[],
 ): ChipConfig[] {
-  const chips: ChipConfig[] = [{ type: 'lights' }, { type: 'motion' }];
+  const chips: ChipConfig[] = [
+    { type: 'lights' },
+    { type: 'motion' },
+    { type: 'windows', show_when_zero: false },
+    { type: 'doors', show_when_zero: false },
+    { type: 'leak', show_when_zero: false },
+  ];
   const temp = entries.find(
     (e) => hass.states?.[e.entity_id]?.attributes?.device_class === 'temperature',
   );
@@ -204,16 +214,20 @@ export class StratumRoomCard extends LitElement {
     if (!this.hass) return [];
     this._templates.setHass(this.hass);
     const chips = this._config?.chips ?? autoRoomChips(this.hass, entries);
-    return chips.map((chip) => {
+    const rendered: TemplateResult[] = [];
+    for (const chip of chips) {
       const { label, active } = evaluateChip(this.hass!, entries, chip, this._templates);
-      return html`<stratum-card-chip
+      const showWhenZero = chip.show_when_zero !== false;
+      if (!active && !showWhenZero) continue;
+      rendered.push(html`<stratum-card-chip
         .icon=${resolveChipIcon(chip)}
         .label=${label}
         .active=${active}
         .color=${resolveChipColor(chip)}
-        .showWhenZero=${chip.show_when_zero ?? false}
-      ></stratum-card-chip>`;
-    });
+        .showWhenZero=${showWhenZero}
+      ></stratum-card-chip>`);
+    }
+    return rendered;
   }
 
   protected render(): TemplateResult | typeof nothing {

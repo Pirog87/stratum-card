@@ -41,8 +41,9 @@ const QUICK_PICKS: ChipQuickPick[] = [
 const DEFAULT_CHIPS_PREVIEW: ChipConfig[] = [
   { type: 'lights' },
   { type: 'motion' },
-  { type: 'windows' },
-  { type: 'doors' },
+  { type: 'windows', show_when_zero: false },
+  { type: 'doors', show_when_zero: false },
+  { type: 'leak', show_when_zero: false },
 ];
 
 const CHIP_LABELS: Record<string, string> = {
@@ -109,6 +110,11 @@ export class StratumChipsEditor extends LitElement {
 
   private _makeChip(pick: ChipQuickPick): ChipConfig {
     if (pick.builtin) {
+      // Alarmowe typy (okna/drzwi/wyciek) domyślnie ukryte gdy wartość 0
+      // — pokazują się tylko gdy coś się dzieje. Lights/motion widoczne zawsze.
+      if (pick.builtin === 'windows' || pick.builtin === 'doors' || pick.builtin === 'leak') {
+        return { type: pick.builtin, show_when_zero: false };
+      }
       return { type: pick.builtin };
     }
     if (pick.type === 'entity') {

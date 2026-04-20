@@ -22,6 +22,7 @@ const FIELD_META: Array<{ value: TileField; label: string; icon: string }> = [
   { value: 'motion', label: 'Obecność', icon: 'mdi:motion-sensor' },
   { value: 'windows', label: 'Okna', icon: 'mdi:window-open-variant' },
   { value: 'doors', label: 'Drzwi', icon: 'mdi:door-open' },
+  { value: 'leak', label: 'Wyciek', icon: 'mdi:water-alert' },
 ];
 
 const OP_LABELS: Record<DisplayConditionOp, string> = {

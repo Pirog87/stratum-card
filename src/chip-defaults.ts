@@ -15,11 +15,18 @@ import { filterByDomain, filterBinarySensorDeviceClass } from './area-entities.j
 import { resolveColor } from './colors.js';
 import type { TemplateRenderer } from './template-renderer.js';
 
+/**
+ * Domyślny zestaw chipów pokazywanych gdy user nic nie skonfigurował.
+ * - `lights` / `motion` — zawsze widoczne (show_when_zero default true)
+ * - `windows` / `doors` / `leak` — widoczne tylko gdy coś jest aktywne
+ *   (żeby pusty nagłówek nie zaśmiecał się liczbami „0")
+ */
 export const DEFAULT_CHIPS: ChipConfig[] = [
   { type: 'lights' },
   { type: 'motion' },
-  { type: 'windows' },
-  { type: 'doors' },
+  { type: 'windows', show_when_zero: false },
+  { type: 'doors', show_when_zero: false },
+  { type: 'leak', show_when_zero: false },
 ];
 
 const BUILTIN_ICON: Record<BuiltInChipType, string> = {

@@ -437,7 +437,8 @@ export type TileField =
   | 'lights'
   | 'motion'
   | 'windows'
-  | 'doors';
+  | 'doors'
+  | 'leak';
 
 /** Operator porównania w regułach warunkowego stylu. */
 export type DisplayConditionOp =
@@ -609,6 +610,8 @@ export interface TileFieldEntities {
   windows?: string[];
   /** Lista binary_sensor (door) — zliczamy ile w stanie `on`. */
   doors?: string[];
+  /** Lista binary_sensor (moisture) — zliczamy ile w stanie `on`. */
+  leak?: string[];
 }
 
 /**
