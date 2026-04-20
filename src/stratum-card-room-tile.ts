@@ -4,8 +4,13 @@
 // świateł, indicator motion, temperatura. Gradient tła subtelny; gdy
 // pomieszczenie ma aktywne encje (światła/motion) dostaje accent.
 
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import type { TileConfig, TileField } from './types.js';
+import { resolveColor } from './colors.js';
+import { resolveSceneImage } from './scene-presets.js';
+
+const DEFAULT_FIELDS: TileField[] = ['temperature', 'lights', 'motion'];
 
 @customElement('stratum-card-room-tile')
 export class StratumCardRoomTile extends LitElement {
@@ -22,6 +27,18 @@ export class StratumCardRoomTile extends LitElement {
   @property({ type: String }) public temperature?: string;
 
   @property({ type: Boolean, reflect: true }) public clickable = false;
+
+  /** Wilgotność (sformatowana, np. "54.2 %"). */
+  @property({ type: String }) public humidity?: string;
+
+  /** Liczba otwartych okien. */
+  @property({ type: Number, attribute: 'windows-open' }) public windowsOpen = 0;
+
+  /** Liczba otwartych drzwi. */
+  @property({ type: Number, attribute: 'doors-open' }) public doorsOpen = 0;
+
+  /** Konfiguracja wyglądu kafla. */
+  @property({ attribute: false }) public tileConfig?: TileConfig;
 
   private _onClick = (): void => {
     if (!this.clickable) return;
@@ -43,42 +60,95 @@ export class StratumCardRoomTile extends LitElement {
   };
 
   protected render(): TemplateResult {
+    const cfg = this.tileConfig ?? {};
     const active = this.lightsOn > 0 || this.motion;
+    const fields = cfg.fields ?? DEFAULT_FIELDS;
+    const showIcon = cfg.show_icon !== false;
+    const showName = cfg.show_name !== false;
+    const accent = resolveColor(cfg.accent_color) ?? 'var(--stratum-chip-lights-color, #ffc107)';
+    const bgImage = resolveSceneImage(cfg.background_image);
+    const styles = [
+      `--stratum-room-tile-aspect: ${cfg.aspect ?? '1/1'};`,
+      active ? `--stratum-room-tile-active-color: ${accent};` : '',
+      bgImage ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;` : '',
+    ].join(' ');
+
     return html`
       <div
-        class="tile ${active ? 'active' : ''}"
+        class="tile ${active ? 'active' : ''} ${bgImage ? 'has-bg' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
+        style=${styles}
         @click=${this._onClick}
         @keydown=${this._onKey}
       >
-        <div class="top">
-          <span class="icon-bubble">
-            <ha-icon .icon=${this.icon}></ha-icon>
-          </span>
-          ${this.motion
-            ? html`<ha-icon
-                class="motion-dot"
-                .icon=${'mdi:motion-sensor'}
-                title="Obecność"
-              ></ha-icon>`
-            : null}
-        </div>
-        <div class="name">${this.name}</div>
-        <div class="info">
-          ${this.temperature
-            ? html`<span class="temp">${this.temperature}</span>`
-            : null}
-          ${this.lightsOn > 0
-            ? html`<span class="lights">
-                <ha-icon .icon=${'mdi:lightbulb-on'}></ha-icon>
-                ${this.lightsOn}
-              </span>`
-            : null}
-        </div>
+        ${showIcon || this.motion
+          ? html`<div class="top">
+              ${showIcon
+                ? html`<span class="icon-bubble">
+                    <ha-icon .icon=${this.icon}></ha-icon>
+                  </span>`
+                : html`<span></span>`}
+              ${this.motion && fields.includes('motion')
+                ? html`<ha-icon
+                    class="motion-dot"
+                    .icon=${'mdi:motion-sensor'}
+                    title="Obecność"
+                  ></ha-icon>`
+                : nothing}
+            </div>`
+          : nothing}
+        ${showName ? html`<div class="name">${this.name}</div>` : nothing}
+        <div class="info">${this._renderFields(fields)}</div>
       </div>
     `;
+  }
+
+  private _renderFields(fields: TileField[]): TemplateResult[] {
+    const out: TemplateResult[] = [];
+    for (const f of fields) {
+      switch (f) {
+        case 'temperature':
+          if (this.temperature) {
+            out.push(html`<span class="field temp">${this.temperature}</span>`);
+          }
+          break;
+        case 'humidity':
+          if (this.humidity) {
+            out.push(html`<span class="field hum">
+              <ha-icon .icon=${'mdi:water-percent'}></ha-icon>
+              ${this.humidity}
+            </span>`);
+          }
+          break;
+        case 'lights':
+          if (this.lightsOn > 0) {
+            out.push(html`<span class="field lights">
+              <ha-icon .icon=${'mdi:lightbulb-on'}></ha-icon>
+              ${this.lightsOn}
+            </span>`);
+          }
+          break;
+        case 'windows':
+          if (this.windowsOpen > 0) {
+            out.push(html`<span class="field windows">
+              <ha-icon .icon=${'mdi:window-open-variant'}></ha-icon>
+              ${this.windowsOpen}
+            </span>`);
+          }
+          break;
+        case 'doors':
+          if (this.doorsOpen > 0) {
+            out.push(html`<span class="field doors">
+              <ha-icon .icon=${'mdi:door-open'}></ha-icon>
+              ${this.doorsOpen}
+            </span>`);
+          }
+          break;
+      }
+    }
+    return out;
   }
 
   static styles = css`
@@ -116,8 +186,31 @@ export class StratumCardRoomTile extends LitElement {
     }
 
     .tile.active {
-      border-color: color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 40%, transparent);
-      background: color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 8%, var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03)));
+      border-color: color-mix(in srgb, var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107)) 40%, transparent);
+      background: color-mix(in srgb, var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107)) 8%, var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03)));
+    }
+
+    .tile.has-bg {
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    }
+
+    .tile.has-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.6) 100%);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+
+    .tile {
+      position: relative;
+    }
+
+    .tile.has-bg > * {
+      position: relative;
+      z-index: 1;
     }
 
     .top {

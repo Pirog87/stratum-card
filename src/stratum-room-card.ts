@@ -23,7 +23,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.15.1';
+const VERSION = '1.16.0';
 
 interface SummaryDatum {
   label: string;
