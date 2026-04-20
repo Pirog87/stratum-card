@@ -229,7 +229,23 @@ Rejestracja jako drugi card type (obok `stratum-card`).
 
 ---
 
-## v1.1 — sceny per pomieszczenie ⬜
+## v1.1 — room navigation popup ✅
+
+Klik w wiersz pokoju otwiera `stratum-room-card` jako natywny modal
+(`<dialog>`), bez potrzeby osobnego dashboardu. Działa automatycznie gdy
+`room_tap_action` nie jest ustawione; jawnie ustawione `tap_action` (w tym
+`action: none`) dalej wygrywa.
+
+Fallback chain:
+1. per-room `tap_action`
+2. global `room_tap_action`
+3. popup (nowe)
+
+**Commit:** `feat: room navigation popup on row click`
+
+---
+
+## v1.2 — sceny per pomieszczenie ⬜
 
 - `scenes:` w `stratum-room-card` i `RoomConfig`
   ```yaml
@@ -244,18 +260,6 @@ Rejestracja jako drugi card type (obok `stratum-card`).
 - Auto-discover jeśli `scenes` brak: pola scene z prefixem area_id
 
 **Commit:** `feat(rooms): scenes section in room detail view`
-
----
-
-## v1.2 — room navigation from floor card ⬜
-
-- Gdy user kliknie row pomieszczenia w głównej karcie — zamiast `navigate`
-  do innego dashboardu otwieramy **stratum-room-card** w popup (`more-info`
-  dialog) albo sub-route `/stratum/<area_id>`
-- Flag `room_open_mode: navigate | popup | inline` (inline = karta rozwija
-  się w miejsce wiersza)
-
-**Commit:** `feat: open room detail as popup/navigate from floor card`
 
 ---
 

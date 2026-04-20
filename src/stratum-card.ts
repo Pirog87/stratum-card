@@ -30,7 +30,7 @@ import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 import './stratum-room-card.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -39,6 +39,9 @@ export class StratumCard extends LitElement {
 
   @state() private _config?: StratumCardConfig;
   @state() private _expanded = false;
+
+  /** Popup: aktualnie otwarte pomieszczenie albo undefined. */
+  @state() private _popupRoom?: { area_id: string; merge_with?: string[] };
 
   /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
   private _templates = new TemplateRenderer(() => this.requestUpdate());
@@ -260,6 +263,38 @@ export class StratumCard extends LitElement {
           <div class="body">${this._renderRooms()}</div>
         </div>
       </ha-card>
+      ${this._renderPopup()}
+    `;
+  }
+
+  private _renderPopup(): TemplateResult {
+    if (!this._popupRoom) return html``;
+    const popupConfig = {
+      type: 'custom:stratum-room-card',
+      area_id: this._popupRoom.area_id,
+      merge_with: this._popupRoom.merge_with,
+    };
+    return html`
+      <dialog
+        class="stratum-popup"
+        part="popup"
+        @click=${this._onDialogClick}
+        @close=${() => (this._popupRoom = undefined)}
+      >
+        <div class="stratum-popup-inner" @click=${(ev: Event) => ev.stopPropagation()}>
+          <button
+            class="stratum-popup-close"
+            title="Zamknij"
+            @click=${() => this._closeRoomPopup()}
+          >
+            <ha-icon .icon=${'mdi:close'}></ha-icon>
+          </button>
+          <stratum-room-card
+            .hass=${this.hass}
+            .config=${popupConfig}
+          ></stratum-room-card>
+        </div>
+      </dialog>
     `;
   }
 
@@ -285,7 +320,8 @@ export class StratumCard extends LitElement {
           aggregate === 'sum' && room.merge_with?.length
             ? [room.area_id, ...room.merge_with]
             : [room.area_id];
-        return this._renderRoomRow(areaIds, name, icon, room.tap_action);
+        // Popup pokazuje widok całego scalonego kompleksu (primary + merge_with).
+        return this._renderRoomRow(areaIds, name, icon, room.tap_action, room.merge_with);
       })}`;
     }
 
@@ -298,7 +334,9 @@ export class StratumCard extends LitElement {
           Przypisz area do floor w Settings → Areas & Zones.
         </div>`;
       }
-      return html`${areas.map((area) => this._renderRoomRow([area.area_id], area.name, area.icon ?? undefined))}`;
+      return html`${areas.map((area) =>
+        this._renderRoomRow([area.area_id], area.name, area.icon ?? undefined),
+      )}`;
     }
 
     // Pojedyncza strefa — wiersz tej area.
@@ -316,6 +354,7 @@ export class StratumCard extends LitElement {
     name: string,
     icon: string | undefined,
     perRoomTapAction?: import('./types.js').TapActionConfig,
+    mergeWith?: string[],
   ): TemplateResult {
     const primary = areaIds[0];
     // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
@@ -342,7 +381,11 @@ export class StratumCard extends LitElement {
       );
     const temperature = this._firstTemperature(entries);
     const effectiveTap = perRoomTapAction ?? this._config?.room_tap_action;
-    const clickable = Boolean(effectiveTap && effectiveTap.action !== 'none');
+    // Klik jest aktywny gdy: jest jawna akcja (nie none) LUB nie ma żadnej
+    // akcji (wtedy domyślnie otworzymy popup).
+    const hasAction = Boolean(effectiveTap && effectiveTap.action !== 'none');
+    const explicitNone = effectiveTap?.action === 'none';
+    const clickable = hasAction || !explicitNone;
 
     return html`<stratum-card-room-row
       .areaId=${primary}
@@ -353,19 +396,53 @@ export class StratumCard extends LitElement {
       .temperature=${temperature}
       .clickable=${clickable}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-        this._onRoomTap(ev, effectiveTap)}
+        this._onRoomTap(ev, effectiveTap, mergeWith)}
     ></stratum-card-room-row>`;
   }
 
   private _onRoomTap(
     ev: CustomEvent<{ area_id: string; area_name: string }>,
     action: import('./types.js').TapActionConfig | undefined,
+    mergeWith?: string[],
   ): void {
-    void runTapAction(this.hass, action ?? this._config?.room_tap_action, {
-      source: this,
-      area_id: ev.detail.area_id,
-      area_name: ev.detail.area_name,
+    const effective = action ?? this._config?.room_tap_action;
+    // Jeśli mamy jawną akcję (inna niż 'none') — wykonaj ją.
+    if (effective && effective.action !== 'none') {
+      void runTapAction(this.hass, effective, {
+        source: this,
+        area_id: ev.detail.area_id,
+        area_name: ev.detail.area_name,
+      });
+      return;
+    }
+    // Jeśli action === 'none' — user wyraźnie wyłączył klik.
+    if (effective?.action === 'none') return;
+    // Default: otwórz popup z room-card.
+    this._openRoomPopup(ev.detail.area_id, mergeWith);
+  }
+
+  private _openRoomPopup(areaId: string, mergeWith?: string[]): void {
+    this._popupRoom = { area_id: areaId, merge_with: mergeWith };
+    // showModal() po następnym update — dialog musi być w DOM.
+    void this.updateComplete.then(() => {
+      const dlg = this.renderRoot.querySelector(
+        'dialog.stratum-popup',
+      ) as HTMLDialogElement | null;
+      if (dlg && !dlg.open) dlg.showModal();
     });
+  }
+
+  private _closeRoomPopup(): void {
+    const dlg = this.renderRoot.querySelector(
+      'dialog.stratum-popup',
+    ) as HTMLDialogElement | null;
+    if (dlg?.open) dlg.close();
+    this._popupRoom = undefined;
+  }
+
+  private _onDialogClick(ev: MouseEvent): void {
+    // Kliknięcie w backdrop (samo <dialog> poza zawartością) zamyka popup.
+    if (ev.target === ev.currentTarget) this._closeRoomPopup();
   }
 
   private _firstTemperature(entries: HassEntityRegistryEntry[]): string | undefined {
@@ -487,6 +564,57 @@ export class StratumCard extends LitElement {
       .body-wrap {
         transition: none;
       }
+    }
+
+    dialog.stratum-popup {
+      padding: 0;
+      margin: auto;
+      border: 0;
+      border-radius: var(--ha-card-border-radius, 12px);
+      background: transparent;
+      max-width: min(560px, 92vw);
+      width: 100%;
+      max-height: 85vh;
+      overflow: visible;
+    }
+
+    dialog.stratum-popup::backdrop {
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(6px);
+    }
+
+    .stratum-popup-inner {
+      position: relative;
+      max-height: 85vh;
+      overflow-y: auto;
+      border-radius: var(--ha-card-border-radius, 12px);
+    }
+
+    .stratum-popup-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 0;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.08));
+      color: var(--primary-text-color, #fff);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+
+    .stratum-popup-close:hover {
+      background: var(--primary-color, #ff9b42);
+      color: #fff;
+    }
+
+    .stratum-popup-close ha-icon {
+      --mdc-icon-size: 20px;
     }
   `;
 }

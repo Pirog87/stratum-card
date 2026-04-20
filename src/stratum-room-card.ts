@@ -19,7 +19,7 @@ import './stratum-card-chip.js';
 import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 /** Auto-wybór chipów dla room card: lights + motion + temp + humidity (jeśli są). */
 function autoRoomChips(
@@ -152,6 +152,11 @@ export class StratumRoomCard extends LitElement {
     if (!config) throw new Error('Konfiguracja jest wymagana.');
     if (!config.area_id) throw new Error('Podaj `area_id`.');
     this._config = config;
+  }
+
+  /** Ustawia config poprzez Lit property (dla osadzania w popup). */
+  public set config(value: StratumRoomCardConfig) {
+    if (value) this.setConfig(value);
   }
 
   public getCardSize(): number {
