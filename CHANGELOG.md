@@ -4,6 +4,21 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.38.0] — 2026-04-20
+
+### Changed
+- **Scene preset SVGs przeprojektowane w stylu Philips Hue.** Zamiast
+  literalnych symboli (kubek kawy, pad gamingowy, rolka filmu itp.) każda
+  scena to atmosferyczna kompozycja barwna oddająca *nastrój oświetlenia*:
+  - Wielowarstwowe radialne/liniowe gradienty
+  - Miękkie orby światła z fadeout opacity
+  - Spójna paleta inspirowana Hue (Poranek, Wieczór, Noc, Medytacja, Disco,
+    Gaming, Kino, Kąpiel itd.)
+  - Subtelne gwiazdy dla „Noc", ripple dla „Kąpiel", multi-color spots
+    dla „Impreza", neon split dla „Gaming"
+- 24 sceny zachowują te same `id` + `label` — istniejące configi
+  `image: 'stratum:noc'` działają bez zmian, zmienia się tylko wygląd.
+
 ## [1.37.0] — 2026-04-20
 
 ### Changed
