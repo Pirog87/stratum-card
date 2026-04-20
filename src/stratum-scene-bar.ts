@@ -8,6 +8,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant, SceneBarConfig, SceneConfig } from './types.js';
 import { resolveColor } from './colors.js';
+import { resolveSceneImage } from './scene-presets.js';
 import { runTapAction } from './tap-action.js';
 
 @customElement('stratum-scene-bar')
@@ -38,11 +39,12 @@ export class StratumSceneBar extends LitElement {
     const state = this.hass?.states?.[scene.entity];
     const name =
       scene.name ?? (state?.attributes?.friendly_name as string | undefined) ?? scene.entity;
-    const hasImage = Boolean(scene.image);
+    const resolvedImage = resolveSceneImage(scene.image);
+    const hasImage = Boolean(resolvedImage);
     const icon = scene.icon ?? 'mdi:palette';
     const accent = resolveColor(scene.color) ?? 'var(--primary-color, #ff9b42)';
     const style = hasImage
-      ? `background-image: url('${scene.image}');`
+      ? `background-image: url("${resolvedImage}");`
       : `background: ${accent};`;
     return html`
       <button

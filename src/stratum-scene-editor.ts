@@ -12,6 +12,11 @@ import type {
   SceneConfig,
   TapActionConfig,
 } from './types.js';
+import {
+  SCENE_PRESETS,
+  presetIdFromValue,
+  resolveSceneImage,
+} from './scene-presets.js';
 
 const GLOBAL_SCHEMA = [
   {
@@ -214,6 +219,43 @@ export class StratumSceneEditor extends LitElement {
     return (state?.attributes?.friendly_name as string | undefined) ?? scene.entity ?? '(nowa scena)';
   }
 
+  private _selectPreset(index: number, id: string | null): void {
+    this._updateScene(index, { image: id ? `stratum:${id}` : undefined });
+  }
+
+  private _renderPresetPicker(index: number, scene: SceneConfig): TemplateResult {
+    const selected = presetIdFromValue(scene.image);
+    return html`
+      <div class="preset-block">
+        <div class="preset-head">
+          <span>Wbudowane grafiki</span>
+          ${selected
+            ? html`<button class="reset" @click=${() => this._selectPreset(index, null)}>
+                Wyczyść wybór
+              </button>`
+            : nothing}
+        </div>
+        <div class="preset-grid">
+          ${SCENE_PRESETS.map(
+            (p) => html`
+              <button
+                class="preset-thumb ${selected === p.id ? 'selected' : ''}"
+                title=${p.label}
+                @click=${() => this._selectPreset(index, p.id)}
+              >
+                <span
+                  class="thumb-image"
+                  style=${`background-image:url("${resolveSceneImage('stratum:' + p.id)}");`}
+                ></span>
+                <span class="thumb-label">${p.label}</span>
+              </button>
+            `,
+          )}
+        </div>
+      </div>
+    `;
+  }
+
   protected render(): TemplateResult {
     const items = this.config.items ?? [];
     return html`
@@ -280,6 +322,7 @@ export class StratumSceneEditor extends LitElement {
                       @value-changed=${(ev: CustomEvent<{ value: Partial<SceneConfig> }>) =>
                         this._onSceneFieldChange(idx, ev)}
                     ></ha-form>
+                    ${this._renderPresetPicker(idx, scene)}
                   </div>`
                 : nothing}
             </div>
@@ -401,6 +444,84 @@ export class StratumSceneEditor extends LitElement {
 
     .add-btn ha-icon {
       --mdc-icon-size: 18px;
+    }
+
+    .preset-block {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--divider-color);
+    }
+
+    .preset-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--secondary-text-color);
+      margin-bottom: 6px;
+    }
+
+    .reset {
+      background: transparent;
+      border: 1px solid var(--divider-color);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      color: var(--secondary-text-color);
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .reset:hover {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: 6px;
+    }
+
+    .preset-thumb {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.12s ease;
+    }
+
+    .preset-thumb:hover {
+      transform: translateY(-1px);
+      border-color: var(--divider-color);
+    }
+
+    .preset-thumb.selected {
+      border-color: var(--primary-color, #ff9b42);
+    }
+
+    .thumb-image {
+      display: block;
+      aspect-ratio: 270/150;
+      background-size: cover;
+      background-position: center;
+      border-radius: 6px 6px 0 0;
+    }
+
+    .thumb-label {
+      padding: 4px 0;
+      font-size: 11px;
+      color: var(--primary-text-color);
+      text-align: center;
     }
   `;
 }
