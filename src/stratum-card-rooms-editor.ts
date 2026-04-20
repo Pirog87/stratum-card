@@ -88,7 +88,8 @@ export class StratumCardRoomsEditor extends LitElement {
           select: {
             mode: 'dropdown',
             options: [
-              { value: 'row', label: 'Wiersz (default)' },
+              { value: '', label: 'Domyślnie (z ustawień karty)' },
+              { value: 'row', label: 'Wiersz' },
               { value: 'tile', label: 'Kafel' },
             ],
           },
@@ -221,7 +222,10 @@ export class StratumCardRoomsEditor extends LitElement {
       delete merged.scenes;
     }
     if (!merged.chips || merged.chips.length === 0) delete merged.chips;
-    if (!merged.display || merged.display === 'row') delete merged.display;
+    // `display` zachowujemy zawsze gdy ustawione (row LUB tile), bo to może
+    // być świadomy override globalnego `rooms_display`. Kasujemy tylko gdy
+    // pole jest undefined/empty (user wybrał „Domyślnie (z global)").
+    if (!merged.display) delete merged.display;
     const next = existing
       ? this.rooms.map((r) => (r.area_id === areaId ? merged : r))
       : [...this.rooms, merged];
