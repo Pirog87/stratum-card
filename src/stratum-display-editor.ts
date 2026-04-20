@@ -117,6 +117,17 @@ export class StratumDisplayEditor extends LitElement {
     this._patch({ accent_color: value });
   }
 
+  private _toggleAccentFromLights(): void {
+    const current = this.config.accent_mode;
+    const next = { ...this.config };
+    if (current === 'lights') {
+      delete next.accent_mode;
+    } else {
+      next.accent_mode = 'lights';
+    }
+    this._emit(next);
+  }
+
   private _onCustomColor(ev: Event): void {
     const value = (ev.target as HTMLInputElement).value.trim();
     if (!value) {
@@ -189,6 +200,7 @@ export class StratumDisplayEditor extends LitElement {
     const color = cfg.accent_color ?? '';
     const colorIsPreset = COLOR_SWATCHES.some((s) => s.key === color);
     const customColor = colorIsPreset ? '' : color;
+    const accentFromLights = cfg.accent_mode === 'lights';
     const bg = cfg.background_image ?? '';
     const bgIsPreset = bg.startsWith('stratum:');
     const customBgUrl = !bgIsPreset ? bg : '';
@@ -255,12 +267,22 @@ export class StratumDisplayEditor extends LitElement {
       <div class="group">
         <label class="group-label">Kolor akcentu</label>
         <div class="chip-row">
+          <button
+            type="button"
+            class="chip accent-lights ${accentFromLights ? 'on' : ''}"
+            title="Kolor i jasność akcentu z aktywnych świateł w pomieszczeniu"
+            @click=${this._toggleAccentFromLights}
+          >
+            <ha-icon .icon=${'mdi:lightbulb-on-outline'}></ha-icon>
+            <span>Z świateł</span>
+          </button>
           ${COLOR_SWATCHES.map(
             (s) => html`<button
               type="button"
-              class="swatch ${color === s.key ? 'on' : ''}"
+              class="swatch ${!accentFromLights && color === s.key ? 'on' : ''}"
               style="--swatch:${s.color};"
               title=${s.label}
+              ?disabled=${accentFromLights}
               @click=${() => this._setColor(s.key)}
             ></button>`,
           )}
@@ -269,9 +291,10 @@ export class StratumDisplayEditor extends LitElement {
             class="custom-input"
             placeholder="#ffc107 lub var(--color)"
             .value=${customColor}
+            ?disabled=${accentFromLights}
             @change=${this._onCustomColor}
           />
-          ${color
+          ${color && !accentFromLights
             ? html`<button
                 type="button"
                 class="chip subtle"
@@ -281,6 +304,13 @@ export class StratumDisplayEditor extends LitElement {
               </button>`
             : nothing}
         </div>
+        ${accentFromLights
+          ? html`<p class="group-hint">
+              Akcent dynamiczny — bierze kolor z pierwszego świecącego
+              światła (rgb_color) i jasność z brightness. Kafel zmienia
+              się live gdy zmieniasz barwę żarówki.
+            </p>`
+          : nothing}
       </div>
 
       ${this.mode === 'tile'
@@ -524,6 +554,26 @@ export class StratumDisplayEditor extends LitElement {
 
       .chip.subtle {
         color: var(--secondary-text-color);
+      }
+
+      .chip.accent-lights {
+        border-color: color-mix(in srgb, #ffc107 40%, var(--divider-color));
+      }
+
+      .chip.accent-lights.on {
+        background: linear-gradient(
+          135deg,
+          color-mix(in srgb, #ffc107 26%, transparent),
+          color-mix(in srgb, #ff9b42 26%, transparent)
+        );
+        border-color: #ffc107;
+        color: #ffc107;
+      }
+
+      .swatch[disabled],
+      .custom-input[disabled] {
+        opacity: 0.35;
+        cursor: not-allowed;
       }
 
       .aspect-chip {

@@ -465,6 +465,13 @@ export interface TileDisplayConfig {
   fields?: TileField[];
   /** Kolor akcentu gdy aktywny (lights on / motion). Default amber. */
   accent_color?: string;
+  /**
+   * Tryb wyliczania koloru akcentu:
+   * - `static` (default) — bierze z `accent_color`
+   * - `lights` — czyta `rgb_color` + `brightness` z pierwszego aktywnego
+   *   światła w pomieszczeniu; brightness wpływa na intensywność akcentu
+   */
+  accent_mode?: 'static' | 'lights';
   /** URL/preset obrazka tła (tylko `display: tile`). */
   background_image?: string;
   /** Czy pokazywać ikonę area. Default true. */

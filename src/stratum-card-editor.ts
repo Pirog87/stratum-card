@@ -140,6 +140,7 @@ export class StratumCardEditor extends LitElement {
     if (raw.accent_color && raw.accent_color.trim() !== '') {
       out.accent_color = raw.accent_color;
     }
+    if (raw.accent_mode === 'lights') out.accent_mode = 'lights';
     if (raw.show_icon === false) out.show_icon = false;
     if (raw.show_name === false) out.show_name = false;
     const defaultRadius = isTile ? 14 : 6;

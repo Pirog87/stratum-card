@@ -4,6 +4,27 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.23.0] — 2026-04-20
+
+### Added
+- **Dynamiczny akcent z aktywnych świateł.** Nowy tryb
+  `accent_mode: 'lights'` w row/tile config — kafel/wiersz odzwierciedla
+  `rgb_color` i `brightness` pierwszego świecącego światła w pomieszczeniu.
+  Kafel zmienia kolor live gdy zmieniasz barwę żarówki; jasność wpływa
+  na intensywność akcentu (tło + border).
+- W edytorze nowy chip „💡 Z świateł" w sekcji „Kolor akcentu" — klik
+  toggluje tryb. Gdy aktywny, swatche i pole hex są wyłączone.
+- Fallback dla świateł w trybie CCT (`color_temp_kelvin`) —
+  aproksymacja Tannera Helland do RGB.
+
+### Fixed
+- **Wysokość kafla nie zmniejszała się poniżej wartości z `aspect-ratio`.**
+  Slider „Min. wysokość" dla tile traktowany jest teraz jako explicit
+  `height` z `aspect-ratio: auto` — pozwala zarówno zwiększyć jak i
+  zmniejszyć rozmiar niezależnie od proporcji.
+- **Brak odstępu między scenami a listą pomieszczeń.** Dodany `.body-divider`
+  (linia + margines 10px) w body karty gdy obecne są oba elementy.
+
 ## [1.22.0] — 2026-04-20
 
 ### Added
