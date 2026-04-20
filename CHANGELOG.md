@@ -4,6 +4,31 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.24.0] — 2026-04-20
+
+### Changed
+- **Wszystkie panele głównego edytora teraz collapsible.** Startują zwinięte,
+  klik w nagłówek rozwija:
+  - „Karta Stratum" → rename na **„Ustawienia ogólne"**
+  - „Warunki — styl zależny od encji"
+  - „Pomieszczenia"
+  - „Sceny"
+  - (Wygląd — Wiersz/Kafel już były collapsible od v1.22)
+- **Rewrite editora Warunków.** Zamiast ha-form:
+  - Pole + operator jako chipy z ikonami
+  - Kolor akcentu / borderu / tła / ikony — swatch rows (8 kolorów)
+    + custom hex/var — spójnie z display editorem
+  - Grubość borderu — slider z live wartością (0-8 px)
+  - Ikona override — picker (ha-icon)
+
+### Added
+- **Nowe opcje warunków:**
+  - `icon` — override MDI ikony area gdy warunek spełniony
+    (np. `mdi:window-open-variant` gdy `windows any_on`)
+  - `icon_color` — osobny kolor ikony (niezależny od accent)
+  - `pulse: true` — animacja glow pulse (1.6s loop). Respektuje
+    `prefers-reduced-motion`.
+
 ## [1.23.0] — 2026-04-20
 
 ### Added

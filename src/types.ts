@@ -435,6 +435,12 @@ export interface DisplayConditionConfig {
   accent_color?: string;
   /** Override koloru tła pozycji. */
   background_color?: string;
+  /** Override ikony area (MDI, np. `mdi:window-open-variant`). */
+  icon?: string;
+  /** Osobny kolor ikony (niezależny od akcentu). */
+  icon_color?: string;
+  /** Czy pozycja ma pulsować (animacja glow) gdy reguła spełniona. */
+  pulse?: boolean;
 }
 export type IconPosition =
   | 'top-left'

@@ -324,18 +324,22 @@ export class StratumCardEditor extends LitElement {
       cfg.rooms_tile_columns ?? 'auto';
 
     return html`
-      <div class="stratum-panel base-panel">
-        <div class="stratum-panel-header">
+      <details
+        class="stratum-panel base-panel"
+        ?open=${this._openSections.has('base')}
+        @toggle=${(ev: Event) => this._onSectionToggle('base', ev)}
+      >
+        <summary class="stratum-panel-header">
           <span class="stratum-panel-avatar">
-            <ha-icon .icon=${'mdi:home-floor-0'}></ha-icon>
+            <ha-icon .icon=${'mdi:cog-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Karta Stratum</h3>
+            <h3>Ustawienia ogólne</h3>
             <p class="stratum-panel-hint">
-              Wybierz piętro lub strefę, dostosuj nagłówek i layout.
+              Piętro lub strefa, nagłówek karty, layout, auto-zwijanie.
             </p>
           </div>
-        </div>
+        </summary>
         <div class="stratum-panel-body">
           <ha-form
             .hass=${this.hass}
@@ -446,7 +450,7 @@ export class StratumCardEditor extends LitElement {
             </label>
           </div>
         </div>
-      </div>
+      </details>
     `;
   }
 
@@ -510,8 +514,12 @@ export class StratumCardEditor extends LitElement {
         </div>
       </details>
 
-      <div class="stratum-panel">
-        <div class="stratum-panel-header">
+      <details
+        class="stratum-panel"
+        ?open=${this._openSections.has('conditions')}
+        @toggle=${(ev: Event) => this._onSectionToggle('conditions', ev)}
+      >
+        <summary class="stratum-panel-header">
           <span class="stratum-panel-avatar">
             <ha-icon .icon=${'mdi:function-variant'}></ha-icon>
           </span>
@@ -522,7 +530,7 @@ export class StratumCardEditor extends LitElement {
               wygrywa.
             </p>
           </div>
-        </div>
+        </summary>
         <div class="stratum-panel-body">
           <stratum-conditions-editor
             .hass=${this.hass}
@@ -530,20 +538,25 @@ export class StratumCardEditor extends LitElement {
             @conditions-changed=${this._conditionsChanged}
           ></stratum-conditions-editor>
         </div>
-      </div>
+      </details>
 
-      <div class="stratum-panel">
-        <div class="stratum-panel-header">
+      <details
+        class="stratum-panel"
+        ?open=${this._openSections.has('rooms')}
+        @toggle=${(ev: Event) => this._onSectionToggle('rooms', ev)}
+      >
+        <summary class="stratum-panel-header">
           <span class="stratum-panel-avatar">
             <ha-icon .icon=${'mdi:view-list-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
             <h3>Pomieszczenia</h3>
             <p class="stratum-panel-hint">
-              Zaznacz, posortuj, dostosuj widok popup per pomieszczenie. Brak zaznaczeń = auto-discover.
+              Zaznacz, posortuj, dostosuj widok popup per pomieszczenie.
+              Brak zaznaczeń = auto-discover.
             </p>
           </div>
-        </div>
+        </summary>
         <div class="stratum-panel-body">
           <stratum-card-rooms-editor
             .hass=${this.hass}
@@ -553,20 +566,25 @@ export class StratumCardEditor extends LitElement {
             @rooms-changed=${this._roomsChanged}
           ></stratum-card-rooms-editor>
         </div>
-      </div>
+      </details>
 
-      <div class="stratum-panel">
-        <div class="stratum-panel-header">
+      <details
+        class="stratum-panel"
+        ?open=${this._openSections.has('scenes')}
+        @toggle=${(ev: Event) => this._onSectionToggle('scenes', ev)}
+      >
+        <summary class="stratum-panel-header">
           <span class="stratum-panel-avatar">
             <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
             <h3>Sceny</h3>
             <p class="stratum-panel-hint">
-              Pasek scen w karcie. Każda scena ma obrazek (lub preset), własną ikonę i akcję.
+              Pasek scen w karcie. Każda scena ma obrazek (lub preset),
+              własną ikonę i akcję.
             </p>
           </div>
-        </div>
+        </summary>
         <div class="stratum-panel-body">
           <stratum-scene-editor
             .hass=${this.hass}
@@ -574,7 +592,7 @@ export class StratumCardEditor extends LitElement {
             @scenes-changed=${this._scenesChanged}
           ></stratum-scene-editor>
         </div>
-      </div>
+      </details>
     `;
   }
 
