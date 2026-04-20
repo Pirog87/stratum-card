@@ -167,10 +167,15 @@ export interface RoomSectionConfig {
   /** Filter: tylko te `entity_id` — reszta z area jest pominięta. */
   entities?: string[];
   /**
-   * Tryb wyświetlania (dla `lights` / `covers` / `switches`): `tile` (domyślny
-   * mini-button z toggle) albo `slider` (tile z suwakiem brightness/position).
+   * Tryb wyświetlania sekcji:
+   * - `tile` (domyślny) — pełny kafel z nazwą, stanem i kontrolkami
+   * - `slider` — kafel z suwakiem brightness (lights) / position (covers)
+   * - `chips` — kompaktowy pasek poziomy: ikona + nazwa
+   * - `bubble` — duża ikona w kole, nazwa pod spodem (mushroom-style)
+   * - `icon` — sama ikona, bez tekstu
+   * - `cards` / `inline` / `icons` — tylko dla `summary`
    */
-  mode?: 'tile' | 'slider';
+  mode?: 'tile' | 'slider' | 'chips' | 'bubble' | 'icon' | 'cards' | 'inline' | 'icons';
   /**
    * Layout grid: `1` | `2` | `3` kolumn albo `'auto'`. Default: zgodny z typem
    * (covers/climate/media → 1, scenes → 3, reszta → 2).

@@ -29,8 +29,13 @@ export class StratumRoomTile extends LitElement {
 
   @property({ type: String, attribute: 'entity' }) public entity = '';
 
-  /** Tryb: `tile` (domyślny button toggle) lub `slider` (suwak brightness/position). */
-  @property({ type: String }) public mode: 'tile' | 'slider' = 'tile';
+  /** Tryb wyświetlania tile. */
+  @property({ type: String }) public mode:
+    | 'tile'
+    | 'slider'
+    | 'chips'
+    | 'bubble'
+    | 'icon' = 'tile';
 
   private _state(): HassEntity | undefined {
     return this.hass?.states?.[this.entity];
@@ -71,6 +76,11 @@ export class StratumRoomTile extends LitElement {
     }
 
     const domain = domainOf(this.entity);
+    this.setAttribute('data-domain', domain);
+
+    // Chips mode — kompaktowy pasek dla dowolnego toggle'owalnego typu.
+    if (this.mode === 'chips') return this._renderChipsMode(state, domain);
+
     switch (domain) {
       case 'light':
         return this.mode === 'slider'
@@ -94,6 +104,49 @@ export class StratumRoomTile extends LitElement {
       default:
         return this._renderGeneric(state);
     }
+  }
+
+  private _renderChipsMode(state: HassEntity, domain: string): TemplateResult {
+    const on = state.state === 'on' || state.state === 'open' || state.state === 'playing';
+    const readonly = domain === 'binary_sensor' || domain === 'climate';
+    const iconMap: Record<string, string> = {
+      light: on ? 'mdi:lightbulb-on' : 'mdi:lightbulb',
+      switch: 'mdi:toggle-switch',
+      fan: 'mdi:fan',
+      cover: on ? 'mdi:blinds-open' : 'mdi:blinds',
+      media_player: on ? 'mdi:pause' : 'mdi:play',
+      scene: 'mdi:palette',
+      binary_sensor: (state.attributes?.device_class === 'window')
+        ? on ? 'mdi:window-open-variant' : 'mdi:window-closed-variant'
+        : (state.attributes?.device_class === 'door')
+        ? on ? 'mdi:door-open' : 'mdi:door-closed'
+        : on ? 'mdi:alert' : 'mdi:check-circle',
+      climate: 'mdi:thermostat',
+    };
+    const icon = (state.attributes?.icon as string | undefined) ?? iconMap[domain] ?? 'mdi:help';
+    const click = readonly
+      ? (ev: Event) => this._openMoreInfo(ev)
+      : domain === 'scene'
+      ? (ev: Event) => this._callService(ev, 'scene', 'turn_on')
+      : domain === 'cover'
+      ? (ev: Event) =>
+          this._callService(ev, 'cover', on ? 'close_cover' : 'open_cover')
+      : domain === 'media_player'
+      ? (ev: Event) => this._callService(ev, 'media_player', 'media_play_pause')
+      : (ev: Event) => this._callService(ev, domain, 'toggle');
+
+    return html`
+      <button
+        class="chips-tile ${on ? 'on' : 'off'} ${readonly ? 'readonly' : ''}"
+        part="tile"
+        @click=${click}
+        @contextmenu=${this._openMoreInfo}
+        title=${friendlyName(state, this.entity)}
+      >
+        <ha-icon class="chips-icon" .icon=${icon}></ha-icon>
+        <span class="chips-name">${friendlyName(state, this.entity)}</span>
+      </button>
+    `;
   }
 
   private _renderLightSlider(state: HassEntity): TemplateResult {
@@ -453,6 +506,66 @@ export class StratumRoomTile extends LitElement {
       height: 4px;
       accent-color: var(--stratum-chip-lights-color, #ffc107);
       cursor: pointer;
+    }
+
+    .chips-tile {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      min-height: 32px;
+      border-radius: var(--stratum-tile-chip-radius, 999px);
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
+      background: var(--stratum-tile-chip-background, rgba(255, 255, 255, 0.04));
+      color: var(--primary-text-color);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .chips-tile.readonly {
+      cursor: default;
+    }
+
+    .chips-tile.on {
+      border-color: var(--stratum-tile-chip-accent, var(--primary-color, #ff9b42));
+      background: color-mix(in srgb, var(--stratum-tile-chip-accent, var(--primary-color, #ff9b42)) 18%, transparent);
+      color: var(--stratum-tile-chip-accent, var(--primary-color, #ff9b42));
+    }
+
+    .chips-tile:hover:not(.readonly) {
+      background: var(--stratum-tile-hover-background, rgba(255, 255, 255, 0.08));
+    }
+
+    .chips-tile.on:hover:not(.readonly) {
+      background: color-mix(in srgb, var(--stratum-tile-chip-accent, var(--primary-color, #ff9b42)) 28%, transparent);
+    }
+
+    .chips-icon {
+      --mdc-icon-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .chips-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Per-domain akcenty w chips mode */
+    :host([data-domain='light']) .chips-tile.on {
+      --stratum-tile-chip-accent: var(--stratum-chip-lights-color, #ffc107);
+    }
+    :host([data-domain='binary_sensor']) .chips-tile.on {
+      --stratum-tile-chip-accent: #f44336;
+    }
+    :host([data-domain='binary_sensor']) .chips-tile.off {
+      --stratum-tile-chip-accent: #4caf50;
+      border-color: var(--stratum-tile-chip-accent, #4caf50);
+      color: var(--stratum-tile-chip-accent, #4caf50);
     }
   `;
 }
