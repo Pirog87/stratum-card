@@ -84,8 +84,11 @@ export interface StratumRoomCardConfig {
   icon?: string;
   /** Chipy w headerze. Default: `motion`, entity(temp), entity(humidity). */
   chips?: ChipConfig[];
-  /** Lista sekcji do wyświetlenia. Default: auto-discover po typach encji. */
-  sections?: RoomSectionType[];
+  /**
+   * Lista sekcji do wyświetlenia. Akceptuje string albo pełny `RoomSectionConfig`.
+   * Default: auto-discover po typach encji. Kolejność w tablicy = kolejność UI.
+   */
+  sections?: RoomSectionSpec[];
   /** Pasek scen — zastępuje auto-sekcję scen, pełna kontrola layoutu. */
   scenes?: SceneBarConfig;
   /** Debug log do konsoli. */
@@ -124,6 +127,7 @@ export interface SceneBarConfig {
 
 /** Typy sekcji w room card. Każda mapuje na domain + ew. device_class. */
 export type RoomSectionType =
+  | 'summary'
   | 'lights'
   | 'covers'
   | 'windows'
@@ -133,6 +137,53 @@ export type RoomSectionType =
   | 'fans'
   | 'switches'
   | 'scenes';
+
+/** Pola pokazywane w sekcji `summary`. */
+export type SummaryField =
+  | 'motion'
+  | 'occupancy'
+  | 'temperature'
+  | 'humidity'
+  | 'lights_on'
+  | 'windows_open'
+  | 'doors_open'
+  | 'battery_low'
+  | 'leak';
+
+/**
+ * Konfiguracja pojedynczej sekcji w room card — identyfikator typu + overrides
+ * i ograniczenia (które encje, tryb wyświetlania, ukrywanie).
+ *
+ * W formie skróconej można przekazać sam string (`'lights'`) — automatycznie
+ * znormalizujemy do `{ type: 'lights' }`.
+ */
+export interface RoomSectionConfig {
+  /** Typ sekcji. */
+  type: RoomSectionType;
+  /** Override nazwy sekcji (nagłówek). */
+  title?: string;
+  /** Override ikony w nagłówku. */
+  icon?: string;
+  /** Filter: tylko te `entity_id` — reszta z area jest pominięta. */
+  entities?: string[];
+  /**
+   * Tryb wyświetlania (dla `lights` / `covers` / `switches`): `tile` (domyślny
+   * mini-button z toggle) albo `slider` (tile z suwakiem brightness/position).
+   */
+  mode?: 'tile' | 'slider';
+  /**
+   * Layout grid: `1` | `2` | `3` kolumn albo `'auto'`. Default: zgodny z typem
+   * (covers/climate/media → 1, scenes → 3, reszta → 2).
+   */
+  columns?: 1 | 2 | 3 | 'auto';
+  /** Tylko dla `summary` — które pola renderować. */
+  fields?: SummaryField[];
+  /** Wyłącz sekcję bez usuwania configu. */
+  hidden?: boolean;
+}
+
+/** Typ dopuszczalny w `sections` — string (typ skrócony) lub pełny config. */
+export type RoomSectionSpec = RoomSectionType | RoomSectionConfig;
 
 /** Wbudowane typy chipów agregujących encje area/floor. */
 export type BuiltInChipType = 'lights' | 'motion' | 'occupancy' | 'windows' | 'doors';
