@@ -158,6 +158,8 @@ export class StratumChipsEditor extends LitElement {
   }
 
   private _schemaFor(chip: ChipConfig) {
+    const listSupported =
+      chip.type !== 'entity' && chip.type !== 'template';
     const common = [
       {
         type: 'grid',
@@ -168,6 +170,7 @@ export class StratumChipsEditor extends LitElement {
         ],
       },
       { name: 'show_when_zero', selector: { boolean: {} } },
+      ...(listSupported ? [{ name: 'show_list', selector: { boolean: {} } }] : []),
       { name: 'tap_action', selector: { ui_action: {} } },
     ];
     if (chip.type === 'entity') {
@@ -226,7 +229,8 @@ export class StratumChipsEditor extends LitElement {
       icon: 'Ikona (override)',
       color: 'Kolor',
       show_when_zero: 'Pokazuj też gdy wartość 0',
-      tap_action: 'Akcja po kliknięciu',
+      show_list: 'Popup z listą po kliknięciu (default ON)',
+      tap_action: 'Akcja po kliknięciu (nadpisuje listę)',
       entity: 'Encja',
       format: 'Format',
       attribute: 'Atrybut',

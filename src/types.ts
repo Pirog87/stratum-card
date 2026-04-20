@@ -299,8 +299,15 @@ interface BaseChipConfig {
   color?: string;
   /** Czy chip pokazuje swoją wartość nawet gdy jest "pusty"/zero. */
   show_when_zero?: boolean;
-  /** Akcja po kliknięciu chipu. */
+  /** Akcja po kliknięciu chipu. Gdy ustawiona, wygrywa nad `show_list`. */
   tap_action?: TapActionConfig;
+  /**
+   * Pokaż listę pasujących encji w popupie po kliknięciu. Dla lights /
+   * switches / covers dodaje toggles + master akcję; dla motion / windows /
+   * doors czyta-only. Default `true` gdy `tap_action` nie ustawione.
+   * Ignorowane dla `entity` (single entity — użyj more-info) i `template`.
+   */
+  show_list?: boolean;
 }
 
 export interface BuiltInChipConfig extends BaseChipConfig {
