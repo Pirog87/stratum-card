@@ -31,7 +31,7 @@ import './stratum-card-room-row.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -41,8 +41,14 @@ export class StratumCard extends LitElement {
   @state() private _config?: StratumCardConfig;
   @state() private _expanded = false;
 
-  /** Popup: aktualnie otwarte pomieszczenie albo undefined. */
-  @state() private _popupRoom?: { area_id: string; merge_with?: string[] };
+  /** Popup: aktualnie otwarte pomieszczenie z overrides z RoomConfig. */
+  @state() private _popupRoom?: {
+    area_id: string;
+    merge_with?: string[];
+    sections?: import('./types.js').RoomSectionSpec[];
+    scenes?: import('./types.js').SceneBarConfig;
+    chips?: import('./types.js').ChipConfig[];
+  };
 
   /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
   private _templates = new TemplateRenderer(() => this.requestUpdate());
@@ -270,10 +276,13 @@ export class StratumCard extends LitElement {
 
   private _renderPopup(): TemplateResult {
     if (!this._popupRoom) return html``;
-    const popupConfig = {
+    const popupConfig: import('./types.js').StratumRoomCardConfig = {
       type: 'custom:stratum-room-card',
       area_id: this._popupRoom.area_id,
       merge_with: this._popupRoom.merge_with,
+      sections: this._popupRoom.sections,
+      scenes: this._popupRoom.scenes,
+      chips: this._popupRoom.chips,
     };
     return html`
       <dialog
@@ -340,8 +349,12 @@ export class StratumCard extends LitElement {
           aggregate === 'sum' && room.merge_with?.length
             ? [room.area_id, ...room.merge_with]
             : [room.area_id];
-        // Popup pokazuje widok całego scalonego kompleksu (primary + merge_with).
-        return this._renderRoomRow(areaIds, name, icon, room.tap_action, room.merge_with);
+        return this._renderRoomRow(areaIds, name, icon, room.tap_action, {
+          merge_with: room.merge_with,
+          sections: room.sections,
+          scenes: room.scenes,
+          chips: room.chips,
+        });
       })}`;
     }
 
@@ -374,7 +387,12 @@ export class StratumCard extends LitElement {
     name: string,
     icon: string | undefined,
     perRoomTapAction?: import('./types.js').TapActionConfig,
-    mergeWith?: string[],
+    popupOverrides?: {
+      merge_with?: string[];
+      sections?: import('./types.js').RoomSectionSpec[];
+      scenes?: import('./types.js').SceneBarConfig;
+      chips?: import('./types.js').ChipConfig[];
+    },
   ): TemplateResult {
     const primary = areaIds[0];
     // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
@@ -416,17 +434,21 @@ export class StratumCard extends LitElement {
       .temperature=${temperature}
       .clickable=${clickable}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-        this._onRoomTap(ev, effectiveTap, mergeWith)}
+        this._onRoomTap(ev, effectiveTap, popupOverrides)}
     ></stratum-card-room-row>`;
   }
 
   private _onRoomTap(
     ev: CustomEvent<{ area_id: string; area_name: string }>,
     action: import('./types.js').TapActionConfig | undefined,
-    mergeWith?: string[],
+    roomOverrides?: {
+      merge_with?: string[];
+      sections?: import('./types.js').RoomSectionSpec[];
+      scenes?: import('./types.js').SceneBarConfig;
+      chips?: import('./types.js').ChipConfig[];
+    },
   ): void {
     const effective = action ?? this._config?.room_tap_action;
-    // Jeśli mamy jawną akcję (inna niż 'none') — wykonaj ją.
     if (effective && effective.action !== 'none') {
       void runTapAction(this.hass, effective, {
         source: this,
@@ -435,14 +457,26 @@ export class StratumCard extends LitElement {
       });
       return;
     }
-    // Jeśli action === 'none' — user wyraźnie wyłączył klik.
     if (effective?.action === 'none') return;
-    // Default: otwórz popup z room-card.
-    this._openRoomPopup(ev.detail.area_id, mergeWith);
+    this._openRoomPopup(ev.detail.area_id, roomOverrides);
   }
 
-  private _openRoomPopup(areaId: string, mergeWith?: string[]): void {
-    this._popupRoom = { area_id: areaId, merge_with: mergeWith };
+  private _openRoomPopup(
+    areaId: string,
+    overrides?: {
+      merge_with?: string[];
+      sections?: import('./types.js').RoomSectionSpec[];
+      scenes?: import('./types.js').SceneBarConfig;
+      chips?: import('./types.js').ChipConfig[];
+    },
+  ): void {
+    this._popupRoom = {
+      area_id: areaId,
+      merge_with: overrides?.merge_with,
+      sections: overrides?.sections,
+      scenes: overrides?.scenes,
+      chips: overrides?.chips,
+    };
     // showModal() po następnym update — dialog musi być w DOM.
     void this.updateComplete.then(() => {
       const dlg = this.renderRoot.querySelector(

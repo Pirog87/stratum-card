@@ -272,6 +272,18 @@ export interface RoomConfig {
    *   hierarchii (np. detail view w v1.0+)
    */
   aggregate?: 'sum' | 'primary_only';
+
+  /**
+   * Sekcje widoczne w popup pokoju (otwiera się po kliknięciu wiersza).
+   * Gdy puste — popup używa auto-discovery zgodnej z encjami area.
+   */
+  sections?: RoomSectionSpec[];
+
+  /** Pasek scen w popup pokoju. */
+  scenes?: SceneBarConfig;
+
+  /** Chipy w headerze popup pokoju. Puste = default per room-card. */
+  chips?: ChipConfig[];
 }
 
 /** Zachowane dla kompatybilności — alias do nowego typu. */
