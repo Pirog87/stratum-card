@@ -4,6 +4,22 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.30.0] — 2026-04-20
+
+### Fixed
+- **`device_class` user override (Entity Options → „Pokaż jako klasę
+  urządzenia") nie był czytany.** Niektóre integracje (np. SATEL Integra)
+  nie aktualizują `state.attributes.device_class` po zmianie w UI,
+  tylko `hass.entities[id].device_class`. Teraz `filterBinarySensorDeviceClass`
+  sprawdza oba źródła + `original_device_class` — okno oznaczone w HA
+  jako „Okno" wreszcie pojawia się w chipie `windows` i row pokoju.
+- **Toggle „Pokazuj też gdy wartość 0" nie działał.** Chip był renderowany
+  zawsze niezależnie od flagi. Teraz:
+  - `show_when_zero: true` (default) → chip zawsze widoczny
+  - `show_when_zero: false` → chip znika gdy `active=false` / wartość 0
+- Edytor form pokazuje toggle `show_when_zero` jako ON zgodnie z rzeczywistym
+  defaultem. Zapis do YAML pomija wartość `true` (default — niepotrzebny szum).
+
 ## [1.29.0] — 2026-04-20
 
 ### Added

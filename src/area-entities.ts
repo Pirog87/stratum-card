@@ -76,8 +76,13 @@ export function filterByDomain(
 }
 
 /**
- * Filtruje encje binary_sensor po `device_class` z `attributes` w `hass.states`.
- * Przykładowe device_class: `motion`, `occupancy`, `window`, `door`.
+ * Filtruje encje binary_sensor po `device_class`. Sprawdza w kolejności:
+ * 1. `hass.states[id].attributes.device_class` — efektywna klasa (z override)
+ * 2. `hass.entities[id].device_class` — user override z Entity Options
+ * 3. `hass.entities[id].original_device_class` — native z integracji
+ *
+ * Niektóre integracje (np. SATEL Integra) nie propagują user override
+ * do state.attributes, stąd fallback przez registry.
  */
 export function filterBinarySensorDeviceClass(
   hass: HomeAssistant,
@@ -87,7 +92,12 @@ export function filterBinarySensorDeviceClass(
   return entries.filter((entry) => {
     if (!entry.entity_id.startsWith('binary_sensor.')) return false;
     const state: HassEntity | undefined = hass.states?.[entry.entity_id];
-    return state?.attributes?.device_class === deviceClass;
+    const stateClass = state?.attributes?.device_class;
+    if (stateClass === deviceClass) return true;
+    const registryEntry = hass.entities?.[entry.entity_id] ?? entry;
+    const regClass =
+      registryEntry.device_class ?? registryEntry.original_device_class ?? null;
+    return regClass === deviceClass;
   });
 }
 
