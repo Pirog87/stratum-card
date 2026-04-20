@@ -16,9 +16,10 @@ import { getEntitiesInArea, filterByDomain, filterBinarySensorDeviceClass } from
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
+import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 
-const VERSION = '0.13.0';
+const VERSION = '1.0.0';
 
 /** Auto-wybór chipów dla room card: lights + motion + temp + humidity (jeśli są). */
 function autoRoomChips(
@@ -157,6 +158,17 @@ export class StratumRoomCard extends LitElement {
     return 6;
   }
 
+  /** Powiązuje wizualny editor z kartą. */
+  public static async getConfigElement(): Promise<HTMLElement> {
+    return document.createElement('stratum-room-card-editor');
+  }
+
+  /** Sensowny default gdy user dodaje kartę przez wizard „Add card". */
+  public static getStubConfig(hass: HomeAssistant): Partial<StratumRoomCardConfig> {
+    const firstArea = hass?.areas && Object.keys(hass.areas)[0];
+    return { area_id: firstArea ?? '' };
+  }
+
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     this._templates.destroy();
@@ -274,7 +286,10 @@ export class StratumRoomCard extends LitElement {
       border-radius: var(--stratum-card-border-radius, var(--ha-card-border-radius, 12px));
       color: var(--stratum-card-color, var(--primary-text-color, #e8e8e8));
       overflow: hidden;
-      padding: 16px;
+      padding: var(--stratum-room-padding, 16px);
+      box-shadow: var(--ha-card-box-shadow, none);
+      border: var(--ha-card-border-width, 1px) solid
+        var(--ha-card-border-color, var(--divider-color, transparent));
     }
 
     .header {
@@ -282,60 +297,84 @@ export class StratumRoomCard extends LitElement {
       align-items: center;
       gap: 12px;
       margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
     }
 
     .icon {
       --mdc-icon-size: 28px;
       color: var(--primary-text-color);
+      flex-shrink: 0;
     }
 
     .title {
       flex: 1;
       font-size: 20px;
       font-weight: 600;
+      letter-spacing: -0.01em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .chips {
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
+      flex-shrink: 0;
     }
 
     .body {
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 18px;
     }
 
     .section {
-      border-top: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
-      padding-top: 10px;
-    }
-
-    .section:first-child {
-      border-top: 0;
-      padding-top: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     .section-header {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 600;
-      color: var(--primary-text-color);
-      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--secondary-text-color);
     }
 
     .section-header ha-icon {
-      --mdc-icon-size: 18px;
-      color: var(--secondary-text-color);
+      --mdc-icon-size: 16px;
     }
 
     .section-header .count {
       margin-left: auto;
+      font-weight: 500;
+      text-transform: none;
+      letter-spacing: 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
       color: var(--secondary-text-color);
-      font-weight: 400;
+    }
+
+    @media (max-width: 480px) {
+      ha-card {
+        padding: 12px;
+      }
+      .header {
+        gap: 8px;
+      }
+      .title {
+        font-size: 17px;
+      }
+      .body {
+        gap: 14px;
+      }
     }
 
     .tiles {
