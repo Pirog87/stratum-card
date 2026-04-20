@@ -136,7 +136,8 @@ export type RoomSectionType =
   | 'media'
   | 'fans'
   | 'switches'
-  | 'scenes';
+  | 'scenes'
+  | 'custom';
 
 /** Pola pokazywane w sekcji `summary`. */
 export type SummaryField =
@@ -183,6 +184,13 @@ export interface RoomSectionConfig {
   columns?: 1 | 2 | 3 | 'auto';
   /** Tylko dla `summary` — które pola renderować. */
   fields?: SummaryField[];
+  /**
+   * Tylko dla `type: 'custom'` — pełny config dowolnej karty HA/HACS:
+   * `{ type: 'media-control', entity: 'media_player.salon' }`,
+   * `{ type: 'custom:mushroom-light-card', ... }` itd.
+   * Jeśli karta custom nie jest jeszcze załadowana, HA zrobi to sam.
+   */
+  card?: Record<string, unknown>;
   /** Wyłącz sekcję bez usuwania configu. */
   hidden?: boolean;
 }

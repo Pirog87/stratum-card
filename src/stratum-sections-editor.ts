@@ -25,6 +25,7 @@ const TYPE_OPTIONS = [
   { value: 'media', label: 'Media' },
   { value: 'fans', label: 'Wentylacja' },
   { value: 'switches', label: 'Przełączniki' },
+  { value: 'custom', label: 'Karta custom (HA/HACS)' },
 ];
 
 const SUMMARY_FIELD_OPTIONS = [
@@ -107,6 +108,13 @@ function buildSchema(section: RoomSectionConfig) {
       ]
     : [];
 
+  if (section.type === 'custom') {
+    // Dla custom card pokazujemy tylko type + title. Pole `card` obsługujemy
+    // przez osobny ha-yaml-editor w template (bo ha-form nie ma selector
+    // na dowolny YAML object).
+    return common;
+  }
+
   if (section.type === 'summary') {
     return [
       ...common,
@@ -177,6 +185,7 @@ function entityDomainsForType(type: RoomSectionType): string[] {
     case 'scenes':
       return ['scene', 'script'];
     case 'summary':
+    case 'custom':
       return [];
   }
 }
@@ -226,6 +235,7 @@ export class StratumSectionsEditor extends LitElement {
     }
     if (!merged.mode) delete merged.mode;
     if (!merged.columns || merged.columns === 'auto') delete merged.columns;
+    if (merged.card && Object.keys(merged.card).length === 0) delete merged.card;
     next[index] = merged;
     this._emit(next);
   }
@@ -346,6 +356,23 @@ export class StratumSectionsEditor extends LitElement {
                       @value-changed=${(ev: CustomEvent<{ value: Partial<RoomSectionConfig> }>) =>
                         this._onFieldChange(idx, ev)}
                     ></ha-form>
+                    ${section.type === 'custom'
+                      ? html`<div class="card-yaml">
+                          <label>Konfiguracja karty (YAML)</label>
+                          <p class="hint">
+                            Wklej dowolny config karty HA/HACS:
+                            <code>type: media-control</code>,
+                            <code>type: custom:mushroom-light-card</code>,
+                            <code>type: custom:bubble-card</code> itd.
+                          </p>
+                          <ha-yaml-editor
+                            .defaultValue=${section.card ?? {}}
+                            @value-changed=${(ev: CustomEvent<{ value: Record<string, unknown>; isValid: boolean }>) =>
+                              ev.detail.isValid &&
+                              this._updateAt(idx, { card: ev.detail.value })}
+                          ></ha-yaml-editor>
+                        </div>`
+                      : nothing}
                   </div>`
                 : nothing}
             </div>
@@ -474,6 +501,39 @@ export class StratumSectionsEditor extends LitElement {
 
     .add-btn ha-icon {
       --mdc-icon-size: 18px;
+    }
+
+    .card-yaml {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--divider-color);
+    }
+
+    .card-yaml label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--secondary-text-color);
+      margin-bottom: 4px;
+    }
+
+    .card-yaml .hint {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--secondary-text-color);
+    }
+
+    .card-yaml code {
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    ha-yaml-editor {
+      display: block;
     }
   `;
 }
