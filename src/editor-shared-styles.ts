@@ -383,4 +383,173 @@ export const editorSharedStyles = css`
     border-radius: 10px;
     background: transparent;
   }
+
+  /* === Form primitives (chipy / slidery / toggles) === */
+
+  .stratum-group {
+    margin-bottom: 16px;
+  }
+
+  .stratum-group:last-child {
+    margin-bottom: 0;
+  }
+
+  .stratum-group-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary-text-color);
+    margin-bottom: 8px;
+  }
+
+  .stratum-group-label.sub {
+    margin-top: 14px;
+  }
+
+  .stratum-group-hint {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: var(--secondary-text-color);
+  }
+
+  .stratum-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .stratum-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color, rgba(255, 255, 255, 0.02));
+    color: var(--primary-text-color);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+  }
+
+  .stratum-chip ha-icon {
+    --mdc-icon-size: 14px;
+  }
+
+  .stratum-chip:hover {
+    background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+  }
+
+  .stratum-chip:active {
+    transform: scale(0.97);
+  }
+
+  .stratum-chip.on {
+    background: color-mix(in srgb, var(--primary-color, #ff9b42) 22%, transparent);
+    border-color: var(--primary-color, #ff9b42);
+    color: var(--primary-color, #ff9b42);
+    font-weight: 600;
+  }
+
+  .stratum-slider-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 10px;
+    row-gap: 2px;
+    margin-bottom: 12px;
+  }
+
+  .stratum-slider-label {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 12px;
+    color: var(--secondary-text-color);
+  }
+
+  .stratum-slider-value {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--primary-text-color);
+    font-weight: 600;
+  }
+
+  .stratum-slider {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    accent-color: var(--primary-color, #ff9b42);
+    margin: 0;
+  }
+
+  .stratum-toggles-row {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .stratum-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--primary-text-color);
+  }
+
+  .stratum-toggle input[type='checkbox'] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-color, #ff9b42);
+    cursor: pointer;
+  }
+
+  /* === Collapsible panel (kliknij nagłówek żeby rozwinąć) === */
+
+  details.stratum-panel {
+    padding: 0;
+  }
+
+  details.stratum-panel > summary.stratum-panel-header {
+    margin: 0;
+    padding: 14px 16px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    border-radius: 14px;
+  }
+
+  details.stratum-panel > summary.stratum-panel-header::-webkit-details-marker {
+    display: none;
+  }
+
+  details.stratum-panel > summary.stratum-panel-header::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    margin-left: auto;
+    border-right: 2px solid var(--secondary-text-color);
+    border-bottom: 2px solid var(--secondary-text-color);
+    transform: rotate(-45deg);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  details.stratum-panel[open] > summary.stratum-panel-header::after {
+    transform: rotate(45deg);
+  }
+
+  details.stratum-panel > summary.stratum-panel-header:hover {
+    background: color-mix(in srgb, var(--primary-color, #ff9b42) 4%, transparent);
+  }
+
+  details.stratum-panel > .stratum-panel-body {
+    padding: 4px 16px 16px;
+    margin-top: 0;
+    border-top: 1px solid var(--divider-color);
+  }
 `;

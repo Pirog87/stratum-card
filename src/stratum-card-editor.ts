@@ -5,7 +5,7 @@
 // Każda zmiana wartości emituje event `config-changed` z pełnym configiem —
 // tak wymaga dashboard editor HA.
 
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
   DisplayConditionConfig,
@@ -32,9 +32,12 @@ interface FormSchemaItem {
   schema?: FormSchemaItem[];
 }
 
-const SCHEMA: readonly FormSchemaItem[] = [
+const SOURCE_SCHEMA: readonly FormSchemaItem[] = [
   { name: 'floor_id', selector: { floor: {} } },
   { name: 'area_id', selector: { area: {} } },
+];
+
+const IDENTITY_SCHEMA: readonly FormSchemaItem[] = [
   {
     type: 'grid',
     name: '',
@@ -43,44 +46,9 @@ const SCHEMA: readonly FormSchemaItem[] = [
       { name: 'icon', selector: { icon: {} } },
     ],
   },
-  {
-    type: 'grid',
-    name: '',
-    schema: [
-      { name: 'expanded', selector: { boolean: {} } },
-      { name: 'debug', selector: { boolean: {} } },
-    ],
-  },
-  {
-    name: 'auto_collapse',
-    selector: {
-      number: { min: 0, max: 600, step: 5, unit_of_measurement: 's', mode: 'slider' },
-    },
-  },
-  {
-    type: 'grid',
-    name: '',
-    schema: [
-      {
-        name: 'rooms_display',
-        selector: {
-          select: {
-            mode: 'dropdown',
-            options: [
-              { value: 'row', label: 'Wiersz (poziomy, pełna szerokość)' },
-              { value: 'tile', label: 'Kafel (card z licznikami)' },
-            ],
-          },
-        },
-      },
-      {
-        name: 'rooms_tile_min_width',
-        selector: {
-          number: { min: 120, max: 280, step: 10, unit_of_measurement: 'px', mode: 'box' },
-        },
-      },
-    ],
-  },
+];
+
+const TAP_SCHEMA: readonly FormSchemaItem[] = [
   { name: 'room_tap_action', selector: { ui_action: {} } },
 ];
 
@@ -89,11 +57,6 @@ const LABELS: Record<string, string> = {
   area_id: 'Pojedyncza strefa (area) — alternatywa',
   name: 'Nazwa (override)',
   icon: 'Ikona (override)',
-  expanded: 'Rozwinięta domyślnie',
-  debug: 'Debug log w konsoli',
-  auto_collapse: 'Auto-zwijanie po (s)',
-  rooms_display: 'Forma pozycji pomieszczeń',
-  rooms_tile_min_width: 'Min. szerokość kafla (px)',
   room_tap_action: 'Akcja po kliknięciu w wiersz pomieszczenia',
 };
 
@@ -104,17 +67,19 @@ const HELPERS: Record<string, string> = {
     'Użyj zamiast floor_id gdy chcesz kartę na jeden pokój. Wybierz JEDNO z pól.',
   name: 'Pozostaw puste, żeby użyć nazwy piętra/strefy z HA.',
   icon: 'Pozostaw puste, żeby użyć ikony piętra/strefy z HA (fallback: mdi:home).',
-  expanded: 'Czy expander startuje otwarty.',
-  debug: 'Włącza console.log z encjami area — pomocne w configu.',
-  auto_collapse:
-    'Karta zwija się sama po N sekundach bez interakcji. 0 = wyłączone. Domyślnie 60 s.',
-  rooms_display:
-    'Domyślny wygląd pomieszczeń — wiersz albo kafel. Możesz nadpisać per pomieszczenie w sekcji poniżej.',
-  rooms_tile_min_width:
-    'Minimalna szerokość kafla — wpływa na liczbę kolumn (auto-fill). Default 160px.',
   room_tap_action:
-    'Określa co się dzieje po kliknięciu wiersza pomieszczenia. Bez ustawienia klik nic nie robi. Dla "Przejdź" wypełnij pole „Ścieżka", np. /dashboard-domek/home#{area_id} — {area_id} i {area_name} są podmieniane automatycznie.',
+    'Domyślnie klik otwiera popup pokoju. Możesz nadpisać: Przejdź, Więcej info, Wywołaj serwis itd.',
 };
+
+const COLUMN_CHIPS: Array<{ value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6; label: string }> = [
+  { value: 'auto', label: 'Auto' },
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
+  { value: 3, label: '3' },
+  { value: 4, label: '4' },
+  { value: 5, label: '5' },
+  { value: 6, label: '6' },
+];
 
 @customElement('stratum-card-editor')
 export class StratumCardEditor extends LitElement {
@@ -122,8 +87,33 @@ export class StratumCardEditor extends LitElement {
 
   @state() private _config?: StratumCardConfig;
 
+  /** Stan rozwinięcia collapsible paneli (Wygląd — Wiersz, Wygląd — Kafel). */
+  @state() private _openSections = new Set<string>();
+
   public setConfig(config: StratumCardConfig): void {
     this._config = config;
+  }
+
+  /** Zmiana jednego pola StratumCardConfig — kasuje klucz gdy wartość pusta. */
+  private _updateField<K extends keyof StratumCardConfig>(
+    key: K,
+    value: StratumCardConfig[K] | undefined,
+  ): void {
+    if (!this._config) return;
+    const next: StratumCardConfig = {
+      ...this._config,
+      type: this._config.type ?? 'custom:stratum-card',
+    };
+    const isEmpty =
+      value === undefined ||
+      value === '' ||
+      (Array.isArray(value) && value.length === 0);
+    if (isEmpty) {
+      delete next[key];
+    } else {
+      (next as unknown as Record<string, unknown>)[key as string] = value as unknown;
+    }
+    this._emitConfig(next);
   }
 
   private _computeLabel = (schema: FormSchemaItem): string =>
@@ -283,6 +273,182 @@ export class StratumCardEditor extends LitElement {
     this._emitConfig(next);
   }
 
+  private _onSectionToggle(key: string, ev: Event): void {
+    const target = ev.target as HTMLDetailsElement;
+    const next = new Set(this._openSections);
+    if (target.open) next.add(key);
+    else next.delete(key);
+    this._openSections = next;
+  }
+
+  private _onAutoCollapseInput(ev: Event): void {
+    const v = parseInt((ev.target as HTMLInputElement).value, 10);
+    // Default = 60; zapisujemy tylko gdy inne.
+    this._updateField('auto_collapse', v === 60 ? undefined : v);
+  }
+
+  private _onToggleChange(
+    key: 'expanded' | 'debug',
+    ev: Event,
+  ): void {
+    const checked = (ev.target as HTMLInputElement).checked;
+    this._updateField(key, checked ? true : undefined);
+  }
+
+  private _onRoomsDisplay(value: 'row' | 'tile'): void {
+    // Default = 'row', więc zapisujemy tylko gdy tile.
+    this._updateField('rooms_display', value === 'tile' ? 'tile' : undefined);
+  }
+
+  private _onColumnsChange(value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6): void {
+    const next: StratumCardConfig = {
+      ...this._config!,
+      type: this._config!.type ?? 'custom:stratum-card',
+    };
+    if (value === 'auto') {
+      delete next.rooms_tile_columns;
+    } else {
+      next.rooms_tile_columns = value;
+    }
+    // Przy migracji na columns — skasuj stary min_width z configu.
+    delete next.rooms_tile_min_width;
+    this._emitConfig(next);
+  }
+
+  private _renderBasePanel(): TemplateResult {
+    const cfg = this._config!;
+    const autoCollapse = cfg.auto_collapse ?? 60;
+    const roomsDisplay = cfg.rooms_display ?? 'row';
+    const cols: 'auto' | 1 | 2 | 3 | 4 | 5 | 6 =
+      cfg.rooms_tile_columns ?? 'auto';
+
+    return html`
+      <div class="stratum-panel base-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:home-floor-0'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Karta Stratum</h3>
+            <p class="stratum-panel-hint">
+              Wybierz piętro lub strefę, dostosuj nagłówek i layout.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <ha-form
+            .hass=${this.hass}
+            .data=${cfg}
+            .schema=${SOURCE_SCHEMA}
+            .computeLabel=${this._computeLabel}
+            .computeHelper=${this._computeHelper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+
+          <ha-form
+            .hass=${this.hass}
+            .data=${cfg}
+            .schema=${IDENTITY_SCHEMA}
+            .computeLabel=${this._computeLabel}
+            .computeHelper=${this._computeHelper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+
+          <div class="stratum-group">
+            <label class="stratum-group-label">Domyślna forma pozycji</label>
+            <div class="stratum-chip-row">
+              <button
+                type="button"
+                class="stratum-chip ${roomsDisplay === 'row' ? 'on' : ''}"
+                @click=${() => this._onRoomsDisplay('row')}
+              >
+                <ha-icon .icon=${'mdi:format-list-bulleted'}></ha-icon>
+                <span>Wiersz</span>
+              </button>
+              <button
+                type="button"
+                class="stratum-chip ${roomsDisplay === 'tile' ? 'on' : ''}"
+                @click=${() => this._onRoomsDisplay('tile')}
+              >
+                <ha-icon .icon=${'mdi:view-grid-outline'}></ha-icon>
+                <span>Kafel</span>
+              </button>
+            </div>
+            <p class="stratum-group-hint">
+              Możesz nadpisać per pomieszczenie w sekcji „Pomieszczenia".
+            </p>
+          </div>
+
+          <div class="stratum-group">
+            <label class="stratum-group-label">Kafle — liczba kolumn</label>
+            <div class="stratum-chip-row">
+              ${COLUMN_CHIPS.map(
+                (c) => html`<button
+                  type="button"
+                  class="stratum-chip ${cols === c.value ? 'on' : ''}"
+                  @click=${() => this._onColumnsChange(c.value)}
+                >
+                  ${c.value === 'auto'
+                    ? html`<ha-icon .icon=${'mdi:view-dashboard-variant-outline'}></ha-icon>`
+                    : nothing}
+                  <span>${c.label}</span>
+                </button>`,
+              )}
+            </div>
+            <p class="stratum-group-hint">
+              Auto = auto-fill (dostosowuje liczbę kolumn do szerokości).
+              Cyfra = sztywno N kolumn, szerokość kafli dzieli się równo.
+            </p>
+          </div>
+
+          <div class="stratum-slider-row">
+            <label class="stratum-slider-label">Auto-zwijanie po</label>
+            <div class="stratum-slider-value">
+              ${autoCollapse === 0 ? 'wyłączone' : `${autoCollapse} s`}
+            </div>
+            <input
+              type="range"
+              class="stratum-slider"
+              min="0"
+              max="600"
+              step="5"
+              .value=${String(autoCollapse)}
+              @input=${this._onAutoCollapseInput}
+            />
+          </div>
+
+          <ha-form
+            .hass=${this.hass}
+            .data=${cfg}
+            .schema=${TAP_SCHEMA}
+            .computeLabel=${this._computeLabel}
+            .computeHelper=${this._computeHelper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+
+          <div class="stratum-toggles-row">
+            <label class="stratum-toggle">
+              <input
+                type="checkbox"
+                .checked=${cfg.expanded === true}
+                @change=${(ev: Event) => this._onToggleChange('expanded', ev)}
+              />
+              <span>Rozwinięta domyślnie</span>
+            </label>
+            <label class="stratum-toggle">
+              <input
+                type="checkbox"
+                .checked=${cfg.debug === true}
+                @change=${(ev: Event) => this._onToggleChange('debug', ev)}
+              />
+              <span>Debug log w konsoli</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private _emitConfig(config: StratumCardConfig): void {
     this.dispatchEvent(
       new CustomEvent('config-changed', {
@@ -295,51 +461,23 @@ export class StratumCardEditor extends LitElement {
 
   protected render(): TemplateResult {
     if (!this.hass || !this._config) return html``;
-    // Merge defaults tak, żeby slider auto_collapse pokazywał 60 gdy config
-    // nie ma tego pola (default = włączone 60s). Config-przesłania wygrywa.
-    const formData = {
-      auto_collapse: 60,
-      ...this._config,
-    };
     return html`
-      <div class="stratum-panel base-panel">
-        <div class="stratum-panel-header">
-          <span class="stratum-panel-avatar">
-            <ha-icon .icon=${'mdi:home-floor-0'}></ha-icon>
-          </span>
-          <div class="stratum-panel-title">
-            <h3>Karta Stratum</h3>
-            <p class="stratum-panel-hint">
-              Wybierz piętro lub strefę, dostosuj nagłówek, domyślne zachowanie.
-            </p>
-          </div>
-        </div>
-        <div class="stratum-panel-body">
-          <ha-form
-            .hass=${this.hass}
-            .data=${formData}
-            .schema=${SCHEMA}
-            .computeLabel=${this._computeLabel}
-            .computeHelper=${this._computeHelper}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
-        </div>
-      </div>
+      ${this._renderBasePanel()}
 
-      <div class="stratum-panel">
-        <div class="stratum-panel-header">
+      <details class="stratum-panel" ?open=${this._openSections.has('row')}
+        @toggle=${(ev: Event) => this._onSectionToggle('row', ev)}>
+        <summary class="stratum-panel-header">
           <span class="stratum-panel-avatar row-avatar">
             <ha-icon .icon=${'mdi:format-list-bulleted'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
             <h3>Wygląd — Wiersz (row)</h3>
             <p class="stratum-panel-hint">
-              Konfiguracja kompaktowej formy. Dotyczy pokoi z
-              <code>display: row</code> oraz domyślnej gdy
-              <code>rooms_display: row</code>.
+              Konfiguracja formy kompaktowej — pola, kolory, zaokrąglenia,
+              reakcje na dotyk.
             </p>
           </div>
-        </div>
+        </summary>
         <div class="stratum-panel-body">
           <stratum-display-editor
             mode="row"
@@ -347,21 +485,21 @@ export class StratumCardEditor extends LitElement {
             @display-config-changed=${this._rowConfigChanged}
           ></stratum-display-editor>
         </div>
-      </div>
+      </details>
 
-      <div class="stratum-panel">
-        <div class="stratum-panel-header">
+      <details class="stratum-panel" ?open=${this._openSections.has('tile')}
+        @toggle=${(ev: Event) => this._onSectionToggle('tile', ev)}>
+        <summary class="stratum-panel-header">
           <span class="stratum-panel-avatar tile-avatar">
             <ha-icon .icon=${'mdi:view-grid-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
             <h3>Wygląd — Kafel (tile)</h3>
             <p class="stratum-panel-hint">
-              Pełna karta z licznikami. Dodaje proporcje kafla, obrazek tła
-              i pozycję ikony poza schemat wspólny z wierszem.
+              Dodatkowo proporcje kafla, obrazek tła i pozycja ikony.
             </p>
           </div>
-        </div>
+        </summary>
         <div class="stratum-panel-body">
           <stratum-display-editor
             mode="tile"
@@ -369,7 +507,7 @@ export class StratumCardEditor extends LitElement {
             @display-config-changed=${this._tileConfigChanged}
           ></stratum-display-editor>
         </div>
-      </div>
+      </details>
 
       <div class="stratum-panel">
         <div class="stratum-panel-header">
