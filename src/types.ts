@@ -53,6 +53,18 @@ export interface StratumCardConfig {
   rooms_tile_min_width?: number;
 
   /**
+   * Globalna konfiguracja wyglądu pozycji pomieszczenia — jednorazowa dla całej
+   * karty. Steruje zarówno formą kompaktową (`row`) jak i kaflem (`tile`):
+   * które pola (temperatura / wilgotność / światła / motion / okna / drzwi)
+   * wyświetlać, ikonami, kolorami, tłem i proporcjami kafla.
+   *
+   * Per-pokój można wskazać konkretne encje dla tych pól przez
+   * `RoomConfig.field_entities` oraz ewentualnie nadpisać CSS przez
+   * `RoomConfig.style_override`.
+   */
+  display_config?: DisplayConfig;
+
+  /**
    * Akcja wyzwalana kliknięciem w wiersz pomieszczenia. Wspiera placeholdery
    * `{area_id}` i `{area_name}` w `navigation_path`.
    * Przy braku: wiersz nie reaguje na klik.
@@ -309,26 +321,28 @@ export interface RoomConfig {
 
   /**
    * Forma wyświetlania pozycji w głównej karcie:
-   * - `row` (domyślny) — poziomy wiersz w pełnej szerokości
-   * - `tile` — kafel Stratum (konfigurowalny przez `tile_config`)
-   * - `custom:<card-type>` — dowolna karta HACS jako kafel pokoju
-   *   (auto-config z `area_id`/`entity` lub `tile_card_config` jako jawny YAML)
+   * - `row` (domyślny) — poziomy wiersz pełnej szerokości
+   * - `tile` — kwadratowy kafel card-style
+   * Wygląd obu form (pola, kolory, aspect) konfigurujesz globalnie
+   * w `StratumCardConfig.display_config`.
    * Bez ustawienia — używa `rooms_display` ze `StratumCardConfig`.
    */
-  display?: string;
+  display?: 'row' | 'tile';
 
   /**
-   * Konfiguracja wyglądu wbudowanego kafla Stratum (tylko dla `display: tile`).
-   * Aspect, jakie pola pokazać, kolor akcentu, opcjonalne tło.
+   * Override domyślnego auto-discovery per pole dla tego pomieszczenia.
+   * Pozwala wskazać konkretny termometr/hygrometr albo podmienić listę
+   * świateł / motion / okien / drzwi uwzględnianych w liczniku.
+   * Pominięte pole → auto-discovery z encji area.
    */
-  tile_config?: TileConfig;
+  field_entities?: TileFieldEntities;
 
   /**
-   * Pełny config karty custom (tylko dla `display: 'custom:<card>'`).
-   * Pominięte = próba auto-config: `{type, area_id}` (gdy karta tego oczekuje)
-   * lub `{type, entity}`.
+   * Surowy CSS wstrzyknięty do tej konkretnej pozycji (row lub tile).
+   * Użyj np. `background: #222; border-color: red;`. Zakres: wewnątrz
+   * shadow-DOM pozycji, więc `::part()` nie jest tu potrzebne.
    */
-  tile_card_config?: Record<string, unknown>;
+  style_override?: string;
 
   /**
    * Sekcje widoczne w popup pokoju (otwiera się po kliknięciu wiersza).
@@ -346,7 +360,7 @@ export interface RoomConfig {
 /** Zachowane dla kompatybilności — alias do nowego typu. */
 export type RoomRefConfig = RoomConfig;
 
-/** Pola które wbudowany tile może pokazać w sekcji info. */
+/** Pola które wbudowany row/tile może pokazać w sekcji info. */
 export type TileField =
   | 'temperature'
   | 'humidity'
@@ -355,20 +369,43 @@ export type TileField =
   | 'windows'
   | 'doors';
 
-/** Konfiguracja wyglądu wbudowanego kafla pomieszczenia (`display: tile`). */
-export interface TileConfig {
-  /** CSS aspect-ratio kafla. Default `1/1`. Przykłady: `4/3`, `16/9`, `3/2`. */
+/**
+ * Globalna konfiguracja wyglądu pozycji pomieszczenia — dotyczy zarówno formy
+ * kompaktowej (`row`) jak i kafla (`tile`). Ustawiasz raz dla całej karty,
+ * per-pokój decydujesz tylko o formie (`display`) i ewentualnym override
+ * encji / CSS.
+ */
+export interface DisplayConfig {
+  /** CSS aspect-ratio kafla (dotyczy tylko `display: tile`). Default `1/1`. */
   aspect?: string;
-  /** Lista pól w sekcji info (kolejność znaczy). Default `[temperature, lights, motion]`. */
+  /**
+   * Lista pól w sekcji info (kolejność znaczy).
+   * Default `[temperature, lights, motion]`.
+   */
   fields?: TileField[];
   /** Kolor akcentu gdy aktywny (lights on / motion). Default amber. */
   accent_color?: string;
-  /** URL/preset obrazka tła (jak scene `image`, np. `stratum:noc`). */
+  /** URL/preset obrazka tła (tylko `display: tile`). */
   background_image?: string;
-  /** Czy pokazywać ikonę area w lewym górnym rogu. Default true. */
+  /** Czy pokazywać ikonę area. Default true. */
   show_icon?: boolean;
   /** Czy pokazywać nazwę area. Default true. */
   show_name?: boolean;
+}
+
+export interface TileFieldEntities {
+  /** Single sensor z `device_class=temperature` — bierzemy jego state. */
+  temperature?: string;
+  /** Single sensor z `device_class=humidity` — bierzemy jego state. */
+  humidity?: string;
+  /** Lista encji `light.*` — zliczamy ile w stanie `on`. */
+  lights?: string[];
+  /** Lista binary_sensor — motion jeśli dowolna w stanie `on`. */
+  motion?: string[];
+  /** Lista binary_sensor (window) — zliczamy ile w stanie `on`. */
+  windows?: string[];
+  /** Lista binary_sensor (door) — zliczamy ile w stanie `on`. */
+  doors?: string[];
 }
 
 /**

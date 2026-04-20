@@ -8,6 +8,7 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
+  DisplayConfig,
   HomeAssistant,
   RoomConfig,
   SceneBarConfig,
@@ -77,6 +78,63 @@ const SCHEMA: readonly FormSchemaItem[] = [
   { name: 'room_tap_action', selector: { ui_action: {} } },
 ];
 
+const DISPLAY_SCHEMA: readonly FormSchemaItem[] = [
+  {
+    name: 'fields',
+    selector: {
+      select: {
+        multiple: true,
+        mode: 'list',
+        options: [
+          { value: 'temperature', label: 'Temperatura' },
+          { value: 'humidity', label: 'Wilgotność' },
+          { value: 'lights', label: 'Liczba świateł on' },
+          { value: 'motion', label: 'Obecność (ikona)' },
+          { value: 'windows', label: 'Otwarte okna' },
+          { value: 'doors', label: 'Otwarte drzwi' },
+        ],
+      },
+    },
+  },
+  {
+    type: 'grid',
+    name: '',
+    schema: [
+      { name: 'aspect', selector: { text: {} } },
+      { name: 'accent_color', selector: { text: {} } },
+    ],
+  },
+  { name: 'background_image', selector: { text: {} } },
+  {
+    type: 'grid',
+    name: '',
+    schema: [
+      { name: 'show_icon', selector: { boolean: {} } },
+      { name: 'show_name', selector: { boolean: {} } },
+    ],
+  },
+];
+
+const DISPLAY_LABELS: Record<string, string> = {
+  fields: 'Pola w sekcji info',
+  aspect: 'Proporcje kafla (CSS)',
+  accent_color: 'Kolor akcentu',
+  background_image: 'Obrazek tła (URL lub stratum:<id>)',
+  show_icon: 'Pokaż ikonę',
+  show_name: 'Pokaż nazwę',
+};
+
+const DISPLAY_HELPERS: Record<string, string> = {
+  fields:
+    'Które wartości pokazać w wierszu lub kaflu. Kolejność z listy = kolejność wyświetlania.',
+  aspect:
+    'Dotyczy tylko kafla. Np. 1/1 (default), 4/3, 16/9. Wiersz ignoruje.',
+  accent_color:
+    'Kolor gdy wiersz/kafel jest aktywny (światła/motion). Nazwa (amber, blue), hex (#ffc107) lub var(--color).',
+  background_image:
+    'Obraz tła kafla — np. /local/img/salon.jpg albo preset stratum:noc. Dotyczy tylko kafla.',
+};
+
 const LABELS: Record<string, string> = {
   floor_id: 'Piętro (floor)',
   area_id: 'Pojedyncza strefa (area) — alternatywa',
@@ -135,6 +193,36 @@ export class StratumCardEditor extends LitElement {
     };
     this._emitConfig(next);
   }
+
+  private _displayConfigChanged(
+    ev: CustomEvent<{ value: DisplayConfig }>,
+  ): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const raw = ev.detail.value ?? {};
+    const cleaned: DisplayConfig = {};
+    if (raw.fields && raw.fields.length > 0) cleaned.fields = raw.fields;
+    if (raw.aspect && raw.aspect.trim() !== '') cleaned.aspect = raw.aspect;
+    if (raw.accent_color && raw.accent_color.trim() !== '') {
+      cleaned.accent_color = raw.accent_color;
+    }
+    if (raw.background_image && raw.background_image.trim() !== '') {
+      cleaned.background_image = raw.background_image;
+    }
+    if (raw.show_icon === false) cleaned.show_icon = false;
+    if (raw.show_name === false) cleaned.show_name = false;
+
+    const next: StratumCardConfig = { ...this._config };
+    if (Object.keys(cleaned).length === 0) delete next.display_config;
+    else next.display_config = cleaned;
+    this._emitConfig(next);
+  }
+
+  private _computeDisplayLabel = (schema: FormSchemaItem): string =>
+    DISPLAY_LABELS[schema.name] ?? schema.name;
+
+  private _computeDisplayHelper = (schema: FormSchemaItem): string =>
+    DISPLAY_HELPERS[schema.name] ?? '';
 
   private _roomsChanged(ev: CustomEvent<{ rooms: RoomConfig[] }>): void {
     ev.stopPropagation();
@@ -197,6 +285,35 @@ export class StratumCardEditor extends LitElement {
             .computeLabel=${this._computeLabel}
             .computeHelper=${this._computeHelper}
             @value-changed=${this._valueChanged}
+          ></ha-form>
+        </div>
+      </div>
+
+      <div class="stratum-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:image-outline'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Wygląd pomieszczeń (globalny)</h3>
+            <p class="stratum-panel-hint">
+              Jedno ustawienie dla całej karty — dotyczy zarówno wiersza jak i
+              kafla. Per-pomieszczenie wybierzesz tylko formę i ewentualny CSS.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <ha-form
+            .hass=${this.hass}
+            .data=${{
+              show_icon: true,
+              show_name: true,
+              ...(this._config.display_config ?? {}),
+            }}
+            .schema=${DISPLAY_SCHEMA}
+            .computeLabel=${this._computeDisplayLabel}
+            .computeHelper=${this._computeDisplayHelper}
+            @value-changed=${this._displayConfigChanged}
           ></ha-form>
         </div>
       </div>

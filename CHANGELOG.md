@@ -4,6 +4,56 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.17.0] — 2026-04-20
+
+### Changed
+- **Wygląd pozycji pomieszczeń skonfigurujesz raz dla całej karty.**
+  Nowy klucz top-level `display_config` (`fields`, `aspect`, `accent_color`,
+  `background_image`, `show_icon`, `show_name`) zastępuje dotychczasowy
+  per-room `tile_config`. Obowiązuje zarówno dla wiersza (`row`) jak i
+  kafla (`tile`) — obie formy honorują teraz tę samą listę pól.
+- Per pomieszczenie zostały tylko trzy rzeczy:
+  - `display` — `row` albo `tile`
+  - opcjonalny `field_entities` — wskazanie konkretnej encji dla każdego
+    pola (temperatura / wilgotność / światła / motion / okna / drzwi),
+    zamiast domyślnego auto-discovery z area
+  - opcjonalny `style_override` — surowy CSS wstrzykiwany do pozycji
+- Wbudowana forma `row` pokazuje teraz te same pola co kafel zgodnie
+  z `display_config.fields` (dotąd `row` miał twardy układ).
+- Edytor: nowy panel „Wygląd pomieszczeń (globalny)" z ustawieniami.
+  Per-pokój sub-form zredukowany do `display` + panel encji + panel CSS.
+
+### Removed
+- `RoomConfig.tile_config` — migracja do top-level `display_config`.
+- `RoomConfig.tile_card_config` oraz opcja `display: custom:xxx` dla
+  pojedynczego pomieszczenia — kafle w sekcjach popup nadal wspierają karty
+  HACS (niezmienione).
+
+### Migration
+```yaml
+# stare (≤ v1.16)
+type: custom:stratum-card
+rooms:
+  - area_id: salon
+    display: tile
+    tile_config:
+      aspect: 16/9
+      fields: [temperature, lights, motion]
+      accent_color: amber
+
+# nowe (v1.17)
+type: custom:stratum-card
+display_config:            # JEDEN raz dla wszystkich pokoi
+  aspect: 16/9
+  fields: [temperature, lights, motion]
+  accent_color: amber
+rooms:
+  - area_id: salon
+    display: tile          # tylko forma
+    field_entities:        # opcjonalnie
+      temperature: sensor.salon_termometr_balkonowy
+```
+
 ## [1.13.0] — 2026-04-20
 
 ### Added

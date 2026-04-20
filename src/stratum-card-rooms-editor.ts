@@ -19,7 +19,6 @@ import type {
 import './stratum-sections-editor.js';
 import './stratum-scene-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
-import { getCustomCardOptions } from './custom-cards.js';
 
 const ROOM_LABELS: Record<string, string> = {
   name: 'Nazwa (override)',
@@ -90,12 +89,8 @@ export class StratumCardRoomsEditor extends LitElement {
             mode: 'dropdown',
             options: [
               { value: '', label: 'Domyślnie (z ustawień karty)' },
-              { value: 'row', label: 'Wiersz' },
-              { value: 'tile', label: 'Kafel Stratum (konfigurowalny)' },
-              ...(getCustomCardOptions().length > 0
-                ? [{ value: '__sep__', label: '── Karty custom (HACS) ──', disabled: true }]
-                : []),
-              ...getCustomCardOptions(),
+              { value: 'row', label: 'Wiersz (kompaktowy)' },
+              { value: 'tile', label: 'Kafel' },
             ],
           },
         },
@@ -227,15 +222,19 @@ export class StratumCardRoomsEditor extends LitElement {
       delete merged.scenes;
     }
     if (!merged.chips || merged.chips.length === 0) delete merged.chips;
-    // `display` zachowujemy zawsze gdy ustawione (row LUB tile LUB custom:xxx),
-    // bo to może być świadomy override globalnego `rooms_display`. Kasujemy
-    // tylko gdy pole jest undefined/empty.
+    // `display` zachowujemy zawsze gdy ustawione (row albo tile) — świadomy
+    // override globalnego `rooms_display`. Kasujemy tylko gdy pole puste.
     if (!merged.display) delete merged.display;
-    if (!merged.tile_config || Object.keys(merged.tile_config).length === 0) {
-      delete merged.tile_config;
+    if (
+      !merged.field_entities ||
+      Object.values(merged.field_entities).every(
+        (v) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0),
+      )
+    ) {
+      delete merged.field_entities;
     }
-    if (!merged.tile_card_config || Object.keys(merged.tile_card_config).length === 0) {
-      delete merged.tile_card_config;
+    if (!merged.style_override || merged.style_override.trim() === '') {
+      delete merged.style_override;
     }
     const next = existing
       ? this.rooms.map((r) => (r.area_id === areaId ? merged : r))
@@ -259,81 +258,92 @@ export class StratumCardRoomsEditor extends LitElement {
     this._updateRoom(areaId, { scenes: ev.detail.scenes });
   }
 
-  private _renderTileConfigPanel(
+  private _renderFieldEntitiesPanel(
     areaId: string,
     room: RoomConfig | undefined,
   ): TemplateResult {
-    if (room?.display !== 'tile') return html``;
-    const tileSchema = [
+    const fieldSchema = [
       {
-        type: 'grid',
-        name: '',
-        schema: [
-          { name: 'aspect', selector: { text: {} } },
-          { name: 'accent_color', selector: { text: {} } },
-        ],
-      },
-      {
-        name: 'fields',
+        name: 'temperature',
         selector: {
-          select: {
-            multiple: true,
-            mode: 'list',
-            options: [
-              { value: 'temperature', label: 'Temperatura' },
-              { value: 'humidity', label: 'Wilgotność' },
-              { value: 'lights', label: 'Liczba świateł on' },
-              { value: 'motion', label: 'Obecność (ikona)' },
-              { value: 'windows', label: 'Otwarte okna' },
-              { value: 'doors', label: 'Otwarte drzwi' },
+          entity: {
+            filter: [
+              { domain: 'sensor', device_class: 'temperature' },
+              { domain: 'climate' },
             ],
           },
         },
       },
-      { name: 'background_image', selector: { text: {} } },
       {
-        type: 'grid',
-        name: '',
-        schema: [
-          { name: 'show_icon', selector: { boolean: {} } },
-          { name: 'show_name', selector: { boolean: {} } },
-        ],
+        name: 'humidity',
+        selector: {
+          entity: { filter: [{ domain: 'sensor', device_class: 'humidity' }] },
+        },
+      },
+      {
+        name: 'lights',
+        selector: { entity: { multiple: true, filter: [{ domain: 'light' }] } },
+      },
+      {
+        name: 'motion',
+        selector: {
+          entity: {
+            multiple: true,
+            filter: [
+              { domain: 'binary_sensor', device_class: 'motion' },
+              { domain: 'binary_sensor', device_class: 'occupancy' },
+            ],
+          },
+        },
+      },
+      {
+        name: 'windows',
+        selector: {
+          entity: {
+            multiple: true,
+            filter: [{ domain: 'binary_sensor', device_class: 'window' }],
+          },
+        },
+      },
+      {
+        name: 'doors',
+        selector: {
+          entity: {
+            multiple: true,
+            filter: [{ domain: 'binary_sensor', device_class: 'door' }],
+          },
+        },
       },
     ];
-    const tileLabels: Record<string, string> = {
-      aspect: 'Proporcje (CSS)',
-      accent_color: 'Kolor akcentu',
-      fields: 'Pola w sekcji info',
-      background_image: 'Obrazek tła (URL lub stratum:<id>)',
-      show_icon: 'Pokaż ikonę',
-      show_name: 'Pokaż nazwę',
-    };
-    const tileHelpers: Record<string, string> = {
-      aspect: 'Np. 1/1 (default), 4/3, 16/9, 3/2',
-      accent_color: 'Nazwa (amber, blue), hex (#ffc107) lub var(--color)',
-      background_image: 'np. /local/img/salon.jpg lub preset stratum:noc',
+    const labels: Record<string, string> = {
+      temperature: 'Temperatura (encja)',
+      humidity: 'Wilgotność (encja)',
+      lights: 'Światła (lista encji)',
+      motion: 'Obecność / motion (lista encji)',
+      windows: 'Okna (lista encji)',
+      doors: 'Drzwi (lista encji)',
     };
     return html`
-      <details class="stratum-collapsible" open>
+      <details class="stratum-collapsible">
         <summary>
-          <ha-icon .icon=${'mdi:image-outline'}></ha-icon>
-          <span>Wygląd kafla</span>
+          <ha-icon .icon=${'mdi:pin-outline'}></ha-icon>
+          <span>Encje pól (override auto-discovery)</span>
         </summary>
         <div class="stratum-collapsible-body">
+          <p class="stratum-collapsible-hint">
+            Puste = bierzemy z area automatycznie. Ustaw aby wskazać konkretną
+            encję (np. termometr z innej strefy) dla tego pomieszczenia.
+          </p>
           <ha-form
             .hass=${this.hass}
-            .data=${{
-              aspect: '1/1',
-              show_icon: true,
-              show_name: true,
-              ...(room?.tile_config ?? {}),
-            }}
-            .schema=${tileSchema}
-            .computeLabel=${(s: { name: string }) => tileLabels[s.name] ?? s.name}
-            .computeHelper=${(s: { name: string }) => tileHelpers[s.name] ?? ''}
+            .data=${room?.field_entities ?? {}}
+            .schema=${fieldSchema}
+            .computeLabel=${(s: { name: string }) => labels[s.name] ?? s.name}
             @value-changed=${(ev: CustomEvent<{ value: Record<string, unknown> }>) => {
               ev.stopPropagation();
-              this._updateRoom(areaId, { tile_config: ev.detail.value });
+              this._updateRoom(areaId, {
+                field_entities: ev.detail.value as RoomConfig['field_entities'],
+              });
             }}
           ></ha-form>
         </div>
@@ -341,32 +351,31 @@ export class StratumCardRoomsEditor extends LitElement {
     `;
   }
 
-  private _renderCustomCardPanel(
+  private _renderStyleOverridePanel(
     areaId: string,
     room: RoomConfig | undefined,
   ): TemplateResult {
-    if (!room?.display || !room.display.startsWith('custom:')) return html``;
     return html`
-      <details class="stratum-collapsible" open>
+      <details class="stratum-collapsible">
         <summary>
-          <ha-icon .icon=${'mdi:code-braces'}></ha-icon>
-          <span>Konfiguracja karty (YAML)</span>
+          <ha-icon .icon=${'mdi:palette-swatch-outline'}></ha-icon>
+          <span>Custom CSS (tylko ten pokój)</span>
         </summary>
         <div class="stratum-collapsible-body">
           <p class="stratum-collapsible-hint">
-            Pominięte = auto-config (próba <code>{type, area, area_id}</code>).
-            Ustaw aby dostosować — np.
-            <code>type: ${room.display}</code>,
-            <code>entity: light.${areaId}_main</code>.
+            Surowe CSS wstrzykiwane jako <code>style=""</code> na row/tile tego
+            pokoju. Np. <code>background: #222; border-color: #ff9b42;</code>
           </p>
-          <ha-yaml-editor
-            .defaultValue=${room.tile_card_config ?? {}}
-            @value-changed=${(ev: CustomEvent<{ value: Record<string, unknown>; isValid: boolean }>) => {
-              if (ev.detail.isValid) {
-                this._updateRoom(areaId, { tile_card_config: ev.detail.value });
-              }
+          <textarea
+            class="stratum-css-input"
+            rows="4"
+            placeholder="background: ...; border: ...;"
+            .value=${room?.style_override ?? ''}
+            @input=${(ev: Event) => {
+              const v = (ev.target as HTMLTextAreaElement).value;
+              this._updateRoom(areaId, { style_override: v });
             }}
-          ></ha-yaml-editor>
+          ></textarea>
         </div>
       </details>
     `;
@@ -569,8 +578,8 @@ export class StratumCardRoomsEditor extends LitElement {
                         @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
                           this._onFieldChange(area.area_id, ev)}
                       ></ha-form>
-                      ${this._renderTileConfigPanel(area.area_id, room)}
-                      ${this._renderCustomCardPanel(area.area_id, room)}
+                      ${this._renderFieldEntitiesPanel(area.area_id, room)}
+                      ${this._renderStyleOverridePanel(area.area_id, room)}
                       <details class="stratum-collapsible">
                         <summary>
                           <ha-icon .icon=${'mdi:view-dashboard-outline'}></ha-icon>
@@ -626,6 +635,23 @@ export class StratumCardRoomsEditor extends LitElement {
         margin: 0;
         accent-color: var(--primary-color, #ff9b42);
         cursor: pointer;
+      }
+
+      textarea.stratum-css-input {
+        width: 100%;
+        box-sizing: border-box;
+        font: 12px/1.4 var(--code-font-family, ui-monospace, Menlo, monospace);
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
+        background: var(--card-background-color, #2b2d31);
+        color: var(--primary-text-color);
+        resize: vertical;
+      }
+
+      textarea.stratum-css-input:focus-visible {
+        outline: 2px solid var(--primary-color, #ff9b42);
+        outline-offset: 1px;
       }
     `,
   ];

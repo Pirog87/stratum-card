@@ -6,11 +6,10 @@
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import type { TileConfig, TileField } from './types.js';
+import type { DisplayConfig, TileField } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
-
-const DEFAULT_FIELDS: TileField[] = ['temperature', 'lights', 'motion'];
+import { DEFAULT_FIELDS } from './tile-data.js';
 
 @customElement('stratum-card-room-tile')
 export class StratumCardRoomTile extends LitElement {
@@ -37,8 +36,11 @@ export class StratumCardRoomTile extends LitElement {
   /** Liczba otwartych drzwi. */
   @property({ type: Number, attribute: 'doors-open' }) public doorsOpen = 0;
 
-  /** Konfiguracja wyglądu kafla. */
-  @property({ attribute: false }) public tileConfig?: TileConfig;
+  /** Globalna konfiguracja wyglądu (aspect, pola, kolor akcentu, tło). */
+  @property({ attribute: false }) public displayConfig?: DisplayConfig;
+
+  /** Per-pokój CSS override (wstrzykiwane jako style na .tile). */
+  @property({ type: String, attribute: 'style-override' }) public styleOverride?: string;
 
   private _onClick = (): void => {
     if (!this.clickable) return;
@@ -60,7 +62,7 @@ export class StratumCardRoomTile extends LitElement {
   };
 
   protected render(): TemplateResult {
-    const cfg = this.tileConfig ?? {};
+    const cfg = this.displayConfig ?? {};
     const active = this.lightsOn > 0 || this.motion;
     const fields = cfg.fields ?? DEFAULT_FIELDS;
     const showIcon = cfg.show_icon !== false;
@@ -71,6 +73,7 @@ export class StratumCardRoomTile extends LitElement {
       `--stratum-room-tile-aspect: ${cfg.aspect ?? '1/1'};`,
       active ? `--stratum-room-tile-active-color: ${accent};` : '',
       bgImage ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;` : '',
+      this.styleOverride ?? '',
     ].join(' ');
 
     return html`
