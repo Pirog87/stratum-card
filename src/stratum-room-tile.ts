@@ -29,6 +29,9 @@ export class StratumRoomTile extends LitElement {
 
   @property({ type: String, attribute: 'entity' }) public entity = '';
 
+  /** Tryb: `tile` (domyślny button toggle) lub `slider` (suwak brightness/position). */
+  @property({ type: String }) public mode: 'tile' | 'slider' = 'tile';
+
   private _state(): HassEntity | undefined {
     return this.hass?.states?.[this.entity];
   }
@@ -70,11 +73,16 @@ export class StratumRoomTile extends LitElement {
     const domain = domainOf(this.entity);
     switch (domain) {
       case 'light':
+        return this.mode === 'slider'
+          ? this._renderLightSlider(state)
+          : this._renderToggle(state, domain);
       case 'switch':
       case 'fan':
         return this._renderToggle(state, domain);
       case 'cover':
-        return this._renderCover(state);
+        return this.mode === 'slider'
+          ? this._renderCoverSlider(state)
+          : this._renderCover(state);
       case 'binary_sensor':
         return this._renderBinary(state);
       case 'climate':
@@ -86,6 +94,82 @@ export class StratumRoomTile extends LitElement {
       default:
         return this._renderGeneric(state);
     }
+  }
+
+  private _renderLightSlider(state: HassEntity): TemplateResult {
+    const on = state.state === 'on';
+    const bright = (state.attributes?.brightness as number | undefined) ?? 0;
+    const pct = on ? Math.round((bright / 255) * 100) : 0;
+    const icon = on ? 'mdi:lightbulb-on' : 'mdi:lightbulb';
+    return html`
+      <div class="tile slider ${on ? 'on' : 'off'}" part="tile">
+        <button
+          class="inline-toggle"
+          @click=${(ev: Event) => this._callService(ev, 'light', 'toggle')}
+          @contextmenu=${this._openMoreInfo}
+          title=${on ? 'Wyłącz' : 'Włącz'}
+        >
+          <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
+        </button>
+        <div class="slider-body">
+          <span class="tile-name">${friendlyName(state, this.entity)}</span>
+          <input
+            type="range"
+            class="range"
+            min="0"
+            max="100"
+            step="1"
+            .value=${String(pct)}
+            @click=${(ev: Event) => ev.stopPropagation()}
+            @change=${(ev: Event) => this._onBrightnessChange(ev)}
+          />
+        </div>
+        <span class="tile-state">${on ? `${pct}%` : 'off'}</span>
+      </div>
+    `;
+  }
+
+  private _onBrightnessChange(ev: Event): void {
+    const pct = Number((ev.target as HTMLInputElement).value);
+    const brightness = Math.round((pct / 100) * 255);
+    if (brightness <= 0) {
+      void this.hass?.callService('light', 'turn_off', { entity_id: this.entity });
+    } else {
+      void this.hass?.callService('light', 'turn_on', {
+        entity_id: this.entity,
+        brightness,
+      });
+    }
+  }
+
+  private _renderCoverSlider(state: HassEntity): TemplateResult {
+    const pos = (state.attributes?.current_position as number | undefined) ?? 0;
+    const isOpen = state.state === 'open' || pos > 0;
+    return html`
+      <div class="tile slider ${isOpen ? 'on' : 'off'}" part="tile">
+        <ha-icon class="tile-icon" .icon=${isOpen ? 'mdi:blinds-open' : 'mdi:blinds'}></ha-icon>
+        <div class="slider-body">
+          <span class="tile-name">${friendlyName(state, this.entity)}</span>
+          <input
+            type="range"
+            class="range"
+            min="0"
+            max="100"
+            step="1"
+            .value=${String(pos)}
+            @click=${(ev: Event) => ev.stopPropagation()}
+            @change=${(ev: Event) => {
+              const v = Number((ev.target as HTMLInputElement).value);
+              void this.hass?.callService('cover', 'set_cover_position', {
+                entity_id: this.entity,
+                position: v,
+              });
+            }}
+          />
+        </div>
+        <span class="tile-state">${pos}%</span>
+      </div>
+    `;
   }
 
   private _renderToggle(state: HassEntity, domain: string): TemplateResult {
@@ -330,6 +414,45 @@ export class StratumRoomTile extends LitElement {
       grid-template-columns: auto 1fr;
       grid-template-areas: 'icon name';
       opacity: 0.5;
+    }
+
+    .tile.slider {
+      grid-template-columns: auto 1fr auto;
+      grid-template-areas: 'icon body state';
+      cursor: default;
+      gap: 8px 12px;
+    }
+
+    .slider-body {
+      grid-area: body;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .slider-body .tile-name {
+      grid-area: unset;
+    }
+
+    .inline-toggle {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      display: inline-flex;
+      color: inherit;
+    }
+
+    .inline-toggle:hover {
+      opacity: 0.8;
+    }
+
+    .range {
+      width: 100%;
+      height: 4px;
+      accent-color: var(--stratum-chip-lights-color, #ffc107);
+      cursor: pointer;
     }
   `;
 }

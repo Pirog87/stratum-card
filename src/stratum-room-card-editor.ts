@@ -7,10 +7,12 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
   HomeAssistant,
+  RoomSectionConfig,
   SceneBarConfig,
   StratumRoomCardConfig,
 } from './types.js';
 import './stratum-scene-editor.js';
+import './stratum-sections-editor.js';
 
 interface FormSchemaItem {
   name: string;
@@ -142,6 +144,21 @@ export class StratumRoomCardEditor extends LitElement {
     );
   }
 
+  private _sectionsChanged(ev: CustomEvent<{ sections: RoomSectionConfig[] }>): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const next: StratumRoomCardConfig = { ...this._config };
+    if (ev.detail.sections.length === 0) delete next.sections;
+    else next.sections = ev.detail.sections;
+    this.dispatchEvent(
+      new CustomEvent('config-changed', {
+        detail: { config: next },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   protected render(): TemplateResult {
     if (!this.hass || !this._config) return html``;
     return html`
@@ -153,6 +170,19 @@ export class StratumRoomCardEditor extends LitElement {
         .computeHelper=${this._computeHelper}
         @value-changed=${this._valueChanged}
       ></ha-form>
+      <div class="sections-section">
+        <h3>Sekcje</h3>
+        <p class="hint">
+          Lista sekcji pokoju — kolejność, ograniczenia encji, tryb
+          wyświetlania. Brak elementów = auto-discover na podstawie encji.
+        </p>
+        <stratum-sections-editor
+          .hass=${this.hass}
+          .sections=${this._normalizedSections()}
+          @sections-changed=${this._sectionsChanged}
+        ></stratum-sections-editor>
+      </div>
+
       <div class="scenes-section">
         <h3>Sceny</h3>
         <p class="hint">
@@ -167,6 +197,11 @@ export class StratumRoomCardEditor extends LitElement {
     `;
   }
 
+  private _normalizedSections(): RoomSectionConfig[] {
+    const raw = this._config?.sections ?? [];
+    return raw.map((s) => (typeof s === 'string' ? { type: s } : s));
+  }
+
   static styles = css`
     :host {
       display: block;
@@ -174,12 +209,14 @@ export class StratumRoomCardEditor extends LitElement {
     ha-form {
       display: block;
     }
-    .scenes-section {
+    .scenes-section,
+    .sections-section {
       margin-top: 16px;
       padding-top: 12px;
       border-top: 1px solid var(--divider-color);
     }
-    .scenes-section h3 {
+    .scenes-section h3,
+    .sections-section h3 {
       margin: 0 0 4px;
       font-size: 14px;
       font-weight: 600;
