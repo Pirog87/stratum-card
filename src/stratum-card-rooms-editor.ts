@@ -9,7 +9,15 @@
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getAreasInFloor } from './area-entities.js';
-import type { HomeAssistant, RoomConfig, TapActionConfig } from './types.js';
+import type {
+  HomeAssistant,
+  RoomConfig,
+  RoomSectionConfig,
+  SceneBarConfig,
+  TapActionConfig,
+} from './types.js';
+import './stratum-sections-editor.js';
+import './stratum-scene-editor.js';
 
 const ROOM_LABELS: Record<string, string> = {
   name: 'Nazwa (override)',
@@ -194,10 +202,36 @@ export class StratumCardRoomsEditor extends LitElement {
     if (!merged.aggregate || merged.aggregate === 'sum') {
       delete merged.aggregate;
     }
+    if (!merged.sections || merged.sections.length === 0) delete merged.sections;
+    if (!merged.scenes || (merged.scenes.items ?? []).length === 0) {
+      delete merged.scenes;
+    }
+    if (!merged.chips || merged.chips.length === 0) delete merged.chips;
     const next = existing
       ? this.rooms.map((r) => (r.area_id === areaId ? merged : r))
       : [...this.rooms, merged];
     this._emitChange(next);
+  }
+
+  private _onSectionsChanged(
+    areaId: string,
+    ev: CustomEvent<{ sections: RoomSectionConfig[] }>,
+  ): void {
+    ev.stopPropagation();
+    this._updateRoom(areaId, { sections: ev.detail.sections });
+  }
+
+  private _onScenesChanged(
+    areaId: string,
+    ev: CustomEvent<{ scenes: SceneBarConfig }>,
+  ): void {
+    ev.stopPropagation();
+    this._updateRoom(areaId, { scenes: ev.detail.scenes });
+  }
+
+  private _normalizedRoomSections(room: RoomConfig | undefined): RoomSectionConfig[] {
+    const raw = room?.sections ?? [];
+    return raw.map((s) => (typeof s === 'string' ? { type: s } : s));
   }
 
   private _onFieldChange(
@@ -387,6 +421,35 @@ export class StratumCardRoomsEditor extends LitElement {
                         @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
                           this._onFieldChange(area.area_id, ev)}
                       ></ha-form>
+                      <details class="popup-cfg">
+                        <summary>
+                          <ha-icon .icon=${'mdi:view-dashboard-outline'}></ha-icon>
+                          <span>Sekcje popup pomieszczenia</span>
+                        </summary>
+                        <p class="hint">
+                          Kolejność i zawartość sekcji które pojawią się w popup
+                          po kliknięciu tego pokoju. Puste = auto-discover z
+                          encji.
+                        </p>
+                        <stratum-sections-editor
+                          .hass=${this.hass}
+                          .sections=${this._normalizedRoomSections(room)}
+                          @sections-changed=${(ev: CustomEvent<{ sections: RoomSectionConfig[] }>) =>
+                            this._onSectionsChanged(area.area_id, ev)}
+                        ></stratum-sections-editor>
+                      </details>
+                      <details class="popup-cfg">
+                        <summary>
+                          <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
+                          <span>Sceny popup pomieszczenia</span>
+                        </summary>
+                        <stratum-scene-editor
+                          .hass=${this.hass}
+                          .config=${room?.scenes ?? { items: [] }}
+                          @scenes-changed=${(ev: CustomEvent<{ scenes: SceneBarConfig }>) =>
+                            this._onScenesChanged(area.area_id, ev)}
+                        ></stratum-scene-editor>
+                      </details>
                     </div>
                   `
                 : nothing}
@@ -545,6 +608,51 @@ export class StratumCardRoomsEditor extends LitElement {
 
     .room.open {
       background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
+    }
+
+    .popup-cfg {
+      margin-top: 10px;
+      border: 1px solid var(--divider-color);
+      border-radius: 6px;
+      padding: 6px 10px;
+      background: var(--card-background-color, transparent);
+    }
+
+    .popup-cfg summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 4px 0;
+      list-style: none;
+    }
+
+    .popup-cfg summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .popup-cfg summary ha-icon {
+      --mdc-icon-size: 18px;
+      color: var(--secondary-text-color);
+    }
+
+    .popup-cfg summary::after {
+      content: '▸';
+      margin-left: auto;
+      color: var(--secondary-text-color);
+      transition: transform 0.15s ease;
+    }
+
+    .popup-cfg[open] summary::after {
+      transform: rotate(90deg);
+    }
+
+    .popup-cfg .hint {
+      margin: 6px 0 10px;
+      font-size: 12px;
+      color: var(--secondary-text-color);
     }
   `;
 }
