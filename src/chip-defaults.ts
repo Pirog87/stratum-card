@@ -33,7 +33,7 @@ const BUILTIN_ICON: Record<BuiltInChipType, string> = {
   lights: 'mdi:lightbulb',
   motion: 'mdi:motion-sensor',
   occupancy: 'mdi:account',
-  windows: 'mdi:window-open',
+  windows: 'mdi:window-open-variant',
   doors: 'mdi:door-open',
   leak: 'mdi:water-alert',
 };
@@ -43,7 +43,7 @@ const BUILTIN_COLOR: Record<BuiltInChipType, string> = {
   motion: 'var(--stratum-chip-motion-color, #4caf50)',
   occupancy: 'var(--stratum-chip-occupancy-color, #4caf50)',
   windows: 'var(--stratum-chip-windows-color, #42a5f5)',
-  doors: 'var(--stratum-chip-doors-color, #42a5f5)',
+  doors: 'var(--stratum-chip-doors-color, #ba68c8)',
   leak: 'var(--stratum-chip-leak-color, #f44336)',
 };
 
