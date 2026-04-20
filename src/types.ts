@@ -41,6 +41,18 @@ export interface StratumCardConfig {
   auto_collapse?: number;
 
   /**
+   * Globalny default formy pozycji pomieszczeń: `row` (domyślny) albo `tile`.
+   * Per-pokój `display` w `RoomConfig` nadpisuje.
+   */
+  rooms_display?: 'row' | 'tile';
+
+  /**
+   * Minimalna szerokość kafla (px) w layoucie tile. Wpływa na auto-fill
+   * grid-template-columns. Default 160.
+   */
+  rooms_tile_min_width?: number;
+
+  /**
    * Akcja wyzwalana kliknięciem w wiersz pomieszczenia. Wspiera placeholdery
    * `{area_id}` i `{area_name}` w `navigation_path`.
    * Przy braku: wiersz nie reaguje na klik.
@@ -294,6 +306,15 @@ export interface RoomConfig {
    *   hierarchii (np. detail view w v1.0+)
    */
   aggregate?: 'sum' | 'primary_only';
+
+  /**
+   * Forma wyświetlania pozycji w głównej karcie:
+   * - `row` (domyślny) — poziomy wiersz w pełnej szerokości
+   * - `tile` — kafel (card-style), kwadratowy z dużą ikoną i kompaktowymi
+   *   licznikami. Można mieszać wiersze i kafle w obrębie jednej karty.
+   * Bez ustawienia — używa `rooms_display` ze `StratumCardConfig`.
+   */
+  display?: 'row' | 'tile';
 
   /**
    * Sekcje widoczne w popup pokoju (otwiera się po kliknięciu wiersza).
