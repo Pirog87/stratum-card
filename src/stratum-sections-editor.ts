@@ -38,7 +38,47 @@ const SUMMARY_FIELD_OPTIONS = [
   { value: 'leak', label: 'Wyciek wody' },
 ];
 
-const HAS_MODE = new Set<RoomSectionType>(['lights', 'covers']);
+/** Opcje trybu wyświetlania dostępne per typ sekcji. */
+const MODE_OPTIONS_BY_TYPE: Partial<Record<RoomSectionType, Array<{ value: string; label: string }>>> = {
+  lights: [
+    { value: 'tile', label: 'Tile (kafel z toggle)' },
+    { value: 'slider', label: 'Slider (brightness)' },
+    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
+  ],
+  covers: [
+    { value: 'tile', label: 'Tile (kafel z przyciskami)' },
+    { value: 'slider', label: 'Slider (pozycja)' },
+    { value: 'chips', label: 'Chips (open/close)' },
+  ],
+  switches: [
+    { value: 'tile', label: 'Tile (kafel z toggle)' },
+    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
+  ],
+  fans: [
+    { value: 'tile', label: 'Tile (kafel z toggle)' },
+    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
+  ],
+  media: [
+    { value: 'tile', label: 'Tile (play/pause)' },
+    { value: 'chips', label: 'Chips (play/pause)' },
+  ],
+  windows: [
+    { value: 'tile', label: 'Tile (kafel ze statusem)' },
+    { value: 'chips', label: 'Chips (status readonly)' },
+  ],
+  doors: [
+    { value: 'tile', label: 'Tile (kafel ze statusem)' },
+    { value: 'chips', label: 'Chips (status readonly)' },
+  ],
+  scenes: [
+    { value: 'tile', label: 'Tile (przycisk aktywuj)' },
+    { value: 'chips', label: 'Chips (przycisk aktywuj)' },
+  ],
+  summary: [
+    { value: 'cards', label: 'Cards (kafle z labelem + value)' },
+    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
+  ],
+};
 
 function buildSchema(section: RoomSectionConfig) {
   const entityDomains = entityDomainsForType(section.type);
@@ -57,6 +97,16 @@ function buildSchema(section: RoomSectionConfig) {
     },
   ];
 
+  const modeOpts = MODE_OPTIONS_BY_TYPE[section.type];
+  const modeField = modeOpts
+    ? [
+        {
+          name: 'mode',
+          selector: { select: { mode: 'dropdown', options: modeOpts } },
+        },
+      ]
+    : [];
+
   if (section.type === 'summary') {
     return [
       ...common,
@@ -66,6 +116,7 @@ function buildSchema(section: RoomSectionConfig) {
           select: { multiple: true, mode: 'list', options: SUMMARY_FIELD_OPTIONS },
         },
       },
+      ...modeField,
     ];
   }
 
@@ -99,22 +150,7 @@ function buildSchema(section: RoomSectionConfig) {
           },
         },
       },
-      ...(HAS_MODE.has(section.type)
-        ? [
-            {
-              name: 'mode',
-              selector: {
-                select: {
-                  mode: 'dropdown',
-                  options: [
-                    { value: 'tile', label: 'Tile (toggle)' },
-                    { value: 'slider', label: 'Slider (brightness/position)' },
-                  ],
-                },
-              },
-            },
-          ]
-        : []),
+      ...modeField,
     ],
   });
 

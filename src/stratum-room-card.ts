@@ -23,7 +23,15 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
+
+interface SummaryDatum {
+  label: string;
+  icon: string;
+  value: string;
+  active: boolean;
+  color: string;
+}
 
 /** Auto-wybór chipów dla room card: lights + motion + temp + humidity (jeśli są). */
 function autoRoomChips(
@@ -267,12 +275,14 @@ export class StratumRoomCard extends LitElement {
     }
     if (items.length === 0) return html``;
 
-    const layout =
-      section.columns === 1 ? 'grid-1'
+    const mode = section.mode ?? 'tile';
+    const isChips = mode === 'chips';
+    const layout = isChips
+      ? 'chips-layout'
+      : section.columns === 1 ? 'grid-1'
       : section.columns === 2 ? 'grid-2'
       : section.columns === 3 ? 'grid-3'
       : SECTION_LAYOUT[type];
-    const mode = section.mode ?? 'tile';
 
     return html`
       <div class="section" part="section">
@@ -309,44 +319,60 @@ export class StratumRoomCard extends LitElement {
       'windows_open',
       'doors_open',
     ];
-    const chips = fields
-      .map((f) => this._summaryChip(f, entries))
-      .filter((t): t is TemplateResult => t !== null);
-    if (chips.length === 0) return html``;
+    const data = fields
+      .map((f) => this._summaryData(f, entries))
+      .filter((d): d is SummaryDatum => d !== null);
+    if (data.length === 0) return html``;
+    const mode = section.mode ?? 'cards';
+    const body =
+      mode === 'chips'
+        ? html`<div class="summary-chips">
+            ${data.map(
+              (d) => html`
+                <span
+                  class="summary-chip ${d.active ? 'active' : 'inactive'}"
+                  style=${d.active ? `--stratum-sum-accent:${d.color};` : ''}
+                  title=${d.label}
+                >
+                  <ha-icon .icon=${d.icon}></ha-icon>
+                  <span>${d.value}</span>
+                </span>
+              `,
+            )}
+          </div>`
+        : html`<div class="summary-grid">
+            ${data.map((d) => this._summaryItem(d.label, d.icon, d.value, d.active, d.color))}
+          </div>`;
     return html`
       <div class="section" part="section">
         <div class="section-header" part="section-header">
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
         </div>
-        <div class="summary-grid">${chips}</div>
+        ${body}
       </div>
     `;
   }
 
-  private _summaryChip(
+  private _summaryData(
     field: SummaryField,
     entries: HassEntityRegistryEntry[],
-  ): TemplateResult | null {
+  ): SummaryDatum | null {
     const hass = this.hass!;
+    const mk = (label: string, icon: string, value: string, active: boolean, color: string): SummaryDatum => ({
+      label, icon, value, active, color,
+    });
     switch (field) {
       case 'motion':
       case 'occupancy': {
-        const cls = field;
-        const on = filterBinarySensorDeviceClass(hass, entries, cls).some(
+        const on = filterBinarySensorDeviceClass(hass, entries, field).some(
           (e) => hass.states?.[e.entity_id]?.state === 'on',
         );
-        return this._summaryItem(
-          field === 'motion' ? 'Obecność' : 'Obecność',
-          'mdi:motion-sensor',
-          on ? 'aktywna' : 'brak',
-          on,
-          '#4caf50',
-        );
+        return mk('Obecność', 'mdi:motion-sensor', on ? 'aktywna' : 'brak', on, '#4caf50');
       }
       case 'temperature':
       case 'humidity': {
-        const cls = field === 'temperature' ? 'temperature' : 'humidity';
+        const cls = field;
         const entry = entries.find(
           (e) =>
             e.entity_id.startsWith('sensor.') &&
@@ -360,46 +386,28 @@ export class StratumRoomCard extends LitElement {
         const label = cls === 'temperature' ? 'Temperatura' : 'Wilgotność';
         const icon = cls === 'temperature' ? 'mdi:thermometer' : 'mdi:water-percent';
         const color = cls === 'temperature' ? '#ffc107' : '#42a5f5';
-        return this._summaryItem(label, icon, `${state.state} ${unit}`, true, color);
+        return mk(label, icon, `${state.state} ${unit}`, true, color);
       }
       case 'lights_on': {
         const n = filterByDomain(entries, 'light').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
-        return this._summaryItem(
-          'Światła',
-          'mdi:lightbulb-on',
-          n > 0 ? `${n} włącz.` : 'wszystkie wył.',
-          n > 0,
-          '#ffc107',
-        );
+        return mk('Światła', 'mdi:lightbulb-on', n > 0 ? `${n} włącz.` : 'wszystkie wył.', n > 0, '#ffc107');
       }
       case 'windows_open': {
         const n = filterBinarySensorDeviceClass(hass, entries, 'window').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
-        return this._summaryItem(
-          'Okna',
-          'mdi:window-open-variant',
-          n > 0 ? `${n} otwart.` : 'zamknięte',
-          n > 0,
-          '#42a5f5',
-        );
+        return mk('Okna', 'mdi:window-open-variant', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, '#42a5f5');
       }
       case 'doors_open': {
         const n = filterBinarySensorDeviceClass(hass, entries, 'door').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
-        return this._summaryItem(
-          'Drzwi',
-          'mdi:door-open',
-          n > 0 ? `${n} otwart.` : 'zamknięte',
-          n > 0,
-          '#42a5f5',
-        );
+        return mk('Drzwi', 'mdi:door-open', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, '#42a5f5');
       }
       case 'battery_low': {
         const low = entries.some((e) => {
@@ -409,20 +417,14 @@ export class StratumRoomCard extends LitElement {
           return !Number.isNaN(v) && v < 20;
         });
         if (!low) return null;
-        return this._summaryItem(
-          'Bateria',
-          'mdi:battery-alert',
-          'niski poziom',
-          true,
-          '#f44336',
-        );
+        return mk('Bateria', 'mdi:battery-alert', 'niski poziom', true, '#f44336');
       }
       case 'leak': {
         const active = filterBinarySensorDeviceClass(hass, entries, 'moisture').some(
           (e) => hass.states?.[e.entity_id]?.state === 'on',
         );
         if (!active) return null;
-        return this._summaryItem('Wyciek', 'mdi:water-alert', 'wykryty', true, '#f44336');
+        return mk('Wyciek', 'mdi:water-alert', 'wykryty', true, '#f44336');
       }
       default:
         return null;
@@ -539,6 +541,39 @@ export class StratumRoomCard extends LitElement {
       gap: 8px;
     }
 
+    .summary-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .summary-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
+      background: var(--stratum-tile-chip-background, rgba(255, 255, 255, 0.04));
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary-text-color);
+    }
+
+    .summary-chip.inactive {
+      opacity: 0.45;
+    }
+
+    .summary-chip.active {
+      color: var(--stratum-sum-accent, var(--primary-color));
+      border-color: var(--stratum-sum-accent, var(--primary-color));
+      background: color-mix(in srgb, var(--stratum-sum-accent, var(--primary-color)) 18%, transparent);
+    }
+
+    .summary-chip ha-icon {
+      --mdc-icon-size: 16px;
+    }
+
     .summary-item {
       display: flex;
       align-items: center;
@@ -600,6 +635,12 @@ export class StratumRoomCard extends LitElement {
     .tiles {
       display: grid;
       gap: 8px;
+    }
+
+    .tiles.chips-layout {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
     }
 
     .tiles.grid-1 {
