@@ -13,7 +13,6 @@ import type {
   SummaryField,
 } from './types.js';
 import { SECTION_LABEL, SECTION_ICON } from './section-defaults.js';
-import { getCustomCardOptionsForSection } from './custom-cards.js';
 import {
   SECTION_PRESETS,
   CATEGORY_LABELS,
@@ -105,6 +104,11 @@ const MODE_OPTIONS_BY_TYPE: Partial<Record<RoomSectionType, Array<{ value: strin
   ],
 };
 
+/**
+ * Schema dla ha-form BEZ `mode` — mode renderujemy osobno jako wizualny picker.
+ * `summary` nadal ma dropdown mode w ha-form (cards/chips są specyficzne dla
+ * summary i nie trafiają do section-presets).
+ */
 function buildSchema(section: RoomSectionConfig) {
   const entityDomains = entityDomainsForType(section.type);
   const common = [
@@ -122,28 +126,23 @@ function buildSchema(section: RoomSectionConfig) {
     },
   ];
 
-  const nativeModeOpts = MODE_OPTIONS_BY_TYPE[section.type];
-  const customCardOpts =
-    nativeModeOpts && section.type !== 'summary'
-      ? getCustomCardOptionsForSection(section.type)
-      : [];
-  const modeOpts = nativeModeOpts
-    ? customCardOpts.length > 0
+  // Mode dla wszystkich typów oprócz summary renderujemy jako WIZUALNY picker
+  // (grid presetów) poza ha-formem. Summary ma specjalny dropdown bo cards/chips
+  // są specyficzne dla summary, nie trafiają do section-presets.
+  const modeField =
+    section.type === 'summary'
       ? [
-          ...nativeModeOpts,
-          { value: '__sep__', label: '──── Custom cards (HACS) ────', disabled: true },
-          ...customCardOpts,
+          {
+            name: 'mode',
+            selector: {
+              select: {
+                mode: 'dropdown',
+                options: MODE_OPTIONS_BY_TYPE.summary,
+              },
+            },
+          },
         ]
-      : nativeModeOpts
-    : undefined;
-  const modeField = modeOpts
-    ? [
-        {
-          name: 'mode',
-          selector: { select: { mode: 'dropdown', options: modeOpts } },
-        },
-      ]
-    : [];
+      : [];
 
   if (section.type === 'custom') {
     // Dla custom card pokazujemy tylko type + title. Pole `card` obsługujemy
@@ -298,6 +297,30 @@ export class StratumSectionsEditor extends LitElement {
     this._showPresets = false;
   }
 
+  /** Sprawdza czy preset jest „aktywny" dla aktualnej sekcji (mode match). */
+  private _isPresetActive(
+    section: RoomSectionConfig,
+    preset: SectionPreset,
+  ): boolean {
+    if (section.type !== preset.config.type) return false;
+    return (section.mode ?? '') === (preset.config.mode ?? '');
+  }
+
+  /** Aplikuje preset jako szybki mode-switch — zachowuje tytuł/ikonę/entities. */
+  private _applyPresetMode(index: number, preset: SectionPreset): void {
+    const current = this.sections[index];
+    if (!current) return;
+    const next: RoomSectionConfig = {
+      ...current,
+      type: preset.config.type,
+      mode: preset.config.mode,
+      card_template: preset.config.card_template,
+    };
+    if (!preset.config.mode) delete next.mode;
+    if (!preset.config.card_template) delete next.card_template;
+    this._updateAt(index, next);
+  }
+
   private _addPreset(preset: SectionPreset): void {
     // Clone configu — presety są immutable.
     const clone: RoomSectionConfig = JSON.parse(JSON.stringify(preset.config));
@@ -406,6 +429,7 @@ export class StratumSectionsEditor extends LitElement {
               </div>
               ${open
                 ? html`<div class="stratum-row-sub">
+                    ${this._renderModePicker(section, idx)}
                     <ha-form
                       .hass=${this.hass}
                       .data=${{ columns: 'auto', ...section }}
@@ -477,6 +501,72 @@ export class StratumSectionsEditor extends LitElement {
           <ha-icon .icon=${'mdi:plus'}></ha-icon>
           Pusta
         </button>
+      </div>
+    `;
+  }
+
+  /**
+   * Wizualny picker trybu dla aktualnej sekcji — grid presetów pasujących
+   * do section.type z active state + availability check.
+   */
+  private _renderModePicker(
+    section: RoomSectionConfig,
+    idx: number,
+  ): TemplateResult {
+    // Summary i custom nie mają preset-based pickera.
+    if (section.type === 'summary' || section.type === 'custom') {
+      return html``;
+    }
+    const relevant = SECTION_PRESETS.filter(
+      (p) => p.config.type === section.type,
+    );
+    if (relevant.length === 0) return html``;
+
+    const currentMode = section.mode ?? '';
+    const anyActive = relevant.some((p) => this._isPresetActive(section, p));
+
+    return html`
+      <div class="mode-picker">
+        <label class="mode-picker-label">Tryb wyświetlania</label>
+        <div class="presets-grid">
+          ${relevant.map((p) => {
+            const installed = !p.requires || isCardInstalled(p.requires);
+            const active = this._isPresetActive(section, p);
+            return html`<button
+              class="preset-card preset-mode ${active ? 'active' : ''} ${installed
+                ? ''
+                : 'unavailable'}"
+              ?disabled=${!installed}
+              title=${installed
+                ? p.hint
+                : `Wymaga zainstalowanej karty: ${p.requires}`}
+              @click=${() => this._applyPresetMode(idx, p)}
+            >
+              <span class="preset-avatar preset-avatar-${p.category}">
+                <ha-icon .icon=${p.avatar}></ha-icon>
+              </span>
+              <span class="preset-body">
+                <span class="preset-title">${p.label}</span>
+                <span class="preset-hint">${p.hint}</span>
+                ${!installed
+                  ? html`<span class="preset-missing">Brak: ${p.requires}</span>`
+                  : nothing}
+              </span>
+              ${active
+                ? html`<span class="active-check">
+                    <ha-icon .icon=${'mdi:check-circle'}></ha-icon>
+                  </span>`
+                : nothing}
+            </button>`;
+          })}
+        </div>
+        ${!anyActive && currentMode
+          ? html`<p class="mode-picker-hint">
+              <ha-icon .icon=${'mdi:information-outline'}></ha-icon>
+              Aktualny tryb: <code>${currentMode}</code> — nie pasuje do żadnego
+              presetu. Kliknij dowolny preset żeby podmienić.
+            </p>`
+          : nothing}
       </div>
     `;
   }
@@ -703,6 +793,68 @@ export class StratumSectionsEditor extends LitElement {
         color: var(--error-color, #e53935);
         margin-top: 2px;
         font-style: italic;
+      }
+
+      .mode-picker {
+        margin-bottom: 14px;
+      }
+
+      .mode-picker-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--secondary-text-color);
+        margin-bottom: 8px;
+      }
+
+      .preset-card.preset-mode {
+        position: relative;
+        padding-right: 32px;
+      }
+
+      .preset-card.preset-mode.active {
+        border-color: var(--primary-color, #ff9b42);
+        background: color-mix(in srgb, var(--primary-color, #ff9b42) 12%, transparent);
+        box-shadow: 0 0 0 1px var(--primary-color, #ff9b42);
+      }
+
+      .active-check {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--primary-color, #ff9b42);
+      }
+
+      .active-check ha-icon {
+        --mdc-icon-size: 18px;
+      }
+
+      .mode-picker-hint {
+        margin: 8px 0 0;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--warning-color, #ff9800) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--warning-color, #ff9800) 30%, transparent);
+        font-size: 11px;
+        color: var(--primary-text-color);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .mode-picker-hint ha-icon {
+        --mdc-icon-size: 14px;
+        color: var(--warning-color, #ff9800);
+      }
+
+      .mode-picker-hint code {
+        background: var(--secondary-background-color, rgba(255, 255, 255, 0.08));
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 10px;
       }
     `,
   ];

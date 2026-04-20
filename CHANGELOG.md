@@ -4,6 +4,19 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.37.0] — 2026-04-20
+
+### Changed
+- **Wizualny mode picker w edytorze sekcji.** Zamiast tekstowego dropdowna
+  (Tryb wyświetlania → Tile / Slider / Bubble / …) edytor pokazuje teraz
+  grid presetów pasujących do typu sekcji. Klik przełącza tryb + aktualizuje
+  `card_template` z presetu.
+  - Aktywny preset: checkmark ✓ + niebieski border + tinted bg
+  - Presety HACS niedostępne: wyszarzone z labelem „Brak: mushroom-…"
+  - Gdy user ma tryb spoza presetów → warning hint „Aktualny tryb: xxx"
+- `summary` zachowuje klasyczny dropdown (cards/chips są specyficzne i nie
+  trafiają do section-presets).
+
 ## [1.36.0] — 2026-04-20
 
 ### Added
