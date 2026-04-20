@@ -1,0 +1,77 @@
+# Pełna konfiguracja parteru z merge, custom sections per-room, scenami.
+#
+# - Kuchnia dostaje scaloną Spiżarnię (nie widać jej jako osobnego wiersza,
+#   liczniki sumują się w wierszu Kuchni).
+# - Kuchnia ma własny popup z sekcjami skonfigurowanymi ręcznie.
+# - Salon ma popup z mushroom-light-cards dla każdej lampy.
+# - Pasek scen na górze karty z wbudowanymi grafikami.
+
+type: custom:stratum-card
+floor_id: parter
+auto_collapse: 90
+
+# Sceny aktywujące predefiniowane scenariusze. Obrazki: 14 wbudowanych
+# presetów stratum: (jasne / noc / usypianie / czytanie / relaks / disco /
+# nauka / tv / poranek / wieczor / kino / praca / romantyczne / impreza)
+# + 10 nowych (sport / medytacja / gotowanie / goscie / gaming / ogrod /
+# kapiel / muzyka / kawa / bezpieczenstwo).
+scenes:
+  position: top
+  columns: 3
+  size: md
+  aspect: "16/9"
+  items:
+    - entity: scene.parter_jasne
+      image: stratum:jasne
+    - entity: scene.parter_usypianie
+      image: stratum:usypianie
+    - entity: scene.parter_noc
+      image: stratum:noc
+
+rooms:
+  # Kuchnia scala Spiżarnię. Licznik świateł = kuchnia + spiżarnia.
+  # Popup Kuchni ma własną listę sekcji z tylko wybranymi encjami.
+  - area_id: kuchnia
+    merge_with: [spizarnia]
+    sections:
+      - type: summary
+        fields: [motion, temperature, humidity, lights_on]
+      - type: lights
+        mode: ambient
+        entities: [light.kuchnia_blat, light.kuchnia_gorne]
+      - type: windows
+        mode: chips
+      - type: custom
+        title: "Zmywarka"
+        card:
+          type: custom:mushroom-entity-card
+          entity: sensor.zmywarka_status
+
+  # Salon — wszystkie światła jako mushroom-light-card per encja.
+  - area_id: salon
+    sections:
+      - type: summary
+      - type: scenes
+      - type: lights
+        mode: custom:mushroom-light-card
+      - type: media
+        mode: bubble
+
+  # Jadalnia — standardowy układ (auto-discover sekcji).
+  - area_id: jadalnia
+
+  # Wiatrołap — krótki widok popup.
+  - area_id: wiatrolap
+    sections:
+      - type: summary
+        fields: [motion, doors_open]
+      - type: lights
+        mode: bubble
+
+  # Łazienka parter — override ikony i tryb kompaktowy.
+  - area_id: lazienka_parter
+    icon: mdi:shower-head
+    sections:
+      - type: summary
+      - type: lights
+        mode: chips

@@ -6,113 +6,143 @@
 
 ![Stratum card preview](docs/images/preview.png)
 
-> Customowa karta Home Assistant — podsumowanie strefy z rozwijaną listą pomieszczeń.
+> Dwie customowe karty Home Assistant: **Stratum** (podsumowanie piętra z listą pomieszczeń) + **Stratum Room** (widok pojedynczego pokoju). Jedna konfiguracja, pełna kontrola.
 
-**Stratum** (łac. _warstwa_) — metafora jest dokładna: dom ma warstwy (piętra,
-strefy), każda warstwa ma swoje pomieszczenia. Karta pokazuje stan warstwy na
-głownym poziomie (ile świateł włączonych, czy jest ruch, czy coś otwarte) i
-pozwala rozwinąć listę pomieszczeń w środku.
+**Stratum** (łac. _warstwa_) — metafora jest dokładna: dom ma warstwy (piętra, strefy), każda warstwa ma swoje pomieszczenia. Karta pokazuje stan warstwy na głównym poziomie (ile świateł, obecność, otwarte okna) i pozwala kliknąć każdy pokój żeby zobaczyć jego detale w popup.
 
-Pomyślane dla domów z logicznym podziałem na piętra / strefy (Parter, Piętro,
-Ogród), gdzie jeden rzut oka ma powiedzieć „co się dzieje u góry".
+## Dwie karty, jeden bundle
 
-## Status
+### `stratum-card` (floor card)
+Jeden wiersz per pomieszczenie piętra. Header z chipami agregującymi (lights / motion / windows / doors / custom), expandable body z listą pokoi. Klik pokoju → popup z widokiem tego pomieszczenia.
 
-🚧 **v0.1 — szkielet.** Renderuje się, przyjmuje config, czeka na rozwój.
-Roadmap v0.1 → v1.0 w [`docs/roadmap.md`](docs/roadmap.md).
+### `stratum-room-card` (room card)
+Widok detalu pomieszczenia. Header z chipami specyficznymi dla pokoju, sekcje auto-wykryte (lub ręcznie skonfigurowane): Podsumowanie, Światła, Rolety, Okna, Drzwi, Klimat, Media, Wentylacja, Sceny, **Dowolna karta custom z HACS**.
+
+## Funkcje
+
+### Floor card
+- Automatyczna detekcja pomieszczeń z `hass.floors` (HA 2024.3+)
+- **Merge rooms** — łączenie pokoi (Kuchnia+Spiżarnia → jeden wiersz z zagregowanymi licznikami)
+- **Auto-collapse** po N sekundach bezczynności (domyślnie 60 s, configurable)
+- **Klik pokoju otwiera popup** z widokiem tego pomieszczenia (bez potrzeby osobnego dashboardu)
+- **Pasek scen** opcjonalny — nad / pod listą pomieszczeń
+- Pełna kontrola kolejności + per-room overrides (nazwa, ikona, tap_action, widoki popup)
+
+### Room card (popup)
+- **9 typów sekcji**: `summary` / `lights` / `covers` / `windows` / `doors` / `climate` / `media` / `fans` / `switches` / `scenes` / `custom`
+- **7 trybów wyświetlania** per sekcja:
+  - `tile` (default) — pełny kafel z toggle
+  - `slider` — brightness (lights) / position (covers)
+  - `ambient` (lights) — tile zmienia kolor i jasność wg encji 🌈
+  - `bubble` — duża ikona w kółku (mushroom-style)
+  - `chips` — kompaktowy pasek pigułek
+  - `icon` — sama ikona
+  - **`custom:<any-hacs-card>`** — każda encja w sekcji jako dowolna karta HACS (mushroom, bubble-card, button-card…)
+
+### Sceny
+- **24 wbudowane grafiki** SVG (jasne / noc / usypianie / czytanie / relaks / kino / disco / gaming / medytacja / …)
+- Własne URL obrazków albo ikony + kolor
+- Konfigurowalna pozycja, rozmiar, kolumny, aspect ratio (default 16:9, 3 kolumny)
+- Tap action override per scena
+
+### Konfiguracja
+- **Pełny wizualny edytor** — bez pisania YAML
+- Per-pokój: checkbox + override name/icon/tap_action/merge_with
+- Per-pokój popup: niezależna lista sekcji + scen
+- Per-sekcja: filter encji, kolumny, tryb wyświetlania
+- Custom HACS cards w dropdown „Tryb wyświetlania" (auto-enumerate z `window.customCards`)
+
+### Stylizacja
+- CSS variables (`--stratum-*`) dla wszystkich kolorów i wymiarów
+- Shadow parts (`::part(card)`, `::part(chip)`, `::part(popup)` itd.)
+- Kompatybilność z `card-mod`
+- Pełna dokumentacja stylizacji w [`docs/styling.md`](docs/styling.md)
 
 ## Instalacja przez HACS (custom repository)
 
-**Wymagania**: [HACS](https://hacs.xyz/) zainstalowany w Home Assistant,
-repozytorium musi być publiczne na GitHubie i mieć przynajmniej jeden release
-z plikiem `stratum-card.js` jako asset.
-
-### Krok po kroku
-
-1. W Home Assistant otwórz **HACS** (menu po lewej)
-2. Kliknij **trzy kropki** w prawym górnym rogu → **Custom repositories**
+1. W Home Assistant otwórz **HACS**
+2. Kliknij ⋮ (menu) → **Custom repositories**
 3. Wypełnij:
-   - **Repository**: `https://github.com/<TWÓJ-USER>/stratum-card`
-   - **Type**: `Dashboard`
-4. Kliknij **Add**
-5. Zamknij okno Custom repositories
-6. W HACS wyszukaj **Stratum** → **Download**
-7. Po instalacji HACS zasugeruje dodanie resource — zaakceptuj
-   (albo ręcznie: *Settings → Dashboards → Resources*, typ `JavaScript Module`,
-   URL `/hacsfiles/stratum-card/stratum-card.js`)
-8. Odśwież dashboard: **Ctrl+Shift+R**
+   - Repository: `https://github.com/Pirog87/stratum-card`
+   - Type: **Plugin** (NIE „Integration"!)
+4. **Add**
+5. W HACS wyszukaj **Stratum** → **Download**
+6. Zaakceptuj dodanie resource (albo ręcznie: *Settings → Dashboards → Resources* → URL `/hacsfiles/stratum-card/stratum-card.js`, type `JavaScript Module`)
+7. Ctrl+Shift+R
 
-### Użycie
+## Przykłady
 
-Dodaj kartę w dashboardzie (YAML lub przez UI → „Manual"):
+Konkretne konfiguracje YAML w katalogu [`examples/`](examples/):
+
+- [`parter-basic.yaml`](examples/parter-basic.yaml) — prosty floor z auto-discovery
+- [`parter-advanced.yaml`](examples/parter-advanced.yaml) — pełna konfiguracja z merge, sekcjami popup, scenami
+- [`sypialnia-room.yaml`](examples/sypialnia-room.yaml) — standalone `stratum-room-card`
+
+## Szybki start
+
+Najprostsza konfiguracja — karta dla parteru:
 
 ```yaml
 type: custom:stratum-card
-area_id: parter          # ID area z twojego HA
+floor_id: parter
 ```
 
-Więcej przykładów w [`examples/dom-example.yaml`](examples/dom-example.yaml).
+Z konfiguracją scen:
 
-## Instalacja ręczna (bez HACS)
+```yaml
+type: custom:stratum-card
+floor_id: parter
+scenes:
+  items:
+    - entity: scene.jasne
+      image: stratum:jasne
+    - entity: scene.noc
+      image: stratum:noc
+    - entity: scene.odpoczynek
+      image: stratum:relaks
+```
 
-1. Pobierz `stratum-card.js` z [Releases](../../releases/latest)
-2. Skopiuj do `/config/www/stratum-card.js`
-3. *Settings → Dashboards → Resources → Add resource*
-   - URL: `/local/stratum-card.js`
-   - Type: `JavaScript Module`
-4. Ctrl+Shift+R
+Kliknięcie pokoju otwiera popup z automatycznie wykrytymi sekcjami na bazie encji tej area.
 
-## Szybki start — deweloper
+## Dev
 
 ```bash
-git clone https://github.com/<user>/stratum-card.git
+git clone https://github.com/Pirog87/stratum-card.git
 cd stratum-card
 npm install
-npm run build            # jednorazowy build
-npm run watch            # rebuild on save (do developmentu)
+npm run build      # jednorazowy
+npm run watch      # rebuild on save
 ```
 
-Plik wyjściowy: `dist/stratum-card.js`. Skopiuj do `/config/www/` swojej instancji HA
-żeby testować zmiany na żywo.
+Plik wyjściowy: `dist/stratum-card.js`. Skopiuj do `/config/www/` swojej instancji HA żeby testować zmiany.
 
-Szczegóły dev loopu, debug, podłączenie do lokalnej instancji — w
-[`docs/development.md`](docs/development.md).
+Szczegóły dev loopu w [`docs/development.md`](docs/development.md).
 
-## Architektura w skrócie
+## Historia zmian
 
-- **Lit** jako framework komponentowy (standard HA custom cards)
-- **TypeScript** dla type-safety z Home Assistant API
-- **Rollup** jako bundler (single-file output, ES module)
-- **CSS variables + ::part** jako API stylizacji (kompatybilne z `card-mod`)
-- **Wszystko client-side** — karta czyta `hass.areas / hass.entities / hass.states`,
-  nie wymaga żadnej integracji po stronie HA
+Pełna lista w [`CHANGELOG.md`](CHANGELOG.md). Highlighty:
+
+- **v1.12** — zunifikowany system wizualny wszystkich edytorów
+- **v1.11** — custom HACS cards w dropdown trybów wyświetlania
+- **v1.10** — 24 scene presets (redesign + 10 nowych), 16:9 default
+- **v1.9** — bubble + icon + **ambient** (kolor żarówki na tile) modes
+- **v1.8** — custom card jako sekcja + fix entity filter
+- **v1.7** — chips mode dla sekcji i summary
+- **v1.6** — styling guide + fix `tap_action: default`
+- **v1.5** — per-room popup configuration w edytorze floor
+- **v1.3** — RoomSectionConfig + summary section + slider tile
+- **v1.2** — sceny z 14 grafikami
+- **v1.1** — popup room-card przy klik wiersza
+- **v1.0** — stratum-room-card (drugi card type)
+
+## Architektura
 
 Decyzje projektowe: [`docs/architecture.md`](docs/architecture.md).
+Roadmap: [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Stylizacja
 
-Stratum ma trzy warstwy customizacji: YAML config, CSS variables, shadow parts.
-Pełna lista zmiennych (`--stratum-*`) i gotowe snippety card-mod:
-[`docs/styling.md`](docs/styling.md).
-
-## Praca z Claude Code
-
-Projekt ma plik [`CLAUDE.md`](CLAUDE.md) z pełnym kontekstem — konwencje kodu,
-roadmap, zasady edycji, jak się testuje. Claude Code wczyta to automatycznie
-przy starcie sesji.
-
-Typowy flow:
-
-```bash
-cd stratum-card
-claude
-```
-
-Prompty iteracyjne (zgodnie z roadmapą):
-
-- *„Zaimplementuj v0.2: czytanie encji w area przez hass.entities."*
-- *„v0.3: rendering chipów — lights, motion, windows — z konfiguracji."*
-- *„v0.4: animacja expandera z CSS transitions."*
+Trzy warstwy customizacji: YAML config, CSS variables, shadow parts. Pełna lista zmiennych (`--stratum-*`) i gotowe snippety card-mod: [`docs/styling.md`](docs/styling.md).
 
 ## Licencja
 

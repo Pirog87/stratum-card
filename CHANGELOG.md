@@ -1,0 +1,203 @@
+# Changelog
+
+Wszystkie znaczące zmiany projektu. Format zgodny z
+[Keep a Changelog](https://keepachangelog.com/), wersjonowanie
+[SemVer](https://semver.org/).
+
+## [1.13.0] — 2026-04-20
+
+### Added
+- Pełny rewrite README.md z aktualną listą features
+- Katalog `examples/` z trzema gotowymi konfiguracjami:
+  - `parter-basic.yaml` — minimalistyczny floor
+  - `parter-advanced.yaml` — merge + custom sections + sceny
+  - `sypialnia-room.yaml` — standalone room card
+- Ten `CHANGELOG.md` z historią wersji
+
+## [1.12.0] — 2026-04-20
+
+### Changed
+- **Zunifikowany system wizualny** we wszystkich edytorach (floor, room,
+  rooms, sections, scenes). Jeden wspólny plik `editor-shared-styles.ts`
+  z prymitywami `.stratum-panel` / `.stratum-row` / `.stratum-toolbar` /
+  `.stratum-badge` / `.stratum-icon-btn` / `.stratum-collapsible` itd.
+- Panele z avatarami-ikonami (primary-color tinted), spójne nagłówki z hintami
+- Jednolite wiersze list z animacjami (fade-in sub-form)
+- Scene preset picker: większe miniatury (92px), glow ring przy selected
+
+## [1.11.0] — 2026-04-20
+
+### Added
+- **Custom HACS cards w dropdown trybów wyświetlania** sekcji.
+  Czyta `window.customCards` i oferuje wszystkie zainstalowane karty
+  (mushroom, bubble, button-card, ...) do wyboru per sekcja
+- `buildDefaultCustomConfig()` auto-konfiguruje child card z `entity` dla
+  każdej encji sekcji (bubble-card dostaje też `card_type: button`)
+
+## [1.10.0] — 2026-04-20
+
+### Added
+- 10 nowych scene presets: sport / medytacja / gotowanie / goscie /
+  gaming / ogrod / kapiel / muzyka / kawa / bezpieczenstwo (łącznie 24)
+
+### Changed
+- **Wszystkie 24 presety przeprojektowane** — viewBox 320:180, radialne
+  gradienty, glow filter, rounded shapes, mniej kanciastych kształtów
+- Default aspect sceny zmieniony z `1/1` na `16/9`
+- Edytorskie miniatury również 16:9
+
+## [1.9.0] — 2026-04-20
+
+### Added
+- **`bubble` mode** dla sekcji — duża ikona w kółku + label (mushroom-style)
+- **`icon` mode** — sama ikona, kompaktowy flex-wrap (dla windows/doors
+  zielony = zamknięte, czerwony = otwarte)
+- **`ambient` mode dla lights** — tile zmienia kolor i jasność live wg
+  `light.rgb_color` + `brightness`, slider `accent-color` matcha odcień
+- `MODE_OPTIONS_BY_TYPE` rozszerzony: lights dostaje 6 opcji, covers 5
+
+## [1.8.0] — 2026-04-20
+
+### Added
+- **Nowy typ sekcji `custom`** — dowolna karta HA/HACS jako sekcja popup,
+  z `card:` config jako plain object
+- `<ha-yaml-editor>` pod sub-formą sekcji `custom`
+
+### Fixed
+- **Entity filter fix**: gdy `section.entities` podane jawnie, bierzemy
+  encje z `hass.entities` bez filtra area scope. Grupa / template bez
+  `area_id` (np. `light.kuchnia_blat`) znowu się renderuje
+
+## [1.7.0] — 2026-04-20
+
+### Added
+- **`chips` mode** dla sekcji — kompaktowy pasek pigułek, per-domain
+  akcent (lights amber, windows red/green, ...)
+- **`chips` mode dla summary** — pasek mini-pigułek z ikoną + wartością
+- Dropdown „Tryb wyświetlania" pojawia się dla każdego typu sekcji
+
+## [1.6.2] — 2026-04-20
+
+### Fixed
+- Popup renderuje się teraz jako fixed overlay div zamiast `<dialog>` —
+  prawidłowe centrowanie w Shadow DOM HA, animacja pop-in, ESC/backdrop
+  close
+
+## [1.6.1] — 2026-04-20
+
+### Fixed
+- `tap_action: 'default'` z HA ui_action selektora traktowany jako
+  fallback, nie jako jawna akcja. Klik w pokój bez configu otwiera popup
+
+## [1.6.0] — 2026-04-20
+
+### Added
+- `docs/styling.md` — pełna dokumentacja CSS variables, shadow parts,
+  8 gotowych snippetów card-mod
+- README sekcja „Stylizacja" z linkiem
+
+## [1.5.0] — 2026-04-20
+
+### Added
+- **Per-room popup configuration** w edytorze floor. Każdy pokój w
+  edytorze rooms ma teraz collapsible:
+  - „Sekcje popup pomieszczenia" (stratum-sections-editor inline)
+  - „Sceny popup pomieszczenia" (stratum-scene-editor inline)
+- `RoomConfig` rozszerzony o `sections` / `scenes` / `chips`
+
+## [1.4.0] — 2026-04-20
+
+### Added
+- **14 wbudowanych grafik scen** jako inline SVG (data URI):
+  jasne, noc, usypianie, czytanie, relaks, disco, nauka, tv, poranek,
+  wieczor, kino, praca, romantyczne, impreza
+- Picker galerii pod polem URL w sub-formie sceny
+
+## [1.3.0] — 2026-04-20
+
+### Added
+- **`RoomSectionConfig`** — sekcje jako pełne obiekty z overrides
+  (title, icon, entities, mode, columns, fields, hidden)
+- **Nowa sekcja `summary`** z 8 polami (motion / occupancy / temperature /
+  humidity / lights_on / windows_open / doors_open / battery_low / leak)
+- **Slider mode** dla lights (brightness) i covers (position)
+- `stratum-sections-editor` z dynamic subform per typ sekcji
+
+## [1.2.0] — 2026-04-20
+
+### Added
+- **Pasek scen** w obu kartach — `SceneConfig` z entity / name / icon /
+  image / color / tap_action
+- Globalne: position / size / columns / aspect
+- Full visual editor scen z drag&drop-friendly reorder
+
+## [1.1.0] — 2026-04-20
+
+### Added
+- **Popup room-card przy klik wiersza** (nowy default)
+- Fallback chain: per-room tap_action → global → popup
+- `<dialog>`-based modal (zamieniony na div overlay w v1.6.2)
+
+## [1.0.0] — 2026-04-20
+
+### Added
+- **`stratum-room-card`** — drugi card type z auto-generowanymi sekcjami
+- Visual editor dla room-card
+- Final polish CSS (spacing, mobile breakpoint)
+
+## [0.10.0] — 2026-04-19
+
+### Added
+- **Merge rooms** — `merge_with` + `aggregate` w RoomConfig
+- Primary row agreguje encje + liczniki ze wszystkich połączonych area
+
+## [0.9.0] — 2026-04-19
+
+### Added
+- **Jawny `rooms` config** z per-room overrides
+- `stratum-card-rooms-editor` z checkboxami + sub-formami
+
+## [0.8.0] — 2026-04-19
+
+### Added
+- Custom chipy: `entity` / `filter` / `template` (live Jinja2 przez WebSocket)
+- Semantyczne nazwy kolorów
+
+## [0.7.0] — 2026-04-19
+
+### Added
+- Tap actions na wierszach pokoi (navigate / more-info / call-service / none)
+- Placeholdery `{area_id}` / `{area_name}` w navigation_path
+
+## [0.6.0] — 2026-04-19
+
+### Added
+- Animacja expandera (grid-template-rows transition)
+- Lista pomieszczeń w body expandera
+
+## [0.5.0] — 2026-04-19
+
+### Added
+- Default chipy w headerze (lights / motion / windows / doors)
+
+## [0.4.0] — 2026-04-19
+
+### Changed
+- **Floor-first model** (HA 2024.3+) — `floor_id` jako primary, `area_id`
+  jako alternatywa
+- `HassFloor` typy + helpery `getAreasInFloor` / `getEntitiesInFloor`
+
+## [0.3.0] — 2026-04-19
+
+### Added
+- Area entity helpers
+- Visual editor (szkielet)
+- Auto-release workflow (push to main → tag + release automatycznie)
+
+## [0.1.0] — 2026-04-19
+
+### Added
+- Initial skeleton
+- Podstawowy header z chipami (placeholder)
+- Expander toggle
+- CSS variables + shadow parts

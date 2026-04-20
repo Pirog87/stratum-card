@@ -1,0 +1,61 @@
+# Standalone stratum-room-card — można dodać jako samodzielna karta
+# (nie przez popup). Przydatne gdy chcesz dedykowaną kartę pokoju
+# w dashboardzie, nie przez klik z floor card.
+#
+# Scala Sypialnię z Garderobą i Łazienką — wszystkie encje z tych trzech
+# area wpadają do sekcji.
+
+type: custom:stratum-room-card
+area_id: sypialnia
+merge_with:
+  - sypialnia_garderoba
+  - sypialnia_lazienka
+
+name: "Sypialnia"
+icon: mdi:bed-king
+
+# Chipy w headerze — default auto (lights + motion + temp + humidity).
+# chips:
+#   - type: motion
+#   - type: entity
+#     entity: sensor.sypialnia_temp
+#     icon: mdi:thermometer
+#     suffix: " °C"
+#     color: amber
+#   - type: entity
+#     entity: sensor.sypialnia_humidity
+#     icon: mdi:water-percent
+#     suffix: " %"
+#     color: blue
+
+scenes:
+  columns: 3
+  aspect: "16/9"
+  items:
+    - entity: scene.sypialnia_jasne
+      image: stratum:jasne
+    - entity: scene.sypialnia_usypianie
+      image: stratum:usypianie
+    - entity: scene.sypialnia_noc
+      image: stratum:noc
+    - entity: scene.sypialnia_czytanie
+      image: stratum:czytanie
+    - entity: scene.sypialnia_romantyczne
+      image: stratum:romantyczne
+    - entity: scene.sypialnia_medytacja
+      image: stratum:medytacja
+
+sections:
+  - type: summary
+    fields: [motion, temperature, humidity, lights_on, windows_open]
+  - type: lights
+    mode: ambient
+  - type: covers
+    mode: slider
+  - type: windows
+    mode: chips
+  - type: custom
+    title: "Budzik"
+    card:
+      type: custom:mushroom-time-card
+      entity: sensor.sypialnia_budzik

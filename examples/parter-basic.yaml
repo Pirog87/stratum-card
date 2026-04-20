@@ -1,0 +1,13 @@
+# Najprostszy przykład — karta dla parteru.
+#
+# Brak override'ów: karta pokaże wszystkie pokoje piętra z auto-wykrytymi
+# licznikami (światła / motion / okna / drzwi) i domyślnymi ikonami.
+#
+# Klik w wiersz pokoju → popup z domyślnymi sekcjami (auto-discovery encji).
+
+type: custom:stratum-card
+floor_id: parter
+
+# Auto-collapse po 60s bez interakcji (domyślne zachowanie).
+# Ustaw 0 żeby wyłączyć.
+# auto_collapse: 60
