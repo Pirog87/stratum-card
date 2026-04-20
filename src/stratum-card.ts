@@ -31,7 +31,7 @@ import './stratum-card-room-row.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.6.1';
+const VERSION = '1.6.2';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -204,6 +204,7 @@ export class StratumCard extends LitElement {
     super.disconnectedCallback();
     this._templates.destroy();
     this._clearAutoCollapse();
+    document.removeEventListener('keydown', this._onPopupKey);
   }
 
   private _debugLog(): void {
@@ -285,17 +286,16 @@ export class StratumCard extends LitElement {
       chips: this._popupRoom.chips,
     };
     return html`
-      <dialog
-        class="stratum-popup"
+      <div
+        class="stratum-popup-backdrop"
         part="popup"
-        @click=${this._onDialogClick}
-        @close=${() => (this._popupRoom = undefined)}
+        @click=${(ev: MouseEvent) => this._onBackdropClick(ev)}
       >
-        <div class="stratum-popup-inner" @click=${(ev: Event) => ev.stopPropagation()}>
+        <div class="stratum-popup-card" @click=${(ev: Event) => ev.stopPropagation()}>
           <button
             class="stratum-popup-close"
             title="Zamknij"
-            @click=${() => this._closeRoomPopup()}
+            @click=${this._closeRoomPopup}
           >
             <ha-icon .icon=${'mdi:close'}></ha-icon>
           </button>
@@ -304,7 +304,7 @@ export class StratumCard extends LitElement {
             .config=${popupConfig}
           ></stratum-room-card>
         </div>
-      </dialog>
+      </div>
     `;
   }
 
@@ -492,25 +492,22 @@ export class StratumCard extends LitElement {
       scenes: overrides?.scenes,
       chips: overrides?.chips,
     };
-    // showModal() po następnym update — dialog musi być w DOM.
-    void this.updateComplete.then(() => {
-      const dlg = this.renderRoot.querySelector(
-        'dialog.stratum-popup',
-      ) as HTMLDialogElement | null;
-      if (dlg && !dlg.open) dlg.showModal();
-    });
+    document.addEventListener('keydown', this._onPopupKey);
   }
 
-  private _closeRoomPopup(): void {
-    const dlg = this.renderRoot.querySelector(
-      'dialog.stratum-popup',
-    ) as HTMLDialogElement | null;
-    if (dlg?.open) dlg.close();
+  private _closeRoomPopup = (): void => {
     this._popupRoom = undefined;
-  }
+    document.removeEventListener('keydown', this._onPopupKey);
+  };
 
-  private _onDialogClick(ev: MouseEvent): void {
-    // Kliknięcie w backdrop (samo <dialog> poza zawartością) zamyka popup.
+  private _onPopupKey = (ev: KeyboardEvent): void => {
+    if (ev.key === 'Escape' && this._popupRoom) {
+      ev.stopPropagation();
+      this._closeRoomPopup();
+    }
+  };
+
+  private _onBackdropClick(ev: MouseEvent): void {
     if (ev.target === ev.currentTarget) this._closeRoomPopup();
   }
 
@@ -635,55 +632,70 @@ export class StratumCard extends LitElement {
       }
     }
 
-    dialog.stratum-popup {
-      padding: 0;
-      margin: auto;
-      border: 0;
-      border-radius: var(--ha-card-border-radius, 12px);
-      background: transparent;
+    .stratum-popup-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: stratum-popup-fade 0.15s ease-out;
+    }
+
+    @keyframes stratum-popup-fade {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .stratum-popup-card {
+      position: relative;
       max-width: min(560px, 92vw);
       width: 100%;
       max-height: 85vh;
-      overflow: visible;
-    }
-
-    dialog.stratum-popup::backdrop {
-      background: rgba(0, 0, 0, 0.65);
-      backdrop-filter: blur(6px);
-    }
-
-    .stratum-popup-inner {
-      position: relative;
-      max-height: 85vh;
       overflow-y: auto;
       border-radius: var(--ha-card-border-radius, 12px);
+      animation: stratum-popup-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes stratum-popup-pop {
+      from { transform: scale(0.95); opacity: 0.6; }
+      to { transform: scale(1); opacity: 1; }
     }
 
     .stratum-popup-close {
       position: absolute;
-      top: 8px;
-      right: 8px;
+      top: 12px;
+      right: 12px;
       z-index: 2;
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       border: 0;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.08));
-      color: var(--primary-text-color, #fff);
+      background: var(--primary-color, #ff9b42);
+      color: #fff;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      backdrop-filter: blur(4px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
     }
 
     .stratum-popup-close:hover {
-      background: var(--primary-color, #ff9b42);
-      color: #fff;
+      filter: brightness(1.1);
     }
 
     .stratum-popup-close ha-icon {
       --mdc-icon-size: 20px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stratum-popup-backdrop,
+      .stratum-popup-card {
+        animation: none;
+      }
     }
   `;
 }
