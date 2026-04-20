@@ -361,46 +361,103 @@ export class StratumRoomTile extends LitElement {
 
   private _renderToggle(state: HassEntity, domain: string): TemplateResult {
     const on = state.state === 'on';
-    const icon =
-      (state.attributes?.icon as string | undefined) ??
-      (domain === 'light' ? (on ? 'mdi:lightbulb-on' : 'mdi:lightbulb')
-       : domain === 'fan' ? 'mdi:fan'
-       : 'mdi:toggle-switch');
+    const defaultIcon =
+      domain === 'light'
+        ? on
+          ? 'mdi:lightbulb-on'
+          : 'mdi:lightbulb-outline'
+        : domain === 'fan'
+        ? 'mdi:fan'
+        : on
+        ? 'mdi:toggle-switch'
+        : 'mdi:toggle-switch-off-outline';
+    const icon = (state.attributes?.icon as string | undefined) ?? defaultIcon;
+    // Lights: użyj rgb_color żarówki jako akcentu gdy ON.
+    let accent: string | undefined;
+    let brightnessPct: number | undefined;
+    if (domain === 'light' && on) {
+      const rgb = state.attributes?.rgb_color as [number, number, number] | undefined;
+      if (rgb) accent = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+      const b = state.attributes?.brightness as number | undefined;
+      if (typeof b === 'number') brightnessPct = Math.round((b / 255) * 100);
+    }
+    const style = accent ? `--stratum-tile-accent:${accent};` : '';
+    const stateText =
+      on && typeof brightnessPct === 'number'
+        ? `${brightnessPct}%`
+        : on
+        ? 'włączone'
+        : 'wyłączone';
     return html`
       <button
-        class="tile toggle ${on ? 'on' : 'off'}"
+        class="tile toggle ${on ? 'on' : 'off'} ${domain}"
         part="tile"
+        style=${style}
         @click=${(ev: Event) => this._callService(ev, domain, 'toggle')}
         @contextmenu=${this._openMoreInfo}
       >
-        <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
+        <span class="tile-icon-wrap">
+          <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
+        </span>
         <span class="tile-name">${friendlyName(state, this.entity)}</span>
-        <span class="tile-state">${on ? 'włączone' : 'wyłączone'}</span>
+        <span class="tile-state">${stateText}</span>
+        ${on && typeof brightnessPct === 'number'
+          ? html`<span
+              class="progress-bar"
+              style="--pct:${brightnessPct}%;"
+            ></span>`
+          : nothing}
+        ${domain === 'switch' || domain === 'fan'
+          ? html`<span class="mini-toggle ${on ? 'on' : ''}">
+              <span class="mini-toggle-knob"></span>
+            </span>`
+          : nothing}
       </button>
     `;
   }
 
   private _renderCover(state: HassEntity): TemplateResult {
     const pos = state.attributes?.current_position;
+    const posNum = typeof pos === 'number' ? Math.round(pos) : undefined;
     const isOpen = state.state === 'open' || (typeof pos === 'number' && pos > 0);
+    const icon = isOpen ? 'mdi:blinds-open' : 'mdi:blinds';
     return html`
       <div
         class="tile cover ${isOpen ? 'on' : 'off'}"
         part="tile"
         @click=${this._openMoreInfo}
       >
-        <ha-icon class="tile-icon" .icon=${isOpen ? 'mdi:blinds-open' : 'mdi:blinds'}></ha-icon>
+        <span class="tile-icon-wrap">
+          <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
+        </span>
         <span class="tile-name">${friendlyName(state, this.entity)}</span>
-        <span class="tile-state">${typeof pos === 'number' ? `${pos}%` : state.state}</span>
+        <span class="tile-state">
+          ${posNum !== undefined ? `${posNum}%` : isOpen ? 'otwarte' : 'zamknięte'}
+        </span>
+        ${posNum !== undefined
+          ? html`<span class="progress-bar" style="--pct:${posNum}%;"></span>`
+          : nothing}
         <div class="controls">
-          <button @click=${(ev: Event) => this._callService(ev, 'cover', 'open_cover')} title="Otwórz">
-            <ha-icon .icon=${'mdi:arrow-up'}></ha-icon>
+          <button
+            class="ctrl-btn up"
+            @click=${(ev: Event) => this._callService(ev, 'cover', 'open_cover')}
+            title="Otwórz"
+          >
+            <ha-icon .icon=${'mdi:chevron-up'}></ha-icon>
           </button>
-          <button @click=${(ev: Event) => this._callService(ev, 'cover', 'stop_cover')} title="Stop">
-            <ha-icon .icon=${'mdi:stop'}></ha-icon>
+          <button
+            class="ctrl-btn stop"
+            @click=${(ev: Event) => this._callService(ev, 'cover', 'stop_cover')}
+            title="Stop"
+          >
+            <ha-icon .icon=${'mdi:square'}></ha-icon>
           </button>
-          <button @click=${(ev: Event) => this._callService(ev, 'cover', 'close_cover')} title="Zamknij">
-            <ha-icon .icon=${'mdi:arrow-down'}></ha-icon>
+          <button
+            class="ctrl-btn down"
+            @click=${(ev: Event) => this._callService(ev, 'cover', 'close_cover')}
+            title="Zamknij"
+          >
+            <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
           </button>
         </div>
       </div>
@@ -494,6 +551,7 @@ export class StratumRoomTile extends LitElement {
     }
 
     .tile {
+      position: relative;
       display: grid;
       grid-template-columns: auto 1fr auto;
       grid-template-areas:
@@ -504,14 +562,108 @@ export class StratumRoomTile extends LitElement {
       width: 100%;
       min-height: 56px;
       padding: 10px 12px;
-      border-radius: 10px;
+      border-radius: 12px;
       border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
       background: var(--stratum-tile-background, rgba(255, 255, 255, 0.03));
       color: var(--primary-text-color);
       font: inherit;
       text-align: left;
       cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease;
+      transition: background 0.18s ease, border-color 0.18s ease,
+        transform 0.1s ease, box-shadow 0.15s ease;
+      overflow: hidden;
+    }
+
+    .tile:active {
+      transform: scale(0.98);
+    }
+
+    .tile.toggle.on {
+      background: color-mix(
+        in srgb,
+        var(--stratum-tile-accent, var(--stratum-chip-lights-color, #ffc107)) 12%,
+        var(--stratum-tile-background, rgba(255, 255, 255, 0.03))
+      );
+      border-color: color-mix(
+        in srgb,
+        var(--stratum-tile-accent, var(--stratum-chip-lights-color, #ffc107)) 40%,
+        transparent
+      );
+    }
+
+    .tile-icon-wrap {
+      grid-area: icon;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
+      color: var(--secondary-text-color);
+      flex-shrink: 0;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+
+    .tile.on .tile-icon-wrap {
+      background: color-mix(
+        in srgb,
+        var(--stratum-tile-accent, var(--stratum-chip-lights-color, #ffc107)) 22%,
+        transparent
+      );
+      color: var(--stratum-tile-accent, var(--stratum-chip-lights-color, #ffc107));
+    }
+
+    .progress-bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: var(--divider-color, rgba(255, 255, 255, 0.08));
+      overflow: hidden;
+    }
+
+    .progress-bar::after {
+      content: '';
+      display: block;
+      height: 100%;
+      width: var(--pct, 0%);
+      background: var(--stratum-tile-accent, var(--stratum-chip-lights-color, #ffc107));
+      transition: width 0.25s ease-out;
+      border-radius: 3px;
+    }
+
+    .mini-toggle {
+      grid-area: state;
+      position: relative;
+      width: 36px;
+      height: 20px;
+      border-radius: 999px;
+      background: var(--divider-color, rgba(255, 255, 255, 0.2));
+      flex-shrink: 0;
+      transition: background 0.15s ease;
+      align-self: center;
+    }
+
+    .mini-toggle.on {
+      background: var(--stratum-tile-accent, var(--primary-color, #ff9b42));
+    }
+
+    .mini-toggle-knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .mini-toggle.on .mini-toggle-knob {
+      transform: translateX(16px);
     }
 
     .tile.cover {
@@ -573,28 +725,52 @@ export class StratumRoomTile extends LitElement {
       grid-area: ctrl;
       display: flex;
       gap: 6px;
-      margin-top: 4px;
+      margin-top: 6px;
     }
 
-    .controls button {
+    .ctrl-btn {
       flex: 1;
-      padding: 4px;
-      border-radius: 6px;
-      border: 1px solid var(--divider-color);
-      background: transparent;
+      padding: 6px;
+      border-radius: 8px;
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.03));
       color: var(--primary-text-color);
       cursor: pointer;
       display: inline-flex;
       justify-content: center;
+      align-items: center;
+      transition: background 0.12s ease, border-color 0.12s ease,
+        color 0.12s ease, transform 0.08s ease;
     }
 
-    .controls button:hover {
-      background: var(--stratum-tile-hover-background, rgba(255, 255, 255, 0.06));
-      border-color: var(--primary-color);
+    .ctrl-btn:hover {
+      background: color-mix(
+        in srgb,
+        var(--primary-color, #ff9b42) 12%,
+        var(--secondary-background-color, rgba(255, 255, 255, 0.04))
+      );
+      border-color: var(--primary-color, #ff9b42);
     }
 
-    .controls ha-icon {
-      --mdc-icon-size: 16px;
+    .ctrl-btn:active {
+      transform: scale(0.94);
+    }
+
+    .ctrl-btn.up:hover {
+      color: #66bb6a;
+      border-color: #66bb6a;
+    }
+    .ctrl-btn.down:hover {
+      color: #ef5350;
+      border-color: #ef5350;
+    }
+    .ctrl-btn.stop:hover {
+      color: #ffb74d;
+      border-color: #ffb74d;
+    }
+
+    .ctrl-btn ha-icon {
+      --mdc-icon-size: 18px;
     }
 
     .missing {

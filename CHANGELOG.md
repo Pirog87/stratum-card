@@ -4,6 +4,26 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.34.0] — 2026-04-20
+
+### Changed
+- **Fallback tile polish** (stratum-room-tile) — gdy user nie przypisuje
+  custom HACS card do sekcji, domyślny tile wygląda lepiej:
+  - Ikona w kolorowym kafelku 36×36 (tinted bg gdy aktywna)
+  - Active light bierze `rgb_color` żarówki jako akcent (tło + ikona)
+  - Brightness bar (3px line) na dole gdy światło on
+  - Position bar dla cover (0-100%)
+  - Przyciski cover (↑/⏹/↓) z hover-color (zielony/pomarańcz/czerwony)
+  - Active press animation (scale 0.98)
+- Switch / fan: kompaktowy iOS-style toggle po prawej (mini-toggle).
+
+### Note
+Dedykowany redesign popupu pokoju (mushroom-style natywnie) został
+porzucony na rzecz szerszego wsparcia dla HACS cards w przyszłych
+wersjach. Budowanie sekcji z `custom:mushroom-light-card` / `custom:bubble-card`
+już teraz jest wspierane — per tile `mode: 'custom:xxx'` i per sekcja
+`type: custom, card: {...}`.
+
 ## [1.33.0] — 2026-04-20
 
 ### Changed
