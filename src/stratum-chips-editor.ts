@@ -32,6 +32,18 @@ const QUICK_PICKS: ChipQuickPick[] = [
   { type: 'template', label: 'Template', icon: 'mdi:code-braces' },
 ];
 
+/**
+ * Domyślny set chipów gdy user nic nie skonfigurował — lustrzane odbicie
+ * `DEFAULT_CHIPS` z `chip-defaults.ts`. Pokazujemy je w edytorze żeby user
+ * widział co jest i mógł dostosować bez szukania w runtime.
+ */
+const DEFAULT_CHIPS_PREVIEW: ChipConfig[] = [
+  { type: 'lights' },
+  { type: 'motion' },
+  { type: 'windows' },
+  { type: 'doors' },
+];
+
 const CHIP_LABELS: Record<string, string> = {
   lights: 'Światła',
   motion: 'Obecność (motion)',
@@ -73,9 +85,20 @@ export class StratumChipsEditor extends LitElement {
     );
   }
 
+  /** Zwraca effective chips — rzeczywiste albo domyślne gdy user nic nie ustawił. */
+  private _effective(): ChipConfig[] {
+    if (this.chips && this.chips.length > 0) return [...this.chips];
+    return [...DEFAULT_CHIPS_PREVIEW];
+  }
+
+  private get _isShowingDefaults(): boolean {
+    return !this.chips || this.chips.length === 0;
+  }
+
   private _add(pick: ChipQuickPick): void {
     const chip = this._makeChip(pick);
-    const next = [...this.chips, chip];
+    const base = this._effective();
+    const next = [...base, chip];
     this._openRow = next.length - 1;
     this._showAddMenu = false;
     this._emit(next);
@@ -95,14 +118,16 @@ export class StratumChipsEditor extends LitElement {
   }
 
   private _remove(index: number): void {
-    this._emit(this.chips.filter((_, i) => i !== index));
+    const base = this._effective();
+    this._emit(base.filter((_, i) => i !== index));
     if (this._openRow === index) this._openRow = -1;
   }
 
   private _move(index: number, delta: -1 | 1): void {
+    const base = this._effective();
     const target = index + delta;
-    if (target < 0 || target >= this.chips.length) return;
-    const next = [...this.chips];
+    if (target < 0 || target >= base.length) return;
+    const next = [...base];
     [next[index], next[target]] = [next[target]!, next[index]!];
     this._emit(next);
   }
@@ -112,7 +137,8 @@ export class StratumChipsEditor extends LitElement {
   }
 
   private _patch(index: number, patch: Partial<ChipConfig>): void {
-    const next = this.chips.map((c, i) => {
+    const base = this._effective();
+    const next = base.map((c, i) => {
       if (i !== index) return c;
       return { ...c, ...patch } as ChipConfig;
     });
@@ -215,15 +241,22 @@ export class StratumChipsEditor extends LitElement {
   };
 
   protected render(): TemplateResult {
+    const effective = this._effective();
+    const showingDefaults = this._isShowingDefaults;
     return html`
-      ${this.chips.length === 0
-        ? html`<div class="stratum-empty">
-            Brak chipów. Domyślnie pokazywane: Światła, Motion, Okna, Drzwi.
-            Dodaj własne żeby nadpisać domyślny set.
+      ${showingDefaults
+        ? html`<div class="defaults-hint">
+            <ha-icon .icon=${'mdi:information-outline'}></ha-icon>
+            <span>
+              Pokazujemy domyślny zestaw. Kliknij <strong>Edytuj</strong>,
+              <strong>Usuń</strong> albo <strong>Dodaj chip</strong> żeby
+              dostosować — po pierwszej zmianie konfiguracja się
+              „materializuje" i zapisze do YAML-a.
+            </span>
           </div>`
         : nothing}
 
-      <div class="stratum-list">${this.chips.map((c, i) => this._renderChipRow(c, i))}</div>
+      <div class="stratum-list">${effective.map((c, i) => this._renderChipRow(c, i))}</div>
 
       ${this._showAddMenu
         ? html`<div class="add-menu">
@@ -254,11 +287,24 @@ export class StratumChipsEditor extends LitElement {
             <ha-icon .icon=${'mdi:plus-circle-outline'}></ha-icon>
             Dodaj chip
           </button>`}
+
+      ${!showingDefaults
+        ? html`<button
+            type="button"
+            class="reset-btn"
+            @click=${() => this._emit([])}
+            title="Przywróć domyślny zestaw"
+          >
+            <ha-icon .icon=${'mdi:restore'}></ha-icon>
+            Przywróć domyślne
+          </button>`
+        : nothing}
     `;
   }
 
   private _renderChipRow(chip: ChipConfig, idx: number): TemplateResult {
     const isOpen = this._openRow === idx;
+    const total = this._effective().length;
     const label = CHIP_LABELS[chip.type] ?? chip.type;
     const icon = chip.icon ?? CHIP_ICONS[chip.type] ?? 'mdi:label-outline';
     const summary =
@@ -297,7 +343,7 @@ export class StratumChipsEditor extends LitElement {
               type="button"
               class="stratum-icon-btn"
               title="W dół"
-              ?disabled=${idx >= this.chips.length - 1}
+              ?disabled=${idx >= total - 1}
               @click=${() => this._move(idx, 1)}
             >
               <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
@@ -412,6 +458,50 @@ export class StratumChipsEditor extends LitElement {
         color: var(--secondary-text-color);
         font-size: 11px;
         cursor: pointer;
+      }
+
+      .defaults-hint {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--primary-color, #ff9b42) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-color, #ff9b42) 30%, transparent);
+        color: var(--primary-text-color);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .defaults-hint ha-icon {
+        --mdc-icon-size: 18px;
+        color: var(--primary-color, #ff9b42);
+        flex-shrink: 0;
+      }
+
+      .reset-btn {
+        margin-top: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid var(--divider-color);
+        background: transparent;
+        color: var(--secondary-text-color);
+        border-radius: 999px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: border-color 0.15s, color 0.15s;
+      }
+
+      .reset-btn:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+      }
+
+      .reset-btn ha-icon {
+        --mdc-icon-size: 16px;
       }
     `,
   ];

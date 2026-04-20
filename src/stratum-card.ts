@@ -33,7 +33,7 @@ import './stratum-card-room-tile.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.25.0';
+const VERSION = '1.26.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -58,13 +58,59 @@ export class StratumCard extends LitElement {
   /** Timer auto-collapse — wołany gdy karta rozwinięta i nic nie klikniemy. */
   private _autoCollapseTimer?: number;
 
+  /** Flaga ustawiana gdy HA wywoła `preview = true` na elemencie. */
+  private _previewFlag = false;
+
+  /** HA wywoła ten setter gdy karta jest w preview pane edytora. */
+  public set preview(value: boolean) {
+    this._previewFlag = Boolean(value);
+    if (this._previewFlag) {
+      this._expanded = true;
+      this._clearAutoCollapse();
+      this.requestUpdate();
+    }
+  }
+
   /**
-   * Sprawdza czy karta jest renderowana w edytorze HA (preview pane).
-   * W edit mode: zawsze rozwinięta + brak auto-collapse, żeby user widział
-   * wszystkie sekcje na żywo podczas edycji.
+   * Wykrywa czy karta jest w preview pane edytora HA. Używa wielu sygnałów:
+   * 1. flaga `preview` ustawiona przez HA
+   * 2. `hui-dialog-edit-card` / `hui-card-element-editor` w DOM
+   * 3. walk-up przez shadow DOM szukając `hui-card-preview`
    */
   private _isEditorPreview(): boolean {
-    return !!document.querySelector('hui-dialog-edit-card, hui-card-element-editor');
+    if (this._previewFlag) return true;
+    if (
+      document.querySelector(
+        'hui-dialog-edit-card, hui-card-element-editor, hui-card-layout-editor',
+      )
+    ) {
+      return true;
+    }
+    let el: Node | null = this;
+    while (el) {
+      if (el instanceof HTMLElement) {
+        const tag = el.tagName?.toLowerCase();
+        if (
+          tag === 'hui-card-preview' ||
+          tag === 'hui-dialog-edit-card' ||
+          tag === 'hui-card-element-editor'
+        ) {
+          return true;
+        }
+      }
+      const parent: Node | null = el.parentNode;
+      if (parent) {
+        el = parent;
+        continue;
+      }
+      const root = el.getRootNode();
+      if (root instanceof ShadowRoot) {
+        el = root.host;
+        continue;
+      }
+      el = null;
+    }
+    return false;
   }
 
   private _autoCollapseSeconds(): number {
@@ -123,10 +169,10 @@ export class StratumCard extends LitElement {
 
     const editorMode = this._isEditorPreview();
     if (editorMode) {
-      // Podgląd w edytorze: zawsze rozwinięty na starcie, brak auto-collapse.
-      // Dalsze setConfig (zmiany pól) zachowują aktualny stan
-      // `_expanded` — user może ręcznie zwinąć jeśli chce.
-      if (isFirst) this._expanded = true;
+      // Podgląd w edytorze: zawsze rozwinięty, niezależnie od config.expanded
+      // i niezależnie od liczby wywołań setConfig. HA potrafi wołać setConfig
+      // przy każdym keystroke — bez force-true wygląd resetowałby się ciągle.
+      this._expanded = true;
       this._clearAutoCollapse();
       return;
     }
@@ -261,6 +307,16 @@ export class StratumCard extends LitElement {
 
   private _onChipTap(chip: { tap_action?: unknown }): void {
     void runTapAction(this.hass, chip.tap_action as never, { source: this });
+  }
+
+  public connectedCallback(): void {
+    super.connectedCallback();
+    // Druga okazja do wykrycia edytora — po tym jak element jest już w drzewie.
+    if (this._isEditorPreview()) {
+      this._previewFlag = true;
+      this._expanded = true;
+      this._clearAutoCollapse();
+    }
   }
 
   public disconnectedCallback(): void {

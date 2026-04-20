@@ -46,7 +46,11 @@ export interface ConditionOverride {
   background_color?: string;
   icon?: string;
   icon_color?: string;
-  pulse?: boolean;
+  icon_size_scale?: number;
+  icon_animation?: import('./types.js').AnimationType;
+  animation?: import('./types.js').AnimationType;
+  text_color?: string;
+  opacity?: number;
 }
 
 /**
@@ -331,7 +335,19 @@ export function evaluateConditions(
       if (cond.background_color) override.background_color = cond.background_color;
       if (cond.icon) override.icon = cond.icon;
       if (cond.icon_color) override.icon_color = cond.icon_color;
-      if (cond.pulse) override.pulse = true;
+      if (typeof cond.icon_size_scale === 'number') {
+        override.icon_size_scale = cond.icon_size_scale;
+      }
+      // Migracja: `pulse: true` (deprecated) → `animation: 'pulse'`.
+      const effectiveAnim = cond.animation ?? (cond.pulse ? 'pulse' : undefined);
+      if (effectiveAnim && effectiveAnim !== 'none') {
+        override.animation = effectiveAnim;
+      }
+      if (cond.icon_animation && cond.icon_animation !== 'none') {
+        override.icon_animation = cond.icon_animation;
+      }
+      if (cond.text_color) override.text_color = cond.text_color;
+      if (typeof cond.opacity === 'number') override.opacity = cond.opacity;
       return Object.keys(override).length > 0 ? override : undefined;
     }
   }

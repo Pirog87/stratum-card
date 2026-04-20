@@ -78,6 +78,10 @@ export class StratumCardRoomTile extends LitElement {
     const showName = cfg.show_name !== false;
     const ovr = this.conditionOverride;
     const iconColorOvr = resolveColor(ovr?.icon_color);
+    const textColorOvr = resolveColor(ovr?.text_color);
+    const opacityOvr = typeof ovr?.opacity === 'number' ? ovr.opacity : undefined;
+    const iconScaleOvr =
+      typeof ovr?.icon_size_scale === 'number' ? ovr.icon_size_scale : undefined;
     // Priorytety: conditionOverride.accent > lightsAccent (dynamiczne) > cfg.accent_color > default amber.
     const accent =
       resolveColor(ovr?.accent_color) ??
@@ -127,6 +131,9 @@ export class StratumCardRoomTile extends LitElement {
       borderWidthOvr ? `border-width: ${borderWidthOvr};` : '',
       bgColorOvr ? `background-color: ${bgColorOvr};` : '',
       iconColorOvr ? `--stratum-room-tile-icon-color: ${iconColorOvr};` : '',
+      textColorOvr ? `color: ${textColorOvr};` : '',
+      opacityOvr !== undefined ? `opacity: ${opacityOvr};` : '',
+      iconScaleOvr !== undefined ? `--stratum-room-tile-icon-scale: ${iconScaleOvr};` : '',
       bgImage
         ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;`
         : '',
@@ -136,11 +143,12 @@ export class StratumCardRoomTile extends LitElement {
 
     const effectiveActive = active || Boolean(ovr?.accent_color) || lightsActive;
     const effectiveIcon = ovr?.icon ?? this.icon;
-    const shouldPulse = Boolean(ovr?.pulse);
+    const tileAnim = ovr?.animation;
+    const iconAnim = ovr?.icon_animation;
 
     return html`
       <div
-        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''} ${shouldPulse ? 'pulse' : ''}"
+        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''} ${tileAnim ? `anim-${tileAnim}` : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -152,7 +160,7 @@ export class StratumCardRoomTile extends LitElement {
         @keydown=${this._onKey}
       >
         ${showIcon && iconStyle !== 'none'
-          ? html`<span class="icon-slot icon-${iconStyle}">
+          ? html`<span class="icon-slot icon-${iconStyle} ${iconAnim ? `icon-anim-${iconAnim}` : ''}">
               <ha-icon .icon=${effectiveIcon}></ha-icon>
             </span>`
           : nothing}
@@ -377,10 +385,23 @@ export class StratumCardRoomTile extends LitElement {
       color: var(--stratum-room-tile-icon-color, var(--stratum-chip-lights-color, #ffc107));
     }
 
-    /* --- Pulse animation (warunek spełniony + pulse=true) --- */
-    .tile.pulse {
+    /* --- Animacje dla tile (z reguł warunkowych) --- */
+    .tile.anim-pulse {
       animation: stratum-tile-pulse 1.6s ease-in-out infinite;
     }
+    .tile.anim-blink {
+      animation: stratum-tile-blink 1.4s ease-in-out infinite;
+    }
+    .tile.anim-shake {
+      animation: stratum-tile-shake 0.6s ease-in-out infinite;
+    }
+    .tile.anim-glow {
+      animation: stratum-tile-glow 2.4s ease-in-out infinite;
+    }
+    .tile.anim-bounce {
+      animation: stratum-tile-bounce 1.4s ease-in-out infinite;
+    }
+
     @keyframes stratum-tile-pulse {
       0%, 100% {
         box-shadow: 0 0 0 0 color-mix(
@@ -397,8 +418,98 @@ export class StratumCardRoomTile extends LitElement {
         );
       }
     }
+
+    @keyframes stratum-tile-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+
+    @keyframes stratum-tile-shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-3px); }
+      75% { transform: translateX(3px); }
+    }
+
+    @keyframes stratum-tile-glow {
+      0%, 100% {
+        box-shadow: 0 0 4px color-mix(
+            in srgb,
+            var(--stratum-room-tile-active-color, #ffc107) 40%,
+            transparent
+          ),
+          0 0 0 1px color-mix(
+            in srgb,
+            var(--stratum-room-tile-active-color, #ffc107) 20%,
+            transparent
+          );
+      }
+      50% {
+        box-shadow: 0 0 12px color-mix(
+            in srgb,
+            var(--stratum-room-tile-active-color, #ffc107) 60%,
+            transparent
+          ),
+          0 0 0 2px color-mix(
+            in srgb,
+            var(--stratum-room-tile-active-color, #ffc107) 40%,
+            transparent
+          );
+      }
+    }
+
+    @keyframes stratum-tile-bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+
+    /* --- Animacje dla samej ikony --- */
+    .icon-slot {
+      transform-origin: center center;
+      transform: scale(var(--stratum-room-tile-icon-scale, 1));
+    }
+    .icon-slot.icon-anim-spin {
+      animation: stratum-icon-spin 3s linear infinite;
+    }
+    .icon-slot.icon-anim-pulse {
+      animation: stratum-icon-pulse 1.4s ease-in-out infinite;
+    }
+    .icon-slot.icon-anim-blink {
+      animation: stratum-tile-blink 1.4s ease-in-out infinite;
+    }
+    .icon-slot.icon-anim-shake {
+      animation: stratum-tile-shake 0.6s ease-in-out infinite;
+    }
+    .icon-slot.icon-anim-bounce {
+      animation: stratum-icon-bounce 1.2s ease-in-out infinite;
+    }
+    .icon-slot.icon-anim-glow ha-icon {
+      filter: drop-shadow(0 0 4px currentColor);
+    }
+
+    @keyframes stratum-icon-spin {
+      from { transform: rotate(0deg) scale(var(--stratum-room-tile-icon-scale, 1)); }
+      to { transform: rotate(360deg) scale(var(--stratum-room-tile-icon-scale, 1)); }
+    }
+    @keyframes stratum-icon-pulse {
+      0%, 100% { transform: scale(calc(var(--stratum-room-tile-icon-scale, 1))); }
+      50% { transform: scale(calc(var(--stratum-room-tile-icon-scale, 1) * 1.18)); }
+    }
+    @keyframes stratum-icon-bounce {
+      0%, 100% { transform: translateY(0) scale(var(--stratum-room-tile-icon-scale, 1)); }
+      50% { transform: translateY(-3px) scale(var(--stratum-room-tile-icon-scale, 1)); }
+    }
+
     @media (prefers-reduced-motion: reduce) {
-      .tile.pulse {
+      .tile.anim-pulse,
+      .tile.anim-blink,
+      .tile.anim-shake,
+      .tile.anim-glow,
+      .tile.anim-bounce,
+      .icon-slot.icon-anim-spin,
+      .icon-slot.icon-anim-pulse,
+      .icon-slot.icon-anim-blink,
+      .icon-slot.icon-anim-shake,
+      .icon-slot.icon-anim-bounce {
         animation: none;
       }
     }

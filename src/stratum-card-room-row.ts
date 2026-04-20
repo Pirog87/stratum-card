@@ -86,7 +86,12 @@ export class StratumCardRoomRow extends LitElement {
       resolveColor(cfg.accent_color);
     const effectiveIcon = ovr?.icon ?? this.icon;
     const iconColorOvr = resolveColor(ovr?.icon_color);
-    const shouldPulse = Boolean(ovr?.pulse);
+    const rowAnim = ovr?.animation;
+    const iconAnim = ovr?.icon_animation;
+    const textColorOvr = resolveColor(ovr?.text_color);
+    const opacityOvr = typeof ovr?.opacity === 'number' ? ovr.opacity : undefined;
+    const iconScaleOvr =
+      typeof ovr?.icon_size_scale === 'number' ? ovr.icon_size_scale : undefined;
     const borderColorOvr = resolveColor(ovr?.border_color);
     const borderWidthOvr =
       typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
@@ -119,13 +124,16 @@ export class StratumCardRoomRow extends LitElement {
         : '',
       bgColorOvr ? `background-color: ${bgColorOvr};` : '',
       iconColorOvr ? `--stratum-card-room-icon-color: ${iconColorOvr};` : '',
+      textColorOvr ? `color: ${textColorOvr};` : '',
+      opacityOvr !== undefined ? `opacity: ${opacityOvr};` : '',
+      iconScaleOvr !== undefined ? `--stratum-room-row-icon-scale: ${iconScaleOvr};` : '',
       this.styleOverride ?? '',
     ];
     const styles = cssVars.filter(Boolean).join(' ');
 
     return html`
       <div
-        class="row ${effectiveActive ? 'active' : ''} ${shouldPulse ? 'pulse' : ''}"
+        class="row ${effectiveActive ? 'active' : ''} ${rowAnim ? `anim-${rowAnim}` : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -135,7 +143,10 @@ export class StratumCardRoomRow extends LitElement {
         @keydown=${this._onKey}
       >
         ${showIcon
-          ? html`<ha-icon class="icon" .icon=${effectiveIcon}></ha-icon>`
+          ? html`<ha-icon
+              class="icon ${iconAnim ? `icon-anim-${iconAnim}` : ''}"
+              .icon=${effectiveIcon}
+            ></ha-icon>`
           : nothing}
         ${showName
           ? html`<span class="name">${this.name}</span>`
@@ -255,10 +266,13 @@ export class StratumCardRoomRow extends LitElement {
       flex-shrink: 0;
     }
 
-    /* --- Pulse animation (warunek spełniony + pulse=true) --- */
-    .row.pulse {
-      animation: stratum-row-pulse 1.6s ease-in-out infinite;
-    }
+    /* --- Animacje dla row (z reguł warunkowych) --- */
+    .row.anim-pulse { animation: stratum-row-pulse 1.6s ease-in-out infinite; }
+    .row.anim-blink { animation: stratum-row-blink 1.4s ease-in-out infinite; }
+    .row.anim-shake { animation: stratum-row-shake 0.6s ease-in-out infinite; }
+    .row.anim-glow { animation: stratum-row-glow 2.4s ease-in-out infinite; }
+    .row.anim-bounce { animation: stratum-row-bounce 1.4s ease-in-out infinite; }
+
     @keyframes stratum-row-pulse {
       0%, 100% {
         box-shadow: 0 0 0 0 color-mix(
@@ -275,10 +289,50 @@ export class StratumCardRoomRow extends LitElement {
         );
       }
     }
+    @keyframes stratum-row-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+    @keyframes stratum-row-shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-2px); }
+      75% { transform: translateX(2px); }
+    }
+    @keyframes stratum-row-glow {
+      0%, 100% { box-shadow: 0 0 4px color-mix(in srgb, var(--stratum-room-row-active-color, #ffc107) 40%, transparent); }
+      50% { box-shadow: 0 0 10px color-mix(in srgb, var(--stratum-room-row-active-color, #ffc107) 60%, transparent); }
+    }
+    @keyframes stratum-row-bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+
+    /* --- Animacje ikony w row --- */
+    .icon {
+      transform: scale(var(--stratum-room-row-icon-scale, 1));
+      transform-origin: center center;
+    }
+    .icon.icon-anim-spin { animation: stratum-icon-spin 3s linear infinite; }
+    .icon.icon-anim-pulse { animation: stratum-icon-pulse 1.4s ease-in-out infinite; }
+    .icon.icon-anim-blink { animation: stratum-row-blink 1.4s ease-in-out infinite; }
+    .icon.icon-anim-shake { animation: stratum-row-shake 0.6s ease-in-out infinite; }
+    .icon.icon-anim-bounce { animation: stratum-row-bounce 1.2s ease-in-out infinite; }
+    .icon.icon-anim-glow { filter: drop-shadow(0 0 4px currentColor); }
+
+    @keyframes stratum-icon-spin {
+      from { transform: rotate(0deg) scale(var(--stratum-room-row-icon-scale, 1)); }
+      to { transform: rotate(360deg) scale(var(--stratum-room-row-icon-scale, 1)); }
+    }
+    @keyframes stratum-icon-pulse {
+      0%, 100% { transform: scale(var(--stratum-room-row-icon-scale, 1)); }
+      50% { transform: scale(calc(var(--stratum-room-row-icon-scale, 1) * 1.2)); }
+    }
 
     @media (prefers-reduced-motion: reduce) {
       .row { transition: none; }
-      .row.pulse { animation: none; }
+      .row.anim-pulse, .row.anim-blink, .row.anim-shake, .row.anim-glow, .row.anim-bounce,
+      .icon.icon-anim-spin, .icon.icon-anim-pulse, .icon.icon-anim-blink,
+      .icon.icon-anim-shake, .icon.icon-anim-bounce { animation: none; }
       :host([clickable]) .row:hover,
       :host([clickable]) .row:active { transform: none; }
     }
