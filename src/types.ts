@@ -53,14 +53,28 @@ export interface StratumCardConfig {
   rooms_tile_min_width?: number;
 
   /**
-   * Globalna konfiguracja wyglądu pozycji pomieszczenia — jednorazowa dla całej
-   * karty. Steruje zarówno formą kompaktową (`row`) jak i kaflem (`tile`):
-   * które pola (temperatura / wilgotność / światła / motion / okna / drzwi)
-   * wyświetlać, ikonami, kolorami, tłem i proporcjami kafla.
-   *
-   * Per-pokój można wskazać konkretne encje dla tych pól przez
-   * `RoomConfig.field_entities` oraz ewentualnie nadpisać CSS przez
-   * `RoomConfig.style_override`.
+   * Konfiguracja wyglądu wiersza (row) — używana gdy `display: row`
+   * per-pokój albo `rooms_display: row` globalnie.
+   */
+  row_config?: RowDisplayConfig;
+
+  /**
+   * Konfiguracja wyglądu kafla (tile) — używana gdy `display: tile`.
+   * Zawiera dodatkowe pola specyficzne dla kafla: `aspect`,
+   * `background_image`, `icon_position`.
+   */
+  tile_config?: TileDisplayConfig;
+
+  /**
+   * Reguły warunkowego stylu wspólne dla row i tile. Pierwsza spełniona
+   * reguła wygrywa. Zobacz `DisplayConditionConfig`.
+   */
+  conditions?: DisplayConditionConfig[];
+
+  /**
+   * @deprecated od v1.21 — użyj `row_config`, `tile_config` i top-level
+   * `conditions` oddzielnie. Stare configi są automatycznie migrowane
+   * przy setConfig; pole zostawione wyłącznie dla wstecznej kompatybilności.
    */
   display_config?: DisplayConfig;
 
@@ -428,12 +442,11 @@ export type IconStyle = 'bubble' | 'flat' | 'none';
 export type HoverEffect = 'none' | 'subtle' | 'lift' | 'glow';
 
 /**
- * Globalna konfiguracja wyglądu pozycji pomieszczenia — dotyczy zarówno formy
- * kompaktowej (`row`) jak i kafla (`tile`). Ustawiasz raz dla całej karty,
- * per-pokój decydujesz tylko o formie (`display`) i ewentualnym override
- * encji / CSS.
+ * Wspólny interfejs wyglądu dla row i tile. Jest szersty niż potrzebne dla
+ * row (pola `aspect`, `background_image`, `icon_position` dotyczą tylko kafla)
+ * — row ignoruje te pola. Edytor wyświetla je tylko w trybie tile.
  */
-export interface DisplayConfig {
+export interface TileDisplayConfig {
   /** CSS aspect-ratio kafla (dotyczy tylko `display: tile`). Default `1/1`. */
   aspect?: string;
   /**
@@ -467,11 +480,18 @@ export interface DisplayConfig {
   hover_effect?: HoverEffect;
   /** Skala podczas `:active` (tap feedback). 1 = brak. Default 0.98. Zakres 0.9–1. */
   press_scale?: number;
+}
 
-  /**
-   * Lista reguł warunkowego stylu — pierwsza spełniona wygrywa.
-   * Pozwala np. ustawić czerwony border gdy okno otwarte, zielony akcent gdy motion.
-   */
+/** Konfiguracja wyglądu wiersza (row). Identyczna schema co tile. */
+export type RowDisplayConfig = TileDisplayConfig;
+
+/**
+ * @deprecated od v1.21 — użyj `row_config` i `tile_config` osobno, a
+ * `conditions` przeniesione zostały na top-level `StratumCardConfig`.
+ * Pozostawione dla wstecznej kompatybilności — stare configi są
+ * automatycznie migrowane przy setConfig.
+ */
+export interface DisplayConfig extends TileDisplayConfig {
   conditions?: DisplayConditionConfig[];
 }
 

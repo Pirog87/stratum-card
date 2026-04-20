@@ -33,7 +33,7 @@ import './stratum-card-room-tile.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.20.0';
+const VERSION = '1.21.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -101,9 +101,48 @@ export class StratumCard extends LitElement {
     if (!config.floor_id && !config.area_id && !config.name) {
       throw new Error('Podaj `floor_id`, `area_id` lub `name`.');
     }
+    // W edytorze każda zmiana formularza woła setConfig ponownie — gdybyśmy
+    // za każdym razem resetowali `_expanded` do `config.expanded`, podgląd
+    // zwijałby się po każdym klawiszu. Inicjalizujemy tylko przy pierwszym
+    // setConfig albo gdy sam flag `expanded` faktycznie się zmienił.
+    const isFirst = !this._config;
+    const expandedFlagChanged =
+      this._config?.expanded !== config.expanded;
     this._config = config;
-    this._expanded = Boolean(config.expanded);
-    if (this._expanded) this._scheduleAutoCollapse();
+    if (isFirst || expandedFlagChanged) {
+      this._expanded = Boolean(config.expanded);
+      if (this._expanded) this._scheduleAutoCollapse();
+    }
+  }
+
+  /** Rozwiązuje effective row config (z migracją deprecated display_config). */
+  private _resolveRowConfig(): import('./types.js').RowDisplayConfig | undefined {
+    if (this._config?.row_config) return this._config.row_config;
+    if (this._config?.display_config) {
+      const { conditions: _c, ...rest } = this._config.display_config;
+      void _c;
+      return rest;
+    }
+    return undefined;
+  }
+
+  /** Rozwiązuje effective tile config (z migracją deprecated display_config). */
+  private _resolveTileConfig(): import('./types.js').TileDisplayConfig | undefined {
+    if (this._config?.tile_config) return this._config.tile_config;
+    if (this._config?.display_config) {
+      const { conditions: _c, ...rest } = this._config.display_config;
+      void _c;
+      return rest;
+    }
+    return undefined;
+  }
+
+  /** Rozwiązuje reguły warunkowego stylu (z migracją deprecated display_config). */
+  private _resolveConditions():
+    | import('./types.js').DisplayConditionConfig[]
+    | undefined {
+    if (this._config?.conditions) return this._config.conditions;
+    return this._config?.display_config?.conditions;
   }
 
   /** HA używa tego do kalkulacji layoutu masonry. */
@@ -448,8 +487,10 @@ export class StratumCard extends LitElement {
     // Jedno wyliczenie dla obu form (row/tile). Override per-pole przez
     // fieldEntities; bez override → auto-discovery z encji area.
     const data = computeTileData(this.hass!, entries, fieldEntities);
-    const displayConfig = this._config?.display_config;
-    const conditionOverride = evaluateConditions(data, displayConfig?.conditions);
+    const rowConfig = this._resolveRowConfig();
+    const tileConfig = this._resolveTileConfig();
+    const conditions = this._resolveConditions();
+    const conditionOverride = evaluateConditions(data, conditions);
 
     // Rozwiązywanie akcji dla klikalności wiersza.
     const isSet = (a: import('./types.js').TapActionConfig | undefined): boolean =>
@@ -475,7 +516,7 @@ export class StratumCard extends LitElement {
         .humidity=${data.humidity}
         .windowsOpen=${data.windowsOpen}
         .doorsOpen=${data.doorsOpen}
-        .displayConfig=${displayConfig}
+        .displayConfig=${tileConfig}
         .conditionOverride=${conditionOverride}
         .styleOverride=${styleOverride}
         .clickable=${clickable}
@@ -494,7 +535,7 @@ export class StratumCard extends LitElement {
       .humidity=${data.humidity}
       .windowsOpen=${data.windowsOpen}
       .doorsOpen=${data.doorsOpen}
-      .displayConfig=${displayConfig}
+      .displayConfig=${rowConfig}
       .conditionOverride=${conditionOverride}
       .styleOverride=${styleOverride}
       .clickable=${clickable}
