@@ -23,7 +23,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 
 /** Auto-wybór chipów dla room card: lights + motion + temp + humidity (jeśli są). */
 function autoRoomChips(
