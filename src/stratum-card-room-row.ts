@@ -403,6 +403,29 @@ export class StratumCardRoomRow extends LitElement {
     .leak ha-icon {
       --mdc-icon-size: 16px;
     }
+
+    .windows {
+      color: var(--stratum-chip-windows-color, #42a5f5);
+      font-weight: 600;
+    }
+
+    .windows ha-icon {
+      --mdc-icon-size: 16px;
+    }
+
+    .doors {
+      color: var(--stratum-chip-doors-color, #ba68c8);
+      font-weight: 600;
+    }
+
+    .doors ha-icon {
+      --mdc-icon-size: 16px;
+    }
+
+    .hum {
+      color: var(--secondary-text-color);
+      font-variant-numeric: tabular-nums;
+    }
   `;
 }
 

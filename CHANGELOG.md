@@ -4,6 +4,22 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.33.0] — 2026-04-20
+
+### Changed
+- **Spójne ikony i kolory** dla pól windows/doors/leak w całej karcie:
+  - Ikona okien: `mdi:window-open-variant` (było: różne w chipie i wierszu)
+  - Ikona drzwi: `mdi:door-open`
+  - Ikona wycieku: `mdi:water-alert`
+- **Kolorowanie pól** w wierszu/kaflu pokoju:
+  - 🪟 Okna — niebieski (`--stratum-chip-windows-color`)
+  - 🚪 Drzwi — fioletowy (`--stratum-chip-doors-color`)
+  - 💧 Wyciek — czerwony (`--stratum-chip-leak-color`)
+  - 💡 Światła — amber (było)
+  - 🏃 Motion — zielony (było)
+- Chip kolor drzwi zmieniony z niebieskiego na fioletowy — żeby wizualnie
+  odróżniał się od okien w nagłówku.
+
 ## [1.32.0] — 2026-04-20
 
 ### Added
