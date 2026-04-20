@@ -4,6 +4,33 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.22.0] — 2026-04-20
+
+### Added
+- **`rooms_tile_columns`** — nowy klucz top-level: `auto` (default) albo
+  `1..6`. Określa liczbę kolumn siatki kafli. Kafle same dzielą szerokość
+  równo, koniec z ręcznym ustawianiem `px`. Stare `rooms_tile_min_width`
+  działa dalej jako fallback gdy `rooms_tile_columns` nie ustawione.
+- `minmax(0, 1fr)` w grid — chroni przed nakładaniem się kafli przy
+  długiej zawartości / aspect-ratio.
+
+### Changed
+- **Panel „Karta Stratum" przepisany na chip/slider/toggle UX:**
+  - Liczba kolumn jako chipy `Auto / 1 / 2 / 3 / 4 / 5 / 6`
+  - Forma pozycji jako chipy (Wiersz / Kafel)
+  - Auto-zwijanie jako slider z live wartością (0 = „wyłączone")
+  - Rozwinięta / Debug jako natywne checkboxy
+  - ha-form zostaje tylko dla floor/area/name/icon/tap_action
+- **Panele „Wygląd — Wiersz" i „Wygląd — Kafel" są teraz collapsible.**
+  Startują zwinięte — kliknij nagłówek żeby rozwinąć. Z defaultu nie
+  pokazujemy ściany ustawień — tylko to co chcesz edytować.
+- Wspólne prymitywy `stratum-chip`, `stratum-slider-row`, `stratum-toggle`
+  wyniesione do `editor-shared-styles` — spójny look we wszystkich panelach.
+
+### Removed (z UI)
+- Pole „Min. szerokość kafla (px)" — zastąpione chipem liczby kolumn.
+  YAML-owo `rooms_tile_min_width` nadal działa dla backward-compat.
+
 ## [1.21.0] — 2026-04-20
 
 ### Changed

@@ -33,7 +33,7 @@ import './stratum-card-room-tile.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.21.0';
+const VERSION = '1.22.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -361,12 +361,17 @@ export class StratumCard extends LitElement {
           ></stratum-scene-bar>`
         : null;
     const roomsTemplate = this._renderRooms();
-    const tileMin = this._config?.rooms_tile_min_width ?? 160;
+    const cols = this._config?.rooms_tile_columns;
+    const tileMin = this._config?.rooms_tile_min_width ?? 140;
+    // `auto` albo brak — auto-fill z sensowną minimalną szerokością.
+    // Liczba — sztywna siatka N×1fr, karta sama oblicza szerokość każdego
+    // kafla tak żeby się zmieściły bez nakładania.
+    const gridStyle =
+      !cols || cols === 'auto'
+        ? `grid-template-columns: repeat(auto-fill, minmax(${tileMin}px, 1fr));`
+        : `grid-template-columns: repeat(${cols}, minmax(0, 1fr));`;
     const roomsWrapped = roomsTemplate
-      ? html`<div
-          class="rooms-grid"
-          style="--stratum-room-tile-min-width:${tileMin}px;"
-        >
+      ? html`<div class="rooms-grid" style=${gridStyle}>
           ${roomsTemplate}
         </div>`
       : null;
@@ -707,10 +712,9 @@ export class StratumCard extends LitElement {
 
     .rooms-grid {
       display: grid;
-      grid-template-columns: repeat(
-        auto-fill,
-        minmax(var(--stratum-room-tile-min-width, 160px), 1fr)
-      );
+      /* grid-template-columns ustawiane inline-style z render() wg
+         rooms_tile_columns (auto albo 1..6). minmax(0, 1fr) chroni
+         przed rozpychaniem kolumny ponad dostępną szerokość. */
       gap: 8px;
     }
 

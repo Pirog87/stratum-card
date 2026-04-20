@@ -47,8 +47,17 @@ export interface StratumCardConfig {
   rooms_display?: 'row' | 'tile';
 
   /**
-   * Minimalna szerokość kafla (px) w layoucie tile. Wpływa na auto-fill
-   * grid-template-columns. Default 160.
+   * Liczba kolumn layoutu kafli:
+   * - `auto` (default) — auto-fill szerokością, min 140 px
+   * - `1`–`6` — sztywna liczba kolumn; tile samo dostosowuje szerokość
+   *
+   * Nadpisuje stary `rooms_tile_min_width`.
+   */
+  rooms_tile_columns?: 'auto' | 1 | 2 | 3 | 4 | 5 | 6;
+
+  /**
+   * @deprecated od v1.22 — użyj `rooms_tile_columns`. Jeśli ustawione a
+   * `rooms_tile_columns` brak, fallback: auto-fill z podaną minimalną szerokością.
    */
   rooms_tile_min_width?: number;
 
