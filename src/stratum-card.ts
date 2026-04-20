@@ -29,8 +29,9 @@ import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 import './stratum-room-card.js';
+import './stratum-scene-bar.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -260,7 +261,7 @@ export class StratumCard extends LitElement {
           part="body"
           aria-hidden=${!this._expanded}
         >
-          <div class="body">${this._renderRooms()}</div>
+          <div class="body">${this._renderBody()}</div>
         </div>
       </ha-card>
       ${this._renderPopup()}
@@ -296,6 +297,25 @@ export class StratumCard extends LitElement {
         </div>
       </dialog>
     `;
+  }
+
+  private _renderBody(): TemplateResult[] {
+    const parts: TemplateResult[] = [];
+    const scenes = this._config?.scenes;
+    const position = scenes?.position ?? 'top';
+    const sceneBar =
+      scenes && scenes.items && scenes.items.length > 0
+        ? html`<stratum-scene-bar
+            .hass=${this.hass}
+            .config=${scenes}
+          ></stratum-scene-bar>`
+        : null;
+    const roomsTemplate = this._renderRooms();
+
+    if (position === 'top' && sceneBar) parts.push(sceneBar);
+    if (roomsTemplate) parts.push(roomsTemplate as TemplateResult);
+    if (position === 'bottom' && sceneBar) parts.push(sceneBar);
+    return parts;
   }
 
   private _renderRooms(): TemplateResult | typeof nothing {

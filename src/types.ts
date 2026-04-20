@@ -59,6 +59,12 @@ export interface StratumCardConfig {
    * lights, motion, windows, doors. Każdy chip pokazuje liczbę encji w stanie on.
    */
   chips?: ChipConfig[];
+
+  /**
+   * Pasek scen w body karty. Renderuje się powyżej lub poniżej listy pokoi
+   * zgodnie z `scenes.position`. Nie renderuje się gdy `items` puste/brak.
+   */
+  scenes?: SceneBarConfig;
 }
 
 /**
@@ -80,8 +86,40 @@ export interface StratumRoomCardConfig {
   chips?: ChipConfig[];
   /** Lista sekcji do wyświetlenia. Default: auto-discover po typach encji. */
   sections?: RoomSectionType[];
+  /** Pasek scen — zastępuje auto-sekcję scen, pełna kontrola layoutu. */
+  scenes?: SceneBarConfig;
   /** Debug log do konsoli. */
   debug?: boolean;
+}
+
+/** Pojedyncza scena w pasku `SceneBarConfig`. */
+export interface SceneConfig {
+  /** Encja typu `scene.*` albo `script.*` — cel wywołania. */
+  entity: string;
+  /** Override nazwy (default: friendly_name encji). */
+  name?: string;
+  /** Ikona gdy brak `image` (default: mdi:palette). */
+  icon?: string;
+  /** URL obrazka tła — `/local/...` albo zewnętrzny. Wypełnia cały tile. */
+  image?: string;
+  /** Kolor akcentu (tile gdy brak image, podświetlenie). */
+  color?: string;
+  /** Nadpisanie akcji — domyślnie `scene.turn_on` (albo odpowiednik script). */
+  tap_action?: TapActionConfig;
+}
+
+/** Pasek scen w karcie: pozycja + layout + lista elementów. */
+export interface SceneBarConfig {
+  /** Sceny do wyświetlenia. Kolejność zachowana. */
+  items: SceneConfig[];
+  /** Pozycja paska w body karty. Default: `top`. */
+  position?: 'top' | 'bottom';
+  /** Rozmiar tile. Default: `md` (80px min). */
+  size?: 'sm' | 'md' | 'lg';
+  /** Liczba kolumn. Default: 3. */
+  columns?: number;
+  /** Aspect-ratio tile (CSS: `1/1`, `16/9`, `270/150`). Default: `1/1`. */
+  aspect?: string;
 }
 
 /** Typy sekcji w room card. Każda mapuje na domain + ew. device_class. */

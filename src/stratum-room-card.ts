@@ -18,8 +18,9 @@ import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
 import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
+import './stratum-scene-bar.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 /** Auto-wybór chipów dla room card: lights + motion + temp + humidity (jeśli są). */
 function autoRoomChips(
@@ -236,6 +237,13 @@ export class StratumRoomCard extends LitElement {
     const icon = this._resolveIcon();
     const sections = this._config.sections ?? autoSections(this.hass, entries);
 
+    // Explicit scenes config wyłącza auto-sekcję scenes (user sam kontroluje pasek).
+    const hasExplicitScenes =
+      this._config.scenes && (this._config.scenes.items ?? []).length > 0;
+    const effectiveSections = hasExplicitScenes
+      ? sections.filter((s) => s !== 'scenes')
+      : sections;
+
     return html`
       <ha-card part="card">
         <div class="header" part="header">
@@ -244,11 +252,17 @@ export class StratumRoomCard extends LitElement {
           <div class="chips" part="chips">${this._renderChips(entries)}</div>
         </div>
         <div class="body" part="body">
-          ${sections.length === 0
+          ${hasExplicitScenes
+            ? html`<stratum-scene-bar
+                .hass=${this.hass}
+                .config=${this._config.scenes}
+              ></stratum-scene-bar>`
+            : null}
+          ${effectiveSections.length === 0
             ? html`<div class="placeholder">
                 Brak encji do wyświetlenia — sprawdź przypisanie area.
               </div>`
-            : sections.map((s) => this._renderSection(s, entries))}
+            : effectiveSections.map((s) => this._renderSection(s, entries))}
         </div>
       </ha-card>
     `;
