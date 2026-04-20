@@ -4,6 +4,24 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.29.0] — 2026-04-20
+
+### Added
+- **Nowy built-in chip `leak`** (wycieki). Zlicza sensory z
+  `device_class: moisture`. Ikona `mdi:water-alert`, kolor czerwony
+  (alarm). Dostępny w quick-pick menu edytora.
+
+### Fixed
+- **Chip `windows` i row-tile windows nie widziały `device_class: opening`.**
+  Wiele sensorów Aqara / Xiaomi / Zigbee raportuje otwarcia jako generyczne
+  `opening` zamiast `window`. Teraz chip zlicza oba device_class
+  (window + opening), zdeduplikowane. Analogicznie `doors` obejmuje
+  `door` + `garage_door`.
+- **Toggle „Popup z listą po kliknięciu" pokazywał się jako OFF**
+  gdy realnie był ON (default true). Edytor teraz materializuje
+  default w ha-form data → toggle pokazuje rzeczywisty stan.
+  Zapis do YAML dalej czysty (pomijamy `show_list: true` jako default).
+
 ## [1.28.0] — 2026-04-20
 
 ### Changed

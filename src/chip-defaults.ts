@@ -28,6 +28,7 @@ const BUILTIN_ICON: Record<BuiltInChipType, string> = {
   occupancy: 'mdi:account',
   windows: 'mdi:window-open',
   doors: 'mdi:door-open',
+  leak: 'mdi:water-alert',
 };
 
 const BUILTIN_COLOR: Record<BuiltInChipType, string> = {
@@ -36,7 +37,22 @@ const BUILTIN_COLOR: Record<BuiltInChipType, string> = {
   occupancy: 'var(--stratum-chip-occupancy-color, #4caf50)',
   windows: 'var(--stratum-chip-windows-color, #42a5f5)',
   doors: 'var(--stratum-chip-doors-color, #42a5f5)',
+  leak: 'var(--stratum-chip-leak-color, #f44336)',
 };
+
+/** Deduplikuje encje po entity_id zachowując kolejność. */
+function dedupe<T extends { entity_id: string }>(lists: T[][]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const list of lists) {
+    for (const e of list) {
+      if (seen.has(e.entity_id)) continue;
+      seen.add(e.entity_id);
+      out.push(e);
+    }
+  }
+  return out;
+}
 
 export function resolveChipIcon(chip: ChipConfig): string {
   if (chip.icon) return chip.icon;
@@ -46,6 +62,7 @@ export function resolveChipIcon(chip: ChipConfig): string {
     case 'occupancy':
     case 'windows':
     case 'doors':
+    case 'leak':
       return BUILTIN_ICON[chip.type];
     case 'filter':
       return chip.domain ? 'mdi:counter' : 'mdi:filter';
@@ -66,6 +83,7 @@ export function resolveChipColor(chip: ChipConfig): string {
     case 'occupancy':
     case 'windows':
     case 'doors':
+    case 'leak':
       return BUILTIN_COLOR[chip.type];
     default:
       return 'var(--primary-color, #ff9b42)';
@@ -88,25 +106,34 @@ export function evaluateChip(
     case 'lights':
       return countedValue(hass, filterByDomain(entries, 'light'));
     case 'motion': {
-      // Spójnie z row/tile: motion chip obejmuje też `device_class: occupancy`,
-      // bo wiele domowych czujek ruchu ma oba warianty (PIR + presence mmWave).
-      const motion = filterBinarySensorDeviceClass(hass, entries, 'motion');
-      const occ = filterBinarySensorDeviceClass(hass, entries, 'occupancy');
-      const seen = new Set<string>();
-      const merged: typeof motion = [];
-      for (const e of [...motion, ...occ]) {
-        if (seen.has(e.entity_id)) continue;
-        seen.add(e.entity_id);
-        merged.push(e);
-      }
+      // Spójnie z row/tile: motion chip obejmuje też `device_class: occupancy`
+      // (czujki presence mmWave).
+      const merged = dedupe([
+        filterBinarySensorDeviceClass(hass, entries, 'motion'),
+        filterBinarySensorDeviceClass(hass, entries, 'occupancy'),
+      ]);
       return countedValue(hass, merged);
     }
     case 'occupancy':
       return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'occupancy'));
-    case 'windows':
-      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'window'));
-    case 'doors':
-      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'door'));
+    case 'windows': {
+      // `device_class: window` albo generyczne `opening` (wiele Aqara /
+      // Xiaomi / Zigbee sensorów raportuje jako `opening`).
+      const merged = dedupe([
+        filterBinarySensorDeviceClass(hass, entries, 'window'),
+        filterBinarySensorDeviceClass(hass, entries, 'opening'),
+      ]);
+      return countedValue(hass, merged);
+    }
+    case 'doors': {
+      const merged = dedupe([
+        filterBinarySensorDeviceClass(hass, entries, 'door'),
+        filterBinarySensorDeviceClass(hass, entries, 'garage_door'),
+      ]);
+      return countedValue(hass, merged);
+    }
+    case 'leak':
+      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'moisture'));
     case 'filter':
       return filterValue(hass, entries, chip.domain, chip.device_class, chip.state ?? 'on');
     case 'entity':

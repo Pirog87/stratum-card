@@ -140,15 +140,16 @@ function resolveFieldEntityIds(
     }
     case 'windows': {
       if (fieldEntities?.windows?.length) return fieldEntities.windows;
-      return filterBinarySensorDeviceClass(hass, entries, 'window').map(
-        (e) => e.entity_id,
-      );
+      // `window` + generyczne `opening` (Aqara/Xiaomi często używają tego drugiego).
+      const w = filterBinarySensorDeviceClass(hass, entries, 'window');
+      const o = filterBinarySensorDeviceClass(hass, entries, 'opening');
+      return Array.from(new Set([...w, ...o].map((e) => e.entity_id)));
     }
     case 'doors': {
       if (fieldEntities?.doors?.length) return fieldEntities.doors;
-      return filterBinarySensorDeviceClass(hass, entries, 'door').map(
-        (e) => e.entity_id,
-      );
+      const d = filterBinarySensorDeviceClass(hass, entries, 'door');
+      const g = filterBinarySensorDeviceClass(hass, entries, 'garage_door');
+      return Array.from(new Set([...d, ...g].map((e) => e.entity_id)));
     }
     default:
       return [];

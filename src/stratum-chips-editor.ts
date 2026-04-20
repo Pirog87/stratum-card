@@ -27,6 +27,7 @@ const QUICK_PICKS: ChipQuickPick[] = [
   { type: 'occupancy', label: 'Zajętość', icon: 'mdi:account-check', builtin: 'occupancy' },
   { type: 'windows', label: 'Okna', icon: 'mdi:window-open-variant', builtin: 'windows' },
   { type: 'doors', label: 'Drzwi', icon: 'mdi:door-open', builtin: 'doors' },
+  { type: 'leak', label: 'Wycieki', icon: 'mdi:water-alert', builtin: 'leak' },
   { type: 'entity', label: 'Encja', icon: 'mdi:pencil-outline' },
   { type: 'filter', label: 'Filtr', icon: 'mdi:filter-variant' },
   { type: 'template', label: 'Template', icon: 'mdi:code-braces' },
@@ -50,6 +51,7 @@ const CHIP_LABELS: Record<string, string> = {
   occupancy: 'Zajętość (occupancy)',
   windows: 'Okna',
   doors: 'Drzwi',
+  leak: 'Wycieki (moisture)',
   entity: 'Encja',
   filter: 'Filtr',
   template: 'Template',
@@ -61,6 +63,7 @@ const CHIP_ICONS: Record<string, string> = {
   occupancy: 'mdi:account-check',
   windows: 'mdi:window-open-variant',
   doors: 'mdi:door-open',
+  leak: 'mdi:water-alert',
   entity: 'mdi:label-outline',
   filter: 'mdi:filter-variant',
   template: 'mdi:code-braces',
@@ -140,7 +143,12 @@ export class StratumChipsEditor extends LitElement {
     const base = this._effective();
     const next = base.map((c, i) => {
       if (i !== index) return c;
-      return { ...c, ...patch } as ChipConfig;
+      const merged = { ...c, ...patch } as Record<string, unknown>;
+      // Klucze z wartością undefined usuwamy z obiektu (YAML-friendly).
+      for (const key of Object.keys(merged)) {
+        if (merged[key] === undefined) delete merged[key];
+      }
+      return merged as unknown as ChipConfig;
     });
     this._emit(next);
   }
@@ -148,13 +156,32 @@ export class StratumChipsEditor extends LitElement {
   private _onChange(index: number, ev: CustomEvent<{ value: Partial<ChipConfig> }>): void {
     ev.stopPropagation();
     const value = ev.detail.value ?? {};
-    // ha-form wrzuca puste stringi — wyczyszczamy je żeby nie zapisywać śmieci.
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
       if (v === '' || v == null) continue;
+      // `show_list: true` to default — nie zapisujemy do YAML, zostaje niepotrzebny szum.
+      if (k === 'show_list' && v === true) continue;
       cleaned[k] = v;
     }
+    // Kasujemy pola które były ustawione a teraz nie są w value (user cofnął).
+    // Szczególnie: show_list true domyślnie → gdy user wyłączy, value ma show_list:false
+    // → zapiszemy false. Gdy z powrotem włączy, value ma show_list:true → pomijamy, trzeba usunąć istniejące.
+    const existing = this.chips[index];
+    if (existing && 'show_list' in existing && value.show_list !== false) {
+      // explicitnie usuń — trafi do _patch jako undefined (spread go skasuje).
+      (cleaned as { show_list?: undefined }).show_list = undefined;
+    }
     this._patch(index, cleaned as Partial<ChipConfig>);
+  }
+
+  /** Dane dla ha-form — wypełnia defaulty żeby toggle odzwierciedlał realny stan. */
+  private _formDataFor(chip: ChipConfig): Record<string, unknown> {
+    const listSupported = chip.type !== 'entity' && chip.type !== 'template';
+    return {
+      // show_list domyślnie ON dla typów wspierających listę.
+      ...(listSupported ? { show_list: chip.show_list !== false } : {}),
+      ...chip,
+    };
   }
 
   private _schemaFor(chip: ChipConfig) {
@@ -374,7 +401,7 @@ export class StratumChipsEditor extends LitElement {
           ? html`<div class="stratum-row-sub">
               <ha-form
                 .hass=${this.hass}
-                .data=${chip}
+                .data=${this._formDataFor(chip)}
                 .schema=${this._schemaFor(chip)}
                 .computeLabel=${this._labelFor}
                 @value-changed=${(ev: CustomEvent<{ value: Partial<ChipConfig> }>) =>

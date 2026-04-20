@@ -34,7 +34,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.28.0';
+const VERSION = '1.29.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -374,12 +374,24 @@ export class StratumCard extends LitElement {
         .filter(matches(['on']));
     }
     if (chip.type === 'windows') {
-      return filterBinarySensorDeviceClass(this.hass, entries, 'window')
-        .map((e) => e.entity_id)
-        .filter(matches(['on']));
+      // window + opening (generyczne Aqara/Xiaomi), zdeduplikowane.
+      const w = filterBinarySensorDeviceClass(this.hass, entries, 'window')
+        .map((e) => e.entity_id);
+      const o = filterBinarySensorDeviceClass(this.hass, entries, 'opening')
+        .map((e) => e.entity_id);
+      const all = Array.from(new Set([...w, ...o]));
+      return all.filter(matches(['on']));
     }
     if (chip.type === 'doors') {
-      return filterBinarySensorDeviceClass(this.hass, entries, 'door')
+      const d = filterBinarySensorDeviceClass(this.hass, entries, 'door')
+        .map((e) => e.entity_id);
+      const g = filterBinarySensorDeviceClass(this.hass, entries, 'garage_door')
+        .map((e) => e.entity_id);
+      const all = Array.from(new Set([...d, ...g]));
+      return all.filter(matches(['on']));
+    }
+    if (chip.type === 'leak') {
+      return filterBinarySensorDeviceClass(this.hass, entries, 'moisture')
         .map((e) => e.entity_id)
         .filter(matches(['on']));
     }
@@ -409,6 +421,7 @@ export class StratumCard extends LitElement {
       occupancy: 'Zajęte strefy',
       windows: 'Otwarte okna',
       doors: 'Otwarte drzwi',
+      leak: 'Wykryto wyciek',
       filter: 'Pasujące encje',
     };
     const colors: Record<string, string> = {
@@ -417,6 +430,7 @@ export class StratumCard extends LitElement {
       occupancy: 'var(--stratum-chip-motion-color, #4caf50)',
       windows: 'var(--stratum-chip-windows-color, #2196f3)',
       doors: 'var(--stratum-chip-doors-color, #9c27b0)',
+      leak: 'var(--stratum-chip-leak-color, #f44336)',
       filter: 'var(--primary-color, #ff9b42)',
     };
     this._popupChip = {
