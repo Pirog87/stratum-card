@@ -18,6 +18,7 @@ import {
   filterBinarySensorDeviceClass,
 } from './area-entities.js';
 import { computeTileData, evaluateConditions } from './tile-data.js';
+import { ensureRegistry, subscribeRegistry } from './entity-registry-cache.js';
 import {
   DEFAULT_CHIPS,
   evaluateChip,
@@ -34,7 +35,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.30.0';
+const VERSION = '1.31.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -453,6 +454,9 @@ export class StratumCard extends LitElement {
     this._popupChip = undefined;
   };
 
+  /** Unsubscribe dla entity registry — wywołujemy w disconnect. */
+  private _unsubRegistry?: () => void;
+
   public connectedCallback(): void {
     super.connectedCallback();
     // Druga okazja do wykrycia edytora — po tym jak element jest już w drzewie.
@@ -461,6 +465,10 @@ export class StratumCard extends LitElement {
       this._expanded = true;
       this._clearAutoCollapse();
     }
+    // Subskrybuj globalny entity registry cache — gdy fetch się zakończy,
+    // chipy / row / popup liczą device_class z overridem (np. SATEL).
+    this._unsubRegistry = subscribeRegistry(() => this.requestUpdate());
+    if (this.hass) void ensureRegistry(this.hass);
   }
 
   public disconnectedCallback(): void {
@@ -468,6 +476,17 @@ export class StratumCard extends LitElement {
     this._templates.destroy();
     this._clearAutoCollapse();
     document.removeEventListener('keydown', this._onPopupKey);
+    this._unsubRegistry?.();
+    this._unsubRegistry = undefined;
+  }
+
+  protected updated(changed: Map<PropertyKey, unknown>): void {
+    super.updated(changed);
+    // Trigger fetch przy pierwszym hass update (gdy ensureRegistry
+    // z connectedCallback nie miał jeszcze hass).
+    if (changed.has('hass') && this.hass) {
+      void ensureRegistry(this.hass);
+    }
   }
 
   private _debugLog(): void {

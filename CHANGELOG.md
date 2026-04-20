@@ -4,6 +4,23 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.31.0] — 2026-04-20
+
+### Fixed
+- **`device_class` user override (właściwy fix).** W v1.30 próbowaliśmy
+  czytać `hass.entities[id].device_class`, ale HA na frontzie eksponuje
+  tylko `EntityRegistryDisplayEntry` — bez `device_class`. Pełny
+  entity registry dostępny jest tylko przez WebSocket
+  (`config/entity_registry/list`).
+  - Nowy moduł `entity-registry-cache` fetchuje pełny registry przez
+    `hass.callWS` przy montowaniu karty
+  - Subskrybuje `entity_registry_updated` event — zmiany w HA UI
+    są widoczne live
+  - `filterBinarySensorDeviceClass` używa tego cache jako 3. fallback
+- Skutek: okna / drzwi z ustawionym „Pokaż jako klasę urządzenia"
+  w Entity Options (np. SATEL Integra, ESPHome custom) są wreszcie
+  wykrywane w chipie i wierszu pokoju.
+
 ## [1.30.0] — 2026-04-20
 
 ### Fixed

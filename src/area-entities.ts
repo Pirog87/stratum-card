@@ -10,6 +10,7 @@ import type {
   HassEntityRegistryEntry,
   HomeAssistant,
 } from './types.js';
+import { registryDeviceClass } from './entity-registry-cache.js';
 
 /**
  * Zwraca wszystkie wpisy registry encji przypisane do podanego area —
@@ -94,10 +95,14 @@ export function filterBinarySensorDeviceClass(
     const state: HassEntity | undefined = hass.states?.[entry.entity_id];
     const stateClass = state?.attributes?.device_class;
     if (stateClass === deviceClass) return true;
+    // Fallback #1: display-entry in hass.entities (inconsistently populated).
     const registryEntry = hass.entities?.[entry.entity_id] ?? entry;
     const regClass =
       registryEntry.device_class ?? registryEntry.original_device_class ?? null;
-    return regClass === deviceClass;
+    if (regClass === deviceClass) return true;
+    // Fallback #2: globalny cache pobrany przez WebSocket — jedyne pewne
+    // źródło user override (np. SATEL + „Pokaż jako klasę urządzenia").
+    return registryDeviceClass(entry.entity_id) === deviceClass;
   });
 }
 

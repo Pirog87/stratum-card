@@ -647,6 +647,8 @@ export interface HomeAssistant {
     service: string,
     data?: Record<string, unknown>
   ) => Promise<void>;
+  /** Synchroniczny WebSocket call (HA frontend API). Używany do fetchu entity registry. */
+  callWS?: <T>(msg: Record<string, unknown>) => Promise<T>;
   /** WebSocket connection — używamy do subskrypcji render_template. */
   connection?: {
     subscribeMessage: <T>(
