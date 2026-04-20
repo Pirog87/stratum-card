@@ -18,6 +18,7 @@ import type {
 import './stratum-card-rooms-editor.js';
 import './stratum-scene-editor.js';
 import './stratum-conditions-editor.js';
+import './stratum-display-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 interface FormSchemaItem {
@@ -82,199 +83,6 @@ const SCHEMA: readonly FormSchemaItem[] = [
   { name: 'room_tap_action', selector: { ui_action: {} } },
 ];
 
-const DISPLAY_SCHEMA: readonly FormSchemaItem[] = [
-  {
-    name: 'fields',
-    selector: {
-      select: {
-        multiple: true,
-        mode: 'list',
-        options: [
-          { value: 'temperature', label: 'Temperatura' },
-          { value: 'humidity', label: 'Wilgotność' },
-          { value: 'lights', label: 'Liczba świateł on' },
-          { value: 'motion', label: 'Obecność (ikona)' },
-          { value: 'windows', label: 'Otwarte okna' },
-          { value: 'doors', label: 'Otwarte drzwi' },
-        ],
-      },
-    },
-  },
-  {
-    type: 'grid',
-    name: '',
-    schema: [
-      { name: 'aspect', selector: { text: {} } },
-      { name: 'accent_color', selector: { text: {} } },
-    ],
-  },
-  { name: 'background_image', selector: { text: {} } },
-  {
-    type: 'grid',
-    name: '',
-    schema: [
-      { name: 'show_icon', selector: { boolean: {} } },
-      { name: 'show_name', selector: { boolean: {} } },
-    ],
-  },
-  {
-    type: 'expandable',
-    name: '',
-    title: 'Wymiary i zaokrąglenia',
-    icon: 'mdi:ruler-square',
-    schema: [
-      {
-        type: 'grid',
-        name: '',
-        schema: [
-          {
-            name: 'border_radius',
-            selector: {
-              number: { min: 0, max: 40, step: 1, unit_of_measurement: 'px', mode: 'slider' },
-            },
-          },
-          {
-            name: 'padding',
-            selector: {
-              number: { min: 0, max: 40, step: 1, unit_of_measurement: 'px', mode: 'slider' },
-            },
-          },
-        ],
-      },
-      {
-        name: 'min_height',
-        selector: {
-          number: { min: 40, max: 260, step: 2, unit_of_measurement: 'px', mode: 'slider' },
-        },
-      },
-    ],
-  },
-  {
-    type: 'expandable',
-    name: '',
-    title: 'Ikona',
-    icon: 'mdi:image-outline',
-    schema: [
-      {
-        type: 'grid',
-        name: '',
-        schema: [
-          {
-            name: 'icon_size',
-            selector: {
-              number: { min: 12, max: 64, step: 1, unit_of_measurement: 'px', mode: 'slider' },
-            },
-          },
-          {
-            name: 'icon_style',
-            selector: {
-              select: {
-                mode: 'dropdown',
-                options: [
-                  { value: 'bubble', label: 'Kółko z tłem (bubble)' },
-                  { value: 'flat', label: 'Płasko (sama ikona)' },
-                  { value: 'none', label: 'Ukryj ikonę' },
-                ],
-              },
-            },
-          },
-        ],
-      },
-      {
-        name: 'icon_position',
-        selector: {
-          select: {
-            mode: 'dropdown',
-            options: [
-              { value: 'top-left', label: 'Góra-lewo (kafel)' },
-              { value: 'top-right', label: 'Góra-prawo (kafel)' },
-              { value: 'bottom-left', label: 'Dół-lewo (kafel)' },
-              { value: 'bottom-right', label: 'Dół-prawo (kafel)' },
-              { value: 'center', label: 'Wyśrodkowana (kafel)' },
-              { value: 'left', label: 'Po lewej, nazwa obok (kafel inline / wiersz)' },
-            ],
-          },
-        },
-      },
-    ],
-  },
-  {
-    type: 'expandable',
-    name: '',
-    title: 'Reakcje na dotyk',
-    icon: 'mdi:gesture-tap',
-    schema: [
-      {
-        type: 'grid',
-        name: '',
-        schema: [
-          {
-            name: 'hover_effect',
-            selector: {
-              select: {
-                mode: 'dropdown',
-                options: [
-                  { value: 'none', label: 'Bez efektu' },
-                  { value: 'subtle', label: 'Subtelny (zmiana tła)' },
-                  { value: 'lift', label: 'Podniesienie (translate + cień)' },
-                  { value: 'glow', label: 'Poświata (glow ring)' },
-                ],
-              },
-            },
-          },
-          {
-            name: 'press_scale',
-            selector: {
-              number: { min: 0.9, max: 1, step: 0.01, mode: 'slider' },
-            },
-          },
-        ],
-      },
-    ],
-  },
-];
-
-const DISPLAY_LABELS: Record<string, string> = {
-  fields: 'Pola w sekcji info',
-  aspect: 'Proporcje kafla (CSS)',
-  accent_color: 'Kolor akcentu',
-  background_image: 'Obrazek tła (URL lub stratum:<id>)',
-  show_icon: 'Pokaż ikonę',
-  show_name: 'Pokaż nazwę',
-  border_radius: 'Zaokrąglenie rogów',
-  padding: 'Wewnętrzny padding',
-  min_height: 'Min. wysokość kafla',
-  icon_size: 'Rozmiar ikony',
-  icon_style: 'Styl ikony',
-  icon_position: 'Pozycja ikony',
-  hover_effect: 'Efekt hover',
-  press_scale: 'Skala przy tapnięciu',
-};
-
-const DISPLAY_HELPERS: Record<string, string> = {
-  fields:
-    'Które wartości pokazać w wierszu lub kaflu. Kolejność z listy = kolejność wyświetlania.',
-  aspect:
-    'Dotyczy tylko kafla. Np. 1/1 (default), 4/3, 16/9. Wiersz ignoruje.',
-  accent_color:
-    'Kolor gdy wiersz/kafel jest aktywny (światła/motion). Nazwa (amber, blue), hex (#ffc107) lub var(--color).',
-  background_image:
-    'Obraz tła kafla — np. /local/img/salon.jpg albo preset stratum:noc. Dotyczy tylko kafla.',
-  border_radius:
-    'Zaokrąglenie rogów. Wiersz stosuje tylko gdy jest klikalny. Default 14px (kafel) / 6px (wiersz).',
-  padding: 'Odstęp wewnętrzny od krawędzi. Default 12px (kafel) / 10px (wiersz).',
-  min_height: 'Minimalna wysokość kafla. Wiersz tego nie używa. Default 110px.',
-  icon_size: 'Rozmiar samej ikony MDI. Bubble dopasuje swoje koło. Default 22px.',
-  icon_style:
-    '„bubble" = kółko z tłem (mushroom-style). „flat" = sama ikona. „none" = bez ikony.',
-  icon_position:
-    'Rozkład kafla. „left" = ikona + nazwa w jednej linii (kompaktowy poziom). Wiersz zawsze ma ikonę po lewej.',
-  hover_effect:
-    'Jak reaguje pozycja gdy najedziesz/dotkniesz palcem. „lift" jest domyślne dla kafla, „subtle" dla wiersza.',
-  press_scale:
-    'Skala podczas tap/click (0.9-1.0). 1 = brak animacji. Default 0.98.',
-};
-
 const LABELS: Record<string, string> = {
   floor_id: 'Piętro (floor)',
   area_id: 'Pojedyncza strefa (area) — alternatywa',
@@ -335,14 +143,17 @@ export class StratumCardEditor extends LitElement {
   }
 
   private _displayConfigChanged(
-    ev: CustomEvent<{ value: DisplayConfig }>,
+    ev: CustomEvent<{ config: DisplayConfig }>,
   ): void {
     ev.stopPropagation();
     if (!this._config) return;
-    const raw = ev.detail.value ?? {};
+    const raw = ev.detail.config ?? {};
     const cleaned: DisplayConfig = {};
+
     if (raw.fields && raw.fields.length > 0) cleaned.fields = raw.fields;
-    if (raw.aspect && raw.aspect.trim() !== '') cleaned.aspect = raw.aspect;
+    if (raw.aspect && raw.aspect.trim() !== '' && raw.aspect !== '1/1') {
+      cleaned.aspect = raw.aspect;
+    }
     if (raw.accent_color && raw.accent_color.trim() !== '') {
       cleaned.accent_color = raw.accent_color;
     }
@@ -351,11 +162,22 @@ export class StratumCardEditor extends LitElement {
     }
     if (raw.show_icon === false) cleaned.show_icon = false;
     if (raw.show_name === false) cleaned.show_name = false;
-    if (typeof raw.border_radius === 'number') cleaned.border_radius = raw.border_radius;
-    if (typeof raw.padding === 'number') cleaned.padding = raw.padding;
-    if (typeof raw.min_height === 'number') cleaned.min_height = raw.min_height;
-    if (typeof raw.icon_size === 'number') cleaned.icon_size = raw.icon_size;
-    if (raw.icon_style && raw.icon_style !== 'bubble') cleaned.icon_style = raw.icon_style;
+
+    if (typeof raw.border_radius === 'number' && raw.border_radius !== 14) {
+      cleaned.border_radius = raw.border_radius;
+    }
+    if (typeof raw.padding === 'number' && raw.padding !== 12) {
+      cleaned.padding = raw.padding;
+    }
+    if (typeof raw.min_height === 'number' && raw.min_height !== 110) {
+      cleaned.min_height = raw.min_height;
+    }
+    if (typeof raw.icon_size === 'number' && raw.icon_size !== 22) {
+      cleaned.icon_size = raw.icon_size;
+    }
+    if (raw.icon_style && raw.icon_style !== 'bubble') {
+      cleaned.icon_style = raw.icon_style;
+    }
     if (raw.icon_position && raw.icon_position !== 'top-left') {
       cleaned.icon_position = raw.icon_position;
     }
@@ -365,18 +187,15 @@ export class StratumCardEditor extends LitElement {
     if (typeof raw.press_scale === 'number' && raw.press_scale !== 0.98) {
       cleaned.press_scale = raw.press_scale;
     }
+    if (raw.conditions && raw.conditions.length > 0) {
+      cleaned.conditions = raw.conditions;
+    }
 
     const next: StratumCardConfig = { ...this._config };
     if (Object.keys(cleaned).length === 0) delete next.display_config;
     else next.display_config = cleaned;
     this._emitConfig(next);
   }
-
-  private _computeDisplayLabel = (schema: FormSchemaItem): string =>
-    DISPLAY_LABELS[schema.name] ?? schema.name;
-
-  private _computeDisplayHelper = (schema: FormSchemaItem): string =>
-    DISPLAY_HELPERS[schema.name] ?? '';
 
   private _conditionsChanged(
     ev: CustomEvent<{ conditions: DisplayConditionConfig[] }>,
@@ -472,18 +291,10 @@ export class StratumCardEditor extends LitElement {
           </div>
         </div>
         <div class="stratum-panel-body">
-          <ha-form
-            .hass=${this.hass}
-            .data=${{
-              show_icon: true,
-              show_name: true,
-              ...(this._config.display_config ?? {}),
-            }}
-            .schema=${DISPLAY_SCHEMA}
-            .computeLabel=${this._computeDisplayLabel}
-            .computeHelper=${this._computeDisplayHelper}
-            @value-changed=${this._displayConfigChanged}
-          ></ha-form>
+          <stratum-display-editor
+            .config=${this._config.display_config ?? {}}
+            @display-config-changed=${this._displayConfigChanged}
+          ></stratum-display-editor>
         </div>
       </div>
 

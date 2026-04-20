@@ -4,6 +4,29 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.20.0] — 2026-04-20
+
+### Changed
+- **Nowy edytor „Wygląd pomieszczeń" — full UX overhaul.** Zamiast wall-of-text
+  inputów dostajesz:
+  - **Pola** — rząd chipów z ikonami (klik = toggle)
+  - **Proporcje kafla** — preset chips (1:1, 4:3, 3:2, 16:9, 2:1) z miniaturą
+    proporcji + pole „Niestandardowe"
+  - **Kolor akcentu** — 8 swatch-chipów (amber/green/blue/red/purple/orange/
+    teal/pink) + pole na custom hex/var
+  - **Obrazek tła** — dropdown z 24 presetami scen (Stratum) + opcja Custom URL
+  - **Wymiary** — trzy slidery z widocznymi wartościami live (px)
+  - **Ikona** — slider rozmiaru + chipy stylu (bubble/flat/none) + **mini-grid
+    3×2 do wyboru pozycji** (góra-lewo/prawo, środek, dół-lewo/prawo, inline)
+  - **Reakcje na dotyk** — chipy efektu hover + slider press_scale
+- Defaulty są widoczne w UI (14px/12px/110px/22px/0.98) ale zapisują się do
+  YAML tylko gdy user zmienił wartość — czysty config.
+
+### Internals
+- Nowy komponent `stratum-display-editor` — samowystarczalny, używa tylko
+  natywnych elementów (range/select/checkbox/text) stylowanych przez Lit CSS.
+  Bez zależności od HA internals poza `ha-icon`.
+
 ## [1.19.0] — 2026-04-20
 
 ### Added
