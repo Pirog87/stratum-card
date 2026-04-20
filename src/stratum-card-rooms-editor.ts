@@ -23,6 +23,7 @@ import { editorSharedStyles } from './editor-shared-styles.js';
 const ROOM_LABELS: Record<string, string> = {
   name: 'Nazwa (override)',
   icon: 'Ikona (override)',
+  display: 'Forma wyświetlania',
   tap_action: 'Akcja po kliknięciu (override)',
   merge_with: 'Połącz z innymi pomieszczeniami',
   aggregate: 'Sposób agregacji',
@@ -80,6 +81,18 @@ export class StratumCardRoomsEditor extends LitElement {
           { name: 'name', selector: { text: {} } },
           { name: 'icon', selector: { icon: {} } },
         ],
+      },
+      {
+        name: 'display',
+        selector: {
+          select: {
+            mode: 'dropdown',
+            options: [
+              { value: 'row', label: 'Wiersz (default)' },
+              { value: 'tile', label: 'Kafel' },
+            ],
+          },
+        },
       },
       { name: 'tap_action', selector: { ui_action: {} } },
       {
@@ -208,6 +221,7 @@ export class StratumCardRoomsEditor extends LitElement {
       delete merged.scenes;
     }
     if (!merged.chips || merged.chips.length === 0) delete merged.chips;
+    if (!merged.display || merged.display === 'row') delete merged.display;
     const next = existing
       ? this.rooms.map((r) => (r.area_id === areaId ? merged : r))
       : [...this.rooms, merged];

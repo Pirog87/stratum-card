@@ -28,10 +28,11 @@ import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
+import './stratum-card-room-tile.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.14.0';
+const VERSION = '1.15.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -320,9 +321,18 @@ export class StratumCard extends LitElement {
           ></stratum-scene-bar>`
         : null;
     const roomsTemplate = this._renderRooms();
+    const tileMin = this._config?.rooms_tile_min_width ?? 160;
+    const roomsWrapped = roomsTemplate
+      ? html`<div
+          class="rooms-grid"
+          style="--stratum-room-tile-min-width:${tileMin}px;"
+        >
+          ${roomsTemplate}
+        </div>`
+      : null;
 
     if (position === 'top' && sceneBar) parts.push(sceneBar);
-    if (roomsTemplate) parts.push(roomsTemplate as TemplateResult);
+    if (roomsWrapped) parts.push(roomsWrapped as TemplateResult);
     if (position === 'bottom' && sceneBar) parts.push(sceneBar);
     return parts;
   }
@@ -349,12 +359,13 @@ export class StratumCard extends LitElement {
           aggregate === 'sum' && room.merge_with?.length
             ? [room.area_id, ...room.merge_with]
             : [room.area_id];
+        const display = room.display ?? this._config?.rooms_display ?? 'row';
         return this._renderRoomRow(areaIds, name, icon, room.tap_action, {
           merge_with: room.merge_with,
           sections: room.sections,
           scenes: room.scenes,
           chips: room.chips,
-        });
+        }, display);
       })}`;
     }
 
@@ -367,8 +378,16 @@ export class StratumCard extends LitElement {
           Przypisz area do floor w Settings → Areas & Zones.
         </div>`;
       }
+      const globalDisplay = this._config.rooms_display ?? 'row';
       return html`${areas.map((area) =>
-        this._renderRoomRow([area.area_id], area.name, area.icon ?? undefined),
+        this._renderRoomRow(
+          [area.area_id],
+          area.name,
+          area.icon ?? undefined,
+          undefined,
+          undefined,
+          globalDisplay,
+        ),
       )}`;
     }
 
@@ -376,7 +395,14 @@ export class StratumCard extends LitElement {
     if (this._config.area_id) {
       const area = this.hass.areas?.[this._config.area_id];
       const name = area?.name ?? this._config.area_id;
-      return this._renderRoomRow([this._config.area_id], name, area?.icon ?? undefined);
+      return this._renderRoomRow(
+        [this._config.area_id],
+        name,
+        area?.icon ?? undefined,
+        undefined,
+        undefined,
+        this._config.rooms_display ?? 'row',
+      );
     }
 
     return nothing;
@@ -393,6 +419,7 @@ export class StratumCard extends LitElement {
       scenes?: import('./types.js').SceneBarConfig;
       chips?: import('./types.js').ChipConfig[];
     },
+    display: 'row' | 'tile' = 'row',
   ): TemplateResult {
     const primary = areaIds[0];
     // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
@@ -430,7 +457,22 @@ export class StratumCard extends LitElement {
     const explicitNone = effectiveTap?.action === 'none';
     const clickable = !explicitNone;
 
+    if (display === 'tile') {
+      return html`<stratum-card-room-tile
+        class="room-item tile-mode"
+        .areaId=${primary}
+        .name=${name}
+        .icon=${icon ?? 'mdi:floor-plan'}
+        .lightsOn=${lightsOn}
+        .motion=${motion}
+        .temperature=${temperature}
+        .clickable=${clickable}
+        @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
+          this._onRoomTap(ev, effectiveTap, popupOverrides)}
+      ></stratum-card-room-tile>`;
+    }
     return html`<stratum-card-room-row
+      class="room-item row-mode"
       .areaId=${primary}
       .name=${name}
       .icon=${icon ?? 'mdi:floor-plan'}
@@ -617,6 +659,19 @@ export class StratumCard extends LitElement {
 
     .body-wrap.open .body {
       padding: 4px 16px 12px;
+    }
+
+    .rooms-grid {
+      display: grid;
+      grid-template-columns: repeat(
+        auto-fill,
+        minmax(var(--stratum-room-tile-min-width, 160px), 1fr)
+      );
+      gap: 8px;
+    }
+
+    .rooms-grid .room-item.row-mode {
+      grid-column: 1 / -1;
     }
 
     .placeholder {

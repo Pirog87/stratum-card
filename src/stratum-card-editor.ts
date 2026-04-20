@@ -50,6 +50,30 @@ const SCHEMA: readonly FormSchemaItem[] = [
       number: { min: 0, max: 600, step: 5, unit_of_measurement: 's', mode: 'slider' },
     },
   },
+  {
+    type: 'grid',
+    name: '',
+    schema: [
+      {
+        name: 'rooms_display',
+        selector: {
+          select: {
+            mode: 'dropdown',
+            options: [
+              { value: 'row', label: 'Wiersz (poziomy, pełna szerokość)' },
+              { value: 'tile', label: 'Kafel (card z licznikami)' },
+            ],
+          },
+        },
+      },
+      {
+        name: 'rooms_tile_min_width',
+        selector: {
+          number: { min: 120, max: 280, step: 10, unit_of_measurement: 'px', mode: 'box' },
+        },
+      },
+    ],
+  },
   { name: 'room_tap_action', selector: { ui_action: {} } },
 ];
 
@@ -61,6 +85,8 @@ const LABELS: Record<string, string> = {
   expanded: 'Rozwinięta domyślnie',
   debug: 'Debug log w konsoli',
   auto_collapse: 'Auto-zwijanie po (s)',
+  rooms_display: 'Forma pozycji pomieszczeń',
+  rooms_tile_min_width: 'Min. szerokość kafla (px)',
   room_tap_action: 'Akcja po kliknięciu w wiersz pomieszczenia',
 };
 
@@ -75,6 +101,10 @@ const HELPERS: Record<string, string> = {
   debug: 'Włącza console.log z encjami area — pomocne w configu.',
   auto_collapse:
     'Karta zwija się sama po N sekundach bez interakcji. 0 = wyłączone. Domyślnie 60 s.',
+  rooms_display:
+    'Domyślny wygląd pomieszczeń — wiersz albo kafel. Możesz nadpisać per pomieszczenie w sekcji poniżej.',
+  rooms_tile_min_width:
+    'Minimalna szerokość kafla — wpływa na liczbę kolumn (auto-fill). Default 160px.',
   room_tap_action:
     'Określa co się dzieje po kliknięciu wiersza pomieszczenia. Bez ustawienia klik nic nie robi. Dla "Przejdź" wypełnij pole „Ścieżka", np. /dashboard-domek/home#{area_id} — {area_id} i {area_name} są podmieniane automatycznie.',
 };
