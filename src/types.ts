@@ -176,7 +176,16 @@ export interface RoomSectionConfig {
    * - `icon` — sama ikona, bez tekstu
    * - `cards` / `inline` / `icons` — tylko dla `summary`
    */
-  mode?: 'tile' | 'slider' | 'chips' | 'bubble' | 'icon' | 'cards' | 'inline' | 'icons';
+  mode?:
+    | 'tile'
+    | 'slider'
+    | 'chips'
+    | 'bubble'
+    | 'icon'
+    | 'ambient'
+    | 'cards'
+    | 'inline'
+    | 'icons';
   /**
    * Layout grid: `1` | `2` | `3` kolumn albo `'auto'`. Default: zgodny z typem
    * (covers/climate/media → 1, scenes → 3, reszta → 2).
