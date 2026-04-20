@@ -35,7 +35,8 @@ export class StratumRoomTile extends LitElement {
     | 'slider'
     | 'chips'
     | 'bubble'
-    | 'icon' = 'tile';
+    | 'icon'
+    | 'ambient' = 'tile';
 
   private _state(): HassEntity | undefined {
     return this.hass?.states?.[this.entity];
@@ -78,8 +79,13 @@ export class StratumRoomTile extends LitElement {
     const domain = domainOf(this.entity);
     this.setAttribute('data-domain', domain);
 
-    // Chips mode — kompaktowy pasek dla dowolnego toggle'owalnego typu.
+    // Modes universal dla większości domen.
     if (this.mode === 'chips') return this._renderChipsMode(state, domain);
+    if (this.mode === 'bubble') return this._renderBubbleMode(state, domain);
+    if (this.mode === 'icon') return this._renderIconMode(state, domain);
+    if (this.mode === 'ambient' && domain === 'light') {
+      return this._renderAmbientLight(state);
+    }
 
     switch (domain) {
       case 'light':
@@ -146,6 +152,116 @@ export class StratumRoomTile extends LitElement {
         <ha-icon class="chips-icon" .icon=${icon}></ha-icon>
         <span class="chips-name">${friendlyName(state, this.entity)}</span>
       </button>
+    `;
+  }
+
+  private _iconForDomain(state: HassEntity, domain: string, on: boolean): string {
+    if (state.attributes?.icon) return state.attributes.icon as string;
+    const dc = state.attributes?.device_class as string | undefined;
+    switch (domain) {
+      case 'light': return on ? 'mdi:lightbulb-on' : 'mdi:lightbulb';
+      case 'switch': return 'mdi:toggle-switch';
+      case 'fan': return 'mdi:fan';
+      case 'cover': return on ? 'mdi:blinds-open' : 'mdi:blinds';
+      case 'media_player': return on ? 'mdi:pause' : 'mdi:play';
+      case 'scene': return 'mdi:palette';
+      case 'climate': return 'mdi:thermostat';
+      case 'binary_sensor':
+        if (dc === 'window') return on ? 'mdi:window-open-variant' : 'mdi:window-closed-variant';
+        if (dc === 'door') return on ? 'mdi:door-open' : 'mdi:door-closed';
+        return on ? 'mdi:alert' : 'mdi:check-circle';
+    }
+    return 'mdi:help';
+  }
+
+  private _actionForDomain(domain: string, on: boolean): (ev: Event) => void {
+    const readonly = domain === 'binary_sensor' || domain === 'climate';
+    if (readonly) return (ev: Event) => this._openMoreInfo(ev);
+    if (domain === 'scene') return (ev: Event) => this._callService(ev, 'scene', 'turn_on');
+    if (domain === 'cover')
+      return (ev: Event) => this._callService(ev, 'cover', on ? 'close_cover' : 'open_cover');
+    if (domain === 'media_player')
+      return (ev: Event) => this._callService(ev, 'media_player', 'media_play_pause');
+    return (ev: Event) => this._callService(ev, domain, 'toggle');
+  }
+
+  private _isActive(state: HassEntity): boolean {
+    return state.state === 'on' || state.state === 'open' || state.state === 'playing';
+  }
+
+  private _renderBubbleMode(state: HassEntity, domain: string): TemplateResult {
+    const on = this._isActive(state);
+    const icon = this._iconForDomain(state, domain, on);
+    const click = this._actionForDomain(domain, on);
+    return html`
+      <button
+        class="bubble-tile ${on ? 'on' : 'off'}"
+        part="tile"
+        @click=${click}
+        @contextmenu=${this._openMoreInfo}
+        title=${friendlyName(state, this.entity)}
+      >
+        <span class="bubble-circle">
+          <ha-icon .icon=${icon}></ha-icon>
+        </span>
+        <span class="bubble-name">${friendlyName(state, this.entity)}</span>
+      </button>
+    `;
+  }
+
+  private _renderIconMode(state: HassEntity, domain: string): TemplateResult {
+    const on = this._isActive(state);
+    const icon = this._iconForDomain(state, domain, on);
+    const click = this._actionForDomain(domain, on);
+    return html`
+      <button
+        class="icon-tile ${on ? 'on' : 'off'}"
+        part="tile"
+        @click=${click}
+        @contextmenu=${this._openMoreInfo}
+        title=${friendlyName(state, this.entity)}
+      >
+        <ha-icon .icon=${icon}></ha-icon>
+      </button>
+    `;
+  }
+
+  private _renderAmbientLight(state: HassEntity): TemplateResult {
+    const on = state.state === 'on';
+    const bright = (state.attributes?.brightness as number | undefined) ?? 0;
+    const pct = on ? Math.round((bright / 255) * 100) : 0;
+    const rgb = state.attributes?.rgb_color as [number, number, number] | undefined;
+    const color = rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : '#ffc107';
+    const bgIntensity = on ? 0.15 + (pct / 100) * 0.55 : 0;
+    const bgStyle = on
+      ? `background: linear-gradient(135deg, ${color}${Math.round(bgIntensity * 255).toString(16).padStart(2, '0')}, ${color}22);`
+      : '';
+    return html`
+      <div class="ambient-tile ${on ? 'on' : 'off'}" part="tile" style=${bgStyle}>
+        <button
+          class="ambient-icon"
+          @click=${(ev: Event) => this._callService(ev, 'light', 'toggle')}
+          @contextmenu=${this._openMoreInfo}
+          title=${on ? 'Wyłącz' : 'Włącz'}
+        >
+          <ha-icon .icon=${on ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline'} style="color:${color};"></ha-icon>
+        </button>
+        <div class="ambient-info">
+          <span class="ambient-name">${friendlyName(state, this.entity)}</span>
+          <span class="ambient-state">${on ? `${pct}%` : 'wyłączone'}</span>
+        </div>
+        <input
+          type="range"
+          class="ambient-range"
+          min="0"
+          max="100"
+          step="1"
+          .value=${String(pct)}
+          @click=${(ev: Event) => ev.stopPropagation()}
+          @change=${(ev: Event) => this._onBrightnessChange(ev)}
+          style="accent-color:${color};"
+        />
+      </div>
     `;
   }
 
@@ -553,6 +669,190 @@ export class StratumRoomTile extends LitElement {
     .chips-name {
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    /* Bubble mode */
+    .bubble-tile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 6px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.03));
+      color: var(--primary-text-color);
+      font: inherit;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.15s ease;
+    }
+
+    .bubble-tile:hover {
+      transform: translateY(-1px);
+      background: var(--stratum-tile-hover-background, rgba(255, 255, 255, 0.06));
+    }
+
+    .bubble-circle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 2px solid var(--stratum-tile-bubble-accent, var(--secondary-text-color));
+      color: var(--stratum-tile-bubble-accent, var(--secondary-text-color));
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .bubble-tile.on .bubble-circle {
+      background: var(--stratum-tile-bubble-accent, var(--primary-color, #ff9b42));
+      color: #fff;
+      border-color: var(--stratum-tile-bubble-accent, var(--primary-color, #ff9b42));
+    }
+
+    .bubble-circle ha-icon {
+      --mdc-icon-size: 24px;
+    }
+
+    .bubble-name {
+      font-size: 12px;
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    /* Per-domain bubble accent */
+    :host([data-domain='light']) .bubble-tile.on {
+      --stratum-tile-bubble-accent: var(--stratum-chip-lights-color, #ffc107);
+    }
+    :host([data-domain='switch']) .bubble-tile.on,
+    :host([data-domain='fan']) .bubble-tile.on,
+    :host([data-domain='media_player']) .bubble-tile.on {
+      --stratum-tile-bubble-accent: var(--primary-color, #ff9b42);
+    }
+    :host([data-domain='cover']) .bubble-tile.on {
+      --stratum-tile-bubble-accent: var(--stratum-chip-windows-color, #42a5f5);
+    }
+    :host([data-domain='binary_sensor']) .bubble-tile.on {
+      --stratum-tile-bubble-accent: #f44336;
+    }
+    :host([data-domain='binary_sensor']) .bubble-tile.off {
+      --stratum-tile-bubble-accent: #4caf50;
+    }
+
+    /* Icon mode */
+    .icon-tile {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
+      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.03));
+      color: var(--secondary-text-color);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .icon-tile:hover {
+      background: var(--stratum-tile-hover-background, rgba(255, 255, 255, 0.08));
+    }
+
+    .icon-tile.on {
+      color: var(--stratum-tile-icon-accent, var(--primary-color, #ff9b42));
+      border-color: var(--stratum-tile-icon-accent, var(--primary-color, #ff9b42));
+    }
+
+    :host([data-domain='light']) .icon-tile.on {
+      --stratum-tile-icon-accent: var(--stratum-chip-lights-color, #ffc107);
+    }
+    :host([data-domain='binary_sensor']) .icon-tile.on {
+      --stratum-tile-icon-accent: #f44336;
+    }
+    :host([data-domain='binary_sensor']) .icon-tile.off {
+      color: #4caf50;
+    }
+
+    .icon-tile ha-icon {
+      --mdc-icon-size: 22px;
+    }
+
+    /* Ambient mode (lights) */
+    .ambient-tile {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-areas:
+        'icon info'
+        'slider slider';
+      align-items: center;
+      gap: 6px 14px;
+      padding: 14px;
+      min-height: 88px;
+      border-radius: 16px;
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.03));
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+      color: var(--primary-text-color);
+    }
+
+    .ambient-tile.on {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      border-color: transparent;
+    }
+
+    .ambient-icon {
+      grid-area: icon;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 0;
+      background: rgba(0, 0, 0, 0.25);
+      color: var(--secondary-text-color);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ambient-tile.on .ambient-icon {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .ambient-icon ha-icon {
+      --mdc-icon-size: 26px;
+    }
+
+    .ambient-info {
+      grid-area: info;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .ambient-name {
+      font-size: 15px;
+      font-weight: 600;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ambient-state {
+      font-size: 12px;
+      opacity: 0.85;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .ambient-range {
+      grid-area: slider;
+      width: 100%;
+      height: 5px;
+      cursor: pointer;
     }
 
     /* Per-domain akcenty w chips mode */

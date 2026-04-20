@@ -23,7 +23,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.8.0';
+const VERSION = '1.9.0';
 
 interface SummaryDatum {
   label: string;
@@ -286,13 +286,21 @@ export class StratumRoomCard extends LitElement {
     if (items.length === 0) return html``;
 
     const mode = section.mode ?? 'tile';
-    const isChips = mode === 'chips';
-    const layout = isChips
-      ? 'chips-layout'
-      : section.columns === 1 ? 'grid-1'
-      : section.columns === 2 ? 'grid-2'
-      : section.columns === 3 ? 'grid-3'
-      : SECTION_LAYOUT[type];
+    const layoutOverride =
+      mode === 'chips' ? 'chips-layout'
+      : mode === 'icon' ? 'icon-layout'
+      : mode === 'bubble' ? 'bubble-layout'
+      : mode === 'ambient' ? 'grid-1'
+      : null;
+    const layout =
+      layoutOverride ??
+      (section.columns === 1
+        ? 'grid-1'
+        : section.columns === 2
+        ? 'grid-2'
+        : section.columns === 3
+        ? 'grid-3'
+        : SECTION_LAYOUT[type]);
 
     return html`
       <div class="section" part="section">
@@ -697,6 +705,18 @@ export class StratumRoomCard extends LitElement {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
+    }
+
+    .tiles.icon-layout {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tiles.bubble-layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: 8px;
     }
 
     .custom-card-slot {

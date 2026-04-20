@@ -44,36 +44,51 @@ const MODE_OPTIONS_BY_TYPE: Partial<Record<RoomSectionType, Array<{ value: strin
   lights: [
     { value: 'tile', label: 'Tile (kafel z toggle)' },
     { value: 'slider', label: 'Slider (brightness)' },
+    { value: 'ambient', label: 'Ambient (kolor + jasność w tle)' },
+    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
     { value: 'chips', label: 'Chips (kompaktowy pasek)' },
+    { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   covers: [
     { value: 'tile', label: 'Tile (kafel z przyciskami)' },
     { value: 'slider', label: 'Slider (pozycja)' },
+    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
     { value: 'chips', label: 'Chips (open/close)' },
+    { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   switches: [
     { value: 'tile', label: 'Tile (kafel z toggle)' },
+    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
     { value: 'chips', label: 'Chips (kompaktowy pasek)' },
+    { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   fans: [
     { value: 'tile', label: 'Tile (kafel z toggle)' },
+    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
     { value: 'chips', label: 'Chips (kompaktowy pasek)' },
+    { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   media: [
     { value: 'tile', label: 'Tile (play/pause)' },
+    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
     { value: 'chips', label: 'Chips (play/pause)' },
+    { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   windows: [
     { value: 'tile', label: 'Tile (kafel ze statusem)' },
     { value: 'chips', label: 'Chips (status readonly)' },
+    { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   doors: [
     { value: 'tile', label: 'Tile (kafel ze statusem)' },
     { value: 'chips', label: 'Chips (status readonly)' },
+    { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   scenes: [
     { value: 'tile', label: 'Tile (przycisk aktywuj)' },
+    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
     { value: 'chips', label: 'Chips (przycisk aktywuj)' },
+    { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   summary: [
     { value: 'cards', label: 'Cards (kafle z labelem + value)' },
