@@ -17,6 +17,7 @@ import {
   filterByDomain,
   filterBinarySensorDeviceClass,
 } from './area-entities.js';
+import { computeTileData, evaluateConditions } from './tile-data.js';
 import {
   DEFAULT_CHIPS,
   evaluateChip,
@@ -32,7 +33,7 @@ import './stratum-card-room-tile.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.16.0';
+const VERSION = '1.19.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -360,12 +361,21 @@ export class StratumCard extends LitElement {
             ? [room.area_id, ...room.merge_with]
             : [room.area_id];
         const display = room.display ?? this._config?.rooms_display ?? 'row';
-        return this._renderRoomRow(areaIds, name, icon, room.tap_action, {
-          merge_with: room.merge_with,
-          sections: room.sections,
-          scenes: room.scenes,
-          chips: room.chips,
-        }, display, room.tile_config, room.tile_card_config);
+        return this._renderRoomRow(
+          areaIds,
+          name,
+          icon,
+          room.tap_action,
+          {
+            merge_with: room.merge_with,
+            sections: room.sections,
+            scenes: room.scenes,
+            chips: room.chips,
+          },
+          display,
+          room.field_entities,
+          room.style_override,
+        );
       })}`;
     }
 
@@ -419,9 +429,9 @@ export class StratumCard extends LitElement {
       scenes?: import('./types.js').SceneBarConfig;
       chips?: import('./types.js').ChipConfig[];
     },
-    display: string = 'row',
-    tileConfig?: import('./types.js').TileConfig,
-    tileCardConfig?: Record<string, unknown>,
+    display: 'row' | 'tile' = 'row',
+    fieldEntities?: import('./types.js').TileFieldEntities,
+    styleOverride?: string,
   ): TemplateResult {
     const primary = areaIds[0];
     // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
@@ -435,18 +445,12 @@ export class StratumCard extends LitElement {
       }
     }
 
-    const lightsOn = filterByDomain(entries, 'light').reduce(
-      (n, e) => n + (this.hass!.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
-      0,
-    );
-    const motion =
-      filterBinarySensorDeviceClass(this.hass!, entries, 'motion').some(
-        (e) => this.hass!.states?.[e.entity_id]?.state === 'on',
-      ) ||
-      filterBinarySensorDeviceClass(this.hass!, entries, 'occupancy').some(
-        (e) => this.hass!.states?.[e.entity_id]?.state === 'on',
-      );
-    const temperature = this._firstTemperature(entries);
+    // Jedno wyliczenie dla obu form (row/tile). Override per-pole przez
+    // fieldEntities; bez override → auto-discovery z encji area.
+    const data = computeTileData(this.hass!, entries, fieldEntities);
+    const displayConfig = this._config?.display_config;
+    const conditionOverride = evaluateConditions(data, displayConfig?.conditions);
+
     // Rozwiązywanie akcji dla klikalności wiersza.
     const isSet = (a: import('./types.js').TapActionConfig | undefined): boolean =>
       Boolean(a && (a as { action?: string }).action && (a as { action: string }).action !== 'default');
@@ -459,33 +463,21 @@ export class StratumCard extends LitElement {
     const explicitNone = effectiveTap?.action === 'none';
     const clickable = !explicitNone;
 
-    // Custom card per room (np. custom:room-summary, mushroom-light-card)
-    if (display.startsWith('custom:')) {
-      return this._renderCustomRoomCard(primary, display, tileCardConfig, popupOverrides, effectiveTap, name);
-    }
-
     if (display === 'tile') {
-      const humidity = this._firstAttrSensor(entries, 'humidity', '%');
-      const windowsOpen = filterBinarySensorDeviceClass(this.hass!, entries, 'window').reduce(
-        (n, e) => n + (this.hass!.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
-        0,
-      );
-      const doorsOpen = filterBinarySensorDeviceClass(this.hass!, entries, 'door').reduce(
-        (n, e) => n + (this.hass!.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
-        0,
-      );
       return html`<stratum-card-room-tile
         class="room-item tile-mode"
         .areaId=${primary}
         .name=${name}
         .icon=${icon ?? 'mdi:floor-plan'}
-        .lightsOn=${lightsOn}
-        .motion=${motion}
-        .temperature=${temperature}
-        .humidity=${humidity}
-        .windowsOpen=${windowsOpen}
-        .doorsOpen=${doorsOpen}
-        .tileConfig=${tileConfig}
+        .lightsOn=${data.lightsOn}
+        .motion=${data.motion}
+        .temperature=${data.temperature}
+        .humidity=${data.humidity}
+        .windowsOpen=${data.windowsOpen}
+        .doorsOpen=${data.doorsOpen}
+        .displayConfig=${displayConfig}
+        .conditionOverride=${conditionOverride}
+        .styleOverride=${styleOverride}
         .clickable=${clickable}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
           this._onRoomTap(ev, effectiveTap, popupOverrides)}
@@ -496,9 +488,15 @@ export class StratumCard extends LitElement {
       .areaId=${primary}
       .name=${name}
       .icon=${icon ?? 'mdi:floor-plan'}
-      .lightsOn=${lightsOn}
-      .motion=${motion}
-      .temperature=${temperature}
+      .lightsOn=${data.lightsOn}
+      .motion=${data.motion}
+      .temperature=${data.temperature}
+      .humidity=${data.humidity}
+      .windowsOpen=${data.windowsOpen}
+      .doorsOpen=${data.doorsOpen}
+      .displayConfig=${displayConfig}
+      .conditionOverride=${conditionOverride}
+      .styleOverride=${styleOverride}
       .clickable=${clickable}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
         this._onRoomTap(ev, effectiveTap, popupOverrides)}
@@ -571,81 +569,6 @@ export class StratumCard extends LitElement {
 
   private _onBackdropClick(ev: MouseEvent): void {
     if (ev.target === ev.currentTarget) this._closeRoomPopup();
-  }
-
-  private _firstAttrSensor(
-    entries: HassEntityRegistryEntry[],
-    deviceClass: string,
-    fallbackUnit: string,
-  ): string | undefined {
-    if (!this.hass) return undefined;
-    for (const entry of entries) {
-      if (!entry.entity_id.startsWith('sensor.')) continue;
-      const state = this.hass.states?.[entry.entity_id];
-      if (!state) continue;
-      if (state.attributes?.device_class !== deviceClass) continue;
-      const value = parseFloat(state.state);
-      if (Number.isNaN(value)) continue;
-      const unit =
-        (state.attributes?.unit_of_measurement as string | undefined) ?? fallbackUnit;
-      return `${value.toFixed(1)} ${unit}`;
-    }
-    return undefined;
-  }
-
-  private _customRoomCards = new Map<string, HTMLElement>();
-
-  private _renderCustomRoomCard(
-    primaryAreaId: string,
-    display: string,
-    tileCardConfig: Record<string, unknown> | undefined,
-    popupOverrides: {
-      merge_with?: string[];
-      sections?: import('./types.js').RoomSectionSpec[];
-      scenes?: import('./types.js').SceneBarConfig;
-      chips?: import('./types.js').ChipConfig[];
-    } | undefined,
-    effectiveTap: import('./types.js').TapActionConfig | undefined,
-    name: string,
-  ): TemplateResult {
-    // Auto-config gdy user nie podał `tile_card_config`. Większość room-cards
-    // chce `area`; niektóre `entity`. Dajemy oba — karty ignorują nieznane pola.
-    const cardType = display.startsWith('custom:') ? display : `custom:${display}`;
-    const config: Record<string, unknown> = tileCardConfig ?? {
-      type: cardType,
-      area: primaryAreaId,
-      area_id: primaryAreaId,
-    };
-    const key = `${primaryAreaId}::${JSON.stringify(config)}`;
-    let el = this._customRoomCards.get(key);
-    if (!el) {
-      el = document.createElement('hui-card');
-      this._customRoomCards.set(key, el);
-    }
-    (el as unknown as { hass?: HomeAssistant }).hass = this.hass;
-    (el as unknown as { config?: Record<string, unknown> }).config = config;
-    // Custom card sama obsługuje swoje akcje (klik, slider itp.) — nie
-    // przechwytujemy. Jeśli user chce popup Stratum przy klik, użyje display
-    // tile/row. `_` oznacza zmienne nieużywane w tym wariancie.
-    void effectiveTap;
-    void popupOverrides;
-    void name;
-    return html`<div class="room-item custom-mode" part="room">${el}</div>`;
-  }
-
-  private _firstTemperature(entries: HassEntityRegistryEntry[]): string | undefined {
-    if (!this.hass) return undefined;
-    for (const entry of entries) {
-      if (!entry.entity_id.startsWith('sensor.')) continue;
-      const state = this.hass.states?.[entry.entity_id];
-      if (!state) continue;
-      if (state.attributes?.device_class !== 'temperature') continue;
-      const value = parseFloat(state.state);
-      if (Number.isNaN(value)) continue;
-      const unit = (state.attributes?.unit_of_measurement as string | undefined) ?? '°C';
-      return `${value.toFixed(1)} ${unit}`;
-    }
-    return undefined;
   }
 
   static styles = css`

@@ -53,6 +53,18 @@ export interface StratumCardConfig {
   rooms_tile_min_width?: number;
 
   /**
+   * Globalna konfiguracja wyglądu pozycji pomieszczenia — jednorazowa dla całej
+   * karty. Steruje zarówno formą kompaktową (`row`) jak i kaflem (`tile`):
+   * które pola (temperatura / wilgotność / światła / motion / okna / drzwi)
+   * wyświetlać, ikonami, kolorami, tłem i proporcjami kafla.
+   *
+   * Per-pokój można wskazać konkretne encje dla tych pól przez
+   * `RoomConfig.field_entities` oraz ewentualnie nadpisać CSS przez
+   * `RoomConfig.style_override`.
+   */
+  display_config?: DisplayConfig;
+
+  /**
    * Akcja wyzwalana kliknięciem w wiersz pomieszczenia. Wspiera placeholdery
    * `{area_id}` i `{area_name}` w `navigation_path`.
    * Przy braku: wiersz nie reaguje na klik.
@@ -309,26 +321,28 @@ export interface RoomConfig {
 
   /**
    * Forma wyświetlania pozycji w głównej karcie:
-   * - `row` (domyślny) — poziomy wiersz w pełnej szerokości
-   * - `tile` — kafel Stratum (konfigurowalny przez `tile_config`)
-   * - `custom:<card-type>` — dowolna karta HACS jako kafel pokoju
-   *   (auto-config z `area_id`/`entity` lub `tile_card_config` jako jawny YAML)
+   * - `row` (domyślny) — poziomy wiersz pełnej szerokości
+   * - `tile` — kwadratowy kafel card-style
+   * Wygląd obu form (pola, kolory, aspect) konfigurujesz globalnie
+   * w `StratumCardConfig.display_config`.
    * Bez ustawienia — używa `rooms_display` ze `StratumCardConfig`.
    */
-  display?: string;
+  display?: 'row' | 'tile';
 
   /**
-   * Konfiguracja wyglądu wbudowanego kafla Stratum (tylko dla `display: tile`).
-   * Aspect, jakie pola pokazać, kolor akcentu, opcjonalne tło.
+   * Override domyślnego auto-discovery per pole dla tego pomieszczenia.
+   * Pozwala wskazać konkretny termometr/hygrometr albo podmienić listę
+   * świateł / motion / okien / drzwi uwzględnianych w liczniku.
+   * Pominięte pole → auto-discovery z encji area.
    */
-  tile_config?: TileConfig;
+  field_entities?: TileFieldEntities;
 
   /**
-   * Pełny config karty custom (tylko dla `display: 'custom:<card>'`).
-   * Pominięte = próba auto-config: `{type, area_id}` (gdy karta tego oczekuje)
-   * lub `{type, entity}`.
+   * Surowy CSS wstrzyknięty do tej konkretnej pozycji (row lub tile).
+   * Użyj np. `background: #222; border-color: red;`. Zakres: wewnątrz
+   * shadow-DOM pozycji, więc `::part()` nie jest tu potrzebne.
    */
-  tile_card_config?: Record<string, unknown>;
+  style_override?: string;
 
   /**
    * Sekcje widoczne w popup pokoju (otwiera się po kliknięciu wiersza).
@@ -346,7 +360,7 @@ export interface RoomConfig {
 /** Zachowane dla kompatybilności — alias do nowego typu. */
 export type RoomRefConfig = RoomConfig;
 
-/** Pola które wbudowany tile może pokazać w sekcji info. */
+/** Pola które wbudowany row/tile może pokazać w sekcji info. */
 export type TileField =
   | 'temperature'
   | 'humidity'
@@ -355,20 +369,125 @@ export type TileField =
   | 'windows'
   | 'doors';
 
-/** Konfiguracja wyglądu wbudowanego kafla pomieszczenia (`display: tile`). */
-export interface TileConfig {
-  /** CSS aspect-ratio kafla. Default `1/1`. Przykłady: `4/3`, `16/9`, `3/2`. */
+/** Operator porównania w regułach warunkowego stylu. */
+export type DisplayConditionOp =
+  | 'any_on'
+  | 'none_on'
+  | 'count_gt'
+  | 'gt'
+  | 'lt'
+  | 'eq';
+
+/**
+ * Reguła warunkowego stylu pozycji pomieszczenia. Jedna reguła = jedno pole
+ * + operator + ew. wartość + overrides stylu. Pierwsza spełniona reguła
+ * wygrywa (kolejność w tablicy).
+ *
+ * Przykłady:
+ *   { field: 'windows', when: 'any_on', border_color: '#e53935', border_width: 2 }
+ *   { field: 'motion', when: 'any_on', accent_color: 'green' }
+ *   { field: 'temperature', when: 'gt', value: 25, accent_color: '#f44336' }
+ *   { field: 'lights', when: 'count_gt', value: 2, accent_color: 'amber' }
+ */
+export interface DisplayConditionConfig {
+  /** Pole z którego czytamy stan. */
+  field: TileField;
+  /**
+   * Operator:
+   * - `any_on` — cokolwiek aktywne (motion true, lightsOn>0, windowsOpen>0...).
+   *   Dla temperature/humidity: sensor ma wartość.
+   * - `none_on` — nic nie aktywne.
+   * - `count_gt` — liczba on > `value` (tylko lights/motion/windows/doors).
+   * - `gt` / `lt` / `eq` — numeryczne porównanie z `value`
+   *   (tylko temperature/humidity).
+   */
+  when: DisplayConditionOp;
+  /** Wartość porównania (dla `count_gt`, `gt`, `lt`, `eq`). */
+  value?: number;
+  /** Override koloru borderu gdy reguła spełniona. */
+  border_color?: string;
+  /** Override grubości borderu (px). */
+  border_width?: number;
+  /** Override koloru akcentu (active glow / underline). */
+  accent_color?: string;
+  /** Override koloru tła pozycji. */
+  background_color?: string;
+}
+export type IconPosition =
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+  | 'center'
+  | 'left';
+
+/** Styl otoczki ikony. */
+export type IconStyle = 'bubble' | 'flat' | 'none';
+
+/** Intensywność reakcji na hover. */
+export type HoverEffect = 'none' | 'subtle' | 'lift' | 'glow';
+
+/**
+ * Globalna konfiguracja wyglądu pozycji pomieszczenia — dotyczy zarówno formy
+ * kompaktowej (`row`) jak i kafla (`tile`). Ustawiasz raz dla całej karty,
+ * per-pokój decydujesz tylko o formie (`display`) i ewentualnym override
+ * encji / CSS.
+ */
+export interface DisplayConfig {
+  /** CSS aspect-ratio kafla (dotyczy tylko `display: tile`). Default `1/1`. */
   aspect?: string;
-  /** Lista pól w sekcji info (kolejność znaczy). Default `[temperature, lights, motion]`. */
+  /**
+   * Lista pól w sekcji info (kolejność znaczy).
+   * Default `[temperature, lights, motion]`.
+   */
   fields?: TileField[];
   /** Kolor akcentu gdy aktywny (lights on / motion). Default amber. */
   accent_color?: string;
-  /** URL/preset obrazka tła (jak scene `image`, np. `stratum:noc`). */
+  /** URL/preset obrazka tła (tylko `display: tile`). */
   background_image?: string;
-  /** Czy pokazywać ikonę area w lewym górnym rogu. Default true. */
+  /** Czy pokazywać ikonę area. Default true. */
   show_icon?: boolean;
   /** Czy pokazywać nazwę area. Default true. */
   show_name?: boolean;
+
+  // --- prymitywy stylu (v1.18) ---
+  /** Zaokrąglenie rogów (px). Default 14 dla kafla, 6 dla wiersza w hover. */
+  border_radius?: number;
+  /** Minimalna wysokość kafla (px). Wiersz ignoruje. Default 110. */
+  min_height?: number;
+  /** Wewnętrzny padding pozycji (px). Default 12 dla kafla, „10 4" dla wiersza. */
+  padding?: number;
+  /** Rozmiar ikony area (px). Default 22 (kafel) / 20 (wiersz). */
+  icon_size?: number;
+  /** Pozycja ikony na kaflu — `left` dotyczy tylko wiersza. Default `top-left`. */
+  icon_position?: IconPosition;
+  /** Otoczka ikony: `bubble` (kółko z tłem), `flat` (sama ikona), `none`. Default `bubble`. */
+  icon_style?: IconStyle;
+  /** Reakcja na hover: `none`/`subtle`/`lift` (przesunięcie)/`glow` (poświata). Default `subtle` dla wiersza, `lift` dla kafla. */
+  hover_effect?: HoverEffect;
+  /** Skala podczas `:active` (tap feedback). 1 = brak. Default 0.98. Zakres 0.9–1. */
+  press_scale?: number;
+
+  /**
+   * Lista reguł warunkowego stylu — pierwsza spełniona wygrywa.
+   * Pozwala np. ustawić czerwony border gdy okno otwarte, zielony akcent gdy motion.
+   */
+  conditions?: DisplayConditionConfig[];
+}
+
+export interface TileFieldEntities {
+  /** Single sensor z `device_class=temperature` — bierzemy jego state. */
+  temperature?: string;
+  /** Single sensor z `device_class=humidity` — bierzemy jego state. */
+  humidity?: string;
+  /** Lista encji `light.*` — zliczamy ile w stanie `on`. */
+  lights?: string[];
+  /** Lista binary_sensor — motion jeśli dowolna w stanie `on`. */
+  motion?: string[];
+  /** Lista binary_sensor (window) — zliczamy ile w stanie `on`. */
+  windows?: string[];
+  /** Lista binary_sensor (door) — zliczamy ile w stanie `on`. */
+  doors?: string[];
 }
 
 /**

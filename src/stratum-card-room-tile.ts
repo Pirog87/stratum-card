@@ -6,11 +6,10 @@
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import type { TileConfig, TileField } from './types.js';
+import type { DisplayConfig, TileField } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
-
-const DEFAULT_FIELDS: TileField[] = ['temperature', 'lights', 'motion'];
+import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
 
 @customElement('stratum-card-room-tile')
 export class StratumCardRoomTile extends LitElement {
@@ -37,8 +36,14 @@ export class StratumCardRoomTile extends LitElement {
   /** Liczba otwartych drzwi. */
   @property({ type: Number, attribute: 'doors-open' }) public doorsOpen = 0;
 
-  /** Konfiguracja wyglądu kafla. */
-  @property({ attribute: false }) public tileConfig?: TileConfig;
+  /** Globalna konfiguracja wyglądu (aspect, pola, kolor akcentu, tło). */
+  @property({ attribute: false }) public displayConfig?: DisplayConfig;
+
+  /** Per-pokój CSS override (wstrzykiwane jako style na .tile). */
+  @property({ type: String, attribute: 'style-override' }) public styleOverride?: string;
+
+  /** Overrides wyliczone z `display_config.conditions`. */
+  @property({ attribute: false }) public conditionOverride?: ConditionOverride;
 
   private _onClick = (): void => {
     if (!this.clickable) return;
@@ -60,44 +65,81 @@ export class StratumCardRoomTile extends LitElement {
   };
 
   protected render(): TemplateResult {
-    const cfg = this.tileConfig ?? {};
+    const cfg = this.displayConfig ?? {};
     const active = this.lightsOn > 0 || this.motion;
     const fields = cfg.fields ?? DEFAULT_FIELDS;
     const showIcon = cfg.show_icon !== false;
     const showName = cfg.show_name !== false;
-    const accent = resolveColor(cfg.accent_color) ?? 'var(--stratum-chip-lights-color, #ffc107)';
+    const ovr = this.conditionOverride;
+    const accent =
+      resolveColor(ovr?.accent_color) ??
+      resolveColor(cfg.accent_color) ??
+      'var(--stratum-chip-lights-color, #ffc107)';
+    const borderColorOvr = resolveColor(ovr?.border_color);
+    const borderWidthOvr =
+      typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
+    const bgColorOvr = resolveColor(ovr?.background_color);
     const bgImage = resolveSceneImage(cfg.background_image);
-    const styles = [
+
+    const iconPos = cfg.icon_position ?? 'top-left';
+    const iconStyle = cfg.icon_style ?? 'bubble';
+    const hoverEffect = cfg.hover_effect ?? 'lift';
+    const pressScale = typeof cfg.press_scale === 'number' ? cfg.press_scale : 0.98;
+
+    const cssVars: string[] = [
       `--stratum-room-tile-aspect: ${cfg.aspect ?? '1/1'};`,
-      active ? `--stratum-room-tile-active-color: ${accent};` : '',
-      bgImage ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;` : '',
-    ].join(' ');
+      active || ovr?.accent_color
+        ? `--stratum-room-tile-active-color: ${accent};`
+        : '',
+      typeof cfg.border_radius === 'number'
+        ? `--stratum-room-tile-radius: ${cfg.border_radius}px;`
+        : '',
+      typeof cfg.min_height === 'number'
+        ? `--stratum-room-tile-min-height: ${cfg.min_height}px;`
+        : '',
+      typeof cfg.padding === 'number'
+        ? `--stratum-room-tile-padding: ${cfg.padding}px;`
+        : '',
+      typeof cfg.icon_size === 'number'
+        ? `--stratum-room-tile-icon-size: ${cfg.icon_size}px;`
+        : '',
+      `--stratum-room-tile-press-scale: ${pressScale};`,
+      borderColorOvr ? `border-color: ${borderColorOvr};` : '',
+      borderWidthOvr ? `border-width: ${borderWidthOvr};` : '',
+      bgColorOvr ? `background-color: ${bgColorOvr};` : '',
+      bgImage
+        ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;`
+        : '',
+      this.styleOverride ?? '',
+    ];
+    const styles = cssVars.filter(Boolean).join(' ');
+
+    const effectiveActive = active || Boolean(ovr?.accent_color);
 
     return html`
       <div
-        class="tile ${active ? 'active' : ''} ${bgImage ? 'has-bg' : ''}"
+        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
+        data-icon-pos=${iconPos}
+        data-icon-style=${iconStyle}
+        data-hover=${hoverEffect}
         style=${styles}
         @click=${this._onClick}
         @keydown=${this._onKey}
       >
-        ${showIcon || this.motion
-          ? html`<div class="top">
-              ${showIcon
-                ? html`<span class="icon-bubble">
-                    <ha-icon .icon=${this.icon}></ha-icon>
-                  </span>`
-                : html`<span></span>`}
-              ${this.motion && fields.includes('motion')
-                ? html`<ha-icon
-                    class="motion-dot"
-                    .icon=${'mdi:motion-sensor'}
-                    title="Obecność"
-                  ></ha-icon>`
-                : nothing}
-            </div>`
+        ${showIcon && iconStyle !== 'none'
+          ? html`<span class="icon-slot icon-${iconStyle}">
+              <ha-icon .icon=${this.icon}></ha-icon>
+            </span>`
+          : nothing}
+        ${this.motion && fields.includes('motion')
+          ? html`<ha-icon
+              class="motion-dot"
+              .icon=${'mdi:motion-sensor'}
+              title="Obecność"
+            ></ha-icon>`
           : nothing}
         ${showName ? html`<div class="name">${this.name}</div>` : nothing}
         <div class="info">${this._renderFields(fields)}</div>
@@ -157,27 +199,98 @@ export class StratumCardRoomTile extends LitElement {
     }
 
     .tile {
+      position: relative;
       aspect-ratio: var(--stratum-room-tile-aspect, 1/1);
       display: grid;
+      grid-template-columns: auto 1fr auto;
       grid-template-rows: auto 1fr auto;
+      grid-template-areas:
+        'icon    .     motion'
+        '.       .     .     '
+        'name    name  info  ';
       gap: 6px;
-      padding: 12px;
-      border-radius: 14px;
+      padding: var(--stratum-room-tile-padding, 12px);
+      border-radius: var(--stratum-room-tile-radius, 14px);
       border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
       background: var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03));
       color: var(--primary-text-color);
       transition: background 0.2s ease, border-color 0.2s ease,
         transform 0.12s ease, box-shadow 0.15s ease;
-      min-height: 110px;
+      min-height: var(--stratum-room-tile-min-height, 110px);
     }
 
-    :host([clickable]) .tile {
-      cursor: pointer;
+    /* --- Warianty pozycji ikony --- */
+    .tile[data-icon-pos='top-left'] {
+      grid-template-areas:
+        'icon    .     motion'
+        '.       .     .     '
+        'name    name  info  ';
+    }
+    .tile[data-icon-pos='top-right'] {
+      grid-template-areas:
+        'motion  .     icon'
+        '.       .     .   '
+        'name    name  info';
+    }
+    .tile[data-icon-pos='bottom-left'] {
+      grid-template-areas:
+        'name    name  motion'
+        '.       .     .     '
+        'icon    info  info  ';
+    }
+    .tile[data-icon-pos='bottom-right'] {
+      grid-template-areas:
+        'name    name  motion'
+        '.       .     .     '
+        'info    info  icon  ';
+    }
+    .tile[data-icon-pos='center'] {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr auto auto;
+      grid-template-areas:
+        'motion'
+        'icon'
+        'name'
+        'info';
+      justify-items: center;
+      text-align: center;
+    }
+    .tile[data-icon-pos='left'] {
+      grid-template-columns: auto 1fr;
+      grid-template-rows: auto auto;
+      grid-template-areas:
+        'icon   name  '
+        'icon   info  ';
+      align-items: center;
+    }
+    .tile[data-icon-pos='left'] .motion-dot {
+      position: absolute;
+      top: 8px;
+      right: 8px;
     }
 
-    :host([clickable]) .tile:hover {
+    .icon-slot { grid-area: icon; }
+    .motion-dot { grid-area: motion; justify-self: end; align-self: start; }
+    .name { grid-area: name; }
+    .info { grid-area: info; }
+
+    /* --- Klikalność + warianty hover --- */
+    :host([clickable]) .tile { cursor: pointer; }
+
+    :host([clickable]) .tile[data-hover='subtle']:hover {
+      background: color-mix(in srgb, var(--primary-color, #ff9b42) 6%, var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03)));
+    }
+    :host([clickable]) .tile[data-hover='lift']:hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+    }
+    :host([clickable]) .tile[data-hover='glow']:hover {
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #ff9b42) 55%, transparent),
+        0 4px 20px color-mix(in srgb, var(--primary-color, #ff9b42) 35%, transparent);
+    }
+
+    :host([clickable]) .tile:active {
+      transform: scale(var(--stratum-room-tile-press-scale, 0.98));
     }
 
     :host([clickable]) .tile:focus-visible {
@@ -190,11 +303,7 @@ export class StratumCardRoomTile extends LitElement {
       background: color-mix(in srgb, var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107)) 8%, var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03)));
     }
 
-    .tile.has-bg {
-      color: #fff;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-    }
-
+    .tile.has-bg { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
     .tile.has-bg::before {
       content: '';
       position: absolute;
@@ -203,41 +312,30 @@ export class StratumCardRoomTile extends LitElement {
       border-radius: inherit;
       pointer-events: none;
     }
+    .tile.has-bg > * { position: relative; z-index: 1; }
 
-    .tile {
-      position: relative;
-    }
-
-    .tile.has-bg > * {
-      position: relative;
-      z-index: 1;
-    }
-
-    .top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-
-    .icon-bubble {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
+    /* --- Warianty stylu ikony --- */
+    .icon-slot {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+    }
+    .icon-slot ha-icon {
+      --mdc-icon-size: var(--stratum-room-tile-icon-size, 22px);
+    }
+    .icon-bubble {
+      width: calc(var(--stratum-room-tile-icon-size, 22px) + 20px);
+      height: calc(var(--stratum-room-tile-icon-size, 22px) + 20px);
+      border-radius: 50%;
       background: color-mix(in srgb, var(--primary-color, #ff9b42) 15%, transparent);
       color: var(--primary-color, #ff9b42);
     }
-
     .tile.active .icon-bubble {
       background: color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 22%, transparent);
       color: var(--stratum-chip-lights-color, #ffc107);
     }
-
-    .icon-bubble ha-icon {
-      --mdc-icon-size: 22px;
-    }
+    .icon-flat { color: var(--primary-color, #ff9b42); }
+    .tile.active .icon-flat { color: var(--stratum-chip-lights-color, #ffc107); }
 
     .motion-dot {
       --mdc-icon-size: 18px;
@@ -246,7 +344,6 @@ export class StratumCardRoomTile extends LitElement {
     }
 
     .name {
-      align-self: end;
       font-size: 14px;
       font-weight: 600;
       letter-spacing: -0.01em;
@@ -258,15 +355,15 @@ export class StratumCardRoomTile extends LitElement {
     .info {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
       gap: 8px;
       font-size: 12px;
       color: var(--secondary-text-color);
     }
 
-    .temp {
-      font-variant-numeric: tabular-nums;
-    }
+    .tile[data-icon-pos='center'] .info { justify-content: center; }
+
+    .temp { font-variant-numeric: tabular-nums; }
 
     .lights {
       display: inline-flex;
@@ -275,9 +372,12 @@ export class StratumCardRoomTile extends LitElement {
       color: var(--stratum-chip-lights-color, #ffc107);
       font-weight: 600;
     }
+    .lights ha-icon { --mdc-icon-size: 14px; }
 
-    .lights ha-icon {
-      --mdc-icon-size: 14px;
+    @media (prefers-reduced-motion: reduce) {
+      .tile { transition: none; }
+      :host([clickable]) .tile:hover,
+      :host([clickable]) .tile:active { transform: none; }
     }
   `;
 }

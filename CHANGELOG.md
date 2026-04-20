@@ -4,6 +4,111 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.19.0] — 2026-04-20
+
+### Added
+- **Warunki stylu zależne od encji** — nowe pole
+  `display_config.conditions: DisplayConditionConfig[]`. Każda reguła łączy
+  pole (temperatura/wilgotność/lights/motion/windows/doors) z operatorem
+  (`any_on`, `none_on`, `count_gt`, `gt`, `lt`, `eq`) i overrides stylu
+  (`accent_color`, `border_color`, `border_width`, `background_color`).
+  Pierwsza spełniona reguła wygrywa.
+- Nowy sub-editor `stratum-conditions-editor` — panel „Warunki — styl
+  zależny od encji" w głównym edytorze. Dodawanie/usuwanie, zmiana
+  kolejności, live podsumowanie per reguła.
+
+### Examples
+```yaml
+type: custom:stratum-card
+display_config:
+  conditions:
+    # czerwony border gdy jakiekolwiek okno otwarte
+    - field: windows
+      when: any_on
+      border_color: '#e53935'
+      border_width: 2
+    # zielony akcent przy obecności
+    - field: motion
+      when: any_on
+      accent_color: '#4caf50'
+    # pomarańczowy akcent gdy temperatura > 25
+    - field: temperature
+      when: gt
+      value: 25
+      accent_color: '#ff9800'
+```
+
+## [1.18.0] — 2026-04-20
+
+### Added
+- **Prymitywy stylu w `display_config`** — pełna kontrola nad wyglądem
+  wiersza/kafla z UI:
+  - `border_radius` — zaokrąglenie rogów (0–40 px)
+  - `padding` — wewnętrzny odstęp
+  - `min_height` — minimalna wysokość kafla (wiersz ignoruje)
+  - `icon_size` — rozmiar ikony MDI
+  - `icon_style` — `bubble` (kółko z tłem), `flat` (sama ikona), `none`
+  - `icon_position` — `top-left` / `top-right` / `bottom-left` /
+    `bottom-right` / `center` / `left` (inline)
+  - `hover_effect` — `none` / `subtle` / `lift` / `glow`
+  - `press_scale` — skala podczas tap/click (0.9–1.0)
+- Edytor: trzy nowe panele expandable w „Wygląd pomieszczeń" —
+  „Wymiary i zaokrąglenia", „Ikona", „Reakcje na dotyk".
+
+### Changed
+- Wiersz (row) dostał efekty hover i press konfigurowalne tak samo jak kafel
+  — do tej pory miał na sztywno zmianę tła.
+
+## [1.17.0] — 2026-04-20
+
+### Changed
+- **Wygląd pozycji pomieszczeń skonfigurujesz raz dla całej karty.**
+  Nowy klucz top-level `display_config` (`fields`, `aspect`, `accent_color`,
+  `background_image`, `show_icon`, `show_name`) zastępuje dotychczasowy
+  per-room `tile_config`. Obowiązuje zarówno dla wiersza (`row`) jak i
+  kafla (`tile`) — obie formy honorują teraz tę samą listę pól.
+- Per pomieszczenie zostały tylko trzy rzeczy:
+  - `display` — `row` albo `tile`
+  - opcjonalny `field_entities` — wskazanie konkretnej encji dla każdego
+    pola (temperatura / wilgotność / światła / motion / okna / drzwi),
+    zamiast domyślnego auto-discovery z area
+  - opcjonalny `style_override` — surowy CSS wstrzykiwany do pozycji
+- Wbudowana forma `row` pokazuje teraz te same pola co kafel zgodnie
+  z `display_config.fields` (dotąd `row` miał twardy układ).
+- Edytor: nowy panel „Wygląd pomieszczeń (globalny)" z ustawieniami.
+  Per-pokój sub-form zredukowany do `display` + panel encji + panel CSS.
+
+### Removed
+- `RoomConfig.tile_config` — migracja do top-level `display_config`.
+- `RoomConfig.tile_card_config` oraz opcja `display: custom:xxx` dla
+  pojedynczego pomieszczenia — kafle w sekcjach popup nadal wspierają karty
+  HACS (niezmienione).
+
+### Migration
+```yaml
+# stare (≤ v1.16)
+type: custom:stratum-card
+rooms:
+  - area_id: salon
+    display: tile
+    tile_config:
+      aspect: 16/9
+      fields: [temperature, lights, motion]
+      accent_color: amber
+
+# nowe (v1.17)
+type: custom:stratum-card
+display_config:            # JEDEN raz dla wszystkich pokoi
+  aspect: 16/9
+  fields: [temperature, lights, motion]
+  accent_color: amber
+rooms:
+  - area_id: salon
+    display: tile          # tylko forma
+    field_entities:        # opcjonalnie
+      temperature: sensor.salon_termometr_balkonowy
+```
+
 ## [1.13.0] — 2026-04-20
 
 ### Added
