@@ -310,11 +310,25 @@ export interface RoomConfig {
   /**
    * Forma wyświetlania pozycji w głównej karcie:
    * - `row` (domyślny) — poziomy wiersz w pełnej szerokości
-   * - `tile` — kafel (card-style), kwadratowy z dużą ikoną i kompaktowymi
-   *   licznikami. Można mieszać wiersze i kafle w obrębie jednej karty.
+   * - `tile` — kafel Stratum (konfigurowalny przez `tile_config`)
+   * - `custom:<card-type>` — dowolna karta HACS jako kafel pokoju
+   *   (auto-config z `area_id`/`entity` lub `tile_card_config` jako jawny YAML)
    * Bez ustawienia — używa `rooms_display` ze `StratumCardConfig`.
    */
-  display?: 'row' | 'tile';
+  display?: string;
+
+  /**
+   * Konfiguracja wyglądu wbudowanego kafla Stratum (tylko dla `display: tile`).
+   * Aspect, jakie pola pokazać, kolor akcentu, opcjonalne tło.
+   */
+  tile_config?: TileConfig;
+
+  /**
+   * Pełny config karty custom (tylko dla `display: 'custom:<card>'`).
+   * Pominięte = próba auto-config: `{type, area_id}` (gdy karta tego oczekuje)
+   * lub `{type, entity}`.
+   */
+  tile_card_config?: Record<string, unknown>;
 
   /**
    * Sekcje widoczne w popup pokoju (otwiera się po kliknięciu wiersza).
@@ -331,6 +345,31 @@ export interface RoomConfig {
 
 /** Zachowane dla kompatybilności — alias do nowego typu. */
 export type RoomRefConfig = RoomConfig;
+
+/** Pola które wbudowany tile może pokazać w sekcji info. */
+export type TileField =
+  | 'temperature'
+  | 'humidity'
+  | 'lights'
+  | 'motion'
+  | 'windows'
+  | 'doors';
+
+/** Konfiguracja wyglądu wbudowanego kafla pomieszczenia (`display: tile`). */
+export interface TileConfig {
+  /** CSS aspect-ratio kafla. Default `1/1`. Przykłady: `4/3`, `16/9`, `3/2`. */
+  aspect?: string;
+  /** Lista pól w sekcji info (kolejność znaczy). Default `[temperature, lights, motion]`. */
+  fields?: TileField[];
+  /** Kolor akcentu gdy aktywny (lights on / motion). Default amber. */
+  accent_color?: string;
+  /** URL/preset obrazka tła (jak scene `image`, np. `stratum:noc`). */
+  background_image?: string;
+  /** Czy pokazywać ikonę area w lewym górnym rogu. Default true. */
+  show_icon?: boolean;
+  /** Czy pokazywać nazwę area. Default true. */
+  show_name?: boolean;
+}
 
 /**
  * Prosty kontrakt tap_action kompatybilny z konwencją HA/Mushroom/Bubble.

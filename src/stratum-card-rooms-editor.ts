@@ -19,6 +19,7 @@ import type {
 import './stratum-sections-editor.js';
 import './stratum-scene-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { getCustomCardOptions } from './custom-cards.js';
 
 const ROOM_LABELS: Record<string, string> = {
   name: 'Nazwa (override)',
@@ -90,7 +91,11 @@ export class StratumCardRoomsEditor extends LitElement {
             options: [
               { value: '', label: 'Domyślnie (z ustawień karty)' },
               { value: 'row', label: 'Wiersz' },
-              { value: 'tile', label: 'Kafel' },
+              { value: 'tile', label: 'Kafel Stratum (konfigurowalny)' },
+              ...(getCustomCardOptions().length > 0
+                ? [{ value: '__sep__', label: '── Karty custom (HACS) ──', disabled: true }]
+                : []),
+              ...getCustomCardOptions(),
             ],
           },
         },
@@ -222,10 +227,16 @@ export class StratumCardRoomsEditor extends LitElement {
       delete merged.scenes;
     }
     if (!merged.chips || merged.chips.length === 0) delete merged.chips;
-    // `display` zachowujemy zawsze gdy ustawione (row LUB tile), bo to może
-    // być świadomy override globalnego `rooms_display`. Kasujemy tylko gdy
-    // pole jest undefined/empty (user wybrał „Domyślnie (z global)").
+    // `display` zachowujemy zawsze gdy ustawione (row LUB tile LUB custom:xxx),
+    // bo to może być świadomy override globalnego `rooms_display`. Kasujemy
+    // tylko gdy pole jest undefined/empty.
     if (!merged.display) delete merged.display;
+    if (!merged.tile_config || Object.keys(merged.tile_config).length === 0) {
+      delete merged.tile_config;
+    }
+    if (!merged.tile_card_config || Object.keys(merged.tile_card_config).length === 0) {
+      delete merged.tile_card_config;
+    }
     const next = existing
       ? this.rooms.map((r) => (r.area_id === areaId ? merged : r))
       : [...this.rooms, merged];
@@ -246,6 +257,119 @@ export class StratumCardRoomsEditor extends LitElement {
   ): void {
     ev.stopPropagation();
     this._updateRoom(areaId, { scenes: ev.detail.scenes });
+  }
+
+  private _renderTileConfigPanel(
+    areaId: string,
+    room: RoomConfig | undefined,
+  ): TemplateResult {
+    if (room?.display !== 'tile') return html``;
+    const tileSchema = [
+      {
+        type: 'grid',
+        name: '',
+        schema: [
+          { name: 'aspect', selector: { text: {} } },
+          { name: 'accent_color', selector: { text: {} } },
+        ],
+      },
+      {
+        name: 'fields',
+        selector: {
+          select: {
+            multiple: true,
+            mode: 'list',
+            options: [
+              { value: 'temperature', label: 'Temperatura' },
+              { value: 'humidity', label: 'Wilgotność' },
+              { value: 'lights', label: 'Liczba świateł on' },
+              { value: 'motion', label: 'Obecność (ikona)' },
+              { value: 'windows', label: 'Otwarte okna' },
+              { value: 'doors', label: 'Otwarte drzwi' },
+            ],
+          },
+        },
+      },
+      { name: 'background_image', selector: { text: {} } },
+      {
+        type: 'grid',
+        name: '',
+        schema: [
+          { name: 'show_icon', selector: { boolean: {} } },
+          { name: 'show_name', selector: { boolean: {} } },
+        ],
+      },
+    ];
+    const tileLabels: Record<string, string> = {
+      aspect: 'Proporcje (CSS)',
+      accent_color: 'Kolor akcentu',
+      fields: 'Pola w sekcji info',
+      background_image: 'Obrazek tła (URL lub stratum:<id>)',
+      show_icon: 'Pokaż ikonę',
+      show_name: 'Pokaż nazwę',
+    };
+    const tileHelpers: Record<string, string> = {
+      aspect: 'Np. 1/1 (default), 4/3, 16/9, 3/2',
+      accent_color: 'Nazwa (amber, blue), hex (#ffc107) lub var(--color)',
+      background_image: 'np. /local/img/salon.jpg lub preset stratum:noc',
+    };
+    return html`
+      <details class="stratum-collapsible" open>
+        <summary>
+          <ha-icon .icon=${'mdi:image-outline'}></ha-icon>
+          <span>Wygląd kafla</span>
+        </summary>
+        <div class="stratum-collapsible-body">
+          <ha-form
+            .hass=${this.hass}
+            .data=${{
+              aspect: '1/1',
+              show_icon: true,
+              show_name: true,
+              ...(room?.tile_config ?? {}),
+            }}
+            .schema=${tileSchema}
+            .computeLabel=${(s: { name: string }) => tileLabels[s.name] ?? s.name}
+            .computeHelper=${(s: { name: string }) => tileHelpers[s.name] ?? ''}
+            @value-changed=${(ev: CustomEvent<{ value: Record<string, unknown> }>) => {
+              ev.stopPropagation();
+              this._updateRoom(areaId, { tile_config: ev.detail.value });
+            }}
+          ></ha-form>
+        </div>
+      </details>
+    `;
+  }
+
+  private _renderCustomCardPanel(
+    areaId: string,
+    room: RoomConfig | undefined,
+  ): TemplateResult {
+    if (!room?.display || !room.display.startsWith('custom:')) return html``;
+    return html`
+      <details class="stratum-collapsible" open>
+        <summary>
+          <ha-icon .icon=${'mdi:code-braces'}></ha-icon>
+          <span>Konfiguracja karty (YAML)</span>
+        </summary>
+        <div class="stratum-collapsible-body">
+          <p class="stratum-collapsible-hint">
+            Pominięte = auto-config (próba <code>{type, area, area_id}</code>).
+            Ustaw aby dostosować — np.
+            <code>type: ${room.display}</code>,
+            <code>entity: light.${areaId}_main</code>.
+          </p>
+          <ha-yaml-editor
+            .defaultValue=${room.tile_card_config ?? {}}
+            @value-changed=${(ev: CustomEvent<{ value: Record<string, unknown>; isValid: boolean }>) => {
+              if (ev.detail.isValid) {
+                this._updateRoom(areaId, { tile_card_config: ev.detail.value });
+              }
+            }}
+          ></ha-yaml-editor>
+        </div>
+      </details>
+    `;
   }
 
   private _normalizedRoomSections(room: RoomConfig | undefined): RoomSectionConfig[] {
@@ -445,6 +569,8 @@ export class StratumCardRoomsEditor extends LitElement {
                         @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
                           this._onFieldChange(area.area_id, ev)}
                       ></ha-form>
+                      ${this._renderTileConfigPanel(area.area_id, room)}
+                      ${this._renderCustomCardPanel(area.area_id, room)}
                       <details class="stratum-collapsible">
                         <summary>
                           <ha-icon .icon=${'mdi:view-dashboard-outline'}></ha-icon>
