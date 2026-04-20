@@ -8,6 +8,7 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
+  DisplayConditionConfig,
   DisplayConfig,
   HomeAssistant,
   RoomConfig,
@@ -16,6 +17,7 @@ import type {
 } from './types.js';
 import './stratum-card-rooms-editor.js';
 import './stratum-scene-editor.js';
+import './stratum-conditions-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 interface FormSchemaItem {
@@ -376,6 +378,21 @@ export class StratumCardEditor extends LitElement {
   private _computeDisplayHelper = (schema: FormSchemaItem): string =>
     DISPLAY_HELPERS[schema.name] ?? '';
 
+  private _conditionsChanged(
+    ev: CustomEvent<{ conditions: DisplayConditionConfig[] }>,
+  ): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const next: StratumCardConfig = { ...this._config };
+    const list = ev.detail.conditions;
+    const current: DisplayConfig = { ...(next.display_config ?? {}) };
+    if (list.length === 0) delete current.conditions;
+    else current.conditions = list;
+    if (Object.keys(current).length === 0) delete next.display_config;
+    else next.display_config = current;
+    this._emitConfig(next);
+  }
+
   private _roomsChanged(ev: CustomEvent<{ rooms: RoomConfig[] }>): void {
     ev.stopPropagation();
     if (!this._config) return;
@@ -467,6 +484,28 @@ export class StratumCardEditor extends LitElement {
             .computeHelper=${this._computeDisplayHelper}
             @value-changed=${this._displayConfigChanged}
           ></ha-form>
+        </div>
+      </div>
+
+      <div class="stratum-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:function-variant'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Warunki — styl zależny od encji</h3>
+            <p class="stratum-panel-hint">
+              Reguły zmieniające border, akcent lub tło w zależności od stanu.
+              Pierwsza spełniona reguła wygrywa.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <stratum-conditions-editor
+            .hass=${this.hass}
+            .conditions=${this._config.display_config?.conditions ?? []}
+            @conditions-changed=${this._conditionsChanged}
+          ></stratum-conditions-editor>
         </div>
       </div>
 

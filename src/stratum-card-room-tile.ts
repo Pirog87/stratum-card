@@ -9,7 +9,7 @@ import { customElement, property } from 'lit/decorators.js';
 import type { DisplayConfig, TileField } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
-import { DEFAULT_FIELDS } from './tile-data.js';
+import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
 
 @customElement('stratum-card-room-tile')
 export class StratumCardRoomTile extends LitElement {
@@ -42,6 +42,9 @@ export class StratumCardRoomTile extends LitElement {
   /** Per-pokój CSS override (wstrzykiwane jako style na .tile). */
   @property({ type: String, attribute: 'style-override' }) public styleOverride?: string;
 
+  /** Overrides wyliczone z `display_config.conditions`. */
+  @property({ attribute: false }) public conditionOverride?: ConditionOverride;
+
   private _onClick = (): void => {
     if (!this.clickable) return;
     this.dispatchEvent(
@@ -67,7 +70,15 @@ export class StratumCardRoomTile extends LitElement {
     const fields = cfg.fields ?? DEFAULT_FIELDS;
     const showIcon = cfg.show_icon !== false;
     const showName = cfg.show_name !== false;
-    const accent = resolveColor(cfg.accent_color) ?? 'var(--stratum-chip-lights-color, #ffc107)';
+    const ovr = this.conditionOverride;
+    const accent =
+      resolveColor(ovr?.accent_color) ??
+      resolveColor(cfg.accent_color) ??
+      'var(--stratum-chip-lights-color, #ffc107)';
+    const borderColorOvr = resolveColor(ovr?.border_color);
+    const borderWidthOvr =
+      typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
+    const bgColorOvr = resolveColor(ovr?.background_color);
     const bgImage = resolveSceneImage(cfg.background_image);
 
     const iconPos = cfg.icon_position ?? 'top-left';
@@ -77,7 +88,9 @@ export class StratumCardRoomTile extends LitElement {
 
     const cssVars: string[] = [
       `--stratum-room-tile-aspect: ${cfg.aspect ?? '1/1'};`,
-      active ? `--stratum-room-tile-active-color: ${accent};` : '',
+      active || ovr?.accent_color
+        ? `--stratum-room-tile-active-color: ${accent};`
+        : '',
       typeof cfg.border_radius === 'number'
         ? `--stratum-room-tile-radius: ${cfg.border_radius}px;`
         : '',
@@ -91,6 +104,9 @@ export class StratumCardRoomTile extends LitElement {
         ? `--stratum-room-tile-icon-size: ${cfg.icon_size}px;`
         : '',
       `--stratum-room-tile-press-scale: ${pressScale};`,
+      borderColorOvr ? `border-color: ${borderColorOvr};` : '',
+      borderWidthOvr ? `border-width: ${borderWidthOvr};` : '',
+      bgColorOvr ? `background-color: ${bgColorOvr};` : '',
       bgImage
         ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;`
         : '',
@@ -98,9 +114,11 @@ export class StratumCardRoomTile extends LitElement {
     ];
     const styles = cssVars.filter(Boolean).join(' ');
 
+    const effectiveActive = active || Boolean(ovr?.accent_color);
+
     return html`
       <div
-        class="tile ${active ? 'active' : ''} ${bgImage ? 'has-bg' : ''}"
+        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}

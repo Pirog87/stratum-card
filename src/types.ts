@@ -369,7 +369,50 @@ export type TileField =
   | 'windows'
   | 'doors';
 
-/** Gdzie umieścić ikonę area na kaflu. Dla wiersza ignorowane. */
+/** Operator porównania w regułach warunkowego stylu. */
+export type DisplayConditionOp =
+  | 'any_on'
+  | 'none_on'
+  | 'count_gt'
+  | 'gt'
+  | 'lt'
+  | 'eq';
+
+/**
+ * Reguła warunkowego stylu pozycji pomieszczenia. Jedna reguła = jedno pole
+ * + operator + ew. wartość + overrides stylu. Pierwsza spełniona reguła
+ * wygrywa (kolejność w tablicy).
+ *
+ * Przykłady:
+ *   { field: 'windows', when: 'any_on', border_color: '#e53935', border_width: 2 }
+ *   { field: 'motion', when: 'any_on', accent_color: 'green' }
+ *   { field: 'temperature', when: 'gt', value: 25, accent_color: '#f44336' }
+ *   { field: 'lights', when: 'count_gt', value: 2, accent_color: 'amber' }
+ */
+export interface DisplayConditionConfig {
+  /** Pole z którego czytamy stan. */
+  field: TileField;
+  /**
+   * Operator:
+   * - `any_on` — cokolwiek aktywne (motion true, lightsOn>0, windowsOpen>0...).
+   *   Dla temperature/humidity: sensor ma wartość.
+   * - `none_on` — nic nie aktywne.
+   * - `count_gt` — liczba on > `value` (tylko lights/motion/windows/doors).
+   * - `gt` / `lt` / `eq` — numeryczne porównanie z `value`
+   *   (tylko temperature/humidity).
+   */
+  when: DisplayConditionOp;
+  /** Wartość porównania (dla `count_gt`, `gt`, `lt`, `eq`). */
+  value?: number;
+  /** Override koloru borderu gdy reguła spełniona. */
+  border_color?: string;
+  /** Override grubości borderu (px). */
+  border_width?: number;
+  /** Override koloru akcentu (active glow / underline). */
+  accent_color?: string;
+  /** Override koloru tła pozycji. */
+  background_color?: string;
+}
 export type IconPosition =
   | 'top-left'
   | 'top-right'
@@ -424,6 +467,12 @@ export interface DisplayConfig {
   hover_effect?: HoverEffect;
   /** Skala podczas `:active` (tap feedback). 1 = brak. Default 0.98. Zakres 0.9–1. */
   press_scale?: number;
+
+  /**
+   * Lista reguł warunkowego stylu — pierwsza spełniona wygrywa.
+   * Pozwala np. ustawić czerwony border gdy okno otwarte, zielony akcent gdy motion.
+   */
+  conditions?: DisplayConditionConfig[];
 }
 
 export interface TileFieldEntities {

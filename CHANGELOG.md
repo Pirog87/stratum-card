@@ -4,6 +4,40 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.19.0] — 2026-04-20
+
+### Added
+- **Warunki stylu zależne od encji** — nowe pole
+  `display_config.conditions: DisplayConditionConfig[]`. Każda reguła łączy
+  pole (temperatura/wilgotność/lights/motion/windows/doors) z operatorem
+  (`any_on`, `none_on`, `count_gt`, `gt`, `lt`, `eq`) i overrides stylu
+  (`accent_color`, `border_color`, `border_width`, `background_color`).
+  Pierwsza spełniona reguła wygrywa.
+- Nowy sub-editor `stratum-conditions-editor` — panel „Warunki — styl
+  zależny od encji" w głównym edytorze. Dodawanie/usuwanie, zmiana
+  kolejności, live podsumowanie per reguła.
+
+### Examples
+```yaml
+type: custom:stratum-card
+display_config:
+  conditions:
+    # czerwony border gdy jakiekolwiek okno otwarte
+    - field: windows
+      when: any_on
+      border_color: '#e53935'
+      border_width: 2
+    # zielony akcent przy obecności
+    - field: motion
+      when: any_on
+      accent_color: '#4caf50'
+    # pomarańczowy akcent gdy temperatura > 25
+    - field: temperature
+      when: gt
+      value: 25
+      accent_color: '#ff9800'
+```
+
 ## [1.18.0] — 2026-04-20
 
 ### Added

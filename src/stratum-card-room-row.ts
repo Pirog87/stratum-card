@@ -8,7 +8,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { DisplayConfig, TileField } from './types.js';
 import { resolveColor } from './colors.js';
-import { DEFAULT_FIELDS } from './tile-data.js';
+import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
 
 @customElement('stratum-card-room-row')
 export class StratumCardRoomRow extends LitElement {
@@ -40,6 +40,9 @@ export class StratumCardRoomRow extends LitElement {
   /** Per-pokój CSS override. */
   @property({ type: String, attribute: 'style-override' }) public styleOverride?: string;
 
+  /** Overrides wyliczone z `display_config.conditions`. */
+  @property({ attribute: false }) public conditionOverride?: ConditionOverride;
+
   /** Czy wiersz ma reagować na klik (pokazać cursor:pointer + hover). */
   @property({ type: Boolean, reflect: true }) public clickable = false;
 
@@ -67,14 +70,23 @@ export class StratumCardRoomRow extends LitElement {
     const fields = cfg.fields ?? DEFAULT_FIELDS;
     const showIcon = cfg.show_icon !== false;
     const showName = cfg.show_name !== false;
-    const active = this.lightsOn > 0 || this.motion;
-    const accent = resolveColor(cfg.accent_color);
+    const ovr = this.conditionOverride;
+    const stateActive = this.lightsOn > 0 || this.motion;
+    const effectiveActive = stateActive || Boolean(ovr?.accent_color);
+    const accent =
+      resolveColor(ovr?.accent_color) ?? resolveColor(cfg.accent_color);
+    const borderColorOvr = resolveColor(ovr?.border_color);
+    const borderWidthOvr =
+      typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
+    const bgColorOvr = resolveColor(ovr?.background_color);
 
     const hoverEffect = cfg.hover_effect ?? 'subtle';
     const pressScale = typeof cfg.press_scale === 'number' ? cfg.press_scale : 0.98;
 
     const cssVars: string[] = [
-      active && accent ? `--stratum-room-row-active-color: ${accent};` : '',
+      effectiveActive && accent
+        ? `--stratum-room-row-active-color: ${accent};`
+        : '',
       typeof cfg.border_radius === 'number'
         ? `--stratum-room-row-radius: ${cfg.border_radius}px;`
         : '',
@@ -88,13 +100,19 @@ export class StratumCardRoomRow extends LitElement {
         ? `--stratum-room-row-icon-size: ${cfg.icon_size}px;`
         : '',
       `--stratum-room-row-press-scale: ${pressScale};`,
+      borderColorOvr
+        ? `border: ${borderWidthOvr ?? '1px'} solid ${borderColorOvr}; border-radius: var(--stratum-room-row-radius, 6px);`
+        : borderWidthOvr
+        ? `border-width: ${borderWidthOvr};`
+        : '',
+      bgColorOvr ? `background-color: ${bgColorOvr};` : '',
       this.styleOverride ?? '',
     ];
     const styles = cssVars.filter(Boolean).join(' ');
 
     return html`
       <div
-        class="row ${active ? 'active' : ''}"
+        class="row ${effectiveActive ? 'active' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}

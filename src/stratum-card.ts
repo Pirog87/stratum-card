@@ -17,7 +17,7 @@ import {
   filterByDomain,
   filterBinarySensorDeviceClass,
 } from './area-entities.js';
-import { computeTileData } from './tile-data.js';
+import { computeTileData, evaluateConditions } from './tile-data.js';
 import {
   DEFAULT_CHIPS,
   evaluateChip,
@@ -33,7 +33,7 @@ import './stratum-card-room-tile.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.18.0';
+const VERSION = '1.19.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -449,6 +449,7 @@ export class StratumCard extends LitElement {
     // fieldEntities; bez override → auto-discovery z encji area.
     const data = computeTileData(this.hass!, entries, fieldEntities);
     const displayConfig = this._config?.display_config;
+    const conditionOverride = evaluateConditions(data, displayConfig?.conditions);
 
     // Rozwiązywanie akcji dla klikalności wiersza.
     const isSet = (a: import('./types.js').TapActionConfig | undefined): boolean =>
@@ -475,6 +476,7 @@ export class StratumCard extends LitElement {
         .windowsOpen=${data.windowsOpen}
         .doorsOpen=${data.doorsOpen}
         .displayConfig=${displayConfig}
+        .conditionOverride=${conditionOverride}
         .styleOverride=${styleOverride}
         .clickable=${clickable}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
@@ -493,6 +495,7 @@ export class StratumCard extends LitElement {
       .windowsOpen=${data.windowsOpen}
       .doorsOpen=${data.doorsOpen}
       .displayConfig=${displayConfig}
+      .conditionOverride=${conditionOverride}
       .styleOverride=${styleOverride}
       .clickable=${clickable}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
