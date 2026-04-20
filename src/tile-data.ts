@@ -14,7 +14,17 @@ import type {
 } from './types.js';
 import { filterBinarySensorDeviceClass, filterByDomain } from './area-entities.js';
 
-export const DEFAULT_FIELDS: TileField[] = ['temperature', 'lights', 'motion'];
+// Domyślny zestaw pól row/tile — wszystkie „informatywne" metryki.
+// Każde pole renderuje się tylko gdy ma sensowną wartość (> 0 / truthy),
+// więc lista „z zapasem" nie powoduje clutteru.
+export const DEFAULT_FIELDS: TileField[] = [
+  'temperature',
+  'lights',
+  'motion',
+  'windows',
+  'doors',
+  'leak',
+];
 
 /** Wartości poszczególnych pól — gotowe do wyświetlenia w row/tile. */
 export interface TileData {
@@ -28,6 +38,8 @@ export interface TileData {
   motion: boolean;
   windowsOpen: number;
   doorsOpen: number;
+  /** Liczba aktywnych czujek wycieku (state=on). */
+  leakActive: number;
   /**
    * Kolor pierwszego aktywnego światła z `rgb_color` w pomieszczeniu.
    * Gdy żadne światło nie świeci albo nie ma `rgb_color` — undefined.
@@ -151,6 +163,12 @@ function resolveFieldEntityIds(
       const g = filterBinarySensorDeviceClass(hass, entries, 'garage_door');
       return Array.from(new Set([...d, ...g].map((e) => e.entity_id)));
     }
+    case 'leak': {
+      if (fieldEntities?.leak?.length) return fieldEntities.leak;
+      return filterBinarySensorDeviceClass(hass, entries, 'moisture').map(
+        (e) => e.entity_id,
+      );
+    }
     default:
       return [];
   }
@@ -178,6 +196,7 @@ export function computeTileData(
   const motionIds = resolveFieldEntityIds(hass, entries, 'motion', fieldEntities);
   const windowsIds = resolveFieldEntityIds(hass, entries, 'windows', fieldEntities);
   const doorsIds = resolveFieldEntityIds(hass, entries, 'doors', fieldEntities);
+  const leakIds = resolveFieldEntityIds(hass, entries, 'leak', fieldEntities);
 
   const { rgb: lightsRgb, brightness: lightsBrightness } = readLightsColor(
     hass,
@@ -193,6 +212,7 @@ export function computeTileData(
     motion: anyOn(hass, motionIds),
     windowsOpen: countOn(hass, windowsIds),
     doorsOpen: countOn(hass, doorsIds),
+    leakActive: countOn(hass, leakIds),
     lightsRgb,
     lightsBrightness,
   };
@@ -308,6 +328,13 @@ function matchCondition(data: TileData, cond: DisplayConditionConfig): boolean {
     }
     case 'doors': {
       const n = data.doorsOpen;
+      if (when === 'any_on') return n > 0;
+      if (when === 'none_on') return n === 0;
+      if (when === 'count_gt') return n > v;
+      return false;
+    }
+    case 'leak': {
+      const n = data.leakActive;
       if (when === 'any_on') return n > 0;
       if (when === 'none_on') return n === 0;
       if (when === 'count_gt') return n > v;

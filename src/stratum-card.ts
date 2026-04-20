@@ -35,7 +35,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.31.0';
+const VERSION = '1.32.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -826,6 +826,7 @@ export class StratumCard extends LitElement {
         .humidity=${data.humidity}
         .windowsOpen=${data.windowsOpen}
         .doorsOpen=${data.doorsOpen}
+        .leakActive=${data.leakActive}
         .displayConfig=${tileConfig}
         .conditionOverride=${conditionOverride}
         .lightsAccent=${tileLightsAccent}

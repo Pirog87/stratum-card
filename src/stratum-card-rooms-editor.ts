@@ -314,10 +314,20 @@ export class StratumCardRoomsEditor extends LitElement {
           },
         },
       },
+      {
+        name: 'leak',
+        selector: {
+          entity: {
+            multiple: true,
+            filter: [{ domain: 'binary_sensor', device_class: 'moisture' }],
+          },
+        },
+      },
     ];
     const labels: Record<string, string> = {
       temperature: 'Temperatura (encja)',
       humidity: 'Wilgotność (encja)',
+      leak: 'Wyciek (lista encji)',
       lights: 'Światła (lista encji)',
       motion: 'Obecność / motion (lista encji)',
       windows: 'Okna (lista encji)',

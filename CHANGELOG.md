@@ -4,6 +4,28 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.32.0] — 2026-04-20
+
+### Added
+- **`leak` jako `TileField`** — wiersz / kafel pokoju pokazuje teraz
+  liczbę aktywnych czujek wycieku (ikona `mdi:water-alert`, czerwony).
+- Display editor i conditions editor: nowe pole „Wyciek" w chipach wyboru.
+- Rooms editor: override encji `leak` w panelu „Encje pól".
+
+### Changed
+- **Domyślny zestaw chipów**: 5 built-in (lights, motion, windows, doors, leak)
+  zamiast 4. Spójnie na karcie głównej floor-a i w popup pokoju.
+- **Per-typ `show_when_zero`:**
+  - `lights` / `motion` — zawsze widoczne (nawet gdy 0)
+  - `windows` / `doors` / `leak` — znikają gdy wartość 0 (alarm-only)
+  To samo zastosowane w quick-pick menu „Dodaj chip" — nowe okna/drzwi/wyciek
+  startują z `show_when_zero: false`.
+- **Domyślny zestaw pól row/tile** rozszerzony o windows, doors, leak.
+  Każde pole renderuje się tylko gdy ma wartość > 0, więc „lista z zapasem"
+  nie zaśmieca wierszy spokojnych pokoi.
+- Room card: chip visibility teraz respektuje `show_when_zero` (filtrowanie
+  tak jak w głównej karcie).
+
 ## [1.31.0] — 2026-04-20
 
 ### Fixed
