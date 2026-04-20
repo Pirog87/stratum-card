@@ -369,6 +369,21 @@ export type TileField =
   | 'windows'
   | 'doors';
 
+/** Gdzie umieścić ikonę area na kaflu. Dla wiersza ignorowane. */
+export type IconPosition =
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+  | 'center'
+  | 'left';
+
+/** Styl otoczki ikony. */
+export type IconStyle = 'bubble' | 'flat' | 'none';
+
+/** Intensywność reakcji na hover. */
+export type HoverEffect = 'none' | 'subtle' | 'lift' | 'glow';
+
 /**
  * Globalna konfiguracja wyglądu pozycji pomieszczenia — dotyczy zarówno formy
  * kompaktowej (`row`) jak i kafla (`tile`). Ustawiasz raz dla całej karty,
@@ -391,6 +406,24 @@ export interface DisplayConfig {
   show_icon?: boolean;
   /** Czy pokazywać nazwę area. Default true. */
   show_name?: boolean;
+
+  // --- prymitywy stylu (v1.18) ---
+  /** Zaokrąglenie rogów (px). Default 14 dla kafla, 6 dla wiersza w hover. */
+  border_radius?: number;
+  /** Minimalna wysokość kafla (px). Wiersz ignoruje. Default 110. */
+  min_height?: number;
+  /** Wewnętrzny padding pozycji (px). Default 12 dla kafla, „10 4" dla wiersza. */
+  padding?: number;
+  /** Rozmiar ikony area (px). Default 22 (kafel) / 20 (wiersz). */
+  icon_size?: number;
+  /** Pozycja ikony na kaflu — `left` dotyczy tylko wiersza. Default `top-left`. */
+  icon_position?: IconPosition;
+  /** Otoczka ikony: `bubble` (kółko z tłem), `flat` (sama ikona), `none`. Default `bubble`. */
+  icon_style?: IconStyle;
+  /** Reakcja na hover: `none`/`subtle`/`lift` (przesunięcie)/`glow` (poświata). Default `subtle` dla wiersza, `lift` dla kafla. */
+  hover_effect?: HoverEffect;
+  /** Skala podczas `:active` (tap feedback). 1 = brak. Default 0.98. Zakres 0.9–1. */
+  press_scale?: number;
 }
 
 export interface TileFieldEntities {

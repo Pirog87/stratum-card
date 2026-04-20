@@ -69,10 +69,28 @@ export class StratumCardRoomRow extends LitElement {
     const showName = cfg.show_name !== false;
     const active = this.lightsOn > 0 || this.motion;
     const accent = resolveColor(cfg.accent_color);
-    const styles = [
+
+    const hoverEffect = cfg.hover_effect ?? 'subtle';
+    const pressScale = typeof cfg.press_scale === 'number' ? cfg.press_scale : 0.98;
+
+    const cssVars: string[] = [
       active && accent ? `--stratum-room-row-active-color: ${accent};` : '',
+      typeof cfg.border_radius === 'number'
+        ? `--stratum-room-row-radius: ${cfg.border_radius}px;`
+        : '',
+      typeof cfg.padding === 'number'
+        ? `--stratum-room-row-padding: ${cfg.padding}px;`
+        : '',
+      typeof cfg.min_height === 'number'
+        ? `--stratum-room-row-min-height: ${cfg.min_height}px;`
+        : '',
+      typeof cfg.icon_size === 'number'
+        ? `--stratum-room-row-icon-size: ${cfg.icon_size}px;`
+        : '',
+      `--stratum-room-row-press-scale: ${pressScale};`,
       this.styleOverride ?? '',
-    ].join(' ');
+    ];
+    const styles = cssVars.filter(Boolean).join(' ');
 
     return html`
       <div
@@ -80,6 +98,7 @@ export class StratumCardRoomRow extends LitElement {
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
+        data-hover=${hoverEffect}
         style=${styles}
         @click=${this._onClick}
         @keydown=${this._onKey}
@@ -153,10 +172,12 @@ export class StratumCardRoomRow extends LitElement {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 10px 4px;
+      padding: var(--stratum-room-row-padding, 10px 4px);
+      min-height: var(--stratum-room-row-min-height, auto);
       border-bottom: 0.5px solid
         var(--stratum-card-room-divider, var(--divider-color, rgba(255, 255, 255, 0.06)));
-      transition: background 0.15s ease, border-color 0.15s ease;
+      transition: background 0.15s ease, border-color 0.15s ease,
+        transform 0.12s ease, box-shadow 0.15s ease;
     }
 
     .row.active {
@@ -169,11 +190,23 @@ export class StratumCardRoomRow extends LitElement {
 
     :host([clickable]) .row {
       cursor: pointer;
-      border-radius: 6px;
+      border-radius: var(--stratum-room-row-radius, 6px);
     }
 
-    :host([clickable]) .row:hover {
+    :host([clickable]) .row[data-hover='subtle']:hover {
       background: var(--stratum-card-room-hover, rgba(255, 255, 255, 0.04));
+    }
+    :host([clickable]) .row[data-hover='lift']:hover {
+      background: var(--stratum-card-room-hover, rgba(255, 255, 255, 0.04));
+      transform: translateY(-1px);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
+    }
+    :host([clickable]) .row[data-hover='glow']:hover {
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #ff9b42) 50%, transparent);
+    }
+
+    :host([clickable]) .row:active {
+      transform: scale(var(--stratum-room-row-press-scale, 0.98));
     }
 
     :host([clickable]) .row:focus-visible {
@@ -186,9 +219,15 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .icon {
-      --mdc-icon-size: 20px;
+      --mdc-icon-size: var(--stratum-room-row-icon-size, 20px);
       color: var(--stratum-card-room-icon-color, var(--secondary-text-color));
       flex-shrink: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .row { transition: none; }
+      :host([clickable]) .row:hover,
+      :host([clickable]) .row:active { transform: none; }
     }
 
     .name {

@@ -4,6 +4,27 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.18.0] — 2026-04-20
+
+### Added
+- **Prymitywy stylu w `display_config`** — pełna kontrola nad wyglądem
+  wiersza/kafla z UI:
+  - `border_radius` — zaokrąglenie rogów (0–40 px)
+  - `padding` — wewnętrzny odstęp
+  - `min_height` — minimalna wysokość kafla (wiersz ignoruje)
+  - `icon_size` — rozmiar ikony MDI
+  - `icon_style` — `bubble` (kółko z tłem), `flat` (sama ikona), `none`
+  - `icon_position` — `top-left` / `top-right` / `bottom-left` /
+    `bottom-right` / `center` / `left` (inline)
+  - `hover_effect` — `none` / `subtle` / `lift` / `glow`
+  - `press_scale` — skala podczas tap/click (0.9–1.0)
+- Edytor: trzy nowe panele expandable w „Wygląd pomieszczeń" —
+  „Wymiary i zaokrąglenia", „Ikona", „Reakcje na dotyk".
+
+### Changed
+- Wiersz (row) dostał efekty hover i press konfigurowalne tak samo jak kafel
+  — do tej pory miał na sztywno zmianę tła.
+
 ## [1.17.0] — 2026-04-20
 
 ### Changed

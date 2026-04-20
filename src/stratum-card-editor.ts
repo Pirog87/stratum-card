@@ -23,6 +23,8 @@ interface FormSchemaItem {
   required?: boolean;
   selector?: Record<string, unknown>;
   type?: string;
+  title?: string;
+  icon?: string;
   schema?: FormSchemaItem[];
 }
 
@@ -113,6 +115,121 @@ const DISPLAY_SCHEMA: readonly FormSchemaItem[] = [
       { name: 'show_name', selector: { boolean: {} } },
     ],
   },
+  {
+    type: 'expandable',
+    name: '',
+    title: 'Wymiary i zaokrąglenia',
+    icon: 'mdi:ruler-square',
+    schema: [
+      {
+        type: 'grid',
+        name: '',
+        schema: [
+          {
+            name: 'border_radius',
+            selector: {
+              number: { min: 0, max: 40, step: 1, unit_of_measurement: 'px', mode: 'slider' },
+            },
+          },
+          {
+            name: 'padding',
+            selector: {
+              number: { min: 0, max: 40, step: 1, unit_of_measurement: 'px', mode: 'slider' },
+            },
+          },
+        ],
+      },
+      {
+        name: 'min_height',
+        selector: {
+          number: { min: 40, max: 260, step: 2, unit_of_measurement: 'px', mode: 'slider' },
+        },
+      },
+    ],
+  },
+  {
+    type: 'expandable',
+    name: '',
+    title: 'Ikona',
+    icon: 'mdi:image-outline',
+    schema: [
+      {
+        type: 'grid',
+        name: '',
+        schema: [
+          {
+            name: 'icon_size',
+            selector: {
+              number: { min: 12, max: 64, step: 1, unit_of_measurement: 'px', mode: 'slider' },
+            },
+          },
+          {
+            name: 'icon_style',
+            selector: {
+              select: {
+                mode: 'dropdown',
+                options: [
+                  { value: 'bubble', label: 'Kółko z tłem (bubble)' },
+                  { value: 'flat', label: 'Płasko (sama ikona)' },
+                  { value: 'none', label: 'Ukryj ikonę' },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      {
+        name: 'icon_position',
+        selector: {
+          select: {
+            mode: 'dropdown',
+            options: [
+              { value: 'top-left', label: 'Góra-lewo (kafel)' },
+              { value: 'top-right', label: 'Góra-prawo (kafel)' },
+              { value: 'bottom-left', label: 'Dół-lewo (kafel)' },
+              { value: 'bottom-right', label: 'Dół-prawo (kafel)' },
+              { value: 'center', label: 'Wyśrodkowana (kafel)' },
+              { value: 'left', label: 'Po lewej, nazwa obok (kafel inline / wiersz)' },
+            ],
+          },
+        },
+      },
+    ],
+  },
+  {
+    type: 'expandable',
+    name: '',
+    title: 'Reakcje na dotyk',
+    icon: 'mdi:gesture-tap',
+    schema: [
+      {
+        type: 'grid',
+        name: '',
+        schema: [
+          {
+            name: 'hover_effect',
+            selector: {
+              select: {
+                mode: 'dropdown',
+                options: [
+                  { value: 'none', label: 'Bez efektu' },
+                  { value: 'subtle', label: 'Subtelny (zmiana tła)' },
+                  { value: 'lift', label: 'Podniesienie (translate + cień)' },
+                  { value: 'glow', label: 'Poświata (glow ring)' },
+                ],
+              },
+            },
+          },
+          {
+            name: 'press_scale',
+            selector: {
+              number: { min: 0.9, max: 1, step: 0.01, mode: 'slider' },
+            },
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 const DISPLAY_LABELS: Record<string, string> = {
@@ -122,6 +239,14 @@ const DISPLAY_LABELS: Record<string, string> = {
   background_image: 'Obrazek tła (URL lub stratum:<id>)',
   show_icon: 'Pokaż ikonę',
   show_name: 'Pokaż nazwę',
+  border_radius: 'Zaokrąglenie rogów',
+  padding: 'Wewnętrzny padding',
+  min_height: 'Min. wysokość kafla',
+  icon_size: 'Rozmiar ikony',
+  icon_style: 'Styl ikony',
+  icon_position: 'Pozycja ikony',
+  hover_effect: 'Efekt hover',
+  press_scale: 'Skala przy tapnięciu',
 };
 
 const DISPLAY_HELPERS: Record<string, string> = {
@@ -133,6 +258,19 @@ const DISPLAY_HELPERS: Record<string, string> = {
     'Kolor gdy wiersz/kafel jest aktywny (światła/motion). Nazwa (amber, blue), hex (#ffc107) lub var(--color).',
   background_image:
     'Obraz tła kafla — np. /local/img/salon.jpg albo preset stratum:noc. Dotyczy tylko kafla.',
+  border_radius:
+    'Zaokrąglenie rogów. Wiersz stosuje tylko gdy jest klikalny. Default 14px (kafel) / 6px (wiersz).',
+  padding: 'Odstęp wewnętrzny od krawędzi. Default 12px (kafel) / 10px (wiersz).',
+  min_height: 'Minimalna wysokość kafla. Wiersz tego nie używa. Default 110px.',
+  icon_size: 'Rozmiar samej ikony MDI. Bubble dopasuje swoje koło. Default 22px.',
+  icon_style:
+    '„bubble" = kółko z tłem (mushroom-style). „flat" = sama ikona. „none" = bez ikony.',
+  icon_position:
+    'Rozkład kafla. „left" = ikona + nazwa w jednej linii (kompaktowy poziom). Wiersz zawsze ma ikonę po lewej.',
+  hover_effect:
+    'Jak reaguje pozycja gdy najedziesz/dotkniesz palcem. „lift" jest domyślne dla kafla, „subtle" dla wiersza.',
+  press_scale:
+    'Skala podczas tap/click (0.9-1.0). 1 = brak animacji. Default 0.98.',
 };
 
 const LABELS: Record<string, string> = {
@@ -211,6 +349,20 @@ export class StratumCardEditor extends LitElement {
     }
     if (raw.show_icon === false) cleaned.show_icon = false;
     if (raw.show_name === false) cleaned.show_name = false;
+    if (typeof raw.border_radius === 'number') cleaned.border_radius = raw.border_radius;
+    if (typeof raw.padding === 'number') cleaned.padding = raw.padding;
+    if (typeof raw.min_height === 'number') cleaned.min_height = raw.min_height;
+    if (typeof raw.icon_size === 'number') cleaned.icon_size = raw.icon_size;
+    if (raw.icon_style && raw.icon_style !== 'bubble') cleaned.icon_style = raw.icon_style;
+    if (raw.icon_position && raw.icon_position !== 'top-left') {
+      cleaned.icon_position = raw.icon_position;
+    }
+    if (raw.hover_effect && raw.hover_effect !== 'subtle') {
+      cleaned.hover_effect = raw.hover_effect;
+    }
+    if (typeof raw.press_scale === 'number' && raw.press_scale !== 0.98) {
+      cleaned.press_scale = raw.press_scale;
+    }
 
     const next: StratumCardConfig = { ...this._config };
     if (Object.keys(cleaned).length === 0) delete next.display_config;
