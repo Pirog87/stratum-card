@@ -13,8 +13,10 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { ChipConfig, HomeAssistant } from './types.js';
 
-interface DomainGroup {
-  domain: string;
+interface AreaGroup {
+  /** Area ID albo pusty string dla „Bez pomieszczenia". */
+  area_id: string;
+  area_name: string;
   entity_ids: string[];
 }
 
@@ -63,30 +65,65 @@ export class StratumChipList extends LitElement {
     document.removeEventListener('keydown', this._onKeydown);
   }
 
-  /** Grupy encji wg domeny — do renderingu sekcji. */
-  private _groupByDomain(): DomainGroup[] {
-    const groups = new Map<string, string[]>();
+  /** Grupy encji wg area — każda sekcja to jeden pokój. */
+  private _groupByArea(): AreaGroup[] {
+    const groups = new Map<string, AreaGroup>();
     for (const id of this.entityIds) {
-      const domain = id.split('.')[0] ?? '';
-      if (!groups.has(domain)) groups.set(domain, []);
-      groups.get(domain)!.push(id);
+      const entry = this.hass?.entities?.[id];
+      let areaId = entry?.area_id ?? undefined;
+      if (!areaId && entry?.device_id) {
+        areaId = this.hass?.devices?.[entry.device_id]?.area_id ?? undefined;
+      }
+      const key = areaId ?? '__none__';
+      const areaName = areaId
+        ? this.hass?.areas?.[areaId]?.name ?? areaId
+        : 'Bez pomieszczenia';
+      if (!groups.has(key)) {
+        groups.set(key, { area_id: key, area_name: areaName, entity_ids: [] });
+      }
+      groups.get(key)!.entity_ids.push(id);
     }
-    return Array.from(groups.entries()).map(([domain, entity_ids]) => ({
-      domain,
-      entity_ids,
-    }));
+    // Sortuj: named areas alfabetycznie, „Bez pomieszczenia" na końcu.
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.area_id === '__none__') return 1;
+      if (b.area_id === '__none__') return -1;
+      return a.area_name.localeCompare(b.area_name, 'pl');
+    });
   }
 
   private _canControl(domain: string): boolean {
     return domain === 'light' || domain === 'switch' || domain === 'cover';
   }
 
-  private _masterOff(domain: string, ids: string[]): void {
+  /** Zwraca mapę domain → ids dla zbioru encji — do per-grupowego master off. */
+  private _splitByDomain(ids: string[]): Map<string, string[]> {
+    const map = new Map<string, string[]>();
+    for (const id of ids) {
+      const domain = id.split('.')[0] ?? '';
+      if (!map.has(domain)) map.set(domain, []);
+      map.get(domain)!.push(id);
+    }
+    return map;
+  }
+
+  /** Master off dla zbioru encji — iteruje po domenach. */
+  private _masterOffAll(ids: string[]): void {
     if (!this.hass) return;
-    const service =
-      domain === 'cover' ? 'close_cover' : 'turn_off';
-    // HA pozwala na listę entity_id w jednym wywołaniu dla większości domen.
-    void this.hass.callService(domain, service, { entity_id: ids });
+    const byDomain = this._splitByDomain(ids);
+    for (const [domain, list] of byDomain) {
+      if (!this._canControl(domain)) continue;
+      const service = domain === 'cover' ? 'close_cover' : 'turn_off';
+      void this.hass.callService(domain, service, { entity_id: list });
+    }
+  }
+
+  /** Czy jakiekolwiek encje w grupie są kontrolowalne i ON — pokazuje master btn. */
+  private _groupHasControllableOn(ids: string[]): boolean {
+    return ids.some((id) => {
+      const domain = id.split('.')[0] ?? '';
+      if (!this._canControl(domain)) return false;
+      return this.hass?.states?.[id]?.state === 'on';
+    });
   }
 
   private _toggle(entity_id: string): void {
@@ -131,20 +168,10 @@ export class StratumChipList extends LitElement {
     );
   }
 
-  private _areaName(entity_id: string): string | undefined {
-    if (!this.hass) return undefined;
-    const entry = this.hass.entities?.[entity_id];
-    let areaId = entry?.area_id ?? undefined;
-    if (!areaId && entry?.device_id) {
-      areaId = this.hass.devices?.[entry.device_id]?.area_id ?? undefined;
-    }
-    if (!areaId) return undefined;
-    return this.hass.areas?.[areaId]?.name ?? undefined;
-  }
-
   protected render(): TemplateResult {
-    const groups = this._groupByDomain();
+    const groups = this._groupByArea();
     const total = this.entityIds.length;
+    const globalHasControllableOn = this._groupHasControllableOn(this.entityIds);
     return html`
       <div
         class="backdrop"
@@ -158,8 +185,21 @@ export class StratumChipList extends LitElement {
             </span>
             <div class="head-body">
               <div class="head-title">${this.label}</div>
-              <div class="head-count">${total} ${total === 1 ? 'pozycja' : 'pozycji'}</div>
+              <div class="head-count">
+                ${total} ${total === 1 ? 'pozycja' : 'pozycji'} ·
+                ${groups.length} ${groups.length === 1 ? 'pokój' : 'pokoi'}
+              </div>
             </div>
+            ${globalHasControllableOn
+              ? html`<button
+                  class="master-global"
+                  title="Wyłącz wszystkie we wszystkich pokojach"
+                  @click=${() => this._masterOffAll(this.entityIds)}
+                >
+                  <ha-icon .icon=${'mdi:power'}></ha-icon>
+                  <span>Wyłącz wszystkie</span>
+                </button>`
+              : nothing}
             <button class="close" title="Zamknij" @click=${this._close}>
               <ha-icon .icon=${'mdi:close'}></ha-icon>
             </button>
@@ -178,42 +218,31 @@ export class StratumChipList extends LitElement {
     `;
   }
 
-  private _renderGroup(group: DomainGroup): TemplateResult {
-    const controllable = this._canControl(group.domain);
-    const anyOn = group.entity_ids.some(
-      (id) => this.hass?.states?.[id]?.state === 'on',
-    );
-    const domainLabels: Record<string, string> = {
-      light: 'Światła',
-      switch: 'Przełączniki',
-      cover: 'Rolety',
-      binary_sensor: 'Czujniki',
-      sensor: 'Sensory',
-      media_player: 'Odtwarzacze',
-      climate: 'Klimat',
-      fan: 'Wentylatory',
-    };
-    const label = domainLabels[group.domain] ?? group.domain;
+  private _renderGroup(group: AreaGroup): TemplateResult {
+    const hasControllableOn = this._groupHasControllableOn(group.entity_ids);
     return html`
       <div class="group">
         <div class="group-head">
-          <span class="group-title">${label} · ${group.entity_ids.length}</span>
-          ${controllable && anyOn
+          <span class="group-area">
+            <ha-icon .icon=${'mdi:floor-plan'}></ha-icon>
+            <span class="group-area-name">${group.area_name}</span>
+            <span class="group-area-count">${group.entity_ids.length}</span>
+          </span>
+          ${hasControllableOn
             ? html`<button
                 class="master-btn"
-                @click=${() => this._masterOff(group.domain, group.entity_ids)}
+                title="Wyłącz wszystkie w tym pokoju"
+                @click=${() => this._masterOffAll(group.entity_ids)}
               >
-                <ha-icon
-                  .icon=${group.domain === 'cover'
-                    ? 'mdi:arrow-down-bold-box-outline'
-                    : 'mdi:power'}
-                ></ha-icon>
-                <span>${group.domain === 'cover' ? 'Zamknij wszystkie' : 'Wyłącz wszystkie'}</span>
+                <ha-icon .icon=${'mdi:power'}></ha-icon>
+                <span>Wyłącz</span>
               </button>`
             : nothing}
         </div>
         <div class="group-body">
-          ${group.entity_ids.map((id) => this._renderItem(id, group.domain))}
+          ${group.entity_ids.map((id) =>
+            this._renderItem(id, id.split('.')[0] ?? ''),
+          )}
         </div>
       </div>
     `;
@@ -223,7 +252,6 @@ export class StratumChipList extends LitElement {
     const state = this.hass?.states?.[entity_id];
     const isOn = state?.state === 'on';
     const name = this._friendlyName(entity_id);
-    const area = this._areaName(entity_id);
     const icon =
       (state?.attributes?.icon as string | undefined) ?? this._defaultIcon(domain, isOn);
     const supportsDim =
@@ -243,6 +271,7 @@ export class StratumChipList extends LitElement {
       domain === 'light' && isOn
         ? this._lightColor(state?.attributes as Record<string, unknown> | undefined)
         : undefined;
+    const hint = this._stateHint(state, domain);
 
     return html`
       <div class="item ${isOn ? 'active' : ''}">
@@ -255,10 +284,10 @@ export class StratumChipList extends LitElement {
           <ha-icon .icon=${icon}></ha-icon>
         </button>
         <div class="item-body">
-          <div class="item-name">${name}</div>
-          ${area
-            ? html`<div class="item-sub">${area}${this._stateHint(state, domain)}</div>`
-            : html`<div class="item-sub">${this._stateHint(state, domain)}</div>`}
+          <div class="item-row">
+            <span class="item-name">${name}</span>
+            ${hint ? html`<span class="item-hint">${hint}</span>` : nothing}
+          </div>
           ${supportsDim && isOn
             ? html`<input
                 type="range"
@@ -324,10 +353,10 @@ export class StratumChipList extends LitElement {
     const attrs = state.attributes ?? {};
     if (domain === 'light' && typeof attrs.brightness === 'number') {
       const pct = Math.round(((attrs.brightness as number) / 255) * 100);
-      return ` · ${pct}%`;
+      return `${pct}%`;
     }
     if (domain === 'cover' && typeof attrs.current_position === 'number') {
-      return ` · ${attrs.current_position}%`;
+      return `${attrs.current_position}%`;
     }
     return '';
   }
@@ -484,46 +513,92 @@ export class StratumChipList extends LitElement {
       padding: 6px 0 10px;
     }
 
+    .master-global {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--divider-color);
+      background: transparent;
+      color: var(--primary-text-color);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      flex-shrink: 0;
+    }
+    .master-global ha-icon { --mdc-icon-size: 16px; }
+    .master-global:hover {
+      background: color-mix(in srgb, var(--error-color, #e53935) 14%, transparent);
+      border-color: var(--error-color, #e53935);
+      color: var(--error-color, #e53935);
+    }
+
     .group {
       padding: 0 14px;
     }
 
     .group + .group {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid var(--divider-color, rgba(255, 255, 255, 0.06));
+      margin-top: 8px;
+      padding-top: 6px;
     }
 
     .group-head {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin: 10px 0 8px;
+      margin: 10px 0 6px;
+      padding: 0 2px;
     }
 
-    .group-title {
+    .group-area {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       flex: 1;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      min-width: 0;
+      font-size: 12px;
       color: var(--secondary-text-color);
+    }
+    .group-area ha-icon {
+      --mdc-icon-size: 14px;
+      color: var(--secondary-text-color);
+    }
+    .group-area-name {
+      font-weight: 600;
+      color: var(--primary-text-color);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-size: 11px;
+    }
+    .group-area-count {
+      font-variant-numeric: tabular-nums;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--divider-color, rgba(255, 255, 255, 0.08));
+      font-size: 10px;
+      font-weight: 700;
     }
 
     .master-btn {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 5px 10px;
+      gap: 3px;
+      padding: 3px 9px;
       border-radius: 999px;
       border: 1px solid var(--divider-color);
       background: transparent;
-      color: var(--primary-text-color);
+      color: var(--secondary-text-color);
       font-size: 11px;
       cursor: pointer;
       transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      flex-shrink: 0;
     }
-    .master-btn ha-icon { --mdc-icon-size: 14px; }
+    .master-btn ha-icon { --mdc-icon-size: 13px; }
     .master-btn:hover {
       background: color-mix(in srgb, var(--error-color, #e53935) 12%, transparent);
       border-color: var(--error-color, #e53935);
@@ -533,15 +608,15 @@ export class StratumChipList extends LitElement {
     .group-body {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
 
     .item {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 10px 12px;
-      border-radius: 12px;
+      gap: 10px;
+      padding: 6px 10px;
+      border-radius: 10px;
       background: var(--secondary-background-color, rgba(255, 255, 255, 0.03));
       border: 1px solid transparent;
       transition: border-color 0.12s ease, background 0.12s ease;
@@ -556,9 +631,9 @@ export class StratumChipList extends LitElement {
     }
 
     .item-icon {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
       border: 0;
       background: color-mix(
         in srgb,
@@ -579,41 +654,51 @@ export class StratumChipList extends LitElement {
     }
     .item-icon:hover { transform: scale(1.06); }
     .item-icon:active { transform: scale(0.94); }
-    .item-icon ha-icon { --mdc-icon-size: 20px; }
+    .item-icon ha-icon { --mdc-icon-size: 16px; }
 
     .item-body {
       flex: 1;
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 3px;
+    }
+
+    .item-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
     }
 
     .item-name {
+      flex: 1;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--primary-text-color);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .item-sub {
+    .item-hint {
       font-size: 11px;
+      font-variant-numeric: tabular-nums;
       color: var(--secondary-text-color);
+      flex-shrink: 0;
     }
 
     .bri-slider {
-      margin-top: 6px;
       width: 100%;
+      height: 4px;
       accent-color: var(--icon-color, var(--primary-color, #ff9b42));
       cursor: pointer;
     }
 
     .toggle {
       position: relative;
-      width: 44px;
-      height: 24px;
+      width: 36px;
+      height: 20px;
       border-radius: 999px;
       border: 0;
       background: var(--divider-color, rgba(255, 255, 255, 0.2));
@@ -631,8 +716,8 @@ export class StratumChipList extends LitElement {
       position: absolute;
       top: 2px;
       left: 2px;
-      width: 20px;
-      height: 20px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       background: #fff;
       transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -640,7 +725,7 @@ export class StratumChipList extends LitElement {
     }
 
     .toggle.on .toggle-knob {
-      transform: translateX(20px);
+      transform: translateX(16px);
     }
 
     .state-badge {

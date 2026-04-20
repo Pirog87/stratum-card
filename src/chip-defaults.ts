@@ -87,8 +87,20 @@ export function evaluateChip(
   switch (chip.type) {
     case 'lights':
       return countedValue(hass, filterByDomain(entries, 'light'));
-    case 'motion':
-      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'motion'));
+    case 'motion': {
+      // Spójnie z row/tile: motion chip obejmuje też `device_class: occupancy`,
+      // bo wiele domowych czujek ruchu ma oba warianty (PIR + presence mmWave).
+      const motion = filterBinarySensorDeviceClass(hass, entries, 'motion');
+      const occ = filterBinarySensorDeviceClass(hass, entries, 'occupancy');
+      const seen = new Set<string>();
+      const merged: typeof motion = [];
+      for (const e of [...motion, ...occ]) {
+        if (seen.has(e.entity_id)) continue;
+        seen.add(e.entity_id);
+        merged.push(e);
+      }
+      return countedValue(hass, merged);
+    }
     case 'occupancy':
       return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'occupancy'));
     case 'windows':

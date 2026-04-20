@@ -4,6 +4,24 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.28.0] — 2026-04-20
+
+### Changed
+- **Popup listy chipów grupuje teraz po pokojach.** Zamiast jednej sekcji
+  „Światła · 13" widzisz pokoje: „Goścni · 2", „Korytarz parter · 1",
+  „Schody · 10" itd. Każda grupa ma własny przycisk „Wyłącz" (wyłącza
+  wszystkie kontrolowalne encje w tym pokoju).
+- **Globalny „Wyłącz wszystkie"** przeniesiony do nagłówka popupu (obok ×).
+- Items zmniejszone wizualnie: ikona 30 px, single-line layout z hintem
+  (np. `26%`) inline, toggle 36×20 — zmieści się więcej w tym samym widoku.
+
+### Fixed
+- **Chip „Motion" nie liczył `device_class: occupancy`.** Domowe czujki
+  z presence mmWave (binary_sensor.xxx_occupancy) były widoczne w wierszu
+  pokoju jako aktywne, ale chip nagłówka pokazywał 0. Teraz motion chip
+  zlicza OBA device_class (motion + occupancy), zdeduplikowane — spójnie
+  z zachowaniem `row`/`tile`. Dotyczy też popupu listy.
+
 ## [1.27.0] — 2026-04-20
 
 ### Added

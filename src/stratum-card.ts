@@ -34,7 +34,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.27.0';
+const VERSION = '1.28.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -360,9 +360,13 @@ export class StratumCard extends LitElement {
         .filter(matches(['on']));
     }
     if (chip.type === 'motion') {
-      return filterBinarySensorDeviceClass(this.hass, entries, 'motion')
-        .map((e) => e.entity_id)
-        .filter(matches(['on']));
+      // Spójnie z chip-defaults: motion + occupancy, zdeduplikowane.
+      const motion = filterBinarySensorDeviceClass(this.hass, entries, 'motion')
+        .map((e) => e.entity_id);
+      const occ = filterBinarySensorDeviceClass(this.hass, entries, 'occupancy')
+        .map((e) => e.entity_id);
+      const all = Array.from(new Set([...motion, ...occ]));
+      return all.filter(matches(['on']));
     }
     if (chip.type === 'occupancy') {
       return filterBinarySensorDeviceClass(this.hass, entries, 'occupancy')
