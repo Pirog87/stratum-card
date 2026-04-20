@@ -436,6 +436,24 @@ export type DisplayConditionOp =
   | 'eq';
 
 /**
+ * Dostępne typy animacji stosowanych do kafla/wiersza lub samej ikony.
+ * - `pulse` — glow pulse (box-shadow)
+ * - `blink` — mrugająca opacity
+ * - `shake` — drganie boczne (alert)
+ * - `glow` — stała poświata pulsująca łagodnie
+ * - `bounce` — delikatny hop w górę
+ * - `spin` — obrót 360° (tylko dla ikon ma sens)
+ */
+export type AnimationType =
+  | 'none'
+  | 'pulse'
+  | 'blink'
+  | 'shake'
+  | 'glow'
+  | 'bounce'
+  | 'spin';
+
+/**
  * Reguła warunkowego stylu pozycji pomieszczenia. Jedna reguła = jedno pole
  * + operator + ew. wartość + overrides stylu. Pierwsza spełniona reguła
  * wygrywa (kolejność w tablicy).
@@ -473,7 +491,21 @@ export interface DisplayConditionConfig {
   icon?: string;
   /** Osobny kolor ikony (niezależny od akcentu). */
   icon_color?: string;
-  /** Czy pozycja ma pulsować (animacja glow) gdy reguła spełniona. */
+  /** Skala ikony (1 = 100%, 1.3 = 130%). */
+  icon_size_scale?: number;
+  /** Animacja samej ikony (spin, pulse, blink, shake, bounce, glow). */
+  icon_animation?: AnimationType;
+  /** Animacja całej pozycji (pulse, blink, shake, glow, bounce). */
+  animation?: AnimationType;
+  /** Kolor tekstu (nazwy + wartości w info). */
+  text_color?: string;
+  /** Przezroczystość całej pozycji (0-1). Użyteczne dla „wyciszenia" gdy reguła. */
+  opacity?: number;
+  /**
+   * @deprecated od v1.26 — użyj `animation: 'pulse'`.
+   * Alias backward-compat: gdy `true` i `animation` nieustawione, traktujemy
+   * jak `animation: 'pulse'`.
+   */
   pulse?: boolean;
 }
 export type IconPosition =

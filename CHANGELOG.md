@@ -4,6 +4,37 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.26.0] — 2026-04-20
+
+### Added
+- **Presety warunków** — 8 gotowych scenariuszy z pre-fillem (alarm okno
+  otwarte, światła aktywne, motion live, gorąco, zimno, wilgotno, wyciszenie).
+  Rozwijane przyciskiem „Presety" w sekcji Warunki.
+- **6 typów animacji** dla całej pozycji i dla samej ikony:
+  `pulse`, `blink`, `shake`, `glow`, `bounce`, `spin` (tylko ikona).
+  Stare `pulse: true` (deprecated) migrowane do `animation: 'pulse'`.
+- **Nowe pola w `DisplayConditionConfig`:**
+  - `animation` — animacja całej pozycji
+  - `icon_animation` — animacja samej ikony (osobno)
+  - `text_color` — kolor nazwy + wartości pól
+  - `opacity` (0–1) — np. wyciszenie gdy pokój nieaktywny
+  - `icon_size_scale` — skala ikony (0.5–2.0)
+- Chipy w nagłówku: **domyślne chipy są widoczne i edytowalne** w edytorze
+  (dotąd „Brak chipów"). Przycisk „Przywróć domyślne" cofa zmiany.
+
+### Changed
+- **Conditions editor rebuild** — pola pogrupowane w trzy sekcje:
+  „Styl pozycji" / „Styl ikony" / „Styl tekstu". Chip rowe animacji
+  (z mini-animowanymi ikonami w chipach gdy wybrane). Slidery przezroczystości
+  i skali ikony z przyciskiem clear.
+
+### Fixed
+- **Podgląd karty w edytorze — mocniejsze wykrywanie.** Walk-up przez
+  shadow DOM szukając `hui-card-preview` / `hui-dialog-edit-card`, plus
+  standardowy setter `preview` obsługiwany przez HA. Force-expand na
+  każde setConfig w trybie edytora (niezależnie od `isFirst` —
+  HA potrafi recycling elementów).
+
 ## [1.25.0] — 2026-04-20
 
 ### Added
