@@ -33,7 +33,7 @@ import './stratum-card-room-tile.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.24.0';
+const VERSION = '1.25.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -58,6 +58,15 @@ export class StratumCard extends LitElement {
   /** Timer auto-collapse — wołany gdy karta rozwinięta i nic nie klikniemy. */
   private _autoCollapseTimer?: number;
 
+  /**
+   * Sprawdza czy karta jest renderowana w edytorze HA (preview pane).
+   * W edit mode: zawsze rozwinięta + brak auto-collapse, żeby user widział
+   * wszystkie sekcje na żywo podczas edycji.
+   */
+  private _isEditorPreview(): boolean {
+    return !!document.querySelector('hui-dialog-edit-card, hui-card-element-editor');
+  }
+
   private _autoCollapseSeconds(): number {
     const v = this._config?.auto_collapse;
     return typeof v === 'number' ? v : 60;
@@ -65,6 +74,8 @@ export class StratumCard extends LitElement {
 
   private _scheduleAutoCollapse(): void {
     this._clearAutoCollapse();
+    // W edit mode nie zwijamy — podgląd ma zawsze pokazywać pełną kartę.
+    if (this._isEditorPreview()) return;
     const seconds = this._autoCollapseSeconds();
     if (seconds <= 0 || !this._expanded) return;
     this._autoCollapseTimer = window.setTimeout(() => {
@@ -109,6 +120,17 @@ export class StratumCard extends LitElement {
     const expandedFlagChanged =
       this._config?.expanded !== config.expanded;
     this._config = config;
+
+    const editorMode = this._isEditorPreview();
+    if (editorMode) {
+      // Podgląd w edytorze: zawsze rozwinięty na starcie, brak auto-collapse.
+      // Dalsze setConfig (zmiany pól) zachowują aktualny stan
+      // `_expanded` — user może ręcznie zwinąć jeśli chce.
+      if (isFirst) this._expanded = true;
+      this._clearAutoCollapse();
+      return;
+    }
+
     if (isFirst || expandedFlagChanged) {
       this._expanded = Boolean(config.expanded);
       if (this._expanded) this._scheduleAutoCollapse();
@@ -280,14 +302,42 @@ export class StratumCard extends LitElement {
 
     const name = this._resolveName();
     const icon = this._resolveIcon();
+    const header = this._config.header ?? {};
 
     if (this._config.debug) this._debugLog();
+
+    const TITLE_SIZE_MAP: Record<string, string> = { sm: '14px', md: '17px', lg: '20px' };
+    const titleSizeCss = TITLE_SIZE_MAP[header.title_size ?? 'md']!;
+    const headerStyles = [
+      `--stratum-card-title-size: ${titleSizeCss};`,
+      header.title_weight
+        ? `--stratum-card-title-weight: ${header.title_weight};`
+        : '',
+      header.title_color
+        ? `--stratum-card-title-color: ${header.title_color};`
+        : '',
+      typeof header.icon_size === 'number'
+        ? `--stratum-card-icon-size: ${header.icon_size}px;`
+        : '',
+      header.icon_color
+        ? `--stratum-card-icon-color: ${header.icon_color};`
+        : '',
+      typeof header.padding === 'number'
+        ? `--stratum-card-header-padding: ${header.padding}px;`
+        : '',
+      header.accent_bar_color
+        ? `--stratum-card-accent-bar-color: ${header.accent_bar_color};`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     return html`
       <ha-card part="card" @pointerdown=${this._onInteraction}>
         <button
-          class="header"
+          class="header ${header.accent_bar ? 'has-accent-bar' : ''}"
           part="header"
+          style=${headerStyles}
           @click=${this._toggleExpand}
           aria-expanded=${this._expanded}
           aria-label="Rozwiń ${name}"
@@ -297,11 +347,13 @@ export class StratumCard extends LitElement {
           <div class="chips" part="chips">
             ${this._renderChips()}
           </div>
-          <ha-icon
-            class="expander ${this._expanded ? 'open' : ''}"
-            part="expander"
-            .icon=${'mdi:chevron-down'}
-          ></ha-icon>
+          ${header.hide_expander
+            ? nothing
+            : html`<ha-icon
+                class="expander ${this._expanded ? 'open' : ''}"
+                part="expander"
+                .icon=${'mdi:chevron-down'}
+              ></ha-icon>`}
         </button>
 
         <div
@@ -658,7 +710,7 @@ export class StratumCard extends LitElement {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 14px 16px;
+      padding: var(--stratum-card-header-padding, 14px) 16px;
       cursor: pointer;
       user-select: none;
       background: transparent;
@@ -667,6 +719,18 @@ export class StratumCard extends LitElement {
       color: inherit;
       font: inherit;
       text-align: left;
+      position: relative;
+    }
+
+    .header.has-accent-bar::before {
+      content: '';
+      position: absolute;
+      top: 10px;
+      bottom: 10px;
+      left: 0;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: var(--stratum-card-accent-bar-color, var(--primary-color, #ff9b42));
     }
 
     .header:hover {
@@ -689,6 +753,7 @@ export class StratumCard extends LitElement {
       font-size: var(--stratum-card-title-size, 17px);
       font-weight: var(--stratum-card-title-weight, 500);
       letter-spacing: -0.01em;
+      color: var(--stratum-card-title-color, var(--primary-text-color));
     }
 
     .chips {

@@ -4,6 +4,30 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.25.0] — 2026-04-20
+
+### Added
+- **Nowa sekcja „Belka nagłówka"** (collapsible) z rich UX:
+  - Rozmiar tytułu — chipy z live preview (Mały / Średni / Duży)
+  - Waga tytułu — chipy (400 / 500 / 600 / 700) z widoczną grubością
+  - Kolor tytułu / ikony — 8 swatch-chipów + custom hex/var
+  - Rozmiar ikony, padding belki — slidery z live wartościami
+  - Toggle: ukryj chevron expandera
+  - Toggle: akcentowy pasek z lewej + kolor
+- **Nowa sekcja „Chipy w nagłówku"** (collapsible):
+  - Lista chipów z add/remove/reorder
+  - Add menu z quick-pickami: Światła / Motion / Zajętość / Okna / Drzwi
+    + Encja / Filtr / Template
+  - Per-chip ha-form z polami pasującymi do typu (entity / filter / template)
+- Top-level `header: HeaderConfig` w `StratumCardConfig`.
+
+### Fixed
+- **Podgląd karty w edytorze nie zwija się automatycznie.** Karta
+  wykrywa tryb edytora (obecność `hui-dialog-edit-card` w DOM) i:
+  - startuje zawsze rozwinięta
+  - pomija `auto_collapse` timer
+  - zachowuje stan `_expanded` gdy user ręcznie zwinie/rozwinie
+
 ## [1.24.0] — 2026-04-20
 
 ### Changed

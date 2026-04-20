@@ -8,7 +8,9 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
+  ChipConfig,
   DisplayConditionConfig,
+  HeaderConfig,
   HomeAssistant,
   RoomConfig,
   RowDisplayConfig,
@@ -20,6 +22,8 @@ import './stratum-card-rooms-editor.js';
 import './stratum-scene-editor.js';
 import './stratum-conditions-editor.js';
 import './stratum-display-editor.js';
+import './stratum-header-editor.js';
+import './stratum-chips-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 interface FormSchemaItem {
@@ -203,6 +207,48 @@ export class StratumCardEditor extends LitElement {
     delete next.display_config;
     if (Object.keys(cleaned).length === 0) delete next.tile_config;
     else next.tile_config = cleaned;
+    this._emitConfig(next);
+  }
+
+  private _headerChanged(ev: CustomEvent<{ config: HeaderConfig }>): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const next: StratumCardConfig = { ...this._config };
+    const raw = ev.detail.config ?? {};
+    // Usuwamy empty keys żeby YAML był czysty.
+    const cleaned: HeaderConfig = {};
+    if (raw.title_size && raw.title_size !== 'md') cleaned.title_size = raw.title_size;
+    if (raw.title_weight && raw.title_weight !== 500) {
+      cleaned.title_weight = raw.title_weight;
+    }
+    if (raw.title_color && raw.title_color.trim() !== '') {
+      cleaned.title_color = raw.title_color;
+    }
+    if (raw.icon_color && raw.icon_color.trim() !== '') {
+      cleaned.icon_color = raw.icon_color;
+    }
+    if (typeof raw.icon_size === 'number' && raw.icon_size !== 22) {
+      cleaned.icon_size = raw.icon_size;
+    }
+    if (typeof raw.padding === 'number' && raw.padding !== 14) {
+      cleaned.padding = raw.padding;
+    }
+    if (raw.hide_expander === true) cleaned.hide_expander = true;
+    if (raw.accent_bar === true) cleaned.accent_bar = true;
+    if (raw.accent_bar_color && raw.accent_bar_color.trim() !== '') {
+      cleaned.accent_bar_color = raw.accent_bar_color;
+    }
+    if (Object.keys(cleaned).length === 0) delete next.header;
+    else next.header = cleaned;
+    this._emitConfig(next);
+  }
+
+  private _chipsChanged(ev: CustomEvent<{ chips: ChipConfig[] }>): void {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const next: StratumCardConfig = { ...this._config };
+    if (ev.detail.chips.length === 0) delete next.chips;
+    else next.chips = ev.detail.chips;
     this._emitConfig(next);
   }
 
@@ -469,6 +515,57 @@ export class StratumCardEditor extends LitElement {
     return html`
       ${this._renderBasePanel()}
 
+      <details
+        class="stratum-panel"
+        ?open=${this._openSections.has('header')}
+        @toggle=${(ev: Event) => this._onSectionToggle('header', ev)}
+      >
+        <summary class="stratum-panel-header">
+          <span class="stratum-panel-avatar header-avatar">
+            <ha-icon .icon=${'mdi:page-layout-header'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Belka nagłówka</h3>
+            <p class="stratum-panel-hint">
+              Wygląd górnej belki: rozmiar/kolor tytułu, ikona area, padding,
+              chevron, akcentowy pasek z lewej.
+            </p>
+          </div>
+        </summary>
+        <div class="stratum-panel-body">
+          <stratum-header-editor
+            .config=${this._config.header ?? {}}
+            @header-config-changed=${this._headerChanged}
+          ></stratum-header-editor>
+        </div>
+      </details>
+
+      <details
+        class="stratum-panel"
+        ?open=${this._openSections.has('chips')}
+        @toggle=${(ev: Event) => this._onSectionToggle('chips', ev)}
+      >
+        <summary class="stratum-panel-header">
+          <span class="stratum-panel-avatar chips-avatar">
+            <ha-icon .icon=${'mdi:label-multiple-outline'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Chipy w nagłówku</h3>
+            <p class="stratum-panel-hint">
+              Skróty po prawej stronie tytułu. Wbudowane: lights / motion /
+              okna / drzwi. Możesz dodać encję, filtr, albo template.
+            </p>
+          </div>
+        </summary>
+        <div class="stratum-panel-body">
+          <stratum-chips-editor
+            .hass=${this.hass}
+            .chips=${this._config.chips ?? []}
+            @chips-changed=${this._chipsChanged}
+          ></stratum-chips-editor>
+        </div>
+      </details>
+
       <details class="stratum-panel" ?open=${this._openSections.has('row')}
         @toggle=${(ev: Event) => this._onSectionToggle('row', ev)}>
         <summary class="stratum-panel-header">
@@ -606,6 +703,14 @@ export class StratumCardEditor extends LitElement {
       .stratum-panel-avatar.tile-avatar {
         background: color-mix(in srgb, #ff9800 22%, transparent);
         color: #ffb74d;
+      }
+      .stratum-panel-avatar.header-avatar {
+        background: color-mix(in srgb, #9c27b0 22%, transparent);
+        color: #ce93d8;
+      }
+      .stratum-panel-avatar.chips-avatar {
+        background: color-mix(in srgb, #4caf50 22%, transparent);
+        color: #81c784;
       }
     `,
     css`

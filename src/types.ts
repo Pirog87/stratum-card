@@ -108,10 +108,44 @@ export interface StratumCardConfig {
   chips?: ChipConfig[];
 
   /**
+   * Konfiguracja wyglądu belki nagłówka (nazwa area + ikona + chipy + expander).
+   * Pozwala dobrać rozmiar tytułu, kolor tytułu/ikony, padding, schować chevron.
+   */
+  header?: HeaderConfig;
+
+  /**
    * Pasek scen w body karty. Renderuje się powyżej lub poniżej listy pokoi
    * zgodnie z `scenes.position`. Nie renderuje się gdy `items` puste/brak.
    */
   scenes?: SceneBarConfig;
+}
+
+/** Predefiniowane rozmiary tytułu nagłówka. */
+export type HeaderTitleSize = 'sm' | 'md' | 'lg';
+
+/**
+ * Konfiguracja wyglądu belki nagłówka karty (ikona + nazwa + chipy + expander).
+ * Analogiczna struktura do `TileDisplayConfig`.
+ */
+export interface HeaderConfig {
+  /** Rozmiar tytułu: `sm` (14px), `md` (17px, default), `lg` (20px). */
+  title_size?: HeaderTitleSize;
+  /** Waga czcionki tytułu. Default 500. */
+  title_weight?: 400 | 500 | 600 | 700;
+  /** Kolor tytułu (nazwa area). Nazwa/hex/var. */
+  title_color?: string;
+  /** Rozmiar ikony area (px). Default 22. */
+  icon_size?: number;
+  /** Kolor ikony area. */
+  icon_color?: string;
+  /** Wewnętrzny padding belki (px). Default 14. */
+  padding?: number;
+  /** Ukryć chevron expandera. */
+  hide_expander?: boolean;
+  /** Dekoracyjny akcentowy pasek z lewej. */
+  accent_bar?: boolean;
+  /** Kolor akcentowego paska (tylko gdy `accent_bar: true`). */
+  accent_bar_color?: string;
 }
 
 /**
