@@ -14,6 +14,7 @@ import type {
 } from './types.js';
 import { SECTION_LABEL, SECTION_ICON } from './section-defaults.js';
 import { getCustomCardOptions } from './custom-cards.js';
+import { editorSharedStyles } from './editor-shared-styles.js';
 
 const TYPE_OPTIONS = [
   { value: 'summary', label: 'Podsumowanie' },
@@ -319,19 +320,25 @@ export class StratumSectionsEditor extends LitElement {
 
   protected render(): TemplateResult {
     return html`
-      <div class="sections">
+      <div class="stratum-list">
         ${this.sections.map((section, idx) => {
           const open = this._open.has(idx);
           const label = section.title ?? SECTION_LABEL[section.type];
           const icon = section.icon ?? SECTION_ICON[section.type];
+          const rowClass = `stratum-row ${!section.hidden ? 'active' : ''} ${section.hidden ? 'section-hidden' : ''}`;
           return html`
-            <div class="section ${open ? 'open' : ''} ${section.hidden ? 'hidden' : ''}">
-              <div class="row">
-                <ha-icon .icon=${icon}></ha-icon>
-                <span class="name">${label}</span>
-                <div class="actions">
+            <div class=${rowClass}>
+              <div class="stratum-row-head">
+                <span class="stratum-row-avatar">
+                  <ha-icon .icon=${icon}></ha-icon>
+                </span>
+                <span class="stratum-row-title">${label}</span>
+                ${section.hidden
+                  ? html`<span class="stratum-badge ghost">ukryta</span>`
+                  : nothing}
+                <div class="stratum-row-actions">
                   <button
-                    class="icon-btn"
+                    class="stratum-icon-btn"
                     title="Przesuń w górę"
                     ?disabled=${idx === 0}
                     @click=${() => this._move(idx, -1)}
@@ -339,7 +346,7 @@ export class StratumSectionsEditor extends LitElement {
                     <ha-icon .icon=${'mdi:chevron-up'}></ha-icon>
                   </button>
                   <button
-                    class="icon-btn"
+                    class="stratum-icon-btn"
                     title="Przesuń w dół"
                     ?disabled=${idx === this.sections.length - 1}
                     @click=${() => this._move(idx, 1)}
@@ -347,7 +354,7 @@ export class StratumSectionsEditor extends LitElement {
                     <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
                   </button>
                   <button
-                    class="icon-btn ${section.hidden ? '' : 'active-eye'}"
+                    class="stratum-icon-btn"
                     title=${section.hidden ? 'Pokaż' : 'Ukryj'}
                     @click=${() => this._toggleHidden(idx)}
                   >
@@ -356,14 +363,14 @@ export class StratumSectionsEditor extends LitElement {
                     ></ha-icon>
                   </button>
                   <button
-                    class="icon-btn edit ${open ? 'active' : ''}"
+                    class="stratum-icon-btn ${open ? 'accent' : ''}"
                     title=${open ? 'Zwiń' : 'Edytuj'}
                     @click=${() => this._toggleEdit(idx)}
                   >
                     <ha-icon .icon=${open ? 'mdi:chevron-up' : 'mdi:pencil'}></ha-icon>
                   </button>
                   <button
-                    class="icon-btn danger"
+                    class="stratum-icon-btn danger"
                     title="Usuń"
                     @click=${() => this._remove(idx)}
                   >
@@ -372,7 +379,7 @@ export class StratumSectionsEditor extends LitElement {
                 </div>
               </div>
               ${open
-                ? html`<div class="sub">
+                ? html`<div class="stratum-row-sub">
                     <ha-form
                       .hass=${this.hass}
                       .data=${{ columns: 'auto', ...section }}
@@ -385,7 +392,7 @@ export class StratumSectionsEditor extends LitElement {
                     ${section.type === 'custom'
                       ? html`<div class="card-yaml">
                           <label>Konfiguracja karty (YAML)</label>
-                          <p class="hint">
+                          <p class="card-hint">
                             Wklej dowolny config karty HA/HACS:
                             <code>type: media-control</code>,
                             <code>type: custom:mushroom-light-card</code>,
@@ -405,163 +412,58 @@ export class StratumSectionsEditor extends LitElement {
           `;
         })}
       </div>
-      <button class="add-btn" @click=${this._add}>
+      <button class="stratum-add-btn" @click=${this._add}>
         <ha-icon .icon=${'mdi:plus'}></ha-icon>
         Dodaj sekcję
       </button>
     `;
   }
 
-  static styles = css`
-    :host {
-      display: block;
-    }
+  static styles = [
+    editorSharedStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-    .sections {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
+      .section-hidden {
+        opacity: 0.55;
+      }
 
-    .section {
-      border: 1px solid var(--divider-color);
-      border-radius: 8px;
-      padding: 6px 10px;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.02));
-    }
+      .card-yaml {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--divider-color);
+      }
 
-    .section.open {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
-    }
+      .card-yaml label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--secondary-text-color);
+        margin-bottom: 4px;
+      }
 
-    .section.hidden {
-      opacity: 0.55;
-    }
+      .card-hint {
+        margin: 0 0 8px;
+        font-size: 12px;
+        color: var(--secondary-text-color);
+      }
 
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 4px 0;
-    }
+      .card-yaml code {
+        background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
 
-    .row > ha-icon {
-      --mdc-icon-size: 20px;
-      color: var(--secondary-text-color);
-    }
-
-    .name {
-      flex: 1;
-      font-weight: 500;
-    }
-
-    .actions {
-      display: flex;
-      gap: 2px;
-      margin-left: auto;
-    }
-
-    .icon-btn {
-      background: transparent;
-      border: 0;
-      padding: 4px;
-      cursor: pointer;
-      color: var(--secondary-text-color);
-      border-radius: 4px;
-      display: inline-flex;
-    }
-
-    .icon-btn:hover:not(:disabled) {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
-      color: var(--primary-text-color);
-    }
-
-    .icon-btn.active-eye {
-      color: var(--primary-text-color);
-    }
-
-    .icon-btn.edit.active {
-      background: var(--primary-color, #ff9b42);
-      color: #fff;
-    }
-
-    .icon-btn.danger:hover {
-      background: rgba(244, 67, 54, 0.15);
-      color: #f44336;
-    }
-
-    .icon-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .icon-btn ha-icon {
-      --mdc-icon-size: 18px;
-    }
-
-    .sub {
-      padding: 8px 0 4px 28px;
-      border-top: 1px dashed var(--divider-color);
-      margin-top: 4px;
-    }
-
-    .add-btn {
-      margin-top: 10px;
-      padding: 8px 14px;
-      border-radius: 6px;
-      border: 1px dashed var(--divider-color);
-      background: transparent;
-      color: var(--primary-text-color);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-    }
-
-    .add-btn:hover {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
-      border-color: var(--primary-color);
-      color: var(--primary-color);
-    }
-
-    .add-btn ha-icon {
-      --mdc-icon-size: 18px;
-    }
-
-    .card-yaml {
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 1px dashed var(--divider-color);
-    }
-
-    .card-yaml label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      color: var(--secondary-text-color);
-      margin-bottom: 4px;
-    }
-
-    .card-yaml .hint {
-      margin: 0 0 8px;
-      font-size: 12px;
-      color: var(--secondary-text-color);
-    }
-
-    .card-yaml code {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-size: 11px;
-    }
-
-    ha-yaml-editor {
-      display: block;
-    }
-  `;
+      ha-yaml-editor {
+        display: block;
+      }
+    `,
+  ];
 }
 
 declare global {

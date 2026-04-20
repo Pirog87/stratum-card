@@ -13,6 +13,7 @@ import type {
 } from './types.js';
 import './stratum-scene-editor.js';
 import './stratum-sections-editor.js';
+import { editorSharedStyles } from './editor-shared-styles.js';
 
 interface FormSchemaItem {
   name: string;
@@ -162,37 +163,70 @@ export class StratumRoomCardEditor extends LitElement {
   protected render(): TemplateResult {
     if (!this.hass || !this._config) return html``;
     return html`
-      <ha-form
-        .hass=${this.hass}
-        .data=${this._config}
-        .schema=${SCHEMA}
-        .computeLabel=${this._computeLabel}
-        .computeHelper=${this._computeHelper}
-        @value-changed=${this._valueChanged}
-      ></ha-form>
-      <div class="sections-section">
-        <h3>Sekcje</h3>
-        <p class="hint">
-          Lista sekcji pokoju — kolejność, ograniczenia encji, tryb
-          wyświetlania. Brak elementów = auto-discover na podstawie encji.
-        </p>
-        <stratum-sections-editor
-          .hass=${this.hass}
-          .sections=${this._normalizedSections()}
-          @sections-changed=${this._sectionsChanged}
-        ></stratum-sections-editor>
+      <div class="stratum-panel base-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:floor-plan'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Pokój</h3>
+            <p class="stratum-panel-hint">
+              Area, nazwa, ikona i opcjonalne scalanie z innymi pomieszczeniami.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <ha-form
+            .hass=${this.hass}
+            .data=${this._config}
+            .schema=${SCHEMA}
+            .computeLabel=${this._computeLabel}
+            .computeHelper=${this._computeHelper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+        </div>
       </div>
 
-      <div class="scenes-section">
-        <h3>Sceny</h3>
-        <p class="hint">
-          Pasek scen w widoku pokoju — zastępuje automatyczną sekcję „Sceny".
-        </p>
-        <stratum-scene-editor
-          .hass=${this.hass}
-          .config=${this._config.scenes ?? { items: [] }}
-          @scenes-changed=${this._scenesChanged}
-        ></stratum-scene-editor>
+      <div class="stratum-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:view-dashboard-outline'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Sekcje</h3>
+            <p class="stratum-panel-hint">
+              Kolejność i zawartość sekcji w widoku pokoju. Pusta lista = auto-discover po encjach.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <stratum-sections-editor
+            .hass=${this.hass}
+            .sections=${this._normalizedSections()}
+            @sections-changed=${this._sectionsChanged}
+          ></stratum-sections-editor>
+        </div>
+      </div>
+
+      <div class="stratum-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Sceny</h3>
+            <p class="stratum-panel-hint">
+              Pasek scen w widoku pokoju. Zastępuje auto-sekcję „Sceny" gdy coś wybrane.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <stratum-scene-editor
+            .hass=${this.hass}
+            .config=${this._config.scenes ?? { items: [] }}
+            @scenes-changed=${this._scenesChanged}
+          ></stratum-scene-editor>
+        </div>
       </div>
     `;
   }
@@ -202,31 +236,20 @@ export class StratumRoomCardEditor extends LitElement {
     return raw.map((s) => (typeof s === 'string' ? { type: s } : s));
   }
 
-  static styles = css`
-    :host {
-      display: block;
-    }
-    ha-form {
-      display: block;
-    }
-    .scenes-section,
-    .sections-section {
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 1px solid var(--divider-color);
-    }
-    .scenes-section h3,
-    .sections-section h3 {
-      margin: 0 0 4px;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .hint {
-      margin: 0 0 10px;
-      font-size: 12px;
-      color: var(--secondary-text-color);
-    }
-  `;
+  static styles = [
+    editorSharedStyles,
+    css`
+      :host {
+        display: block;
+      }
+      ha-form {
+        display: block;
+      }
+      .base-panel {
+        margin-top: 0;
+      }
+    `,
+  ];
 }
 
 declare global {
