@@ -13,7 +13,7 @@ import type {
   SummaryField,
 } from './types.js';
 import { SECTION_LABEL, SECTION_ICON } from './section-defaults.js';
-import { getCustomCardOptions } from './custom-cards.js';
+import { getCustomCardOptionsForSection } from './custom-cards.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 const TYPE_OPTIONS = [
@@ -116,7 +116,10 @@ function buildSchema(section: RoomSectionConfig) {
   ];
 
   const nativeModeOpts = MODE_OPTIONS_BY_TYPE[section.type];
-  const customCardOpts = nativeModeOpts && section.type !== 'summary' ? getCustomCardOptions() : [];
+  const customCardOpts =
+    nativeModeOpts && section.type !== 'summary'
+      ? getCustomCardOptionsForSection(section.type)
+      : [];
   const modeOpts = nativeModeOpts
     ? customCardOpts.length > 0
       ? [
