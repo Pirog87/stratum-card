@@ -289,7 +289,13 @@ export interface RoomSectionConfig {
 export type RoomSectionSpec = RoomSectionType | RoomSectionConfig;
 
 /** Wbudowane typy chipów agregujących encje area/floor. */
-export type BuiltInChipType = 'lights' | 'motion' | 'occupancy' | 'windows' | 'doors';
+export type BuiltInChipType =
+  | 'lights'
+  | 'motion'
+  | 'occupancy'
+  | 'windows'
+  | 'doors'
+  | 'leak';
 
 /** Wspólne pola dla wszystkich typów chipów. */
 interface BaseChipConfig {
