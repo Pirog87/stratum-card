@@ -17,6 +17,7 @@ import {
   presetIdFromValue,
   resolveSceneImage,
 } from './scene-presets.js';
+import { editorSharedStyles } from './editor-shared-styles.js';
 
 const GLOBAL_SCHEMA = [
   {
@@ -270,17 +271,19 @@ export class StratumSceneEditor extends LitElement {
           ></ha-form>`
         : nothing}
 
-      <div class="scenes">
+      <div class="stratum-list scenes-list">
         ${items.map((scene, idx) => {
           const open = this._openScenes.has(idx);
           return html`
-            <div class="scene ${open ? 'open' : ''}">
-              <div class="row">
-                <ha-icon .icon=${scene.icon ?? (scene.image ? 'mdi:image' : 'mdi:palette')}></ha-icon>
-                <span class="name">${this._sceneTitle(scene)}</span>
-                <div class="actions">
+            <div class="stratum-row active">
+              <div class="stratum-row-head">
+                <span class="stratum-row-avatar">
+                  <ha-icon .icon=${scene.icon ?? (scene.image ? 'mdi:image' : 'mdi:palette')}></ha-icon>
+                </span>
+                <span class="stratum-row-title">${this._sceneTitle(scene)}</span>
+                <div class="stratum-row-actions">
                   <button
-                    class="icon-btn"
+                    class="stratum-icon-btn"
                     title="Przesuń w górę"
                     ?disabled=${idx === 0}
                     @click=${() => this._moveScene(idx, -1)}
@@ -288,7 +291,7 @@ export class StratumSceneEditor extends LitElement {
                     <ha-icon .icon=${'mdi:chevron-up'}></ha-icon>
                   </button>
                   <button
-                    class="icon-btn"
+                    class="stratum-icon-btn"
                     title="Przesuń w dół"
                     ?disabled=${idx === items.length - 1}
                     @click=${() => this._moveScene(idx, 1)}
@@ -296,14 +299,14 @@ export class StratumSceneEditor extends LitElement {
                     <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
                   </button>
                   <button
-                    class="icon-btn edit ${open ? 'active' : ''}"
+                    class="stratum-icon-btn ${open ? 'accent' : ''}"
                     title=${open ? 'Zwiń' : 'Edytuj'}
                     @click=${() => this._toggleEdit(idx)}
                   >
                     <ha-icon .icon=${open ? 'mdi:chevron-up' : 'mdi:pencil'}></ha-icon>
                   </button>
                   <button
-                    class="icon-btn danger"
+                    class="stratum-icon-btn danger"
                     title="Usuń"
                     @click=${() => this._removeScene(idx)}
                   >
@@ -312,7 +315,7 @@ export class StratumSceneEditor extends LitElement {
                 </div>
               </div>
               ${open
-                ? html`<div class="sub">
+                ? html`<div class="stratum-row-sub">
                     <ha-form
                       .hass=${this.hass}
                       .data=${scene}
@@ -329,201 +332,107 @@ export class StratumSceneEditor extends LitElement {
           `;
         })}
       </div>
-      <button class="add-btn" @click=${this._addScene}>
+      <button class="stratum-add-btn" @click=${this._addScene}>
         <ha-icon .icon=${'mdi:plus'}></ha-icon>
         Dodaj scenę
       </button>
     `;
   }
 
-  static styles = css`
-    :host {
-      display: block;
-    }
+  static styles = [
+    editorSharedStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-    .scenes {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 12px;
-    }
+      .scenes-list {
+        margin-top: 12px;
+      }
 
-    .scene {
-      border: 1px solid var(--divider-color);
-      border-radius: 8px;
-      padding: 6px 10px;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.02));
-    }
+      .preset-block {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--divider-color);
+      }
 
-    .scene.open {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
-    }
+      .preset-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--secondary-text-color);
+        margin-bottom: 6px;
+      }
 
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 4px 0;
-    }
+      .reset {
+        background: transparent;
+        border: 1px solid var(--divider-color);
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 11px;
+        color: var(--secondary-text-color);
+        cursor: pointer;
+        text-transform: none;
+        letter-spacing: 0;
+      }
 
-    .row > ha-icon {
-      --mdc-icon-size: 20px;
-      color: var(--secondary-text-color);
-    }
+      .reset:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+      }
 
-    .name {
-      flex: 1;
-      font-weight: 500;
-    }
+      .preset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+        gap: 8px;
+      }
 
-    .actions {
-      display: flex;
-      gap: 2px;
-      margin-left: auto;
-    }
+      .preset-thumb {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 0;
+        border: 2px solid transparent;
+        border-radius: 10px;
+        background: transparent;
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform 0.12s ease, border-color 0.12s ease,
+          box-shadow 0.12s ease;
+      }
 
-    .icon-btn {
-      background: transparent;
-      border: 0;
-      padding: 4px;
-      cursor: pointer;
-      color: var(--secondary-text-color);
-      border-radius: 4px;
-      display: inline-flex;
-    }
+      .preset-thumb:hover {
+        transform: translateY(-1px);
+        border-color: var(--divider-color);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+      }
 
-    .icon-btn:hover:not(:disabled) {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
-      color: var(--primary-text-color);
-    }
+      .preset-thumb.selected {
+        border-color: var(--primary-color, #ff9b42);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #ff9b42) 25%, transparent);
+      }
 
-    .icon-btn.edit.active {
-      background: var(--primary-color, #ff9b42);
-      color: #fff;
-    }
+      .thumb-image {
+        display: block;
+        aspect-ratio: 16/9;
+        background-size: cover;
+        background-position: center;
+        border-radius: 8px 8px 0 0;
+      }
 
-    .icon-btn.danger:hover {
-      background: rgba(244, 67, 54, 0.15);
-      color: #f44336;
-    }
-
-    .icon-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .icon-btn ha-icon {
-      --mdc-icon-size: 18px;
-    }
-
-    .sub {
-      padding: 8px 0 4px 28px;
-      border-top: 1px dashed var(--divider-color);
-      margin-top: 4px;
-    }
-
-    .add-btn {
-      margin-top: 10px;
-      padding: 8px 14px;
-      border-radius: 6px;
-      border: 1px dashed var(--divider-color);
-      background: transparent;
-      color: var(--primary-text-color);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-    }
-
-    .add-btn:hover {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
-      border-color: var(--primary-color);
-      color: var(--primary-color);
-    }
-
-    .add-btn ha-icon {
-      --mdc-icon-size: 18px;
-    }
-
-    .preset-block {
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 1px dashed var(--divider-color);
-    }
-
-    .preset-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      color: var(--secondary-text-color);
-      margin-bottom: 6px;
-    }
-
-    .reset {
-      background: transparent;
-      border: 1px solid var(--divider-color);
-      border-radius: 4px;
-      padding: 2px 8px;
-      font-size: 11px;
-      color: var(--secondary-text-color);
-      cursor: pointer;
-      text-transform: none;
-      letter-spacing: 0;
-    }
-
-    .reset:hover {
-      border-color: var(--primary-color);
-      color: var(--primary-color);
-    }
-
-    .preset-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-      gap: 6px;
-    }
-
-    .preset-thumb {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      padding: 0;
-      border: 2px solid transparent;
-      border-radius: 8px;
-      background: transparent;
-      overflow: hidden;
-      cursor: pointer;
-      transition: transform 0.12s ease, border-color 0.12s ease;
-    }
-
-    .preset-thumb:hover {
-      transform: translateY(-1px);
-      border-color: var(--divider-color);
-    }
-
-    .preset-thumb.selected {
-      border-color: var(--primary-color, #ff9b42);
-    }
-
-    .thumb-image {
-      display: block;
-      aspect-ratio: 16/9;
-      background-size: cover;
-      background-position: center;
-      border-radius: 6px 6px 0 0;
-    }
-
-    .thumb-label {
-      padding: 4px 0;
-      font-size: 11px;
-      color: var(--primary-text-color);
-      text-align: center;
-    }
-  `;
+      .thumb-label {
+        padding: 5px 0;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--primary-text-color);
+        text-align: center;
+      }
+    `,
+  ];
 }
 
 declare global {

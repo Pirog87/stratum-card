@@ -18,6 +18,7 @@ import type {
 } from './types.js';
 import './stratum-sections-editor.js';
 import './stratum-scene-editor.js';
+import { editorSharedStyles } from './editor-shared-styles.js';
 
 const ROOM_LABELS: Record<string, string> = {
   name: 'Nazwa (override)',
@@ -303,7 +304,7 @@ export class StratumCardRoomsEditor extends LitElement {
     const areas = this._sortedAreas();
     if (!this.hass) return nothing;
     if (areas.length === 0) {
-      return html`<div class="empty">
+      return html`<div class="stratum-empty">
         Wybierz piętro lub strefę wyżej — pojawi się tu lista pomieszczeń do
         wyboru.
       </div>`;
@@ -316,16 +317,18 @@ export class StratumCardRoomsEditor extends LitElement {
         : this.rooms.filter((r) => !r.hidden).length;
 
     return html`
-      <div class="toolbar">
-        <span class="count">${selectedCount} / ${areas.length} zaznaczonych</span>
-        <button type="button" class="bulk" @click=${this._selectAll}>
+      <div class="stratum-toolbar">
+        <span class="stratum-count">${selectedCount} / ${areas.length} zaznaczonych</span>
+        <button type="button" class="stratum-pill-btn" @click=${this._selectAll}>
+          <ha-icon .icon=${'mdi:checkbox-multiple-marked-outline'}></ha-icon>
           Zaznacz wszystkie
         </button>
-        <button type="button" class="bulk" @click=${this._deselectAll}>
+        <button type="button" class="stratum-pill-btn" @click=${this._deselectAll}>
+          <ha-icon .icon=${'mdi:checkbox-multiple-blank-outline'}></ha-icon>
           Odznacz wszystkie
         </button>
       </div>
-      <div class="wrap">
+      <div class="stratum-list">
         ${areas.map((area) => {
           const visible = this._isVisible(area.area_id);
           const room = this._getRoom(area.area_id);
@@ -338,36 +341,39 @@ export class StratumCardRoomsEditor extends LitElement {
           );
           const editOpen = this._openRooms.has(area.area_id);
           return html`
-            <div class="room ${editOpen ? 'open' : ''}">
-              <div class="row">
+            <div class="stratum-row ${visible ? 'active' : ''}">
+              <div class="stratum-row-head">
                 <input
                   type="checkbox"
+                  class="room-check"
                   .checked=${visible}
                   @change=${(ev: Event) =>
                     this._toggleArea(area.area_id, (ev.target as HTMLInputElement).checked)}
                 />
-                <ha-icon .icon=${area.icon ?? 'mdi:floor-plan'}></ha-icon>
-                <span class="name">${area.name}</span>
+                <span class="stratum-row-avatar">
+                  <ha-icon .icon=${area.icon ?? 'mdi:floor-plan'}></ha-icon>
+                </span>
+                <span class="stratum-row-title">${area.name}</span>
                 ${mergeCount > 0
-                  ? html`<span class="badge merge">+${mergeCount}</span>`
+                  ? html`<span class="stratum-badge merge">+${mergeCount}</span>`
                   : nothing}
                 ${mergedAwayInto
-                  ? html`<span class="badge sub"
+                  ? html`<span class="stratum-badge ghost"
                       >scalone z
                       ${this.hass?.areas?.[mergedAwayInto.area_id]?.name ??
                       mergedAwayInto.area_id}</span
                     >`
                   : nothing}
                 ${hasOverrides
-                  ? html`<span class="badge">custom</span>`
+                  ? html`<span class="stratum-badge accent">custom</span>`
                   : nothing}
                 ${visible
                   ? (() => {
                       const pos = this._getPosition(area.area_id);
-                      return html`<div class="actions">
+                      return html`<div class="stratum-row-actions">
                         <button
                           type="button"
-                          class="icon-btn"
+                          class="stratum-icon-btn"
                           title="Przesuń w górę"
                           ?disabled=${pos.index <= 0}
                           @click=${(ev: Event) => {
@@ -380,7 +386,7 @@ export class StratumCardRoomsEditor extends LitElement {
                         </button>
                         <button
                           type="button"
-                          class="icon-btn"
+                          class="stratum-icon-btn"
                           title="Przesuń w dół"
                           ?disabled=${pos.index === -1 || pos.index >= pos.total - 1}
                           @click=${(ev: Event) => {
@@ -393,7 +399,7 @@ export class StratumCardRoomsEditor extends LitElement {
                         </button>
                         <button
                           type="button"
-                          class="icon-btn edit ${editOpen ? 'active' : ''}"
+                          class="stratum-icon-btn ${editOpen ? 'accent' : ''}"
                           title=${editOpen ? 'Zwiń' : 'Edytuj'}
                           @click=${(ev: Event) => {
                             ev.preventDefault();
@@ -411,7 +417,7 @@ export class StratumCardRoomsEditor extends LitElement {
               </div>
               ${visible && editOpen
                 ? html`
-                    <div class="sub">
+                    <div class="stratum-row-sub">
                       <ha-form
                         .hass=${this.hass}
                         .data=${room ?? { area_id: area.area_id }}
@@ -421,34 +427,37 @@ export class StratumCardRoomsEditor extends LitElement {
                         @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
                           this._onFieldChange(area.area_id, ev)}
                       ></ha-form>
-                      <details class="popup-cfg">
+                      <details class="stratum-collapsible">
                         <summary>
                           <ha-icon .icon=${'mdi:view-dashboard-outline'}></ha-icon>
                           <span>Sekcje popup pomieszczenia</span>
                         </summary>
-                        <p class="hint">
-                          Kolejność i zawartość sekcji które pojawią się w popup
-                          po kliknięciu tego pokoju. Puste = auto-discover z
-                          encji.
-                        </p>
-                        <stratum-sections-editor
-                          .hass=${this.hass}
-                          .sections=${this._normalizedRoomSections(room)}
-                          @sections-changed=${(ev: CustomEvent<{ sections: RoomSectionConfig[] }>) =>
-                            this._onSectionsChanged(area.area_id, ev)}
-                        ></stratum-sections-editor>
+                        <div class="stratum-collapsible-body">
+                          <p class="stratum-collapsible-hint">
+                            Kolejność i zawartość sekcji które pojawią się w popup po
+                            kliknięciu tego pokoju. Puste = auto-discover z encji.
+                          </p>
+                          <stratum-sections-editor
+                            .hass=${this.hass}
+                            .sections=${this._normalizedRoomSections(room)}
+                            @sections-changed=${(ev: CustomEvent<{ sections: RoomSectionConfig[] }>) =>
+                              this._onSectionsChanged(area.area_id, ev)}
+                          ></stratum-sections-editor>
+                        </div>
                       </details>
-                      <details class="popup-cfg">
+                      <details class="stratum-collapsible">
                         <summary>
                           <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
                           <span>Sceny popup pomieszczenia</span>
                         </summary>
-                        <stratum-scene-editor
-                          .hass=${this.hass}
-                          .config=${room?.scenes ?? { items: [] }}
-                          @scenes-changed=${(ev: CustomEvent<{ scenes: SceneBarConfig }>) =>
-                            this._onScenesChanged(area.area_id, ev)}
-                        ></stratum-scene-editor>
+                        <div class="stratum-collapsible-body">
+                          <stratum-scene-editor
+                            .hass=${this.hass}
+                            .config=${room?.scenes ?? { items: [] }}
+                            @scenes-changed=${(ev: CustomEvent<{ scenes: SceneBarConfig }>) =>
+                              this._onScenesChanged(area.area_id, ev)}
+                          ></stratum-scene-editor>
+                        </div>
                       </details>
                     </div>
                   `
@@ -460,201 +469,22 @@ export class StratumCardRoomsEditor extends LitElement {
     `;
   }
 
-  static styles = css`
-    :host {
-      display: block;
-    }
+  static styles = [
+    editorSharedStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-    .wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .empty {
-      padding: 12px;
-      color: var(--secondary-text-color);
-      font-style: italic;
-      text-align: center;
-      border: 1px dashed var(--divider-color);
-      border-radius: 8px;
-    }
-
-    .room {
-      border: 1px solid var(--divider-color);
-      border-radius: 8px;
-      padding: 6px 10px;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.02));
-    }
-
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      user-select: none;
-      padding: 4px 0;
-    }
-
-    .row ha-icon {
-      --mdc-icon-size: 20px;
-      color: var(--secondary-text-color);
-    }
-
-    .name {
-      flex: 1;
-      font-weight: 500;
-    }
-
-    .badge {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 999px;
-      background: var(--primary-color, #ff9b42);
-      color: #fff;
-      text-transform: uppercase;
-      font-weight: 600;
-    }
-
-    .badge.merge {
-      background: #42a5f5;
-    }
-
-    .badge.sub {
-      background: transparent;
-      color: var(--secondary-text-color);
-      border: 1px solid var(--divider-color);
-      text-transform: none;
-      font-style: italic;
-    }
-
-    .sub {
-      padding: 8px 0 4px 28px;
-      border-top: 1px dashed var(--divider-color);
-      margin-top: 4px;
-    }
-
-    input[type='checkbox'] {
-      width: 18px;
-      height: 18px;
-      margin: 0;
-      accent-color: var(--primary-color, #ff9b42);
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.02));
-      font-size: 12px;
-    }
-
-    .toolbar .count {
-      flex: 1;
-      color: var(--secondary-text-color);
-    }
-
-    .bulk {
-      background: transparent;
-      border: 1px solid var(--divider-color);
-      border-radius: 4px;
-      padding: 4px 10px;
-      font-size: 12px;
-      color: var(--primary-text-color);
-      cursor: pointer;
-    }
-
-    .bulk:hover {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
-      border-color: var(--primary-color, #ff9b42);
-    }
-
-    .actions {
-      display: flex;
-      gap: 2px;
-      margin-left: auto;
-    }
-
-    .icon-btn {
-      background: transparent;
-      border: 0;
-      padding: 4px;
-      cursor: pointer;
-      color: var(--secondary-text-color);
-      border-radius: 4px;
-      display: inline-flex;
-    }
-
-    .icon-btn:hover:not(:disabled) {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
-      color: var(--primary-text-color);
-    }
-
-    .icon-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .icon-btn.edit.active {
-      background: var(--primary-color, #ff9b42);
-      color: #fff;
-    }
-
-    .icon-btn ha-icon {
-      --mdc-icon-size: 18px;
-    }
-
-    .room.open {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
-    }
-
-    .popup-cfg {
-      margin-top: 10px;
-      border: 1px solid var(--divider-color);
-      border-radius: 6px;
-      padding: 6px 10px;
-      background: var(--card-background-color, transparent);
-    }
-
-    .popup-cfg summary {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 13px;
-      padding: 4px 0;
-      list-style: none;
-    }
-
-    .popup-cfg summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .popup-cfg summary ha-icon {
-      --mdc-icon-size: 18px;
-      color: var(--secondary-text-color);
-    }
-
-    .popup-cfg summary::after {
-      content: '▸';
-      margin-left: auto;
-      color: var(--secondary-text-color);
-      transition: transform 0.15s ease;
-    }
-
-    .popup-cfg[open] summary::after {
-      transform: rotate(90deg);
-    }
-
-    .popup-cfg .hint {
-      margin: 6px 0 10px;
-      font-size: 12px;
-      color: var(--secondary-text-color);
-    }
-  `;
+      input[type='checkbox'].room-check {
+        width: 18px;
+        height: 18px;
+        margin: 0;
+        accent-color: var(--primary-color, #ff9b42);
+        cursor: pointer;
+      }
+    `,
+  ];
 }
 
 declare global {

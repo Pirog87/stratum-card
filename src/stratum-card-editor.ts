@@ -15,6 +15,7 @@ import type {
 } from './types.js';
 import './stratum-card-rooms-editor.js';
 import './stratum-scene-editor.js';
+import { editorSharedStyles } from './editor-shared-styles.js';
 
 interface FormSchemaItem {
   name: string;
@@ -146,74 +147,90 @@ export class StratumCardEditor extends LitElement {
       ...this._config,
     };
     return html`
-      <ha-form
-        .hass=${this.hass}
-        .data=${formData}
-        .schema=${SCHEMA}
-        .computeLabel=${this._computeLabel}
-        .computeHelper=${this._computeHelper}
-        @value-changed=${this._valueChanged}
-      ></ha-form>
-      <div class="rooms-section">
-        <h3>Pomieszczenia</h3>
-        <p class="hint">
-          Zaznacz pomieszczenia które mają się pokazać na liście. Możesz nadpisać
-          nazwę, ikonę i akcję klik per pomieszczenie. Brak zaznaczeń = wszystkie
-          pomieszczenia floor-a (auto-discover).
-        </p>
-        <stratum-card-rooms-editor
-          .hass=${this.hass}
-          .floorId=${this._config.floor_id ?? ''}
-          .areaId=${this._config.area_id ?? ''}
-          .rooms=${this._config.rooms ?? []}
-          @rooms-changed=${this._roomsChanged}
-        ></stratum-card-rooms-editor>
+      <div class="stratum-panel base-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:home-floor-0'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Karta Stratum</h3>
+            <p class="stratum-panel-hint">
+              Wybierz piętro lub strefę, dostosuj nagłówek, domyślne zachowanie.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <ha-form
+            .hass=${this.hass}
+            .data=${formData}
+            .schema=${SCHEMA}
+            .computeLabel=${this._computeLabel}
+            .computeHelper=${this._computeHelper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+        </div>
       </div>
 
-      <div class="scenes-section">
-        <h3>Sceny</h3>
-        <p class="hint">
-          Pasek scen w karcie — ponad lub pod listą pomieszczeń. Każda scena
-          może mieć obrazek, własną ikonę i kolor.
-        </p>
-        <stratum-scene-editor
-          .hass=${this.hass}
-          .config=${this._config.scenes ?? { items: [] }}
-          @scenes-changed=${this._scenesChanged}
-        ></stratum-scene-editor>
+      <div class="stratum-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:view-list-outline'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Pomieszczenia</h3>
+            <p class="stratum-panel-hint">
+              Zaznacz, posortuj, dostosuj widok popup per pomieszczenie. Brak zaznaczeń = auto-discover.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <stratum-card-rooms-editor
+            .hass=${this.hass}
+            .floorId=${this._config.floor_id ?? ''}
+            .areaId=${this._config.area_id ?? ''}
+            .rooms=${this._config.rooms ?? []}
+            @rooms-changed=${this._roomsChanged}
+          ></stratum-card-rooms-editor>
+        </div>
+      </div>
+
+      <div class="stratum-panel">
+        <div class="stratum-panel-header">
+          <span class="stratum-panel-avatar">
+            <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Sceny</h3>
+            <p class="stratum-panel-hint">
+              Pasek scen w karcie. Każda scena ma obrazek (lub preset), własną ikonę i akcję.
+            </p>
+          </div>
+        </div>
+        <div class="stratum-panel-body">
+          <stratum-scene-editor
+            .hass=${this.hass}
+            .config=${this._config.scenes ?? { items: [] }}
+            @scenes-changed=${this._scenesChanged}
+          ></stratum-scene-editor>
+        </div>
       </div>
     `;
   }
 
-  static styles = css`
-    :host {
-      display: block;
-    }
-    ha-form {
-      display: block;
-    }
-    .rooms-section {
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 1px solid var(--divider-color);
-    }
-    .rooms-section h3,
-    .scenes-section h3 {
-      margin: 0 0 4px;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .scenes-section {
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 1px solid var(--divider-color);
-    }
-    .hint {
-      margin: 0 0 10px;
-      font-size: 12px;
-      color: var(--secondary-text-color);
-    }
-  `;
+  static styles = [
+    editorSharedStyles,
+    css`
+      :host {
+        display: block;
+      }
+      ha-form {
+        display: block;
+      }
+      .base-panel {
+        margin-top: 0;
+      }
+    `,
+  ];
 }
 
 declare global {
