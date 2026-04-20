@@ -44,6 +44,9 @@ export interface ConditionOverride {
   border_width?: number;
   accent_color?: string;
   background_color?: string;
+  icon?: string;
+  icon_color?: string;
+  pulse?: boolean;
 }
 
 /**
@@ -326,6 +329,9 @@ export function evaluateConditions(
       if (typeof cond.border_width === 'number') override.border_width = cond.border_width;
       if (cond.accent_color) override.accent_color = cond.accent_color;
       if (cond.background_color) override.background_color = cond.background_color;
+      if (cond.icon) override.icon = cond.icon;
+      if (cond.icon_color) override.icon_color = cond.icon_color;
+      if (cond.pulse) override.pulse = true;
       return Object.keys(override).length > 0 ? override : undefined;
     }
   }

@@ -77,6 +77,7 @@ export class StratumCardRoomTile extends LitElement {
     const showIcon = cfg.show_icon !== false;
     const showName = cfg.show_name !== false;
     const ovr = this.conditionOverride;
+    const iconColorOvr = resolveColor(ovr?.icon_color);
     // Priorytety: conditionOverride.accent > lightsAccent (dynamiczne) > cfg.accent_color > default amber.
     const accent =
       resolveColor(ovr?.accent_color) ??
@@ -125,6 +126,7 @@ export class StratumCardRoomTile extends LitElement {
       borderColorOvr ? `border-color: ${borderColorOvr};` : '',
       borderWidthOvr ? `border-width: ${borderWidthOvr};` : '',
       bgColorOvr ? `background-color: ${bgColorOvr};` : '',
+      iconColorOvr ? `--stratum-room-tile-icon-color: ${iconColorOvr};` : '',
       bgImage
         ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;`
         : '',
@@ -133,10 +135,12 @@ export class StratumCardRoomTile extends LitElement {
     const styles = cssVars.filter(Boolean).join(' ');
 
     const effectiveActive = active || Boolean(ovr?.accent_color) || lightsActive;
+    const effectiveIcon = ovr?.icon ?? this.icon;
+    const shouldPulse = Boolean(ovr?.pulse);
 
     return html`
       <div
-        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''}"
+        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''} ${shouldPulse ? 'pulse' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -149,7 +153,7 @@ export class StratumCardRoomTile extends LitElement {
       >
         ${showIcon && iconStyle !== 'none'
           ? html`<span class="icon-slot icon-${iconStyle}">
-              <ha-icon .icon=${this.icon}></ha-icon>
+              <ha-icon .icon=${effectiveIcon}></ha-icon>
             </span>`
           : nothing}
         ${this.motion && fields.includes('motion')
@@ -355,15 +359,49 @@ export class StratumCardRoomTile extends LitElement {
       width: calc(var(--stratum-room-tile-icon-size, 22px) + 20px);
       height: calc(var(--stratum-room-tile-icon-size, 22px) + 20px);
       border-radius: 50%;
-      background: color-mix(in srgb, var(--primary-color, #ff9b42) 15%, transparent);
-      color: var(--primary-color, #ff9b42);
+      background: color-mix(
+        in srgb,
+        var(--stratum-room-tile-icon-color, var(--primary-color, #ff9b42)) 15%,
+        transparent
+      );
+      color: var(--stratum-room-tile-icon-color, var(--primary-color, #ff9b42));
     }
     .tile.active .icon-bubble {
       background: color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 22%, transparent);
       color: var(--stratum-chip-lights-color, #ffc107);
     }
-    .icon-flat { color: var(--primary-color, #ff9b42); }
-    .tile.active .icon-flat { color: var(--stratum-chip-lights-color, #ffc107); }
+    .icon-flat {
+      color: var(--stratum-room-tile-icon-color, var(--primary-color, #ff9b42));
+    }
+    .tile.active .icon-flat {
+      color: var(--stratum-room-tile-icon-color, var(--stratum-chip-lights-color, #ffc107));
+    }
+
+    /* --- Pulse animation (warunek spełniony + pulse=true) --- */
+    .tile.pulse {
+      animation: stratum-tile-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes stratum-tile-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(
+          in srgb,
+          var(--stratum-room-tile-active-color, #ffc107) 45%,
+          transparent
+        );
+      }
+      50% {
+        box-shadow: 0 0 0 8px color-mix(
+          in srgb,
+          var(--stratum-room-tile-active-color, #ffc107) 0%,
+          transparent
+        );
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .tile.pulse {
+        animation: none;
+      }
+    }
 
     .motion-dot {
       --mdc-icon-size: 18px;

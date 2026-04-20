@@ -84,6 +84,9 @@ export class StratumCardRoomRow extends LitElement {
       resolveColor(ovr?.accent_color) ??
       this.lightsAccent ??
       resolveColor(cfg.accent_color);
+    const effectiveIcon = ovr?.icon ?? this.icon;
+    const iconColorOvr = resolveColor(ovr?.icon_color);
+    const shouldPulse = Boolean(ovr?.pulse);
     const borderColorOvr = resolveColor(ovr?.border_color);
     const borderWidthOvr =
       typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
@@ -115,13 +118,14 @@ export class StratumCardRoomRow extends LitElement {
         ? `border-width: ${borderWidthOvr};`
         : '',
       bgColorOvr ? `background-color: ${bgColorOvr};` : '',
+      iconColorOvr ? `--stratum-card-room-icon-color: ${iconColorOvr};` : '',
       this.styleOverride ?? '',
     ];
     const styles = cssVars.filter(Boolean).join(' ');
 
     return html`
       <div
-        class="row ${effectiveActive ? 'active' : ''}"
+        class="row ${effectiveActive ? 'active' : ''} ${shouldPulse ? 'pulse' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -131,7 +135,7 @@ export class StratumCardRoomRow extends LitElement {
         @keydown=${this._onKey}
       >
         ${showIcon
-          ? html`<ha-icon class="icon" .icon=${this.icon}></ha-icon>`
+          ? html`<ha-icon class="icon" .icon=${effectiveIcon}></ha-icon>`
           : nothing}
         ${showName
           ? html`<span class="name">${this.name}</span>`
@@ -251,8 +255,30 @@ export class StratumCardRoomRow extends LitElement {
       flex-shrink: 0;
     }
 
+    /* --- Pulse animation (warunek spełniony + pulse=true) --- */
+    .row.pulse {
+      animation: stratum-row-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes stratum-row-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(
+          in srgb,
+          var(--stratum-room-row-active-color, #ffc107) 45%,
+          transparent
+        );
+      }
+      50% {
+        box-shadow: 0 0 0 6px color-mix(
+          in srgb,
+          var(--stratum-room-row-active-color, #ffc107) 0%,
+          transparent
+        );
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .row { transition: none; }
+      .row.pulse { animation: none; }
       :host([clickable]) .row:hover,
       :host([clickable]) .row:active { transform: none; }
     }
