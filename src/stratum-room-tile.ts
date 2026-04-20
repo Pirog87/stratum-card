@@ -14,6 +14,7 @@
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HassEntity, HomeAssistant } from './types.js';
+import { buildDefaultCustomConfig } from './custom-cards.js';
 
 function domainOf(entityId: string): string {
   return entityId.split('.')[0] ?? '';
@@ -29,14 +30,13 @@ export class StratumRoomTile extends LitElement {
 
   @property({ type: String, attribute: 'entity' }) public entity = '';
 
-  /** Tryb wyświetlania tile. */
-  @property({ type: String }) public mode:
-    | 'tile'
-    | 'slider'
-    | 'chips'
-    | 'bubble'
-    | 'icon'
-    | 'ambient' = 'tile';
+  /**
+   * Tryb wyświetlania tile. Akceptuje natywne (`tile`/`slider`/`chips`/...)
+   * oraz dowolne custom card type w formacie `custom:xxx` (np.
+   * `custom:mushroom-light-card`) — wtedy wewnętrznie renderujemy ten typ
+   * karty z auto-configiem.
+   */
+  @property({ type: String }) public mode = 'tile';
 
   private _state(): HassEntity | undefined {
     return this.hass?.states?.[this.entity];
@@ -78,6 +78,9 @@ export class StratumRoomTile extends LitElement {
 
     const domain = domainOf(this.entity);
     this.setAttribute('data-domain', domain);
+
+    // Custom card mode — dowolna karta HACS jako tile.
+    if (this.mode.startsWith('custom:')) return this._renderCustomCardMode();
 
     // Modes universal dla większości domen.
     if (this.mode === 'chips') return this._renderChipsMode(state, domain);
@@ -187,6 +190,21 @@ export class StratumRoomTile extends LitElement {
 
   private _isActive(state: HassEntity): boolean {
     return state.state === 'on' || state.state === 'open' || state.state === 'playing';
+  }
+
+  private _customEl?: HTMLElement;
+  private _customKey?: string;
+
+  private _renderCustomCardMode(): TemplateResult {
+    const config = buildDefaultCustomConfig(this.mode, this.entity);
+    const key = JSON.stringify(config);
+    if (!this._customEl || this._customKey !== key) {
+      this._customEl = document.createElement('hui-card');
+      this._customKey = key;
+    }
+    (this._customEl as unknown as { hass?: HomeAssistant }).hass = this.hass;
+    (this._customEl as unknown as { config?: Record<string, unknown> }).config = config;
+    return html`<div class="custom-slot" part="tile">${this._customEl}</div>`;
   }
 
   private _renderBubbleMode(state: HassEntity, domain: string): TemplateResult {
@@ -853,6 +871,15 @@ export class StratumRoomTile extends LitElement {
       width: 100%;
       height: 5px;
       cursor: pointer;
+    }
+
+    .custom-slot {
+      display: block;
+    }
+
+    .custom-slot > * {
+      display: block;
+      width: 100%;
     }
 
     /* Per-domain akcenty w chips mode */
