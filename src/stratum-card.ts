@@ -31,7 +31,7 @@ import './stratum-card-room-row.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.6.0';
+const VERSION = '1.6.1';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -418,12 +418,17 @@ export class StratumCard extends LitElement {
         (e) => this.hass!.states?.[e.entity_id]?.state === 'on',
       );
     const temperature = this._firstTemperature(entries);
-    const effectiveTap = perRoomTapAction ?? this._config?.room_tap_action;
-    // Klik jest aktywny gdy: jest jawna akcja (nie none) LUB nie ma żadnej
-    // akcji (wtedy domyślnie otworzymy popup).
-    const hasAction = Boolean(effectiveTap && effectiveTap.action !== 'none');
+    // Rozwiązywanie akcji dla klikalności wiersza.
+    const isSet = (a: import('./types.js').TapActionConfig | undefined): boolean =>
+      Boolean(a && (a as { action?: string }).action && (a as { action: string }).action !== 'default');
+    const effectiveTap = isSet(perRoomTapAction)
+      ? perRoomTapAction
+      : isSet(this._config?.room_tap_action)
+      ? this._config?.room_tap_action
+      : undefined;
+    // Klikalność: jawna akcja (nie none) LUB brak akcji (default → popup).
     const explicitNone = effectiveTap?.action === 'none';
-    const clickable = hasAction || !explicitNone;
+    const clickable = !explicitNone;
 
     return html`<stratum-card-room-row
       .areaId=${primary}
@@ -448,8 +453,18 @@ export class StratumCard extends LitElement {
       chips?: import('./types.js').ChipConfig[];
     },
   ): void {
-    const effective = action ?? this._config?.room_tap_action;
-    if (effective && effective.action !== 'none') {
+    // Rozwiązywanie akcji: per-room > global > domyślny popup.
+    // `action: 'default'` z ha-form = „nie ustawione" — przechodzimy głębiej.
+    const isSet = (a: import('./types.js').TapActionConfig | undefined): boolean =>
+      Boolean(a && (a as { action?: string }).action && (a as { action: string }).action !== 'default');
+
+    let effective: import('./types.js').TapActionConfig | undefined;
+    if (isSet(action)) effective = action;
+    else if (isSet(this._config?.room_tap_action)) effective = this._config?.room_tap_action;
+
+    if (effective?.action === 'none') return;
+
+    if (effective) {
       void runTapAction(this.hass, effective, {
         source: this,
         area_id: ev.detail.area_id,
@@ -457,7 +472,7 @@ export class StratumCard extends LitElement {
       });
       return;
     }
-    if (effective?.action === 'none') return;
+
     this._openRoomPopup(ev.detail.area_id, roomOverrides);
   }
 
