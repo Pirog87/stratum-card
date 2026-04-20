@@ -30,10 +30,11 @@ import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 import './stratum-card-room-tile.js';
+import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.26.0';
+const VERSION = '1.27.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -50,6 +51,15 @@ export class StratumCard extends LitElement {
     sections?: import('./types.js').RoomSectionSpec[];
     scenes?: import('./types.js').SceneBarConfig;
     chips?: import('./types.js').ChipConfig[];
+  };
+
+  /** Popup listy encji po kliknięciu chipa nagłówka. */
+  @state() private _popupChip?: {
+    chip: import('./types.js').ChipConfig;
+    entityIds: string[];
+    label: string;
+    icon: string;
+    color: string;
   };
 
   /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
@@ -292,22 +302,131 @@ export class StratumCard extends LitElement {
     const chips = this._config?.chips ?? DEFAULT_CHIPS;
     return chips.map((chip) => {
       const { label, active } = evaluateChip(this.hass!, entries, chip, this._templates);
-      const hasTap = Boolean(chip.tap_action && chip.tap_action.action !== 'none');
+      const tapSet = this._isTapActionSet(chip.tap_action);
+      const listAvailable = this._chipSupportsList(chip);
+      const clickable = tapSet || listAvailable;
       return html`<stratum-card-chip
         .icon=${resolveChipIcon(chip)}
         .label=${label}
         .active=${active}
         .color=${resolveChipColor(chip)}
         .showWhenZero=${chip.show_when_zero ?? false}
-        .clickable=${hasTap}
+        .clickable=${clickable}
         @chip-tap=${() => this._onChipTap(chip)}
       ></stratum-card-chip>`;
     });
   }
 
-  private _onChipTap(chip: { tap_action?: unknown }): void {
-    void runTapAction(this.hass, chip.tap_action as never, { source: this });
+  private _isTapActionSet(
+    a: import('./types.js').TapActionConfig | undefined,
+  ): boolean {
+    if (!a) return false;
+    const act = (a as { action?: string }).action;
+    return Boolean(act && act !== 'default' && act !== 'none');
   }
+
+  private _chipSupportsList(chip: import('./types.js').ChipConfig): boolean {
+    // Entity chip → lepiej więcej info. Template → nic konkretnego do
+    // pokazania. show_list: false jawnie wyłącza.
+    if (chip.show_list === false) return false;
+    if (chip.type === 'entity' || chip.type === 'template') return false;
+    return true;
+  }
+
+  private _onChipTap(chip: import('./types.js').ChipConfig): void {
+    if (this._isTapActionSet(chip.tap_action)) {
+      void runTapAction(this.hass, chip.tap_action as never, { source: this });
+      return;
+    }
+    if (this._chipSupportsList(chip)) {
+      this._openChipList(chip);
+    }
+  }
+
+  private _getChipEntityIds(
+    chip: import('./types.js').ChipConfig,
+  ): string[] {
+    if (!this.hass) return [];
+    const entries = this._getEntries();
+    const matches = (states: string[]): ((id: string) => boolean) => {
+      return (id: string) => {
+        const s = this.hass!.states?.[id]?.state;
+        return Boolean(s && states.includes(s));
+      };
+    };
+    if (chip.type === 'lights') {
+      return filterByDomain(entries, 'light')
+        .map((e) => e.entity_id)
+        .filter(matches(['on']));
+    }
+    if (chip.type === 'motion') {
+      return filterBinarySensorDeviceClass(this.hass, entries, 'motion')
+        .map((e) => e.entity_id)
+        .filter(matches(['on']));
+    }
+    if (chip.type === 'occupancy') {
+      return filterBinarySensorDeviceClass(this.hass, entries, 'occupancy')
+        .map((e) => e.entity_id)
+        .filter(matches(['on']));
+    }
+    if (chip.type === 'windows') {
+      return filterBinarySensorDeviceClass(this.hass, entries, 'window')
+        .map((e) => e.entity_id)
+        .filter(matches(['on']));
+    }
+    if (chip.type === 'doors') {
+      return filterBinarySensorDeviceClass(this.hass, entries, 'door')
+        .map((e) => e.entity_id)
+        .filter(matches(['on']));
+    }
+    if (chip.type === 'filter') {
+      const c = chip as import('./types.js').FilterChipConfig;
+      const activeState = c.state ?? 'on';
+      let pool: import('./types.js').HassEntityRegistryEntry[] = entries;
+      if (c.domain) {
+        pool = filterByDomain(pool, c.domain);
+      }
+      if (c.device_class) {
+        pool = pool.filter(
+          (e) =>
+            this.hass!.states?.[e.entity_id]?.attributes?.device_class === c.device_class,
+        );
+      }
+      return pool.map((e) => e.entity_id).filter(matches([activeState]));
+    }
+    return [];
+  }
+
+  private _openChipList(chip: import('./types.js').ChipConfig): void {
+    const entityIds = this._getChipEntityIds(chip);
+    const labels: Record<string, string> = {
+      lights: 'Włączone światła',
+      motion: 'Wykryto obecność',
+      occupancy: 'Zajęte strefy',
+      windows: 'Otwarte okna',
+      doors: 'Otwarte drzwi',
+      filter: 'Pasujące encje',
+    };
+    const colors: Record<string, string> = {
+      lights: 'var(--stratum-chip-lights-color, #ffc107)',
+      motion: 'var(--stratum-chip-motion-color, #4caf50)',
+      occupancy: 'var(--stratum-chip-motion-color, #4caf50)',
+      windows: 'var(--stratum-chip-windows-color, #2196f3)',
+      doors: 'var(--stratum-chip-doors-color, #9c27b0)',
+      filter: 'var(--primary-color, #ff9b42)',
+    };
+    this._popupChip = {
+      chip,
+      entityIds,
+      label: labels[chip.type] ?? 'Lista',
+      icon: resolveChipIcon(chip) ?? 'mdi:label-outline',
+      color: resolveChipColor(chip) ?? colors[chip.type] ?? 'var(--primary-color)',
+    };
+  }
+
+  private _closeChipList = (): void => {
+    this._popupChip = undefined;
+  };
 
   public connectedCallback(): void {
     super.connectedCallback();
@@ -421,6 +540,7 @@ export class StratumCard extends LitElement {
         </div>
       </ha-card>
       ${this._renderPopup()}
+      ${this._renderChipListPopup()}
     `;
   }
 
@@ -455,6 +575,22 @@ export class StratumCard extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  private _renderChipListPopup(): TemplateResult {
+    if (!this._popupChip) return html``;
+    // Re-resolve entity IDs na każdy render — lista się aktualizuje live
+    // gdy hass emituje nowe stany podczas otwartego popupu.
+    const freshIds = this._getChipEntityIds(this._popupChip.chip);
+    return html`<stratum-chip-list
+      .hass=${this.hass}
+      .chip=${this._popupChip.chip}
+      .entityIds=${freshIds}
+      .label=${this._popupChip.label}
+      .icon=${this._popupChip.icon}
+      .color=${this._popupChip.color}
+      @close=${this._closeChipList}
+    ></stratum-chip-list>`;
   }
 
   private _renderBody(): TemplateResult[] {

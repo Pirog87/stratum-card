@@ -4,6 +4,31 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.27.0] — 2026-04-20
+
+### Added
+- **Popup listy encji po kliknięciu chipa.** Klik np. na chip „Światła" →
+  otwiera się panel z listą świateł które są włączone. Dla
+  kontrolowalnych domen (light / switch / cover):
+  - per-item **toggle switch** (włącz / wyłącz / przełącz)
+  - per-light **slider brightness** (lub position dla rolet)
+  - kolor tła ikony = aktualny `rgb_color` żarówki
+  - master przycisk **„Wyłącz wszystkie"** / **„Zamknij wszystkie"**
+- Dla czujników (motion / occupancy / windows / doors / filter z
+  binary_sensor) lista jest **read-only** — badge stanu per pozycja.
+- Per-item klik w ikonę otwiera HA more-info dialog.
+- Konfiguracja: nowe pole `show_list?: boolean` na chipach (default `true`
+  dla built-in i filter; ignorowane dla entity/template).
+  Jeśli `tap_action` jest ustawione, wygrywa nad listą.
+- Lista aktualizuje się live — zmiana stanu encji w HA natychmiast
+  odświeża popup (też wewnętrznie gdy toggle zmienia stan).
+
+### UI
+- Popup z blur backdrop, pop-in animation, Escape zamyka, klik w tło
+  zamyka. Nagłówek ma tinted gradient w kolorze chipu.
+- Lista pogrupowana per domena (Światła / Przełączniki / Rolety / Czujniki)
+  z mini-headerem sekcji i lokalnym master button.
+
 ## [1.26.0] — 2026-04-20
 
 ### Added
