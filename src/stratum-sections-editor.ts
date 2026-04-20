@@ -14,6 +14,13 @@ import type {
 } from './types.js';
 import { SECTION_LABEL, SECTION_ICON } from './section-defaults.js';
 import { getCustomCardOptionsForSection } from './custom-cards.js';
+import {
+  SECTION_PRESETS,
+  CATEGORY_LABELS,
+  isCardInstalled,
+  type PresetCategory,
+  type SectionPreset,
+} from './section-presets.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 const TYPE_OPTIONS = [
@@ -243,6 +250,8 @@ export class StratumSectionsEditor extends LitElement {
 
   @state() private _open = new Set<number>();
 
+  @state() private _showPresets = false;
+
   private _emit(next: RoomSectionConfig[]): void {
     this.dispatchEvent(
       new CustomEvent('sections-changed', {
@@ -282,9 +291,20 @@ export class StratumSectionsEditor extends LitElement {
   }
 
   private _add(): void {
+    // Klasyczny przycisk — dodaje pustą sekcję Światła (fallback gdy picker zwinięty).
     const next = [...this.sections, { type: 'lights' } as RoomSectionConfig];
     this._emit(next);
     this._open = new Set([...this._open, next.length - 1]);
+    this._showPresets = false;
+  }
+
+  private _addPreset(preset: SectionPreset): void {
+    // Clone configu — presety są immutable.
+    const clone: RoomSectionConfig = JSON.parse(JSON.stringify(preset.config));
+    const next = [...this.sections, clone];
+    this._emit(next);
+    this._open = new Set([...this._open, next.length - 1]);
+    this._showPresets = false;
   }
 
   private _remove(index: number): void {
@@ -440,9 +460,68 @@ export class StratumSectionsEditor extends LitElement {
           `;
         })}
       </div>
-      <button class="stratum-add-btn" @click=${this._add}>
-        <ha-icon .icon=${'mdi:plus'}></ha-icon>
-        Dodaj sekcję
+      ${this._showPresets ? this._renderPresetsPicker() : nothing}
+      <div class="add-row">
+        <button
+          class="stratum-add-btn"
+          @click=${() => (this._showPresets = !this._showPresets)}
+        >
+          <ha-icon .icon=${this._showPresets ? 'mdi:close' : 'mdi:playlist-star'}></ha-icon>
+          ${this._showPresets ? 'Ukryj presety' : 'Dodaj sekcję z presetu'}
+        </button>
+        <button
+          class="stratum-add-btn empty-add"
+          title="Dodaj pustą sekcję Światła"
+          @click=${this._add}
+        >
+          <ha-icon .icon=${'mdi:plus'}></ha-icon>
+          Pusta
+        </button>
+      </div>
+    `;
+  }
+
+  private _renderPresetsPicker(): TemplateResult {
+    const categories: PresetCategory[] = ['builtin', 'mushroom', 'bubble', 'other'];
+    return html`
+      <div class="presets-wrap">
+        ${categories.map((cat) => {
+          const items = SECTION_PRESETS.filter((p) => p.category === cat);
+          if (items.length === 0) return nothing;
+          return html`
+            <div class="preset-group">
+              <div class="preset-category">${CATEGORY_LABELS[cat]}</div>
+              <div class="presets-grid">
+                ${items.map((preset) => this._renderPresetCard(preset))}
+              </div>
+            </div>
+          `;
+        })}
+      </div>
+    `;
+  }
+
+  private _renderPresetCard(preset: SectionPreset): TemplateResult {
+    const installed = !preset.requires || isCardInstalled(preset.requires);
+    return html`
+      <button
+        class="preset-card ${installed ? '' : 'unavailable'}"
+        ?disabled=${!installed}
+        @click=${() => this._addPreset(preset)}
+        title=${installed
+          ? preset.hint
+          : `Wymaga zainstalowanej karty: ${preset.requires}`}
+      >
+        <span class="preset-avatar preset-avatar-${preset.category}">
+          <ha-icon .icon=${preset.avatar}></ha-icon>
+        </span>
+        <span class="preset-body">
+          <span class="preset-title">${preset.label}</span>
+          <span class="preset-hint">${preset.hint}</span>
+          ${!installed
+            ? html`<span class="preset-missing">Brak: ${preset.requires}</span>`
+            : nothing}
+        </span>
       </button>
     `;
   }
@@ -489,6 +568,141 @@ export class StratumSectionsEditor extends LitElement {
 
       ha-yaml-editor {
         display: block;
+      }
+
+      .add-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .add-row .stratum-add-btn {
+        flex: 1;
+        margin-top: 0;
+      }
+
+      .add-row .empty-add {
+        flex: 0 0 auto;
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .presets-wrap {
+        margin-top: 10px;
+        padding: 12px;
+        border: 1.5px dashed color-mix(in srgb, var(--primary-color, #ff9b42) 40%, var(--divider-color));
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--primary-color, #ff9b42) 4%, transparent);
+      }
+
+      .preset-group + .preset-group {
+        margin-top: 14px;
+      }
+
+      .preset-category {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--primary-color, #ff9b42);
+        margin-bottom: 8px;
+      }
+
+      .presets-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 6px;
+      }
+
+      .preset-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--divider-color);
+        border-radius: 10px;
+        background: var(--card-background-color, rgba(255, 255, 255, 0.02));
+        cursor: pointer;
+        text-align: left;
+        color: var(--primary-text-color);
+        transition: border-color 0.12s ease, background 0.12s ease, transform 0.08s ease;
+      }
+
+      .preset-card:hover:not(:disabled) {
+        border-color: var(--primary-color, #ff9b42);
+        background: color-mix(in srgb, var(--primary-color, #ff9b42) 6%, transparent);
+      }
+
+      .preset-card:active:not(:disabled) {
+        transform: scale(0.98);
+      }
+
+      .preset-card.unavailable {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .preset-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--primary-color, #ff9b42) 18%, transparent);
+        color: var(--primary-color, #ff9b42);
+        flex-shrink: 0;
+      }
+
+      .preset-avatar-mushroom {
+        background: color-mix(in srgb, #d48fff 22%, transparent);
+        color: #d48fff;
+      }
+
+      .preset-avatar-bubble {
+        background: color-mix(in srgb, #64b5f6 22%, transparent);
+        color: #64b5f6;
+      }
+
+      .preset-avatar-builtin {
+        background: color-mix(in srgb, #ffb74d 22%, transparent);
+        color: #ffb74d;
+      }
+
+      .preset-avatar-other {
+        background: color-mix(in srgb, #81c784 22%, transparent);
+        color: #81c784;
+      }
+
+      .preset-avatar ha-icon {
+        --mdc-icon-size: 18px;
+      }
+
+      .preset-body {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .preset-title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .preset-hint {
+        font-size: 11px;
+        color: var(--secondary-text-color);
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .preset-missing {
+        font-size: 10px;
+        color: var(--error-color, #e53935);
+        margin-top: 2px;
+        font-style: italic;
       }
     `,
   ];

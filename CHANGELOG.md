@@ -4,6 +4,30 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.36.0] — 2026-04-20
+
+### Added
+- **Presety sekcji** — gotowe szablony dodawane jednym kliknięciem.
+  Editor sekcji popup pokoju ma teraz przycisk „Dodaj sekcję z presetu"
+  który rozwija grid prestów pogrupowanych w 4 kategorie:
+  - **Wbudowane (Stratum)** — Światła tile/slider/ambient, Rolety tile/slider,
+    Sceny, Okna chips, Drzwi chips, Przełączniki, Klimat, Media, Wentylatory
+  - **Mushroom (HACS)** — Light, Cover, Climate, Media, Fan, Entity
+    (z prekonfigurowanym `card_template`: fill_container, use_light_color,
+    show_brightness_control, collapsible_controls itd.)
+  - **Bubble Card (HACS)** — Lights, Covers, Climate, Media
+    (z prekonfigurowanym `card_type` + buttons/slider)
+  - **Inne** — Podsumowanie, Custom YAML
+- Presety wymagające zainstalowanej karty HACS są **markowane jako
+  niedostępne** (wyszarzone + label „Brak: mushroom-light-card") gdy
+  odpowiednia paczka nie jest w `window.customCards`.
+- Kolorowe avatary per kategoria (amber / purple / blue / green).
+
+### Changed
+- Typ `RoomSectionConfig.mode` rozszerzony o template literal type
+  `custom:${string}` — TypeScript teraz poprawnie akceptuje dowolne
+  `custom:xxx` mode.
+
 ## [1.35.0] — 2026-04-20
 
 ### Added

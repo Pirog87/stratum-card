@@ -266,7 +266,8 @@ export interface RoomSectionConfig {
     | 'ambient'
     | 'cards'
     | 'inline'
-    | 'icons';
+    | 'icons'
+    | `custom:${string}`;
   /**
    * Layout grid: `1` | `2` | `3` kolumn albo `'auto'`. Default: zgodny z typem
    * (covers/climate/media → 1, scenes → 3, reszta → 2).
