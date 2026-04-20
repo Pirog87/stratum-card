@@ -4,6 +4,8 @@
 // HA utrzymuje `window.customCards` — listę obiektów `{type, name, description?,
 // preview?}`. Każda karta z HACS rejestruje się tam sama przy ładowaniu.
 
+import type { RoomSectionType } from './types.js';
+
 interface CustomCardEntry {
   type: string;
   name?: string;
@@ -19,8 +21,40 @@ interface CustomCardsWindow extends Window {
 const SKIP = new Set(['stratum-card', 'stratum-room-card']);
 
 /**
- * Zwraca listę zainstalowanych custom cards do pokazania w dropdown trybów.
- * Pozycje mają format `{value: 'custom:xxx', label: 'xxx'}`.
+ * Karty uniwersalne — obsługują dowolny entity, pokazujemy je zawsze
+ * (niezależnie od typu sekcji).
+ */
+const UNIVERSAL_CARDS = new Set<string>([
+  'button-card',
+  'bubble-card',
+  'mushroom-entity-card',
+  'mushroom-template-card',
+  'mushroom-title-card',
+  'mushroom-chips-card',
+]);
+
+/**
+ * Patterny które uważamy za specyficzne dla danego typu sekcji. Karta
+ * pasuje do sekcji gdy jej `type` zawiera którąkolwiek frazę (regex).
+ * Karty uniwersalne z `UNIVERSAL_CARDS` przechodzą zawsze obok patterns.
+ */
+const DOMAIN_PATTERNS: Partial<Record<RoomSectionType, RegExp[]>> = {
+  lights: [/light/i],
+  covers: [/cover/i, /blind/i],
+  windows: [/window/i, /binary[-_]?sensor/i, /status/i],
+  doors: [/door/i, /binary[-_]?sensor/i, /lock/i],
+  climate: [/climate/i, /thermostat/i, /heater/i, /hvac/i],
+  media: [/media[-_]?player/i, /media[-_]?control/i, /spotify/i, /music/i, /player/i],
+  fans: [/fan/i],
+  switches: [/switch/i, /outlet/i, /plug/i, /relay/i],
+  scenes: [/scene/i, /script/i],
+  summary: [],
+  custom: [],
+};
+
+/**
+ * Zwraca listę zainstalowanych custom cards (pełną, bez filtra) w formacie
+ * `{value, label}` do dropdown.
  */
 export function getCustomCardOptions(): Array<{ value: string; label: string }> {
   const w = window as CustomCardsWindow;
@@ -32,6 +66,24 @@ export function getCustomCardOptions(): Array<{ value: string; label: string }> 
       label: c.name ?? c.type,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * Filtruje listę custom cards do tych pasujących do typu sekcji.
+ * Reguła: karta uniwersalna (button-card, bubble-card, mushroom-entity/
+ * template/chips/title) przechodzi zawsze; pozostałe muszą trafić w któryś
+ * z patternów z `DOMAIN_PATTERNS[sectionType]`.
+ */
+export function getCustomCardOptionsForSection(
+  sectionType: RoomSectionType,
+): Array<{ value: string; label: string }> {
+  const all = getCustomCardOptions();
+  const patterns = DOMAIN_PATTERNS[sectionType] ?? [];
+  return all.filter((card) => {
+    const bare = card.value.replace(/^custom:/, '').toLowerCase();
+    if (UNIVERSAL_CARDS.has(bare)) return true;
+    return patterns.some((re) => re.test(bare));
+  });
 }
 
 /**
