@@ -511,7 +511,7 @@ export class StratumSceneEditor extends LitElement {
 
     .thumb-image {
       display: block;
-      aspect-ratio: 270/150;
+      aspect-ratio: 16/9;
       background-size: cover;
       background-position: center;
       border-radius: 6px 6px 0 0;

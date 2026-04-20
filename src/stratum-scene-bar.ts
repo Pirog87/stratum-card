@@ -67,7 +67,7 @@ export class StratumSceneBar extends LitElement {
       return html``;
     }
     const columns = this.config.columns ?? 3;
-    const aspect = this.config.aspect ?? '1/1';
+    const aspect = this.config.aspect ?? '16/9';
     const size = this.config.size ?? 'md';
     return html`
       <div
@@ -110,7 +110,7 @@ export class StratumSceneBar extends LitElement {
       border-radius: var(--stratum-scene-radius, 12px);
       cursor: pointer;
       overflow: hidden;
-      aspect-ratio: var(--scene-aspect, 1/1);
+      aspect-ratio: var(--scene-aspect, 16/9);
       background-size: cover;
       background-position: center;
       color: #fff;
