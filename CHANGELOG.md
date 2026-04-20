@@ -4,6 +4,29 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.35.0] — 2026-04-20
+
+### Added
+- **`card_template` per sekcja** — gdy user wybiera `mode: 'custom:xxx'`
+  (np. `custom:mushroom-light-card`), może teraz przekazać dodatkowe pola
+  YAML które są merge'owane z auto-configiem per encja:
+  ```yaml
+  sections:
+    - type: lights
+      mode: custom:mushroom-light-card
+      card_template:
+        fill_container: true
+        use_light_color: true
+        icon_color: amber
+        secondary_info: last-changed
+  ```
+  Każda żarówka dostaje konfig `{fill_container: true, use_light_color: true,
+  icon_color: amber, secondary_info: last-changed, type: custom:mushroom-light-card,
+  entity: <własny>}`. `type` i `entity` z auto-config zawsze wygrywają.
+- Sections editor: `<ha-yaml-editor>` dla `card_template` pokazuje się
+  automatycznie gdy user wybierze mode `custom:xxx`. Dla `type: custom`
+  nadal dostępny pełny YAML karty (bez iteracji).
+
 ## [1.34.0] — 2026-04-20
 
 ### Changed

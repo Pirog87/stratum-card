@@ -330,6 +330,7 @@ export class StratumRoomCard extends LitElement {
                 .hass=${this.hass}
                 .entity=${e.entity_id}
                 .mode=${mode}
+                .cardTemplate=${section.card_template}
               ></stratum-room-tile>`,
           )}
         </div>
