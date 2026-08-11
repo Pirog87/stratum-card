@@ -4,6 +4,21 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.42.0] — 2026-08-11
+
+### Fixed (geometria fill po porównaniu z bubble-card)
+- **Koło ikony = pełna wysokość wiersza, flush z lewą krawędzią pigułki**
+  (jak bubble-card) — koniec z ikoną „pływającą" w za dużym kole z insetem.
+- **Ikona proporcjonalna do koła (0.46×)** zamiast sztywnych 24 px —
+  brak croppingu przy każdej wysokości wiersza; explicit `icon_size`
+  nadal wygrywa. `overflow: hidden` na kole ucina wszelkie glow/efekty.
+- **Wypełnienie fill to zdecydowany blok koloru** (20% + jaśniejszy „cap"
+  2 px na prawej krawędzi jako wskaźnik poziomu) zamiast rozmytego
+  gradientu-mgławicy. Min-szerokość = średnica koła, więc niska jasność
+  nie renderuje „ogryzka".
+- Usunięte podwójne odstępy (margin-bottom wierszy nakładał się
+  z gap siatki).
+
 ## [1.41.0] — 2026-08-11
 
 ### Changed
