@@ -4,6 +4,29 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.41.0] — 2026-08-11
+
+### Changed
+- **Akcent ze świateł jest teraz DOMYŚLNY.** Bez konfiguracji wiersz/kafel
+  bierze kolor z `rgb_color` pierwszej świecącej żarówki. Ustawienie
+  `accent_color` przełącza na kolor statyczny; toggle „Z świateł" w
+  edytorze pozwala wymusić dowolną kombinację.
+- **Geometria pigułki (fill/pill) policzona na sztywno:** koło ikony =
+  wysokość wiersza − 8 px (48 px przy default 56 px), inset 4 px z każdej
+  strony — ikona zawsze idealnie wpisana, przy każdej wysokości.
+  Ikona MDI w pigułce: 24 px (było 20).
+
+### Added
+- **Suwak jasności gestem (jak bubble-card slider).** Przeciągnięcie
+  poziome po wierszu ustawia jasność wszystkich świateł pokoju:
+  - relative slide — start od aktualnej średniej jasności
+  - live update co 300 ms podczas gestu + finalna wartość po puszczeniu
+  - wypełnienie `fill` podąża za palcem
+  - przeciągnięcie do ~0% wyłącza światła
+  - próg 8 px odróżnia gest od tapnięcia; pionowy scroll działa normalnie
+    (`touch-action: pan-y`)
+  - wyłączane per karta: `row_config.slider: false` (toggle w edytorze)
+
 ## [1.40.0] — 2026-04-20
 
 ### Changed

@@ -144,9 +144,17 @@ export class StratumCardEditor extends LitElement {
     if (raw.accent_color && raw.accent_color.trim() !== '') {
       out.accent_color = raw.accent_color;
     }
-    if (raw.accent_mode === 'lights') out.accent_mode = 'lights';
+    // accent_mode: default = 'lights' (bez koloru) / 'static' (z kolorem).
+    // Zapisujemy tylko odstępstwa od tej reguły.
+    if (raw.accent_mode === 'static' && !raw.accent_color) {
+      out.accent_mode = 'static';
+    } else if (raw.accent_mode === 'lights' && raw.accent_color) {
+      out.accent_mode = 'lights';
+    }
     // Preset wiersza — 'fill' jest defaultem, zapisujemy tylko inne.
     if (!isTile && raw.preset && raw.preset !== 'fill') out.preset = raw.preset;
+    // Suwak gestem — default true, zapisujemy tylko wyłączenie.
+    if (!isTile && raw.slider === false) out.slider = false;
     if (raw.show_icon === false) out.show_icon = false;
     if (raw.show_name === false) out.show_name = false;
     const defaultRadius = isTile ? 14 : 6;

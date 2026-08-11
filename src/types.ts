@@ -573,9 +573,9 @@ export interface TileDisplayConfig {
   accent_color?: string;
   /**
    * Tryb wyliczania koloru akcentu:
-   * - `static` (default) — bierze z `accent_color`
    * - `lights` — czyta `rgb_color` + `brightness` z pierwszego aktywnego
-   *   światła w pomieszczeniu; brightness wpływa na intensywność akcentu
+   *   światła w pomieszczeniu (DEFAULT gdy `accent_color` nieustawione)
+   * - `static` — bierze z `accent_color` (default gdy `accent_color` ustawione)
    */
   accent_mode?: 'static' | 'lights';
   /** URL/preset obrazka tła (tylko `display: tile`). */
@@ -611,6 +611,13 @@ export interface TileDisplayConfig {
    * - `cards` — miękkie karty z gradient-tintem
    */
   preset?: RowPreset;
+
+  /**
+   * Suwak jasności gestem — przeciągnięcie poziome po wierszu ustawia
+   * jasność wszystkich świateł pokoju (relative slide, jak bubble-card).
+   * Default `true`. Tap dalej działa normalnie (próg 8 px odróżnia gest).
+   */
+  slider?: boolean;
 }
 
 /** Dostępne presety kształtu wiersza pokoju. */
