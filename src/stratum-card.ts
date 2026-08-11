@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.43.0';
+const VERSION = '1.44.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {

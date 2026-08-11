@@ -4,6 +4,21 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.44.0] — 2026-08-11
+
+### Changed (wdrożenie makiety A″ wariant C — wybór usera)
+- **Layout dwuliniowy dla fill/pill:** nazwa (17 px/600) + sublinia pod nią
+  (temperatura · wilgotność · ikona motion, 12 px wyciszone). Prawa strona
+  wiersza pokazuje tylko liczniki i alarmy (max 3 + „+n") — koniec z pustą
+  przestrzenią w środku wiersza.
+- **Ikona w spłaszczonym stadionie zakotwiczonym na dole** (jak bubble
+  100×80/r40): wysokość = 4/5 wiersza, szerokość 1.35× wysokości stadionu,
+  dolna krawędź flush z dołem pigułki. Górna ćwiartka wiersza zostaje
+  „lekka". Ikona = 1/2 wysokości stadionu (mniejsza niż dotąd).
+- Default `min_height` wiersza: **72 px** (suwak w edytorze pokazuje
+  właściwy default per tryb: 72 row / 110 tile).
+- Rail i cards zachowują klasyczny jednoliniowy layout.
+
 ## [1.43.0] — 2026-08-11
 
 ### Fixed
