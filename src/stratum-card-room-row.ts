@@ -537,30 +537,52 @@ export class StratumCardRoomRow extends LitElement {
       border-radius: var(--stratum-room-row-radius, 999px);
       background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.045));
       /* Koło ikony = pełna wysokość wiersza, flush z lewą krawędzią pigułki
-         (jak bubble-card). Zero insetu — koło jest częścią kształtu. */
+         (jak bubble-card). Default 64px — skala bubble, nie lista mail. */
       padding: 0 16px 0 0;
-      min-height: var(--stratum-room-row-min-height, 56px);
+      min-height: var(--stratum-room-row-min-height, 64px);
       touch-action: pan-y;
     }
 
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
-      width: var(--stratum-room-row-min-height, 56px);
-      height: var(--stratum-room-row-min-height, 56px);
+      width: var(--stratum-room-row-min-height, 64px);
+      height: var(--stratum-room-row-min-height, 64px);
       border-radius: 50%;
       overflow: hidden;
-      background: var(--stratum-room-row-iconbg, rgba(0, 0, 0, 0.35));
+      /* NIEPRZEZROCZYSTE koło — fill przy niskich % chowa się ZA nim
+         i wynurza dopiero na prawo (jak w bubble slider), zamiast
+         prześwitywać jako kleks pod ikoną. */
+      background: var(
+        --stratum-room-row-iconbg,
+        color-mix(in srgb, var(--card-background-color, #1c1e22) 65%, #000)
+      );
     }
 
     .row[data-preset='fill'] .icon,
     .row[data-preset='pill'] .icon {
-      /* Ikona proporcjonalna do koła (0.46×), chyba że user ustawił
+      /* Ikona proporcjonalna do koła (0.5×), chyba że user ustawił
          icon_size explicit — wtedy inline var wygrywa. Brak croppingu
          przy każdej wysokości wiersza. */
       --mdc-icon-size: var(
         --stratum-room-row-icon-size,
-        calc(var(--stratum-room-row-min-height, 56px) * 0.46)
+        calc(var(--stratum-room-row-min-height, 64px) * 0.5)
       );
+    }
+
+    .row[data-preset='fill'] .name,
+    .row[data-preset='pill'] .name {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .row[data-preset='fill'] .info,
+    .row[data-preset='pill'] .info {
+      font-size: 13px;
+    }
+
+    .row[data-preset='fill'] .info .field ha-icon,
+    .row[data-preset='pill'] .info .field ha-icon {
+      --mdc-icon-size: 18px;
     }
 
     .row[data-preset='fill'].active .iconwrap,
@@ -594,7 +616,6 @@ export class StratumCardRoomRow extends LitElement {
       position: absolute;
       inset: 0;
       width: var(--stratum-room-row-fill, 0%);
-      min-width: var(--stratum-room-row-min-height, 56px);
       border-radius: inherit;
       background: color-mix(
         in srgb,

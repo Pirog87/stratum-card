@@ -4,6 +4,23 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.43.0] — 2026-08-11
+
+### Fixed
+- **Fill nie prześwituje już jako „kleks" pod ikoną przy niskiej jasności.**
+  Koło ikony jest teraz nieprzezroczyste (mix koloru karty z czernią) —
+  wypełnienie chowa się ZA nim i wynurza dopiero na prawo od koła,
+  dokładnie jak slider w bubble-card.
+
+### Changed
+- **Skala bubble jako default dla fill/pill** (porównanie side-by-side
+  z konfiguracją bubble-card usera: 80 px wiersze, 50 px ikony, nazwa 24 px):
+  - wysokość wiersza 56 → **64 px** (koło ikony rośnie razem z nią)
+  - ikona proporcjonalna **0.5×** koła (32 px przy default)
+  - nazwa pokoju **16 px / 600** (było 14/500)
+  - statusy 13 px, ikony statusów 18 px
+  Wszystko dalej konfigurowalne: `min_height`, `icon_size` w edytorze.
+
 ## [1.42.0] — 2026-08-11
 
 ### Fixed (geometria fill po porównaniu z bubble-card)
