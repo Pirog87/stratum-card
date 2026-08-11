@@ -535,27 +535,32 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='fill'],
     .row[data-preset='pill'] {
       border-radius: var(--stratum-room-row-radius, 999px);
-      background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.04));
-      /* Geometria bez zgadywania: koło 48px + 2×4px inset = wiersz 56px.
-         Koło zawsze idealnie wpisane w pigułkę, przy każdej wysokości. */
-      padding: var(--stratum-room-row-padding, 4px) 16px
-        var(--stratum-room-row-padding, 4px) 4px;
+      background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.045));
+      /* Koło ikony = pełna wysokość wiersza, flush z lewą krawędzią pigułki
+         (jak bubble-card). Zero insetu — koło jest częścią kształtu. */
+      padding: 0 16px 0 0;
       min-height: var(--stratum-room-row-min-height, 56px);
-      margin-bottom: 6px;
       touch-action: pan-y;
     }
 
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
-      width: calc(var(--stratum-room-row-min-height, 56px) - 8px);
-      height: calc(var(--stratum-room-row-min-height, 56px) - 8px);
+      width: var(--stratum-room-row-min-height, 56px);
+      height: var(--stratum-room-row-min-height, 56px);
       border-radius: 50%;
-      background: var(--stratum-room-row-iconbg, rgba(0, 0, 0, 0.28));
+      overflow: hidden;
+      background: var(--stratum-room-row-iconbg, rgba(0, 0, 0, 0.35));
     }
 
     .row[data-preset='fill'] .icon,
     .row[data-preset='pill'] .icon {
-      --mdc-icon-size: var(--stratum-room-row-icon-size, 24px);
+      /* Ikona proporcjonalna do koła (0.46×), chyba że user ustawił
+         icon_size explicit — wtedy inline var wygrywa. Brak croppingu
+         przy każdej wysokości wiersza. */
+      --mdc-icon-size: var(
+        --stratum-room-row-icon-size,
+        calc(var(--stratum-room-row-min-height, 56px) * 0.46)
+      );
     }
 
     .row[data-preset='fill'].active .iconwrap,
@@ -581,17 +586,27 @@ export class StratumCardRoomRow extends LitElement {
       color: var(--stratum-chip-leak-color, #f44336);
     }
 
-    /* fill: warstwa wypełnienia = średnia jasność świateł */
+    /* fill: warstwa wypełnienia = średnia jasność świateł.
+       Zdecydowany blok koloru (jak bubble slider), nie mgławica —
+       jednolite 20% + jaśniejszy „cap" na prawej krawędzi jako
+       wskaźnik poziomu. */
     .fill {
       position: absolute;
       inset: 0;
       width: var(--stratum-room-row-fill, 0%);
+      min-width: var(--stratum-room-row-min-height, 56px);
       border-radius: inherit;
-      background: linear-gradient(
-        90deg,
-        color-mix(in srgb, var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107)) 16%, transparent),
-        color-mix(in srgb, var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107)) 5%, transparent)
+      background: color-mix(
+        in srgb,
+        var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107)) 20%,
+        transparent
       );
+      box-shadow: inset -2px 0 0
+        color-mix(
+          in srgb,
+          var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107)) 55%,
+          transparent
+        );
       transition: width 0.3s ease-out;
       pointer-events: none;
     }
@@ -653,7 +668,6 @@ export class StratumCardRoomRow extends LitElement {
       border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.07));
       padding: var(--stratum-room-row-padding, 8px) 14px;
       min-height: var(--stratum-room-row-min-height, 54px);
-      margin-bottom: 6px;
     }
 
     .row[data-preset='cards'].active {
