@@ -622,7 +622,7 @@ export class StratumCardRoomRow extends LitElement {
        wysokość = 4/5 wiersza, szerokość 1.35× wysokości stadionu,
        dolna krawędź flush z dołem pigułki. Górna ćwiartka wiersza
        zostaje „lekka" — fill i nazwa oddychają.
-       Nieprzezroczyste tło → fill chowa się ZA stadionem przy niskich %. */
+       Tło zawsze neutralne, nieprzezroczyste; fill startuje za stadionem. */
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
       align-self: flex-end;
@@ -704,15 +704,8 @@ export class StratumCardRoomRow extends LitElement {
       color: var(--stratum-chip-motion-color, #4caf50);
     }
 
-    .row[data-preset='fill'].active .iconwrap,
-    .row[data-preset='pill'].active .iconwrap {
-      background: color-mix(
-        in srgb,
-        var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107)) 16%,
-        var(--stratum-room-row-iconbg, rgba(0, 0, 0, 0.25))
-      );
-    }
-
+    /* Tło stadionu NIE przejmuje koloru świateł — zostaje neutralne
+       (jak w bubble-card). Kolor sygnalizuje sama ikona + warstwa fill. */
     .row[data-preset='fill'].active .icon,
     .row[data-preset='pill'].active .icon {
       color: var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107));
@@ -749,6 +742,21 @@ export class StratumCardRoomRow extends LitElement {
         );
       transition: width 0.3s ease-out;
       pointer-events: none;
+    }
+
+    /* Gdy stadion ikony jest widoczny, fill startuje ZA nim — inaczej
+       prześwitywał wokół zaokrągleń stadionu jako kolorowe „półksiężyce".
+       Prawa krawędź fill nadal ląduje dokładnie na X% szerokości wiersza. */
+    .row[data-preset='fill']:has(.iconwrap) .fill {
+      left: calc(var(--stratum-room-row-min-height, 64px) * 1.08 + 4px);
+      width: max(
+        0px,
+        calc(
+          var(--stratum-room-row-fill, 0%) -
+            (var(--stratum-room-row-min-height, 64px) * 1.08 + 4px)
+        )
+      );
+      border-radius: 999px;
     }
 
     /* pill: ring aktywności zamiast wypełnienia */

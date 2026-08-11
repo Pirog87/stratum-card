@@ -4,6 +4,25 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.47.0] — 2026-08-11
+
+### Fixed
+- **Tło stadionu ikony jest zawsze neutralne** — nie przejmuje już koloru
+  świateł w stanie aktywnym (jak w bubble-card). Kolorem sygnalizują sama
+  ikona i warstwa wypełnienia; czerwony tint alarmowy zostaje.
+- **Koniec kolorowych „półksiężyców" wokół stadionu** — warstwa fill
+  (jasność świateł) startuje teraz ZA stadionem ikony zamiast pod nim,
+  więc nie prześwituje wokół jego zaokrągleń. Prawa krawędź fill nadal
+  wypada dokładnie na X% szerokości wiersza; bez ikony fill biegnie od
+  lewej krawędzi jak dotąd.
+
+### Changed
+- **Akcja kliknięcia w wiersz dostępna w sekcji „Wygląd — Wiersz"** —
+  selektor `room_tap_action` (Przejdź / Więcej info / Wywołaj serwis /
+  Nic itd.) jest teraz na górze panelu wyglądu wiersza, nie tylko w
+  „Ustawieniach ogólnych". To samo pole — zmiana w jednym miejscu widoczna
+  w obu. Per-pokój nadal nadpisujesz w sekcji „Pomieszczenia".
+
 ## [1.46.0] — 2026-08-11
 
 ### Changed (defaulty wg preferencji usera)

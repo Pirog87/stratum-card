@@ -72,7 +72,7 @@ const HELPERS: Record<string, string> = {
   name: 'Pozostaw puste, żeby użyć nazwy piętra/strefy z HA.',
   icon: 'Pozostaw puste, żeby użyć ikony piętra/strefy z HA (fallback: mdi:home).',
   room_tap_action:
-    'Domyślnie klik otwiera popup pokoju. Możesz nadpisać: Przejdź, Więcej info, Wywołaj serwis itd.',
+    'Domyślnie klik otwiera popup pokoju. Możesz nadpisać: Przejdź, Więcej info, Wywołaj serwis itd. Dotyczy wierszy i kafli; nadpisanie per pokój w sekcji „Pomieszczenia".',
 };
 
 const COLUMN_CHIPS: Array<{ value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6; label: string }> = [
@@ -595,6 +595,14 @@ export class StratumCardEditor extends LitElement {
           </div>
         </summary>
         <div class="stratum-panel-body">
+          <ha-form
+            .hass=${this.hass}
+            .data=${this._config}
+            .schema=${TAP_SCHEMA}
+            .computeLabel=${this._computeLabel}
+            .computeHelper=${this._computeHelper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
           <stratum-display-editor
             mode="row"
             .config=${this._effectiveRowConfig()}
