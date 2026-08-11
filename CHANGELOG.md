@@ -4,6 +4,14 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.45.1] — 2026-08-11
+
+### Fixed
+- **Suwak „Wysokość wiersza" wyniesiony na wierzch** sekcji „Wygląd — Wiersz"
+  (obok presetu i układu statusów) — był zakopany w zwijanym panelu
+  „Wymiary i zaokrąglenia". Zakres 40–120 px, default 72. Cała geometria
+  (stadion ikony, rozmiar ikony) skaluje się proporcjonalnie.
+
 ## [1.45.0] — 2026-08-11
 
 ### Added
