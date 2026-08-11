@@ -331,7 +331,10 @@ export class StratumDisplayEditor extends LitElement {
                 <span>Wszystko po prawej</span>
               </button>
             </div>
-            <div class="toggles-row" style="margin-top:10px">
+            <div style="margin-top:12px">
+              ${this._renderSlider('Wysokość wiersza', 'min_height', minHeight, 40, 120, 2, 'px')}
+            </div>
+            <div class="toggles-row" style="margin-top:4px">
               <label class="toggle">
                 <input
                   type="checkbox"
@@ -511,7 +514,7 @@ export class StratumDisplayEditor extends LitElement {
           ${this._renderSlider('Wewnętrzny padding', 'padding', padding, 0, 40, 1, 'px')}
           ${this.mode === 'tile'
             ? this._renderSlider('Min. wysokość kafla', 'min_height', minHeight, 40, 260, 2, 'px')
-            : this._renderSlider('Min. wysokość wiersza', 'min_height', minHeight, 30, 120, 2, 'px')}
+            : nothing}
         </div>
       </details>
 
