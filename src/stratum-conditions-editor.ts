@@ -23,6 +23,9 @@ const FIELD_META: Array<{ value: TileField; label: string; icon: string }> = [
   { value: 'windows', label: 'Okna', icon: 'mdi:window-open-variant' },
   { value: 'doors', label: 'Drzwi', icon: 'mdi:door-open' },
   { value: 'leak', label: 'Wyciek', icon: 'mdi:water-alert' },
+  { value: 'smoke', label: 'Dym', icon: 'mdi:smoke-detector-variant' },
+  { value: 'gas', label: 'Gaz / CO', icon: 'mdi:gas-cylinder' },
+  { value: 'problem', label: 'Problem', icon: 'mdi:alert-circle-outline' },
 ];
 
 const OP_LABELS: Record<DisplayConditionOp, string> = {

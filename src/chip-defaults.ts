@@ -36,6 +36,11 @@ const BUILTIN_ICON: Record<BuiltInChipType, string> = {
   windows: 'mdi:window-open-variant',
   doors: 'mdi:door-open',
   leak: 'mdi:water-alert',
+  smoke: 'mdi:smoke-detector-variant',
+  gas: 'mdi:gas-cylinder',
+  co: 'mdi:molecule-co',
+  problem: 'mdi:alert-circle-outline',
+  battery_low: 'mdi:battery-alert-variant-outline',
 };
 
 const BUILTIN_COLOR: Record<BuiltInChipType, string> = {
@@ -45,7 +50,30 @@ const BUILTIN_COLOR: Record<BuiltInChipType, string> = {
   windows: 'var(--stratum-chip-windows-color, #42a5f5)',
   doors: 'var(--stratum-chip-doors-color, #ba68c8)',
   leak: 'var(--stratum-chip-leak-color, #f44336)',
+  smoke: 'var(--stratum-chip-smoke-color, #e53935)',
+  gas: 'var(--stratum-chip-gas-color, #ff5722)',
+  co: 'var(--stratum-chip-co-color, #d84315)',
+  problem: 'var(--stratum-chip-problem-color, #ff9800)',
+  battery_low: 'var(--stratum-chip-battery-color, #ff5252)',
 };
+
+const BUILTIN_TYPES: BuiltInChipType[] = [
+  'lights',
+  'motion',
+  'occupancy',
+  'windows',
+  'doors',
+  'leak',
+  'smoke',
+  'gas',
+  'co',
+  'problem',
+  'battery_low',
+];
+
+function isBuiltin(t: string): t is BuiltInChipType {
+  return (BUILTIN_TYPES as string[]).includes(t);
+}
 
 /** Deduplikuje encje po entity_id zachowując kolejność. */
 function dedupe<T extends { entity_id: string }>(lists: T[][]): T[] {
@@ -63,14 +91,8 @@ function dedupe<T extends { entity_id: string }>(lists: T[][]): T[] {
 
 export function resolveChipIcon(chip: ChipConfig): string {
   if (chip.icon) return chip.icon;
+  if (isBuiltin(chip.type)) return BUILTIN_ICON[chip.type];
   switch (chip.type) {
-    case 'lights':
-    case 'motion':
-    case 'occupancy':
-    case 'windows':
-    case 'doors':
-    case 'leak':
-      return BUILTIN_ICON[chip.type];
     case 'filter':
       return chip.domain ? 'mdi:counter' : 'mdi:filter';
     case 'entity':
@@ -84,17 +106,8 @@ export function resolveChipIcon(chip: ChipConfig): string {
 
 export function resolveChipColor(chip: ChipConfig): string {
   if (chip.color) return resolveColor(chip.color) ?? chip.color;
-  switch (chip.type) {
-    case 'lights':
-    case 'motion':
-    case 'occupancy':
-    case 'windows':
-    case 'doors':
-    case 'leak':
-      return BUILTIN_COLOR[chip.type];
-    default:
-      return 'var(--primary-color, #ff9b42)';
-  }
+  if (isBuiltin(chip.type)) return BUILTIN_COLOR[chip.type];
+  return 'var(--primary-color, #ff9b42)';
 }
 
 export interface ChipValue {
@@ -141,6 +154,30 @@ export function evaluateChip(
     }
     case 'leak':
       return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'moisture'));
+    case 'smoke':
+      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'smoke'));
+    case 'gas': {
+      // Gas + Carbon Monoxide (niektóre integracje używają 'carbon_monoxide').
+      const merged = dedupe([
+        filterBinarySensorDeviceClass(hass, entries, 'gas'),
+        filterBinarySensorDeviceClass(hass, entries, 'carbon_monoxide'),
+      ]);
+      return countedValue(hass, merged);
+    }
+    case 'co':
+      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'carbon_monoxide'));
+    case 'problem': {
+      // Agregator „problem entities" — problem, safety, tamper device_class.
+      const merged = dedupe([
+        filterBinarySensorDeviceClass(hass, entries, 'problem'),
+        filterBinarySensorDeviceClass(hass, entries, 'safety'),
+        filterBinarySensorDeviceClass(hass, entries, 'tamper'),
+      ]);
+      return countedValue(hass, merged);
+    }
+    case 'battery_low':
+      // `device_class: battery` + state 'on' = low (konwencja HA).
+      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'battery'));
     case 'filter':
       return filterValue(hass, entries, chip.domain, chip.device_class, chip.state ?? 'on');
     case 'entity':

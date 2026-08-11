@@ -37,6 +37,15 @@ export class StratumCardRoomRow extends LitElement {
   /** Liczba aktywnych czujek wycieku. */
   @property({ type: Number, attribute: 'leak-active' }) public leakActive = 0;
 
+  /** Liczba aktywnych czujek dymu. */
+  @property({ type: Number, attribute: 'smoke-active' }) public smokeActive = 0;
+
+  /** Liczba aktywnych czujek gazu/CO. */
+  @property({ type: Number, attribute: 'gas-active' }) public gasActive = 0;
+
+  /** Liczba aktywnych „problem" binary_sensors. */
+  @property({ type: Number, attribute: 'problem-active' }) public problemActive = 0;
+
   /** Globalna konfiguracja wyglądu (fields, accent_color, show_icon/show_name). */
   @property({ attribute: false }) public displayConfig?: RowDisplayConfig;
 
@@ -207,6 +216,27 @@ export class StratumCardRoomRow extends LitElement {
             ? html`<span class="field leak">
                 <ha-icon .icon=${'mdi:water-alert'}></ha-icon>
                 ${this.leakActive}
+              </span>`
+            : nothing;
+        case 'smoke':
+          return this.smokeActive > 0
+            ? html`<span class="field smoke">
+                <ha-icon .icon=${'mdi:smoke-detector-variant'}></ha-icon>
+                ${this.smokeActive}
+              </span>`
+            : nothing;
+        case 'gas':
+          return this.gasActive > 0
+            ? html`<span class="field gas">
+                <ha-icon .icon=${'mdi:gas-cylinder'}></ha-icon>
+                ${this.gasActive}
+              </span>`
+            : nothing;
+        case 'problem':
+          return this.problemActive > 0
+            ? html`<span class="field problem">
+                <ha-icon .icon=${'mdi:alert-circle-outline'}></ha-icon>
+                ${this.problemActive}
               </span>`
             : nothing;
         default:
@@ -403,6 +433,24 @@ export class StratumCardRoomRow extends LitElement {
     .leak ha-icon {
       --mdc-icon-size: 16px;
     }
+
+    .smoke {
+      color: var(--stratum-chip-smoke-color, #e53935);
+      font-weight: 600;
+    }
+    .smoke ha-icon { --mdc-icon-size: 16px; }
+
+    .gas {
+      color: var(--stratum-chip-gas-color, #ff5722);
+      font-weight: 600;
+    }
+    .gas ha-icon { --mdc-icon-size: 16px; }
+
+    .problem {
+      color: var(--stratum-chip-problem-color, #ff9800);
+      font-weight: 600;
+    }
+    .problem ha-icon { --mdc-icon-size: 16px; }
 
     .windows {
       color: var(--stratum-chip-windows-color, #42a5f5);

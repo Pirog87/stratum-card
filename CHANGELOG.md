@@ -4,6 +4,24 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.39.0] — 2026-04-20
+
+### Added
+- **Alert chips i pola inspirowane room-summary-card:**
+  - Nowe built-in chipy: `smoke` (dym), `gas` (gaz + carbon_monoxide),
+    `co` (tylko CO), `problem` (agregator problem + safety + tamper),
+    `battery_low` (binary_sensor battery w stanie on = niska)
+  - Nowe `TileField`: `smoke`, `gas`, `problem` — wiersz/kafel pokoju
+    pokazuje aktywne alarmy (kolorowe liczniki, tylko gdy > 0)
+  - Wsparcie w conditions editorze (reguły stylu na alarmy),
+    field_entities override i popup listy chipa
+- Wszystkie nowe chipy w quick-pick menu „Dodaj chip", domyślnie
+  `show_when_zero: false` (alarm-only).
+
+### Fixed
+- Wiersz (row) nie dostawał liczników `leak` — przekazywane były tylko
+  do kafla. Teraz oba tryby dostają pełny zestaw alertów.
+
 ## [1.38.0] — 2026-04-20
 
 ### Changed

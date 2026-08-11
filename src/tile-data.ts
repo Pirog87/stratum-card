@@ -24,6 +24,9 @@ export const DEFAULT_FIELDS: TileField[] = [
   'windows',
   'doors',
   'leak',
+  'smoke',
+  'gas',
+  'problem',
 ];
 
 /** Wartości poszczególnych pól — gotowe do wyświetlenia w row/tile. */
@@ -40,6 +43,12 @@ export interface TileData {
   doorsOpen: number;
   /** Liczba aktywnych czujek wycieku (state=on). */
   leakActive: number;
+  /** Liczba aktywnych czujek dymu. */
+  smokeActive: number;
+  /** Liczba aktywnych czujek gazu/CO. */
+  gasActive: number;
+  /** Liczba aktywnych „problem" binary_sensors (problem + safety + tamper). */
+  problemActive: number;
   /**
    * Kolor pierwszego aktywnego światła z `rgb_color` w pomieszczeniu.
    * Gdy żadne światło nie świeci albo nie ma `rgb_color` — undefined.
@@ -169,6 +178,25 @@ function resolveFieldEntityIds(
         (e) => e.entity_id,
       );
     }
+    case 'smoke': {
+      if (fieldEntities?.smoke?.length) return fieldEntities.smoke;
+      return filterBinarySensorDeviceClass(hass, entries, 'smoke').map(
+        (e) => e.entity_id,
+      );
+    }
+    case 'gas': {
+      if (fieldEntities?.gas?.length) return fieldEntities.gas;
+      const g = filterBinarySensorDeviceClass(hass, entries, 'gas');
+      const co = filterBinarySensorDeviceClass(hass, entries, 'carbon_monoxide');
+      return Array.from(new Set([...g, ...co].map((e) => e.entity_id)));
+    }
+    case 'problem': {
+      if (fieldEntities?.problem?.length) return fieldEntities.problem;
+      const p = filterBinarySensorDeviceClass(hass, entries, 'problem');
+      const s = filterBinarySensorDeviceClass(hass, entries, 'safety');
+      const t = filterBinarySensorDeviceClass(hass, entries, 'tamper');
+      return Array.from(new Set([...p, ...s, ...t].map((e) => e.entity_id)));
+    }
     default:
       return [];
   }
@@ -197,6 +225,9 @@ export function computeTileData(
   const windowsIds = resolveFieldEntityIds(hass, entries, 'windows', fieldEntities);
   const doorsIds = resolveFieldEntityIds(hass, entries, 'doors', fieldEntities);
   const leakIds = resolveFieldEntityIds(hass, entries, 'leak', fieldEntities);
+  const smokeIds = resolveFieldEntityIds(hass, entries, 'smoke', fieldEntities);
+  const gasIds = resolveFieldEntityIds(hass, entries, 'gas', fieldEntities);
+  const problemIds = resolveFieldEntityIds(hass, entries, 'problem', fieldEntities);
 
   const { rgb: lightsRgb, brightness: lightsBrightness } = readLightsColor(
     hass,
@@ -213,6 +244,9 @@ export function computeTileData(
     windowsOpen: countOn(hass, windowsIds),
     doorsOpen: countOn(hass, doorsIds),
     leakActive: countOn(hass, leakIds),
+    smokeActive: countOn(hass, smokeIds),
+    gasActive: countOn(hass, gasIds),
+    problemActive: countOn(hass, problemIds),
     lightsRgb,
     lightsBrightness,
   };
@@ -335,6 +369,27 @@ function matchCondition(data: TileData, cond: DisplayConditionConfig): boolean {
     }
     case 'leak': {
       const n = data.leakActive;
+      if (when === 'any_on') return n > 0;
+      if (when === 'none_on') return n === 0;
+      if (when === 'count_gt') return n > v;
+      return false;
+    }
+    case 'smoke': {
+      const n = data.smokeActive;
+      if (when === 'any_on') return n > 0;
+      if (when === 'none_on') return n === 0;
+      if (when === 'count_gt') return n > v;
+      return false;
+    }
+    case 'gas': {
+      const n = data.gasActive;
+      if (when === 'any_on') return n > 0;
+      if (when === 'none_on') return n === 0;
+      if (when === 'count_gt') return n > v;
+      return false;
+    }
+    case 'problem': {
+      const n = data.problemActive;
       if (when === 'any_on') return n > 0;
       if (when === 'none_on') return n === 0;
       if (when === 'count_gt') return n > v;
