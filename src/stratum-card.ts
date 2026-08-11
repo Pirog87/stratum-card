@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.45.1';
+const VERSION = '1.46.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -1126,13 +1126,15 @@ export class StratumCard extends LitElement {
 
     .body {
       overflow: hidden;
-      padding: 0 16px;
+      /* Wąskie boczne paddingi — wiersze-suwaki mają dochodzić blisko
+         krawędzi karty (feedback: za dużo pustego miejsca po bokach). */
+      padding: 0 var(--stratum-card-body-padding, 8px);
       border-top: 0.5px solid
         var(--stratum-card-divider-color, var(--divider-color, rgba(255, 255, 255, 0.08)));
     }
 
     .body-wrap.open .body {
-      padding: 4px 16px 12px;
+      padding: 6px var(--stratum-card-body-padding, 8px) 10px;
     }
 
     .rooms-grid {

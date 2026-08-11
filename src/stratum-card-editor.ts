@@ -155,13 +155,15 @@ export class StratumCardEditor extends LitElement {
     if (!isTile && raw.preset && raw.preset !== 'fill') out.preset = raw.preset;
     // Suwak gestem — default true, zapisujemy tylko wyłączenie.
     if (!isTile && raw.slider === false) out.slider = false;
-    // Układ statusów — default 'two-line', zapisujemy tylko 'right'.
-    if (!isTile && raw.status_layout === 'right') out.status_layout = 'right';
+    // Układ statusów — default 'right', zapisujemy tylko 'two-line'.
+    if (!isTile && raw.status_layout === 'two-line') {
+      out.status_layout = 'two-line';
+    }
     if (raw.show_icon === false) out.show_icon = false;
     if (raw.show_name === false) out.show_name = false;
     const defaultRadius = isTile ? 14 : 6;
     const defaultPadding = isTile ? 12 : 10;
-    const defaultMinH = isTile ? 110 : 72;
+    const defaultMinH = isTile ? 110 : 64;
     if (typeof raw.border_radius === 'number' && raw.border_radius !== defaultRadius) {
       out.border_radius = raw.border_radius;
     }
