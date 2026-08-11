@@ -4,6 +4,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.45.0] — 2026-08-11
+
+### Added
+- **`row_config.status_layout`** — wybór układu statusów dla fill/pill:
+  - `two-line` (default) — temp/wilgotność/motion w sublinii pod nazwą,
+    po prawej tylko liczniki i alarmy
+  - `right` — jedna linia, wszystkie statusy po prawej (max 4 + „+n")
+  W edytorze „Wygląd — Wiersz" jako chipy „Dwie linie / Wszystko po prawej".
+- Nazwa pokoju w układzie jednoliniowym fill/pill zachowuje typografię 17 px/600.
+
 ## [1.44.0] — 2026-08-11
 
 ### Changed (wdrożenie makiety A″ wariant C — wybór usera)

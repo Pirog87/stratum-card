@@ -618,6 +618,14 @@ export interface TileDisplayConfig {
    * Default `true`. Tap dalej działa normalnie (próg 8 px odróżnia gest).
    */
   slider?: boolean;
+
+  /**
+   * Układ statusów w wierszu fill/pill:
+   * - `two-line` (default) — temp/wilgotność/motion w sublinii pod nazwą,
+   *   po prawej tylko liczniki i alarmy
+   * - `right` — jedna linia, wszystkie statusy po prawej stronie
+   */
+  status_layout?: 'two-line' | 'right';
 }
 
 /** Dostępne presety kształtu wiersza pokoju. */
