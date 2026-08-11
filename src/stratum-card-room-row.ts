@@ -47,6 +47,12 @@ const DISPLAY_ORDER: TileField[] = [
 /** Maksymalna liczba widocznych statusów zanim pojawi się „+n". */
 const MAX_VISIBLE_FIELDS = 4;
 
+/** Pola trafiające do sublinii pod nazwą (fill/pill, layout dwuliniowy). */
+const SUB_FIELDS: TileField[] = ['temperature', 'humidity', 'motion'];
+
+/** Limit pól po prawej stronie w layoutcie dwuliniowym. */
+const MAX_RIGHT_FIELDS = 3;
+
 @customElement('stratum-card-room-row')
 export class StratumCardRoomRow extends LitElement {
   @property({ type: String }) public name = '';
@@ -271,6 +277,36 @@ export class StratumCardRoomRow extends LitElement {
     };
   }
 
+  /**
+   * Layout dwuliniowy (fill/pill): rozdziela pola na sublinię pod nazwą
+   * (temp/wilgotność/motion) i prawą stronę (światła + liczniki + alarmy).
+   */
+  private _splitFields(configured: TileField[]): {
+    sub: TileField[];
+    right: TileField[];
+    hiddenCount: number;
+  } {
+    const withValue = configured.filter((f) => this._fieldHasValue(f));
+    const sub = SUB_FIELDS.filter((f) => withValue.includes(f));
+    const rightCandidates = withValue.filter((f) => !SUB_FIELDS.includes(f));
+    if (rightCandidates.length <= MAX_RIGHT_FIELDS) {
+      return {
+        sub,
+        right: DISPLAY_ORDER.filter((f) => rightCandidates.includes(f)),
+        hiddenCount: 0,
+      };
+    }
+    const byPriority = [...rightCandidates].sort(
+      (a, b) => (FIELD_PRIORITY[b] ?? 0) - (FIELD_PRIORITY[a] ?? 0),
+    );
+    const top = new Set(byPriority.slice(0, MAX_RIGHT_FIELDS));
+    return {
+      sub,
+      right: DISPLAY_ORDER.filter((f) => top.has(f)),
+      hiddenCount: rightCandidates.length - MAX_RIGHT_FIELDS,
+    };
+  }
+
   /** Czy jakikolwiek alarm jest aktywny (smoke/gas/leak/problem). */
   private get _alarmActive(): boolean {
     return (
@@ -356,7 +392,11 @@ export class StratumCardRoomRow extends LitElement {
     ];
     const styles = cssVars.filter(Boolean).join(' ');
 
-    const { shown, hiddenCount } = this._visibleFields(fields);
+    // fill/pill = layout dwuliniowy (nazwa + sublinia, prawa strona
+    // tylko liczniki/alarmy); rail/cards = klasyczna jedna linia.
+    const twoLine = preset === 'fill' || preset === 'pill';
+    const single = twoLine ? undefined : this._visibleFields(fields);
+    const split = twoLine ? this._splitFields(fields) : undefined;
 
     return html`
       <div
@@ -388,17 +428,52 @@ export class StratumCardRoomRow extends LitElement {
               ></ha-icon>
             </span>`
           : nothing}
-        ${showName
+        ${twoLine
+          ? html`<span class="body">
+              ${showName
+                ? html`<span class="name">${this.name}</span>`
+                : nothing}
+              ${split!.sub.length > 0
+                ? html`<span class="sub">
+                    ${split!.sub.map((f, i) =>
+                      i === 0
+                        ? this._renderSubField(f)
+                        : html`<span class="dot">·</span>${this._renderSubField(f)}`,
+                    )}
+                  </span>`
+                : nothing}
+            </span>`
+          : showName
           ? html`<span class="name">${this.name}</span>`
           : html`<span class="name-spacer"></span>`}
         <div class="info">
-          ${shown.map((f) => this._renderField(f))}
-          ${hiddenCount > 0
-            ? html`<span class="field more" title="${hiddenCount} więcej">+${hiddenCount}</span>`
+          ${(twoLine ? split!.right : single!.shown).map((f) => this._renderField(f))}
+          ${(twoLine ? split!.hiddenCount : single!.hiddenCount) > 0
+            ? html`<span
+                class="field more"
+                title="${twoLine ? split!.hiddenCount : single!.hiddenCount} więcej"
+                >+${twoLine ? split!.hiddenCount : single!.hiddenCount}</span
+              >`
             : nothing}
         </div>
       </div>
     `;
+  }
+
+  /** Pola sublinii — kompaktowe, wyciszone (temp/wilgotność tekstem, motion ikoną). */
+  private _renderSubField(f: TileField): TemplateResult | typeof nothing {
+    switch (f) {
+      case 'temperature':
+        return html`<span class="sub-item">${this.temperature}</span>`;
+      case 'humidity':
+        return html`<span class="sub-item">${this.humidity}</span>`;
+      case 'motion':
+        return html`<span class="sub-item motion-sub">
+          <ha-icon .icon=${'mdi:motion-sensor'}></ha-icon>
+        </span>`;
+      default:
+        return nothing;
+    }
   }
 
   private _renderField(f: TileField): TemplateResult | typeof nothing {
@@ -536,22 +611,23 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='pill'] {
       border-radius: var(--stratum-room-row-radius, 999px);
       background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.045));
-      /* Koło ikony = pełna wysokość wiersza, flush z lewą krawędzią pigułki
-         (jak bubble-card). Default 64px — skala bubble, nie lista mail. */
-      padding: 0 16px 0 0;
-      min-height: var(--stratum-room-row-min-height, 64px);
+      padding: 0 14px 0 0;
+      min-height: var(--stratum-room-row-min-height, 72px);
       touch-action: pan-y;
     }
 
+    /* Spłaszczony stadion zakotwiczony na dole (jak bubble 100×80/r40):
+       wysokość = 4/5 wiersza, szerokość 1.35× wysokości stadionu,
+       dolna krawędź flush z dołem pigułki. Górna ćwiartka wiersza
+       zostaje „lekka" — fill i nazwa oddychają.
+       Nieprzezroczyste tło → fill chowa się ZA stadionem przy niskich %. */
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
-      width: var(--stratum-room-row-min-height, 64px);
-      height: var(--stratum-room-row-min-height, 64px);
-      border-radius: 50%;
+      align-self: flex-end;
+      height: calc(var(--stratum-room-row-min-height, 72px) * 0.8);
+      width: calc(var(--stratum-room-row-min-height, 72px) * 1.08);
+      border-radius: 999px;
       overflow: hidden;
-      /* NIEPRZEZROCZYSTE koło — fill przy niskich % chowa się ZA nim
-         i wynurza dopiero na prawo (jak w bubble slider), zamiast
-         prześwitywać jako kleks pod ikoną. */
       background: var(
         --stratum-room-row-iconbg,
         color-mix(in srgb, var(--card-background-color, #1c1e22) 65%, #000)
@@ -560,29 +636,68 @@ export class StratumCardRoomRow extends LitElement {
 
     .row[data-preset='fill'] .icon,
     .row[data-preset='pill'] .icon {
-      /* Ikona proporcjonalna do koła (0.5×), chyba że user ustawił
-         icon_size explicit — wtedy inline var wygrywa. Brak croppingu
-         przy każdej wysokości wiersza. */
+      /* Ikona = połowa wysokości stadionu (0.4× wiersza), chyba że user
+         ustawił icon_size explicit — wtedy inline var wygrywa. */
       --mdc-icon-size: var(
         --stratum-room-row-icon-size,
-        calc(var(--stratum-room-row-min-height, 64px) * 0.5)
+        calc(var(--stratum-room-row-min-height, 72px) * 0.4)
       );
     }
 
-    .row[data-preset='fill'] .name,
-    .row[data-preset='pill'] .name {
-      font-size: 16px;
+    .row[data-preset='fill'] .body .name,
+    .row[data-preset='pill'] .body .name {
+      font-size: 17px;
       font-weight: 600;
     }
 
     .row[data-preset='fill'] .info,
     .row[data-preset='pill'] .info {
-      font-size: 13px;
+      font-size: 13.5px;
     }
 
     .row[data-preset='fill'] .info .field ha-icon,
     .row[data-preset='pill'] .info .field ha-icon {
       --mdc-icon-size: 18px;
+    }
+
+    /* ====== Layout dwuliniowy (fill/pill) ====== */
+    .body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      justify-content: center;
+    }
+
+    .body .name {
+      flex: none;
+    }
+
+    .sub {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--secondary-text-color);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .sub-item {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .sub .dot {
+      opacity: 0.5;
+    }
+
+    .sub .motion-sub ha-icon {
+      --mdc-icon-size: 14px;
+      color: var(--stratum-chip-motion-color, #4caf50);
     }
 
     .row[data-preset='fill'].active .iconwrap,

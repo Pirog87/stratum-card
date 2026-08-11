@@ -277,7 +277,7 @@ export class StratumDisplayEditor extends LitElement {
 
     const radius = cfg.border_radius ?? 14;
     const padding = cfg.padding ?? 12;
-    const minHeight = cfg.min_height ?? 110;
+    const minHeight = cfg.min_height ?? (this.mode === 'tile' ? 110 : 72);
     const iconSize = cfg.icon_size ?? 22;
     const press = cfg.press_scale ?? 0.98;
 
