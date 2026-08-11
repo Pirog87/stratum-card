@@ -393,8 +393,10 @@ export class StratumCardRoomRow extends LitElement {
     const styles = cssVars.filter(Boolean).join(' ');
 
     // fill/pill = layout dwuliniowy (nazwa + sublinia, prawa strona
-    // tylko liczniki/alarmy); rail/cards = klasyczna jedna linia.
-    const twoLine = preset === 'fill' || preset === 'pill';
+    // tylko liczniki/alarmy), chyba że user wybrał status_layout: 'right'.
+    // rail/cards = zawsze klasyczna jedna linia.
+    const twoLine =
+      (preset === 'fill' || preset === 'pill') && cfg.status_layout !== 'right';
     const single = twoLine ? undefined : this._visibleFields(fields);
     const split = twoLine ? this._splitFields(fields) : undefined;
 
@@ -645,7 +647,9 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .row[data-preset='fill'] .body .name,
-    .row[data-preset='pill'] .body .name {
+    .row[data-preset='pill'] .body .name,
+    .row[data-preset='fill'] > .name,
+    .row[data-preset='pill'] > .name {
       font-size: 17px;
       font-weight: 600;
     }

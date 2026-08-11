@@ -155,6 +155,8 @@ export class StratumCardEditor extends LitElement {
     if (!isTile && raw.preset && raw.preset !== 'fill') out.preset = raw.preset;
     // Suwak gestem — default true, zapisujemy tylko wyłączenie.
     if (!isTile && raw.slider === false) out.slider = false;
+    // Układ statusów — default 'two-line', zapisujemy tylko 'right'.
+    if (!isTile && raw.status_layout === 'right') out.status_layout = 'right';
     if (raw.show_icon === false) out.show_icon = false;
     if (raw.show_name === false) out.show_name = false;
     const defaultRadius = isTile ? 14 : 6;

@@ -182,6 +182,13 @@ export class StratumDisplayEditor extends LitElement {
     this._emit(next);
   }
 
+  private _setStatusLayout(value: 'two-line' | 'right'): void {
+    const next = { ...this.config };
+    if (value === 'two-line') delete next.status_layout;
+    else next.status_layout = value;
+    this._emit(next);
+  }
+
   private _toggleSlider(): void {
     const next = { ...this.config };
     if (this.config.slider === false) delete next.slider;
@@ -268,6 +275,7 @@ export class StratumDisplayEditor extends LitElement {
       (cfg.accent_mode === undefined && !cfg.accent_color);
     const rowPreset: RowPreset = cfg.preset ?? 'fill';
     const sliderOn = cfg.slider !== false;
+    const statusLayout = cfg.status_layout ?? 'two-line';
     const bg = cfg.background_image ?? '';
     const bgIsPreset = bg.startsWith('stratum:');
     const customBgUrl = !bgIsPreset ? bg : '';
@@ -302,6 +310,27 @@ export class StratumDisplayEditor extends LitElement {
               Fill (domyślny) — wypełnienie pigułki pokazuje średnią jasność
               świateł w pokoju. Rail to dawny, najbardziej zwarty wygląd.
             </p>
+            <label class="group-label sub">Układ statusów</label>
+            <div class="chip-row">
+              <button
+                type="button"
+                class="chip ${statusLayout === 'two-line' ? 'on' : ''}"
+                title="Temp/wilgotność/motion pod nazwą, po prawej liczniki i alarmy"
+                @click=${() => this._setStatusLayout('two-line')}
+              >
+                <ha-icon .icon=${'mdi:format-align-left'}></ha-icon>
+                <span>Dwie linie</span>
+              </button>
+              <button
+                type="button"
+                class="chip ${statusLayout === 'right' ? 'on' : ''}"
+                title="Jedna linia — wszystkie statusy po prawej stronie"
+                @click=${() => this._setStatusLayout('right')}
+              >
+                <ha-icon .icon=${'mdi:format-align-right'}></ha-icon>
+                <span>Wszystko po prawej</span>
+              </button>
+            </div>
             <div class="toggles-row" style="margin-top:10px">
               <label class="toggle">
                 <input
