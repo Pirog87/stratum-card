@@ -35,7 +35,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.39.0';
+const VERSION = '1.40.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -900,6 +900,7 @@ export class StratumCard extends LitElement {
       .conditionOverride=${conditionOverride}
       .lightsAccent=${rowLightsAccent}
       .lightsBrightness=${data.lightsBrightness}
+      .lightsAvgBrightness=${data.lightsAvgBrightness}
       .styleOverride=${styleOverride}
       .clickable=${clickable}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
@@ -1035,6 +1036,12 @@ export class StratumCard extends LitElement {
 
     .title {
       flex: 1;
+      /* min-width: 0 jest kluczowe — bez tego flex nie pozwala się skurczyć
+         i długa nazwa piętra rozpycha nagłówek poza kartę. */
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       font-size: var(--stratum-card-title-size, 17px);
       font-weight: var(--stratum-card-title-weight, 500);
       letter-spacing: -0.01em;
@@ -1045,7 +1052,16 @@ export class StratumCard extends LitElement {
       display: flex;
       gap: 6px;
       align-items: center;
-      flex-shrink: 0;
+      /* Chipy mogą się kurczyć i scrollować poziomo zamiast łamać nagłówek. */
+      flex-shrink: 1;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 4px 0;
+    }
+
+    .chips::-webkit-scrollbar {
+      display: none;
     }
 
     .expander {
@@ -1147,10 +1163,15 @@ export class StratumCard extends LitElement {
     }
 
     .stratum-popup-close {
-      position: absolute;
+      /* sticky (nie absolute): przycisk × zostaje w kadrze podczas scrollowania
+         treści popupu. Ujemny margin-bottom nakłada go na kartę pod spodem. */
+      position: sticky;
       top: 12px;
-      right: 12px;
-      z-index: 2;
+      z-index: 5;
+      margin-left: auto;
+      margin-right: 12px;
+      margin-bottom: -36px;
+      transform: translateY(12px);
       width: 36px;
       height: 36px;
       border-radius: 50%;
@@ -1158,7 +1179,7 @@ export class StratumCard extends LitElement {
       background: var(--primary-color, #ff9b42);
       color: #fff;
       cursor: pointer;
-      display: inline-flex;
+      display: flex;
       align-items: center;
       justify-content: center;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);

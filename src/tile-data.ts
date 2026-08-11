@@ -57,6 +57,12 @@ export interface TileData {
   lightsRgb?: string;
   /** Jasność 0–1 (z atrybutu `brightness` 0-255). */
   lightsBrightness?: number;
+  /**
+   * Średnia jasność WŁĄCZONYCH świateł w pokoju, 0–1. Światła bez atrybutu
+   * `brightness` (zwykłe on/off) liczą się jako 1.0. `undefined` gdy nic
+   * nie świeci. Napędza wypełnienie wiersza w preset `fill`.
+   */
+  lightsAvgBrightness?: number;
 }
 
 /** Overrides stylu wyliczone z reguł `display_config.conditions`. */
@@ -233,6 +239,7 @@ export function computeTileData(
     hass,
     lightsIds,
   );
+  const lightsAvgBrightness = avgBrightness(hass, lightsIds);
 
   return {
     temperature: temp?.formatted,
@@ -249,7 +256,29 @@ export function computeTileData(
     problemActive: countOn(hass, problemIds),
     lightsRgb,
     lightsBrightness,
+    lightsAvgBrightness,
   };
+}
+
+/**
+ * Średnia jasność włączonych świateł (0–1). On/off bez `brightness` → 1.0.
+ * `undefined` gdy żadne światło nie jest włączone.
+ */
+function avgBrightness(
+  hass: HomeAssistant,
+  entityIds: string[],
+): number | undefined {
+  let sum = 0;
+  let n = 0;
+  for (const id of entityIds) {
+    const state = hass.states?.[id];
+    if (!state || state.state !== 'on') continue;
+    const raw = state.attributes?.brightness as number | undefined;
+    sum += typeof raw === 'number' ? Math.max(0, Math.min(1, raw / 255)) : 1;
+    n += 1;
+  }
+  if (n === 0) return undefined;
+  return sum / n;
 }
 
 /**

@@ -4,6 +4,36 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.40.0] — 2026-04-20
+
+### Changed
+- **Nowy domyślny wygląd wiersza pokoju: preset `fill`** (z makiet redesignu).
+  Pigułka z okrągłą ikoną 44 px i wypełnieniem tła = **średnia jasność
+  włączonych świateł w pokoju** (0–100%, subtelny gradient amber).
+  Kolor niesie informację, nie dekoruje.
+- Cztery presety kształtu wiersza: `row_config.preset`:
+  - `fill` (default) — pigułka z wypełnieniem jasności
+  - `pill` — pigułka z ringiem aktywności
+  - `rail` — dawny płaski wygląd z paskiem akcentu z lewej
+  - `cards` — miękkie karty z gradient-tintem
+  Wybór chipami w edytorze „Wygląd — Wiersz" → „Kształt wiersza".
+- **Limit 4 statusów w wierszu + „+n".** Alarmy (dym > gaz > wyciek > problem)
+  mają najwyższy priorytet i nigdy nie są ucinane. Stała kolejność
+  wyświetlania: temperatura → wilgotność → światła → ruch → okna → drzwi → alarmy.
+- Alarmy sygnalizowane na poziomie wiersza: czerwony tint ikony + ring
+  (fill/pill), czerwony pasek (rail), czerwony border (cards).
+
+### Fixed (quick-wins z audytu)
+- **Nagłówek karty nie rozjeżdża się na wąskim ekranie** — tytuł dostał
+  `min-width: 0` + ellipsis, chipy przewijają się poziomo zamiast łamać layout.
+- **Wiersz pokoju ma min. 48–54 px wysokości** (dotąd ~34 px) — touch targets OK.
+- **Przycisk × popupu jest sticky** — nie odjeżdża przy przewijaniu treści.
+
+### Build
+- **Bundle −58 KB (305 → 247 KB).** Nowy krok builda minifikuje wnętrza
+  template literals (`css`/`html`), których Terser nie dotyka —
+  sam whitespace wcięć CSS ważył ~45 KB.
+
 ## [1.39.0] — 2026-04-20
 
 ### Added
