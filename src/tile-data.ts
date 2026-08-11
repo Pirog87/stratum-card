@@ -148,7 +148,7 @@ function formatSensorState(
  * Dla zadanego pola zwróć listę encji z override (`fieldEntities[field]`)
  * lub filtr z auto-discovery.
  */
-function resolveFieldEntityIds(
+export function resolveFieldEntityIds(
   hass: HomeAssistant,
   entries: HassEntityRegistryEntry[],
   field: TileField,

@@ -17,7 +17,11 @@ import {
   filterByDomain,
   filterBinarySensorDeviceClass,
 } from './area-entities.js';
-import { computeTileData, evaluateConditions } from './tile-data.js';
+import {
+  computeTileData,
+  evaluateConditions,
+  resolveFieldEntityIds,
+} from './tile-data.js';
 import { ensureRegistry, subscribeRegistry } from './entity-registry-cache.js';
 import {
   DEFAULT_CHIPS,
@@ -35,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.40.0';
+const VERSION = '1.41.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -833,13 +837,18 @@ export class StratumCard extends LitElement {
     const conditions = this._resolveConditions();
     const conditionOverride = evaluateConditions(data, conditions);
 
-    // Dynamiczny accent z świateł — jeśli config to zaznaczył i jakieś światło świeci.
+    // Dynamiczny accent z świateł. DEFAULT: lights, chyba że user wybrał
+    // konkretny accent_color (wtedy static) albo explicit accent_mode.
+    const effectiveAccentMode = (
+      cfg?: import('./types.js').TileDisplayConfig,
+    ): 'static' | 'lights' =>
+      cfg?.accent_mode ?? (cfg?.accent_color ? 'static' : 'lights');
     const rowLightsAccent =
-      rowConfig?.accent_mode === 'lights' && data.lightsRgb
+      effectiveAccentMode(rowConfig) === 'lights' && data.lightsRgb
         ? data.lightsRgb
         : undefined;
     const tileLightsAccent =
-      tileConfig?.accent_mode === 'lights' && data.lightsRgb
+      effectiveAccentMode(tileConfig) === 'lights' && data.lightsRgb
         ? data.lightsRgb
         : undefined;
 
@@ -901,11 +910,40 @@ export class StratumCard extends LitElement {
       .lightsAccent=${rowLightsAccent}
       .lightsBrightness=${data.lightsBrightness}
       .lightsAvgBrightness=${data.lightsAvgBrightness}
+      .hasLights=${resolveFieldEntityIds(this.hass!, entries, 'lights', fieldEntities)
+        .length > 0}
       .styleOverride=${styleOverride}
       .clickable=${clickable}
+      @row-brightness=${(ev: CustomEvent<{ pct: number; live: boolean }>) =>
+        this._onRowBrightness(entries, fieldEntities, ev.detail.pct, ev.detail.live)}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
         this._onRoomTap(ev, effectiveTap, popupOverrides)}
     ></stratum-card-room-row>`;
+  }
+
+  /**
+   * Gest przeciągnięcia po wierszu = ustaw jasność wszystkich świateł pokoju.
+   * `live: true` to update w trakcie gestu (throttlowany w komponencie),
+   * `live: false` — finalna wartość po puszczeniu palca.
+   * Pct ≤ 2 traktujemy jak intencję wyłączenia.
+   */
+  private _onRowBrightness(
+    entries: HassEntityRegistryEntry[],
+    fieldEntities: import('./types.js').TileFieldEntities | undefined,
+    pct: number,
+    live: boolean,
+  ): void {
+    if (!this.hass) return;
+    const lightsIds = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
+    if (lightsIds.length === 0) return;
+    if (pct <= 2 && !live) {
+      void this.hass.callService('light', 'turn_off', { entity_id: lightsIds });
+      return;
+    }
+    void this.hass.callService('light', 'turn_on', {
+      entity_id: lightsIds,
+      brightness_pct: Math.max(1, Math.min(100, pct)),
+    });
   }
 
   private _onRoomTap(

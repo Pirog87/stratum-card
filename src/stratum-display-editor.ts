@@ -164,13 +164,28 @@ export class StratumDisplayEditor extends LitElement {
   }
 
   private _toggleAccentFromLights(): void {
-    const current = this.config.accent_mode;
-    const next = { ...this.config };
-    if (current === 'lights') {
-      delete next.accent_mode;
-    } else {
+    const cfg = this.config;
+    const isLights =
+      cfg.accent_mode === 'lights' ||
+      (cfg.accent_mode === undefined && !cfg.accent_color);
+    const next = { ...cfg };
+    if (isLights) {
+      // Wyłączamy tryb lights → static (z accent_color albo domyślnym amber).
+      next.accent_mode = 'static';
+    } else if (cfg.accent_color) {
+      // Kolor ustawiony, ale user chce dynamiczny — explicit lights.
       next.accent_mode = 'lights';
+    } else {
+      // Brak koloru → lights jest defaultem, czyścimy klucz.
+      delete next.accent_mode;
     }
+    this._emit(next);
+  }
+
+  private _toggleSlider(): void {
+    const next = { ...this.config };
+    if (this.config.slider === false) delete next.slider;
+    else next.slider = false;
     this._emit(next);
   }
 
@@ -246,8 +261,13 @@ export class StratumDisplayEditor extends LitElement {
     const color = cfg.accent_color ?? '';
     const colorIsPreset = COLOR_SWATCHES.some((s) => s.key === color);
     const customColor = colorIsPreset ? '' : color;
-    const accentFromLights = cfg.accent_mode === 'lights';
+    // DEFAULT: akcent ze świateł, chyba że user wybrał konkretny kolor
+    // (wtedy static) albo explicit accent_mode.
+    const accentFromLights =
+      cfg.accent_mode === 'lights' ||
+      (cfg.accent_mode === undefined && !cfg.accent_color);
     const rowPreset: RowPreset = cfg.preset ?? 'fill';
+    const sliderOn = cfg.slider !== false;
     const bg = cfg.background_image ?? '';
     const bgIsPreset = bg.startsWith('stratum:');
     const customBgUrl = !bgIsPreset ? bg : '';
@@ -282,6 +302,16 @@ export class StratumDisplayEditor extends LitElement {
               Fill (domyślny) — wypełnienie pigułki pokazuje średnią jasność
               świateł w pokoju. Rail to dawny, najbardziej zwarty wygląd.
             </p>
+            <div class="toggles-row" style="margin-top:10px">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  .checked=${sliderOn}
+                  @change=${this._toggleSlider}
+                />
+                <span>Suwak jasności gestem (przeciągnij po wierszu)</span>
+              </label>
+            </div>
           </div>`
         : nothing}
 

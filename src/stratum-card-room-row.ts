@@ -11,7 +11,7 @@
 // priorytet i nie są ucinane przed zwykłymi polami.
 
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import type { RowDisplayConfig, RowPreset, TileField } from './types.js';
 import { resolveColor } from './colors.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
@@ -105,7 +105,29 @@ export class StratumCardRoomRow extends LitElement {
   /** Czy wiersz ma reagować na klik (pokazać cursor:pointer + hover). */
   @property({ type: Boolean, reflect: true }) public clickable = false;
 
+  /** Czy pokój ma jakiekolwiek światła — warunek działania suwaka gestem. */
+  @property({ type: Boolean, attribute: 'has-lights' }) public hasLights = false;
+
+  /** Jasność (%) trzymana lokalnie podczas przeciągania — nadpisuje fill. */
+  @state() private _dragPct?: number;
+
+  /** Stan aktywnego gestu przeciągania. */
+  private _drag?: {
+    startX: number;
+    startPct: number;
+    width: number;
+    sliding: boolean;
+    lastLive: number;
+  };
+
+  /** Flaga tłumiąca click bezpośrednio po zakończonym przeciągnięciu. */
+  private _suppressClick = false;
+
   private _onClick = (): void => {
+    if (this._suppressClick) {
+      this._suppressClick = false;
+      return;
+    }
     if (!this.clickable) return;
     this.dispatchEvent(
       new CustomEvent('row-tap', {
@@ -115,6 +137,81 @@ export class StratumCardRoomRow extends LitElement {
       }),
     );
   };
+
+  /** Czy suwak gestem jest włączony dla tej konfiguracji. */
+  private get _sliderEnabled(): boolean {
+    const cfg = this.displayConfig ?? {};
+    if (cfg.slider === false) return false;
+    return this.hasLights;
+  }
+
+  private _currentPct(): number {
+    if (typeof this._dragPct === 'number') return this._dragPct;
+    if (typeof this.lightsAvgBrightness === 'number') {
+      return Math.round(this.lightsAvgBrightness * 100);
+    }
+    return 0;
+  }
+
+  private _onPointerDown = (ev: PointerEvent): void => {
+    if (!this._sliderEnabled) return;
+    // Tylko primary pointer (lewy przycisk / pierwszy palec).
+    if (ev.button !== 0) return;
+    const row = ev.currentTarget as HTMLElement;
+    this._drag = {
+      startX: ev.clientX,
+      startPct: this._currentPct(),
+      width: Math.max(1, row.getBoundingClientRect().width),
+      sliding: false,
+      lastLive: 0,
+    };
+  };
+
+  private _onPointerMove = (ev: PointerEvent): void => {
+    const d = this._drag;
+    if (!d) return;
+    const dx = ev.clientX - d.startX;
+    if (!d.sliding) {
+      // Próg 8 px odróżnia swipe od tapnięcia; pionowy scroll zostawiamy
+      // przeglądarce (touch-action: pan-y na .row).
+      if (Math.abs(dx) < 8) return;
+      d.sliding = true;
+      (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    }
+    const pct = Math.max(0, Math.min(100, d.startPct + (dx / d.width) * 100));
+    this._dragPct = pct;
+    // Live update — max co 300 ms, żeby nie zalać HA requestami.
+    const now = Date.now();
+    if (now - d.lastLive > 300) {
+      d.lastLive = now;
+      this._emitBrightness(pct, true);
+    }
+  };
+
+  private _onPointerUp = (ev: PointerEvent): void => {
+    const d = this._drag;
+    this._drag = undefined;
+    if (!d?.sliding) return;
+    ev.stopPropagation();
+    this._suppressClick = true;
+    const pct = this._dragPct ?? d.startPct;
+    this._emitBrightness(pct, false);
+    // Po 1.5 s oddajemy kontrolę realnym stanom z hass (uniknięcie skoku
+    // fill zanim HA odeśle nowy brightness).
+    window.setTimeout(() => {
+      this._dragPct = undefined;
+    }, 1500);
+  };
+
+  private _emitBrightness(pct: number, live: boolean): void {
+    this.dispatchEvent(
+      new CustomEvent('row-brightness', {
+        detail: { area_id: this.areaId, pct: Math.round(pct), live },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
 
   private _onKey = (ev: KeyboardEvent): void => {
     if (!this.clickable) return;
@@ -215,10 +312,16 @@ export class StratumCardRoomRow extends LitElement {
     const hoverEffect = cfg.hover_effect ?? 'subtle';
     const pressScale = typeof cfg.press_scale === 'number' ? cfg.press_scale : 0.98;
 
-    // Wypełnienie (preset fill): % = średnia jasność włączonych świateł.
+    // Wypełnienie (preset fill): % = średnia jasność włączonych świateł,
+    // podczas przeciągania nadpisywane lokalną wartością gestu.
+    const dragging = typeof this._dragPct === 'number';
     const fillPct =
-      preset === 'fill' && typeof this.lightsAvgBrightness === 'number'
-        ? Math.round(this.lightsAvgBrightness * 100)
+      preset === 'fill'
+        ? dragging
+          ? Math.round(this._dragPct!)
+          : typeof this.lightsAvgBrightness === 'number'
+          ? Math.round(this.lightsAvgBrightness * 100)
+          : 0
         : 0;
 
     const cssVars: string[] = [
@@ -268,8 +371,12 @@ export class StratumCardRoomRow extends LitElement {
         style=${styles}
         @click=${this._onClick}
         @keydown=${this._onKey}
+        @pointerdown=${this._onPointerDown}
+        @pointermove=${this._onPointerMove}
+        @pointerup=${this._onPointerUp}
+        @pointercancel=${this._onPointerUp}
       >
-        ${preset === 'fill' && fillPct > 0
+        ${preset === 'fill' && (fillPct > 0 || dragging)
           ? html`<span class="fill" aria-hidden="true"></span>`
           : nothing}
         ${preset === 'rail' ? html`<span class="bar" aria-hidden="true"></span>` : nothing}
@@ -429,18 +536,26 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='pill'] {
       border-radius: var(--stratum-room-row-radius, 999px);
       background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.04));
-      padding: var(--stratum-room-row-padding, 5px) 16px
-        var(--stratum-room-row-padding, 5px) 5px;
-      min-height: var(--stratum-room-row-min-height, 54px);
+      /* Geometria bez zgadywania: koło 48px + 2×4px inset = wiersz 56px.
+         Koło zawsze idealnie wpisane w pigułkę, przy każdej wysokości. */
+      padding: var(--stratum-room-row-padding, 4px) 16px
+        var(--stratum-room-row-padding, 4px) 4px;
+      min-height: var(--stratum-room-row-min-height, 56px);
       margin-bottom: 6px;
+      touch-action: pan-y;
     }
 
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
-      width: 44px;
-      height: 44px;
+      width: calc(var(--stratum-room-row-min-height, 56px) - 8px);
+      height: calc(var(--stratum-room-row-min-height, 56px) - 8px);
       border-radius: 50%;
-      background: var(--stratum-room-row-iconbg, rgba(0, 0, 0, 0.25));
+      background: var(--stratum-room-row-iconbg, rgba(0, 0, 0, 0.28));
+    }
+
+    .row[data-preset='fill'] .icon,
+    .row[data-preset='pill'] .icon {
+      --mdc-icon-size: var(--stratum-room-row-icon-size, 24px);
     }
 
     .row[data-preset='fill'].active .iconwrap,
