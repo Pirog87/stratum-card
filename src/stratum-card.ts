@@ -35,7 +35,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.38.0';
+const VERSION = '1.39.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -403,6 +403,37 @@ export class StratumCard extends LitElement {
         .map((e) => e.entity_id)
         .filter(matches(['on']));
     }
+    if (chip.type === 'smoke') {
+      return filterBinarySensorDeviceClass(this.hass, entries, 'smoke')
+        .map((e) => e.entity_id)
+        .filter(matches(['on']));
+    }
+    if (chip.type === 'gas') {
+      const g = filterBinarySensorDeviceClass(this.hass, entries, 'gas')
+        .map((e) => e.entity_id);
+      const co = filterBinarySensorDeviceClass(this.hass, entries, 'carbon_monoxide')
+        .map((e) => e.entity_id);
+      return Array.from(new Set([...g, ...co])).filter(matches(['on']));
+    }
+    if (chip.type === 'co') {
+      return filterBinarySensorDeviceClass(this.hass, entries, 'carbon_monoxide')
+        .map((e) => e.entity_id)
+        .filter(matches(['on']));
+    }
+    if (chip.type === 'problem') {
+      const p = filterBinarySensorDeviceClass(this.hass, entries, 'problem')
+        .map((e) => e.entity_id);
+      const s = filterBinarySensorDeviceClass(this.hass, entries, 'safety')
+        .map((e) => e.entity_id);
+      const t = filterBinarySensorDeviceClass(this.hass, entries, 'tamper')
+        .map((e) => e.entity_id);
+      return Array.from(new Set([...p, ...s, ...t])).filter(matches(['on']));
+    }
+    if (chip.type === 'battery_low') {
+      return filterBinarySensorDeviceClass(this.hass, entries, 'battery')
+        .map((e) => e.entity_id)
+        .filter(matches(['on']));
+    }
     if (chip.type === 'filter') {
       const c = chip as import('./types.js').FilterChipConfig;
       const activeState = c.state ?? 'on';
@@ -430,6 +461,11 @@ export class StratumCard extends LitElement {
       windows: 'Otwarte okna',
       doors: 'Otwarte drzwi',
       leak: 'Wykryto wyciek',
+      smoke: 'Alarm dymu',
+      gas: 'Alarm gazu / CO',
+      co: 'Alarm CO',
+      problem: 'Wykryto problemy',
+      battery_low: 'Niska bateria',
       filter: 'Pasujące encje',
     };
     const colors: Record<string, string> = {
@@ -439,6 +475,11 @@ export class StratumCard extends LitElement {
       windows: 'var(--stratum-chip-windows-color, #2196f3)',
       doors: 'var(--stratum-chip-doors-color, #9c27b0)',
       leak: 'var(--stratum-chip-leak-color, #f44336)',
+      smoke: 'var(--stratum-chip-smoke-color, #e53935)',
+      gas: 'var(--stratum-chip-gas-color, #ff5722)',
+      co: 'var(--stratum-chip-co-color, #d84315)',
+      problem: 'var(--stratum-chip-problem-color, #ff9800)',
+      battery_low: 'var(--stratum-chip-battery-color, #ff5252)',
       filter: 'var(--primary-color, #ff9b42)',
     };
     this._popupChip = {
@@ -827,6 +868,9 @@ export class StratumCard extends LitElement {
         .windowsOpen=${data.windowsOpen}
         .doorsOpen=${data.doorsOpen}
         .leakActive=${data.leakActive}
+        .smokeActive=${data.smokeActive}
+        .gasActive=${data.gasActive}
+        .problemActive=${data.problemActive}
         .displayConfig=${tileConfig}
         .conditionOverride=${conditionOverride}
         .lightsAccent=${tileLightsAccent}
@@ -848,6 +892,10 @@ export class StratumCard extends LitElement {
       .humidity=${data.humidity}
       .windowsOpen=${data.windowsOpen}
       .doorsOpen=${data.doorsOpen}
+      .leakActive=${data.leakActive}
+      .smokeActive=${data.smokeActive}
+      .gasActive=${data.gasActive}
+      .problemActive=${data.problemActive}
       .displayConfig=${rowConfig}
       .conditionOverride=${conditionOverride}
       .lightsAccent=${rowLightsAccent}

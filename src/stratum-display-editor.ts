@@ -25,6 +25,9 @@ const FIELD_META: Array<{ key: TileField; icon: string; label: string }> = [
   { key: 'windows', icon: 'mdi:window-open-variant', label: 'Okna' },
   { key: 'doors', icon: 'mdi:door-open', label: 'Drzwi' },
   { key: 'leak', icon: 'mdi:water-alert', label: 'Wyciek' },
+  { key: 'smoke', icon: 'mdi:smoke-detector-variant', label: 'Dym' },
+  { key: 'gas', icon: 'mdi:gas-cylinder', label: 'Gaz / CO' },
+  { key: 'problem', icon: 'mdi:alert-circle-outline', label: 'Problem' },
 ];
 
 const ASPECT_PRESETS: Array<{ value: string; label: string }> = [

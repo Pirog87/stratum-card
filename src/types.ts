@@ -307,7 +307,12 @@ export type BuiltInChipType =
   | 'occupancy'
   | 'windows'
   | 'doors'
-  | 'leak';
+  | 'leak'
+  | 'smoke'
+  | 'gas'
+  | 'co'
+  | 'problem'
+  | 'battery_low';
 
 /** Wspólne pola dla wszystkich typów chipów. */
 interface BaseChipConfig {
@@ -450,7 +455,10 @@ export type TileField =
   | 'motion'
   | 'windows'
   | 'doors'
-  | 'leak';
+  | 'leak'
+  | 'smoke'
+  | 'gas'
+  | 'problem';
 
 /** Operator porównania w regułach warunkowego stylu. */
 export type DisplayConditionOp =
@@ -624,6 +632,12 @@ export interface TileFieldEntities {
   doors?: string[];
   /** Lista binary_sensor (moisture) — zliczamy ile w stanie `on`. */
   leak?: string[];
+  /** Lista binary_sensor (smoke) — alarm dymu. */
+  smoke?: string[];
+  /** Lista binary_sensor (gas / carbon_monoxide) — alarm gazu. */
+  gas?: string[];
+  /** Lista binary_sensor (problem / safety / tamper) — agregator problemów. */
+  problem?: string[];
 }
 
 /**

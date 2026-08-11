@@ -28,6 +28,11 @@ const QUICK_PICKS: ChipQuickPick[] = [
   { type: 'windows', label: 'Okna', icon: 'mdi:window-open-variant', builtin: 'windows' },
   { type: 'doors', label: 'Drzwi', icon: 'mdi:door-open', builtin: 'doors' },
   { type: 'leak', label: 'Wycieki', icon: 'mdi:water-alert', builtin: 'leak' },
+  { type: 'smoke', label: 'Dym', icon: 'mdi:smoke-detector-variant', builtin: 'smoke' },
+  { type: 'gas', label: 'Gaz / CO', icon: 'mdi:gas-cylinder', builtin: 'gas' },
+  { type: 'co', label: 'Tlenek węgla', icon: 'mdi:molecule-co', builtin: 'co' },
+  { type: 'problem', label: 'Problemy', icon: 'mdi:alert-circle-outline', builtin: 'problem' },
+  { type: 'battery_low', label: 'Słabe baterie', icon: 'mdi:battery-alert-variant-outline', builtin: 'battery_low' },
   { type: 'entity', label: 'Encja', icon: 'mdi:pencil-outline' },
   { type: 'filter', label: 'Filtr', icon: 'mdi:filter-variant' },
   { type: 'template', label: 'Template', icon: 'mdi:code-braces' },
@@ -53,6 +58,11 @@ const CHIP_LABELS: Record<string, string> = {
   windows: 'Okna',
   doors: 'Drzwi',
   leak: 'Wycieki (moisture)',
+  smoke: 'Dym (smoke)',
+  gas: 'Gaz / CO (gas + carbon_monoxide)',
+  co: 'Tlenek węgla (CO)',
+  problem: 'Problemy (problem + safety + tamper)',
+  battery_low: 'Słabe baterie',
   entity: 'Encja',
   filter: 'Filtr',
   template: 'Template',
@@ -65,6 +75,11 @@ const CHIP_ICONS: Record<string, string> = {
   windows: 'mdi:window-open-variant',
   doors: 'mdi:door-open',
   leak: 'mdi:water-alert',
+  smoke: 'mdi:smoke-detector-variant',
+  gas: 'mdi:gas-cylinder',
+  co: 'mdi:molecule-co',
+  problem: 'mdi:alert-circle-outline',
+  battery_low: 'mdi:battery-alert-variant-outline',
   entity: 'mdi:label-outline',
   filter: 'mdi:filter-variant',
   template: 'mdi:code-braces',
@@ -110,9 +125,19 @@ export class StratumChipsEditor extends LitElement {
 
   private _makeChip(pick: ChipQuickPick): ChipConfig {
     if (pick.builtin) {
-      // Alarmowe typy (okna/drzwi/wyciek) domyślnie ukryte gdy wartość 0
-      // — pokazują się tylko gdy coś się dzieje. Lights/motion widoczne zawsze.
-      if (pick.builtin === 'windows' || pick.builtin === 'doors' || pick.builtin === 'leak') {
+      // Alarmowe typy domyślnie ukryte gdy wartość 0 — pokazują się tylko
+      // gdy coś się dzieje. Lights/motion widoczne zawsze.
+      const alarmTypes: Array<typeof pick.builtin> = [
+        'windows',
+        'doors',
+        'leak',
+        'smoke',
+        'gas',
+        'co',
+        'problem',
+        'battery_low',
+      ];
+      if (alarmTypes.includes(pick.builtin)) {
         return { type: pick.builtin, show_when_zero: false };
       }
       return { type: pick.builtin };
