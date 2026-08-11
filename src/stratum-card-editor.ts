@@ -145,6 +145,8 @@ export class StratumCardEditor extends LitElement {
       out.accent_color = raw.accent_color;
     }
     if (raw.accent_mode === 'lights') out.accent_mode = 'lights';
+    // Preset wiersza — 'fill' jest defaultem, zapisujemy tylko inne.
+    if (!isTile && raw.preset && raw.preset !== 'fill') out.preset = raw.preset;
     if (raw.show_icon === false) out.show_icon = false;
     if (raw.show_name === false) out.show_name = false;
     const defaultRadius = isTile ? 14 : 6;

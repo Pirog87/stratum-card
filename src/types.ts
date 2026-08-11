@@ -602,7 +602,19 @@ export interface TileDisplayConfig {
   hover_effect?: HoverEffect;
   /** Skala podczas `:active` (tap feedback). 1 = brak. Default 0.98. Zakres 0.9–1. */
   press_scale?: number;
+
+  /**
+   * Preset kształtu wiersza (tylko `display: row`, tile ignoruje):
+   * - `fill` (default) — pigułka z wypełnieniem = średnia jasność świateł
+   * - `pill` — pigułka z ringiem aktywności, bez wypełnienia
+   * - `rail` — płaska lista z paskiem akcentu z lewej (najbardziej zwarta)
+   * - `cards` — miękkie karty z gradient-tintem
+   */
+  preset?: RowPreset;
 }
+
+/** Dostępne presety kształtu wiersza pokoju. */
+export type RowPreset = 'fill' | 'pill' | 'rail' | 'cards';
 
 /** Konfiguracja wyglądu wiersza (row). Identyczna schema co tile. */
 export type RowDisplayConfig = TileDisplayConfig;

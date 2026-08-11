@@ -8,6 +8,7 @@ import type {
   HoverEffect,
   IconPosition,
   IconStyle,
+  RowPreset,
   TileDisplayConfig,
   TileField,
 } from './types.js';
@@ -73,6 +74,39 @@ const HOVER_EFFECTS: Array<{ value: HoverEffect; label: string }> = [
 
 const DEFAULT_FIELDS: TileField[] = ['temperature', 'lights', 'motion'];
 
+/** Presety kształtu wiersza — tylko mode 'row'. */
+const ROW_PRESETS: Array<{
+  value: RowPreset;
+  label: string;
+  icon: string;
+  hint: string;
+}> = [
+  {
+    value: 'fill',
+    label: 'Fill',
+    icon: 'mdi:signal',
+    hint: 'Pigułka z wypełnieniem = średnia jasność świateł (domyślny)',
+  },
+  {
+    value: 'pill',
+    label: 'Pill',
+    icon: 'mdi:capsule',
+    hint: 'Pigułka z ringiem aktywności, bez wypełnienia',
+  },
+  {
+    value: 'rail',
+    label: 'Rail',
+    icon: 'mdi:format-list-bulleted',
+    hint: 'Płaska lista z paskiem akcentu — najbardziej zwarta (dawny wygląd)',
+  },
+  {
+    value: 'cards',
+    label: 'Karty',
+    icon: 'mdi:card-outline',
+    hint: 'Miękkie karty z gradient-tintem',
+  },
+];
+
 @customElement('stratum-display-editor')
 export class StratumDisplayEditor extends LitElement {
   @property({ attribute: false }) public config: TileDisplayConfig = {};
@@ -119,6 +153,14 @@ export class StratumDisplayEditor extends LitElement {
 
   private _setColor(value: string): void {
     this._patch({ accent_color: value });
+  }
+
+  private _setRowPreset(value: RowPreset): void {
+    // 'fill' to default — nie zapisujemy do configu (czysty YAML).
+    const next = { ...this.config };
+    if (value === 'fill') delete next.preset;
+    else next.preset = value;
+    this._emit(next);
   }
 
   private _toggleAccentFromLights(): void {
@@ -205,6 +247,7 @@ export class StratumDisplayEditor extends LitElement {
     const colorIsPreset = COLOR_SWATCHES.some((s) => s.key === color);
     const customColor = colorIsPreset ? '' : color;
     const accentFromLights = cfg.accent_mode === 'lights';
+    const rowPreset: RowPreset = cfg.preset ?? 'fill';
     const bg = cfg.background_image ?? '';
     const bgIsPreset = bg.startsWith('stratum:');
     const customBgUrl = !bgIsPreset ? bg : '';
@@ -219,6 +262,29 @@ export class StratumDisplayEditor extends LitElement {
     const press = cfg.press_scale ?? 0.98;
 
     return html`
+      ${this.mode === 'row'
+        ? html`<div class="group">
+            <label class="group-label">Kształt wiersza</label>
+            <div class="chip-row">
+              ${ROW_PRESETS.map(
+                (p) => html`<button
+                  type="button"
+                  class="chip ${rowPreset === p.value ? 'on' : ''}"
+                  title=${p.hint}
+                  @click=${() => this._setRowPreset(p.value)}
+                >
+                  <ha-icon .icon=${p.icon}></ha-icon>
+                  <span>${p.label}</span>
+                </button>`,
+              )}
+            </div>
+            <p class="group-hint">
+              Fill (domyślny) — wypełnienie pigułki pokazuje średnią jasność
+              świateł w pokoju. Rail to dawny, najbardziej zwarty wygląd.
+            </p>
+          </div>`
+        : nothing}
+
       <div class="group">
         <label class="group-label">Pola w sekcji info</label>
         <div class="chip-row">
