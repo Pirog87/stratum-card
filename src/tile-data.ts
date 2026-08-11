@@ -24,8 +24,6 @@ export const DEFAULT_FIELDS: TileField[] = [
   'windows',
   'doors',
   'leak',
-  'smoke',
-  'gas',
   'problem',
 ];
 

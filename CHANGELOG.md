@@ -4,6 +4,20 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.46.0] — 2026-08-11
+
+### Changed (defaulty wg preferencji usera)
+- **`status_layout: 'right'` jest teraz domyślne** (jedna linia, wszystkie
+  statusy po prawej). „Dwie linie" pozostaje jako opcja.
+- **Wysokość wiersza domyślnie 64 px** (było 72) — cała geometria stadionu
+  i ikony skaluje się.
+- **Domyślne pola bez Dymu i Gazu/CO** — zestaw: temperatura, światła,
+  obecność, okna, drzwi, wyciek, problem. Dym/Gaz dostępne jednym
+  kliknięciem w „Pola w sekcji info".
+- **Węższe boczne marginesy body karty** (16 → 8 px, konfigurowalne przez
+  `--stratum-card-body-padding`) — wiersze-suwaki dochodzą bliżej krawędzi
+  karty, mniej martwej przestrzeni po bokach.
+
 ## [1.45.1] — 2026-08-11
 
 ### Fixed

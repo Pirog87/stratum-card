@@ -392,11 +392,11 @@ export class StratumCardRoomRow extends LitElement {
     ];
     const styles = cssVars.filter(Boolean).join(' ');
 
-    // fill/pill = layout dwuliniowy (nazwa + sublinia, prawa strona
-    // tylko liczniki/alarmy), chyba że user wybrał status_layout: 'right'.
+    // Default: jedna linia, wszystkie statusy po prawej. Layout dwuliniowy
+    // (nazwa + sublinia) dostępny przez status_layout: 'two-line'.
     // rail/cards = zawsze klasyczna jedna linia.
     const twoLine =
-      (preset === 'fill' || preset === 'pill') && cfg.status_layout !== 'right';
+      (preset === 'fill' || preset === 'pill') && cfg.status_layout === 'two-line';
     const single = twoLine ? undefined : this._visibleFields(fields);
     const split = twoLine ? this._splitFields(fields) : undefined;
 
@@ -614,7 +614,7 @@ export class StratumCardRoomRow extends LitElement {
       border-radius: var(--stratum-room-row-radius, 999px);
       background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.045));
       padding: 0 14px 0 0;
-      min-height: var(--stratum-room-row-min-height, 72px);
+      min-height: var(--stratum-room-row-min-height, 64px);
       touch-action: pan-y;
     }
 
@@ -626,8 +626,8 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
       align-self: flex-end;
-      height: calc(var(--stratum-room-row-min-height, 72px) * 0.8);
-      width: calc(var(--stratum-room-row-min-height, 72px) * 1.08);
+      height: calc(var(--stratum-room-row-min-height, 64px) * 0.8);
+      width: calc(var(--stratum-room-row-min-height, 64px) * 1.08);
       border-radius: 999px;
       overflow: hidden;
       background: var(
@@ -642,7 +642,7 @@ export class StratumCardRoomRow extends LitElement {
          ustawił icon_size explicit — wtedy inline var wygrywa. */
       --mdc-icon-size: var(
         --stratum-room-row-icon-size,
-        calc(var(--stratum-room-row-min-height, 72px) * 0.4)
+        calc(var(--stratum-room-row-min-height, 64px) * 0.4)
       );
     }
 

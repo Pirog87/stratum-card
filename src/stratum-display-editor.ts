@@ -183,8 +183,9 @@ export class StratumDisplayEditor extends LitElement {
   }
 
   private _setStatusLayout(value: 'two-line' | 'right'): void {
+    // 'right' to default — nie zapisujemy do configu.
     const next = { ...this.config };
-    if (value === 'two-line') delete next.status_layout;
+    if (value === 'right') delete next.status_layout;
     else next.status_layout = value;
     this._emit(next);
   }
@@ -275,7 +276,7 @@ export class StratumDisplayEditor extends LitElement {
       (cfg.accent_mode === undefined && !cfg.accent_color);
     const rowPreset: RowPreset = cfg.preset ?? 'fill';
     const sliderOn = cfg.slider !== false;
-    const statusLayout = cfg.status_layout ?? 'two-line';
+    const statusLayout = cfg.status_layout ?? 'right';
     const bg = cfg.background_image ?? '';
     const bgIsPreset = bg.startsWith('stratum:');
     const customBgUrl = !bgIsPreset ? bg : '';
@@ -285,7 +286,7 @@ export class StratumDisplayEditor extends LitElement {
 
     const radius = cfg.border_radius ?? 14;
     const padding = cfg.padding ?? 12;
-    const minHeight = cfg.min_height ?? (this.mode === 'tile' ? 110 : 72);
+    const minHeight = cfg.min_height ?? (this.mode === 'tile' ? 110 : 64);
     const iconSize = cfg.icon_size ?? 22;
     const press = cfg.press_scale ?? 0.98;
 

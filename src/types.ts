@@ -621,9 +621,9 @@ export interface TileDisplayConfig {
 
   /**
    * Układ statusów w wierszu fill/pill:
-   * - `two-line` (default) — temp/wilgotność/motion w sublinii pod nazwą,
+   * - `right` (default) — jedna linia, wszystkie statusy po prawej stronie
+   * - `two-line` — temp/wilgotność/motion w sublinii pod nazwą,
    *   po prawej tylko liczniki i alarmy
-   * - `right` — jedna linia, wszystkie statusy po prawej stronie
    */
   status_layout?: 'two-line' | 'right';
 }
