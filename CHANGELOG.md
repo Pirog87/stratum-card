@@ -4,6 +4,26 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.50.0] — 2026-08-12
+
+### Changed
+- **Popup pomieszczenia jest niemal fullscreen** — 8 px marginesu z każdej
+  strony (mobil, tablet, desktop), karta wypełnia całą wysokość ekranu.
+  Override: `--stratum-popup-margin`, `--stratum-popup-max-width`,
+  `--stratum-popup-radius`.
+- **Przycisk × nie nachodzi na chipy** — neutralny półprzezroczysty krążek
+  (zamiast koloru primary), a header karty pokoju dostaje rezerwę
+  `--stratum-room-header-pad-right`, więc chipy kończą się przed krzyżykiem.
+
+### Added (konfiguracja per pomieszczenie)
+- **„Chipy popup pomieszczenia"** — nowy panel w edycji pokoju (sekcja
+  Pomieszczenia): pełne zarządzanie chipami nagłówka popupu per pokój
+  (które, w jakiej kolejności, własne encje/kolory). Puste = automatyczne.
+- **Grafika sceny przez upload lub ścieżkę** — pole „Obraz" w scenach używa
+  selektora obrazu HA: wgraj plik z dysku (trafia do storage HA) albo wpisz
+  ścieżkę serwera `/local/...`. Nazwy i kolejność scen per pokój — jak dotąd
+  w panelu „Sceny popup pomieszczenia".
+
 ## [1.49.0] — 2026-08-12
 
 ### Added (popup pomieszczenia — krok 1 redesignu)

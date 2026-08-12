@@ -633,6 +633,8 @@ export class StratumRoomCard extends LitElement {
       gap: 12px;
       margin-bottom: 16px;
       padding-bottom: 12px;
+      /* Rezerwa na przycisk × popupu — ustawiana z zewnątrz przez wrapper. */
+      padding-right: var(--stratum-room-header-pad-right, 0px);
       border-bottom: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
     }
 
