@@ -50,6 +50,8 @@ const SUMMARY_FIELD_OPTIONS = [
 /** Opcje trybu wyświetlania dostępne per typ sekcji. */
 const MODE_OPTIONS_BY_TYPE: Partial<Record<RoomSectionType, Array<{ value: string; label: string }>>> = {
   lights: [
+    { value: 'rail', label: 'Rail (pasek jasności z lewej + swipe)' },
+    { value: 'tint', label: 'Tint (tło w kolorze światła + swipe)' },
     { value: 'tile', label: 'Tile (kafel z toggle)' },
     { value: 'slider', label: 'Slider (brightness)' },
     { value: 'ambient', label: 'Ambient (kolor + jasność w tle)' },
