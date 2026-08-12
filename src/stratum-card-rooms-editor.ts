@@ -10,6 +10,7 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getAreasInFloor } from './area-entities.js';
 import type {
+  ChipConfig,
   HomeAssistant,
   RoomConfig,
   RoomSectionConfig,
@@ -18,6 +19,7 @@ import type {
 } from './types.js';
 import './stratum-sections-editor.js';
 import './stratum-scene-editor.js';
+import './stratum-chips-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 const ROOM_LABELS: Record<string, string> = {
@@ -256,6 +258,14 @@ export class StratumCardRoomsEditor extends LitElement {
   ): void {
     ev.stopPropagation();
     this._updateRoom(areaId, { scenes: ev.detail.scenes });
+  }
+
+  private _onChipsChanged(
+    areaId: string,
+    ev: CustomEvent<{ chips: ChipConfig[] }>,
+  ): void {
+    ev.stopPropagation();
+    this._updateRoom(areaId, { chips: ev.detail.chips });
   }
 
   private _renderFieldEntitiesPanel(
@@ -610,10 +620,34 @@ export class StratumCardRoomsEditor extends LitElement {
                       </details>
                       <details class="stratum-collapsible">
                         <summary>
+                          <ha-icon .icon=${'mdi:label-multiple-outline'}></ha-icon>
+                          <span>Chipy popup pomieszczenia</span>
+                        </summary>
+                        <div class="stratum-collapsible-body">
+                          <p class="stratum-collapsible-hint">
+                            Chipy w nagłówku popupu tego pokoju. Puste =
+                            automatyczne (światła, obecność, okna, drzwi,
+                            wyciek + temperatura/wilgotność). Ustaw własną
+                            listę, żeby kontrolować które i w jakiej kolejności.
+                          </p>
+                          <stratum-chips-editor
+                            .hass=${this.hass}
+                            .chips=${room?.chips ?? []}
+                            @chips-changed=${(ev: CustomEvent<{ chips: ChipConfig[] }>) =>
+                              this._onChipsChanged(area.area_id, ev)}
+                          ></stratum-chips-editor>
+                        </div>
+                      </details>
+                      <details class="stratum-collapsible">
+                        <summary>
                           <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
                           <span>Sceny popup pomieszczenia</span>
                         </summary>
                         <div class="stratum-collapsible-body">
+                          <p class="stratum-collapsible-hint">
+                            Własna lista scen z nazwami i grafikami — zastępuje
+                            automatyczną sekcję „Sceny" w popupie tego pokoju.
+                          </p>
                           <stratum-scene-editor
                             .hass=${this.hass}
                             .config=${room?.scenes ?? { items: [] }}

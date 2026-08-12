@@ -85,7 +85,7 @@ const SCENE_FIELDS_SCHEMA = [
       { name: 'icon', selector: { icon: {} } },
     ],
   },
-  { name: 'image', selector: { text: {} } },
+  { name: 'image', selector: { image: {} } },
   { name: 'color', selector: { text: {} } },
   { name: 'tap_action', selector: { ui_action: {} } },
 ];
@@ -100,7 +100,8 @@ const SCENE_LABELS: Record<string, string> = {
 };
 
 const SCENE_HELPERS: Record<string, string> = {
-  image: 'np. /local/img/HUE_Jasne.png — zostaw puste dla trybu ikona+kolor.',
+  image:
+    'Wgraj plik (trafi do storage HA) albo wpisz ścieżkę z serwera, np. /local/img/HUE_Jasne.png. Puste = tryb ikona+kolor.',
   color: 'np. amber, #ff9b42. Domyślnie primary-color.',
   tap_action:
     'Domyślnie wywołuje scene.turn_on (lub script.turn_on). Nadpisuj tylko gdy potrzebujesz innego.',

@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.49.0';
+const VERSION = '1.50.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -1212,6 +1212,8 @@ export class StratumCard extends LitElement {
       }
     }
 
+    /* Popup = niemal fullscreen: 8 px marginesu z każdej strony (override
+       przez --stratum-popup-margin / --stratum-popup-max-width). */
     .stratum-popup-backdrop {
       position: fixed;
       inset: 0;
@@ -1219,9 +1221,9 @@ export class StratumCard extends LitElement {
       background: rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(6px);
       display: flex;
-      align-items: center;
+      align-items: stretch;
       justify-content: center;
-      padding: 20px;
+      padding: var(--stratum-popup-margin, 8px);
       animation: stratum-popup-fade 0.15s ease-out;
     }
 
@@ -1232,12 +1234,30 @@ export class StratumCard extends LitElement {
 
     .stratum-popup-card {
       position: relative;
-      max-width: min(560px, 92vw);
       width: 100%;
-      max-height: 85vh;
+      max-width: var(--stratum-popup-max-width, none);
+      height: 100%;
       overflow-y: auto;
-      border-radius: var(--ha-card-border-radius, 12px);
+      border-radius: var(--stratum-popup-radius, 16px);
+      background: var(--ha-card-background, var(--card-background-color, #1e1f22));
       animation: stratum-popup-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Karta pokoju wypełnia popup na całą wysokość, bez własnej ramki. */
+    .stratum-popup-card stratum-room-card {
+      display: block;
+      min-height: 100%;
+      /* Rezerwa w headerze na przycisk × — chipy nie wjadą pod krzyżyk. */
+      --stratum-room-header-pad-right: 46px;
+    }
+
+    .stratum-popup-card stratum-room-card::part(card) {
+      min-height: calc(100vh - 2 * var(--stratum-popup-margin, 8px));
+      min-height: calc(100dvh - 2 * var(--stratum-popup-margin, 8px));
+      box-sizing: border-box;
+      border-radius: 0;
+      border: 0;
+      box-shadow: none;
     }
 
     @keyframes stratum-popup-pop {
@@ -1247,20 +1267,22 @@ export class StratumCard extends LitElement {
 
     .stratum-popup-close {
       /* sticky (nie absolute): przycisk × zostaje w kadrze podczas scrollowania
-         treści popupu. Ujemny margin-bottom nakłada go na kartę pod spodem. */
+         treści popupu. Ujemny margin-bottom nakłada go na kartę pod spodem.
+         Neutralny, półprzezroczysty — nie konkuruje z chipami headera
+         (header pokoju ma rezerwę --stratum-room-header-pad-right). */
       position: sticky;
-      top: 12px;
+      top: 10px;
       z-index: 5;
       margin-left: auto;
-      margin-right: 12px;
-      margin-bottom: -36px;
-      transform: translateY(12px);
-      width: 36px;
-      height: 36px;
+      margin-right: 10px;
+      margin-bottom: -34px;
+      transform: translateY(10px);
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
-      border: 0;
-      background: var(--primary-color, #ff9b42);
-      color: #fff;
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.16));
+      background: color-mix(in srgb, var(--card-background-color, #1c1e22) 72%, #000);
+      color: var(--primary-text-color, #fff);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -1269,11 +1291,11 @@ export class StratumCard extends LitElement {
     }
 
     .stratum-popup-close:hover {
-      filter: brightness(1.1);
+      background: color-mix(in srgb, var(--card-background-color, #1c1e22) 45%, #000);
     }
 
     .stratum-popup-close ha-icon {
-      --mdc-icon-size: 20px;
+      --mdc-icon-size: 18px;
     }
 
     @media (prefers-reduced-motion: reduce) {
