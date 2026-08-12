@@ -310,6 +310,12 @@ export class StratumRoomCard extends LitElement {
       if (grouped) return grouped;
     }
 
+    // Media: default = JEDEN duży player z okładką (auto: ten, który gra),
+    // reszta odtwarzaczy w zwijanym „Pozostałe". mode: tile przywraca listę.
+    if (type === 'media' && (section.mode ?? 'player') === 'player') {
+      return this._renderMediaSection(section, items, title, iconName);
+    }
+
     const mode = section.mode ?? 'tile';
     const layoutOverride =
       mode === 'chips' ? 'chips-layout'
@@ -407,6 +413,97 @@ export class StratumRoomCard extends LitElement {
               </button>
               ${restOpen
                 ? html`<div class="tiles ${layout}">${rest.map(tile)}</div>`
+                : nothing}
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  /**
+   * Sekcja media (mode player): jeden duży player z okładką + reszta
+   * odtwarzaczy zwinięta. Wybór głównego: `section.entity`, a bez niego
+   * auto — playing > paused > włączony > pierwszy dostępny.
+   */
+  private _renderMediaSection(
+    section: RoomSectionConfig,
+    items: HassEntityRegistryEntry[],
+    title: string,
+    iconName: string,
+  ): TemplateResult {
+    const hass = this.hass!;
+    const priority = (id: string): number => {
+      const s = hass.states?.[id]?.state;
+      switch (s) {
+        case 'playing':
+          return 5;
+        case 'paused':
+        case 'buffering':
+          return 4;
+        case 'on':
+        case 'idle':
+          return 3;
+        case 'off':
+        case 'standby':
+          return 2;
+        default:
+          return 0; // unavailable/unknown na koniec
+      }
+    };
+
+    let featured: HassEntityRegistryEntry | undefined;
+    if (section.entity) {
+      featured = items.find((e) => e.entity_id === section.entity);
+      if (!featured && hass.states?.[section.entity]) {
+        featured = { entity_id: section.entity } as HassEntityRegistryEntry;
+      }
+    }
+    if (!featured) {
+      featured = [...items].sort(
+        (a, b) => priority(b.entity_id) - priority(a.entity_id),
+      )[0];
+    }
+    if (!featured) return html``;
+
+    const rest = items
+      .filter((e) => e.entity_id !== featured!.entity_id)
+      .sort((a, b) => priority(b.entity_id) - priority(a.entity_id));
+    const restKey = `media:${title}`;
+    const restOpen = this._openRest.has(restKey);
+
+    return html`
+      <div class="section" part="section">
+        <div class="section-header" part="section-header">
+          <ha-icon .icon=${iconName}></ha-icon>
+          <span>${title}</span>
+          ${rest.length > 0
+            ? html`<span class="count">${items.length}</span>`
+            : nothing}
+        </div>
+        <stratum-room-tile
+          .hass=${this.hass}
+          .entity=${featured.entity_id}
+          .mode=${'player'}
+        ></stratum-room-tile>
+        ${rest.length > 0
+          ? html`
+              <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
+                <ha-icon
+                  .icon=${restOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
+                ></ha-icon>
+                <span>Pozostałe odtwarzacze</span>
+                <span class="rest-count">${rest.length}</span>
+              </button>
+              ${restOpen
+                ? html`<div class="tiles grid-1">
+                    ${rest.map(
+                      (e) => html`<stratum-room-tile
+                        .hass=${this.hass}
+                        .entity=${e.entity_id}
+                        .mode=${'tile'}
+                      ></stratum-room-tile>`,
+                    )}
+                  </div>`
                 : nothing}
             `
           : nothing}

@@ -273,10 +273,18 @@ export interface RoomSectionConfig {
     | 'ambient'
     | 'rail'
     | 'tint'
+    | 'player'
     | 'cards'
     | 'inline'
     | 'icons'
     | `custom:${string}`;
+  /**
+   * Tylko `media` (mode `player`, default): encja głównego odtwarzacza
+   * pokazywanego jako duży player z okładką. Puste = auto — ten który gra
+   * (playing > paused > włączony > pierwszy dostępny). Reszta odtwarzaczy
+   * ląduje w zwijanym „Pozostałe".
+   */
+  entity?: string;
   /**
    * Tylko `lights`: grupowanie po pomocnikach „Grupa światła" przypisanych do
    * obszaru. `helpers` (default) — pokazuj kafle GRUP, chowaj ich encje-składowe,

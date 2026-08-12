@@ -114,6 +114,9 @@ export class StratumRoomTile extends LitElement {
     if ((this.mode === 'rail' || this.mode === 'tint') && domain === 'light') {
       return this._renderGroupLight(state, this.mode);
     }
+    if (this.mode === 'player' && domain === 'media_player') {
+      return this._renderPlayer(state);
+    }
 
     switch (domain) {
       case 'light':
@@ -671,6 +674,119 @@ export class StratumRoomTile extends LitElement {
     `;
   }
 
+  /**
+   * Duży player z okładką (mode `player`) — jeden porządny odtwarzacz
+   * zamiast listy wierszy. Okładka (entity_picture) jako tło z gradientem,
+   * tytuł/artysta, pasek postępu, prev/play-pause/next + głośność.
+   * Klik w okładkę = more-info.
+   */
+  private _renderPlayer(state: HassEntity): TemplateResult {
+    const playing = state.state === 'playing';
+    const active = playing || state.state === 'paused' || state.state === 'buffering';
+    const title = state.attributes?.media_title as string | undefined;
+    const artist =
+      (state.attributes?.media_artist as string | undefined) ??
+      (state.attributes?.media_album_name as string | undefined) ??
+      (state.attributes?.app_name as string | undefined);
+    const picture = state.attributes?.entity_picture as string | undefined;
+
+    // Postęp: media_position jest „zamrożone" w chwili updated_at — przy
+    // odtwarzaniu doliczamy czas od tamtej chwili. Odświeża się przy każdej
+    // zmianie stanu z hass (bez lokalnego tickera).
+    const duration = state.attributes?.media_duration as number | undefined;
+    let pct = 0;
+    if (active && typeof duration === 'number' && duration > 0) {
+      let pos = (state.attributes?.media_position as number | undefined) ?? 0;
+      const updatedAt = state.attributes?.media_position_updated_at as
+        | string
+        | undefined;
+      if (playing && updatedAt) {
+        pos += (Date.now() - new Date(updatedAt).getTime()) / 1000;
+      }
+      pct = Math.max(0, Math.min(100, (pos / duration) * 100));
+    }
+
+    const volume = state.attributes?.volume_level as number | undefined;
+    const stateText =
+      state.state === 'off'
+        ? 'wyłączony'
+        : state.state === 'idle'
+        ? 'bezczynny'
+        : state.state === 'paused'
+        ? 'pauza'
+        : state.state === 'unavailable'
+        ? 'niedostępny'
+        : state.state;
+
+    const bg = picture
+      ? `background-image: linear-gradient(to top, rgba(8, 9, 12, 0.92) 25%, rgba(8, 9, 12, 0.35)), url('${picture}');`
+      : '';
+
+    return html`
+      <div
+        class="player-tile ${active ? 'on' : 'off'} ${picture ? 'has-art' : ''}"
+        part="tile"
+        style=${bg}
+        @click=${this._openMoreInfo}
+      >
+        <span class="player-tag">${friendlyName(state, this.entity)}</span>
+        <span class="player-title">${title ?? stateText}</span>
+        ${artist ? html`<span class="player-artist">${artist}</span>` : nothing}
+        ${active && pct > 0
+          ? html`<span class="player-progress"
+              ><i style="width:${pct.toFixed(1)}%"></i
+            ></span>`
+          : nothing}
+        <div class="player-controls" @click=${(ev: Event) => ev.stopPropagation()}>
+          <button
+            class="player-btn"
+            title="Poprzedni"
+            @click=${(ev: Event) =>
+              this._callService(ev, 'media_player', 'media_previous_track')}
+          >
+            <ha-icon .icon=${'mdi:skip-previous'}></ha-icon>
+          </button>
+          <button
+            class="player-btn play"
+            title=${playing ? 'Pauza' : 'Odtwarzaj'}
+            @click=${(ev: Event) =>
+              this._callService(ev, 'media_player', 'media_play_pause')}
+          >
+            <ha-icon .icon=${playing ? 'mdi:pause' : 'mdi:play'}></ha-icon>
+          </button>
+          <button
+            class="player-btn"
+            title="Następny"
+            @click=${(ev: Event) =>
+              this._callService(ev, 'media_player', 'media_next_track')}
+          >
+            <ha-icon .icon=${'mdi:skip-next'}></ha-icon>
+          </button>
+          ${typeof volume === 'number'
+            ? html`
+                <ha-icon class="player-vol-icon" .icon=${'mdi:volume-high'}></ha-icon>
+                <input
+                  type="range"
+                  class="player-volume"
+                  min="0"
+                  max="100"
+                  step="1"
+                  .value=${String(Math.round(volume * 100))}
+                  @change=${(ev: Event) => {
+                    const v = Number((ev.target as HTMLInputElement).value);
+                    void this.hass?.callService('media_player', 'volume_set', {
+                      entity_id: this.entity,
+                      volume_level: v / 100,
+                    });
+                  }}
+                />
+              `
+            : nothing}
+        </div>
+      </div>
+    `;
+  }
+
   private _renderMedia(state: HassEntity): TemplateResult {
     const playing = state.state === 'playing';
     return html`
@@ -1223,6 +1339,141 @@ export class StratumRoomTile extends LitElement {
     .custom-slot > * {
       display: block;
       width: 100%;
+    }
+
+    /* ===== Player z okładką (media, mode player) ===== */
+    .player-tile {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 6px;
+      min-height: var(--stratum-player-min-height, 168px);
+      border-radius: 16px;
+      padding: 14px;
+      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.04));
+      background-size: cover;
+      background-position: center;
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.06));
+      color: #fff;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .player-tile:not(.has-art) {
+      color: var(--primary-text-color);
+    }
+
+    .player-tile.off:not(.has-art) {
+      min-height: 96px;
+    }
+
+    .player-tag {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      max-width: 60%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.45);
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .player-tile:not(.has-art) .player-tag {
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+      color: var(--secondary-text-color);
+    }
+
+    .player-title {
+      font-size: 16px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .player-artist {
+      font-size: 12.5px;
+      opacity: 0.75;
+      margin-top: -4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .player-progress {
+      display: block;
+      height: 4px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.22);
+      overflow: hidden;
+    }
+
+    .player-progress i {
+      display: block;
+      height: 100%;
+      border-radius: 4px;
+      background: var(--stratum-player-accent, var(--primary-color, #ff9b42));
+    }
+
+    .player-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .player-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(255, 255, 255, 0.12);
+      color: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.12s ease, transform 0.08s ease;
+    }
+
+    .player-tile:not(.has-art) .player-btn {
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.07));
+    }
+
+    .player-btn:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    .player-btn:active {
+      transform: scale(0.92);
+    }
+
+    .player-btn.play {
+      background: var(--stratum-player-accent, var(--primary-color, #ff9b42));
+      color: #fff;
+    }
+
+    .player-btn ha-icon {
+      --mdc-icon-size: 20px;
+    }
+
+    .player-vol-icon {
+      --mdc-icon-size: 16px;
+      margin-left: auto;
+      opacity: 0.75;
+    }
+
+    .player-volume {
+      width: 90px;
+      height: 4px;
+      accent-color: var(--stratum-player-accent, var(--primary-color, #ff9b42));
+      cursor: pointer;
     }
 
     /* ===== Kafel grupy świateł: rail / tint ===== */
