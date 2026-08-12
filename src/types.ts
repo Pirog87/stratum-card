@@ -95,6 +95,13 @@ export interface StratumCardConfig {
   room_tap_action?: TapActionConfig;
 
   /**
+   * Akcja wyzwalana kliknięciem w IKONĘ wiersza pomieszczenia. Gdy ustawiona,
+   * ikona przechwytuje klik (nie odpala akcji wiersza) — np. ikona otwiera
+   * popup, a wiersz przełącza światła. Przy braku: ikona działa jak wiersz.
+   */
+  room_icon_tap_action?: TapActionConfig;
+
+  /**
    * Jawna lista pomieszczeń do wyświetlenia. Jeśli podana — pokazujemy tylko
    * te area, w tej kolejności, z per-room override'ami. Jeśli pusta lub brak —
    * auto-discover wszystkich area z floor-a.
@@ -390,6 +397,8 @@ export interface RoomConfig {
   icon?: string;
   /** Per-room tap_action. Nadpisuje globalny `room_tap_action` karty. */
   tap_action?: TapActionConfig;
+  /** Per-room akcja kliknięcia w ikonę. Nadpisuje `room_icon_tap_action`. */
+  icon_tap_action?: TapActionConfig;
   /** Ukryj ten wiersz (użyteczne w edytorze jako „wyłącz bez usuwania"). */
   hidden?: boolean;
   /**
@@ -674,6 +683,10 @@ export interface TileFieldEntities {
  */
 export type TapActionConfig =
   | { action: 'none' }
+  /** Otwórz popup pokoju (Stratum). Obsługiwane w stratum-card, nie w runTapAction. */
+  | { action: 'popup' }
+  /** Przełącz światła pokoju: jeśli cokolwiek świeci → zgaś wszystkie, inaczej zapal. */
+  | { action: 'toggle-lights' }
   | { action: 'navigate'; navigation_path: string }
   | { action: 'more-info'; entity?: string }
   | { action: 'url'; url_path: string; new_tab?: boolean }

@@ -18,7 +18,15 @@ export async function runTapAction(
   action: TapActionConfig | undefined,
   ctx: TapContext,
 ): Promise<void> {
-  if (!action || action.action === 'none') return;
+  // `popup` i `toggle-lights` to akcje Stratum obsługiwane w stratum-card
+  // (wymagają kontekstu pokoju) — tutaj są no-op dla bezpieczeństwa.
+  if (
+    !action ||
+    action.action === 'none' ||
+    action.action === 'popup' ||
+    action.action === 'toggle-lights'
+  )
+    return;
 
   switch (action.action) {
     case 'navigate': {

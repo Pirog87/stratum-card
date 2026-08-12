@@ -4,6 +4,27 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.48.0] — 2026-08-12
+
+### Fixed
+- **Fill znów od lewej krawędzi wiersza** — warstwa jasności „oblewa"
+  neutralny stadion ikony (jak w bubble-card), cofnięty offset z 1.47.
+  Tło stadionu pozostaje neutralne — poprawka koloru z 1.47 zostaje.
+
+### Added
+- **Nowe akcje kliknięcia**: `popup` (otwórz popup pokoju) i
+  `toggle-lights` (przełącz światła pokoju: cokolwiek świeci → zgaś
+  wszystkie, inaczej zapal wszystkie).
+- **Osobna akcja kliknięcia w ikonę** — `room_icon_tap_action` (globalnie)
+  i `icon_tap_action` (per pokój). Gdy ustawiona, klik w stadion ikony nie
+  odpala akcji wiersza — np. ikona → popup, wiersz → przełącz światła.
+- **Edytor: sekcja „Wygląd — Wiersz"** ma teraz dwie grupy chipów:
+  „Klik na wiersz" (Popup domyślnie / Przełącz światła / Nic /
+  Niestandardowa…) i „Klik na ikonę" (Tak jak wiersz / Popup pokoju /
+  Przełącz światła / Nic / Niestandardowa…). „Niestandardowa" otwiera
+  pełny selektor akcji HA. Formularz akcji zniknął z „Ustawień ogólnych"
+  (jedno źródło prawdy).
+
 ## [1.47.0] — 2026-08-11
 
 ### Fixed
