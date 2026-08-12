@@ -52,9 +52,16 @@ const IDENTITY_SCHEMA: readonly FormSchemaItem[] = [
   },
 ];
 
-const TAP_SCHEMA: readonly FormSchemaItem[] = [
+const ROW_TAP_SCHEMA: readonly FormSchemaItem[] = [
   { name: 'room_tap_action', selector: { ui_action: {} } },
 ];
+
+const ICON_TAP_SCHEMA: readonly FormSchemaItem[] = [
+  { name: 'room_icon_tap_action', selector: { ui_action: {} } },
+];
+
+/** Szybkie presety akcji kliknięcia (wiersz / ikona). */
+type TapChoice = 'default' | 'popup' | 'toggle-lights' | 'none' | 'custom';
 
 const LABELS: Record<string, string> = {
   floor_id: 'Piętro (floor)',
@@ -62,6 +69,7 @@ const LABELS: Record<string, string> = {
   name: 'Nazwa (override)',
   icon: 'Ikona (override)',
   room_tap_action: 'Akcja po kliknięciu w wiersz pomieszczenia',
+  room_icon_tap_action: 'Akcja po kliknięciu w ikonę pomieszczenia',
 };
 
 const HELPERS: Record<string, string> = {
@@ -72,7 +80,9 @@ const HELPERS: Record<string, string> = {
   name: 'Pozostaw puste, żeby użyć nazwy piętra/strefy z HA.',
   icon: 'Pozostaw puste, żeby użyć ikony piętra/strefy z HA (fallback: mdi:home).',
   room_tap_action:
-    'Domyślnie klik otwiera popup pokoju. Możesz nadpisać: Przejdź, Więcej info, Wywołaj serwis itd. Dotyczy wierszy i kafli; nadpisanie per pokój w sekcji „Pomieszczenia".',
+    'Dowolna akcja HA: Przejdź, Więcej info, Wywołaj usługę itd. Dotyczy wierszy i kafli; nadpisanie per pokój w sekcji „Pomieszczenia".',
+  room_icon_tap_action:
+    'Dowolna akcja HA dla samej ikony. Gdy ustawiona, klik w ikonę nie odpala akcji wiersza.',
 };
 
 const COLUMN_CHIPS: Array<{ value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6; label: string }> = [
@@ -93,6 +103,9 @@ export class StratumCardEditor extends LitElement {
 
   /** Stan rozwinięcia collapsible paneli (Wygląd — Wiersz, Wygląd — Kafel). */
   @state() private _openSections = new Set<string>();
+
+  /** Klucze akcji z otwartym trybem „Niestandardowa" (pełny ha-form). */
+  @state() private _customTapOpen = new Set<string>();
 
   public setConfig(config: StratumCardConfig): void {
     this._config = config;
@@ -482,15 +495,6 @@ export class StratumCardEditor extends LitElement {
             />
           </div>
 
-          <ha-form
-            .hass=${this.hass}
-            .data=${cfg}
-            .schema=${TAP_SCHEMA}
-            .computeLabel=${this._computeLabel}
-            .computeHelper=${this._computeHelper}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
-
           <div class="stratum-toggles-row">
             <label class="stratum-toggle">
               <input
@@ -511,6 +515,79 @@ export class StratumCardEditor extends LitElement {
           </div>
         </div>
       </details>
+    `;
+  }
+
+  /** Mapuje wartość tap_action na preset chipa. */
+  private _tapChoice(key: 'room_tap_action' | 'room_icon_tap_action'): TapChoice {
+    if (this._customTapOpen.has(key)) return 'custom';
+    const a = (this._config?.[key] as { action?: string } | undefined)?.action;
+    if (!a || a === 'default') return 'default';
+    if (a === 'popup') return 'popup';
+    if (a === 'toggle-lights') return 'toggle-lights';
+    if (a === 'none') return 'none';
+    return 'custom';
+  }
+
+  private _setTapPreset(
+    key: 'room_tap_action' | 'room_icon_tap_action',
+    choice: TapChoice,
+  ): void {
+    const custom = new Set(this._customTapOpen);
+    if (choice === 'custom') {
+      custom.add(key);
+      this._customTapOpen = custom;
+      return; // wartość ustawi ha-form poniżej
+    }
+    custom.delete(key);
+    this._customTapOpen = custom;
+    if (choice === 'default') this._updateField(key, undefined);
+    else this._updateField(key, { action: choice } as StratumCardConfig[typeof key]);
+  }
+
+  /** Grupa „Klik na wiersz" / „Klik na ikonę": chipy + opcjonalny ha-form. */
+  private _renderTapGroup(
+    key: 'room_tap_action' | 'room_icon_tap_action',
+    label: string,
+    defaultLabel: string,
+    hint: string,
+  ): TemplateResult {
+    const choice = this._tapChoice(key);
+    const chips: Array<{ v: TapChoice; l: string; icon?: string }> = [
+      { v: 'default', l: defaultLabel },
+      ...(key === 'room_icon_tap_action'
+        ? [{ v: 'popup' as TapChoice, l: 'Popup pokoju', icon: 'mdi:dock-window' }]
+        : []),
+      { v: 'toggle-lights', l: 'Przełącz światła', icon: 'mdi:lightbulb-multiple-outline' },
+      { v: 'none', l: 'Nic', icon: 'mdi:cancel' },
+      { v: 'custom', l: 'Niestandardowa…', icon: 'mdi:tune' },
+    ];
+    return html`
+      <div class="stratum-group">
+        <label class="stratum-group-label">${label}</label>
+        <div class="stratum-chip-row">
+          ${chips.map(
+            (c) => html`<button
+              type="button"
+              class="stratum-chip ${choice === c.v ? 'on' : ''}"
+              @click=${() => this._setTapPreset(key, c.v)}
+            >
+              ${c.icon ? html`<ha-icon .icon=${c.icon}></ha-icon>` : nothing}
+              <span>${c.l}</span>
+            </button>`,
+          )}
+        </div>
+        ${choice === 'custom'
+          ? html`<ha-form
+              .hass=${this.hass}
+              .data=${this._config}
+              .schema=${key === 'room_tap_action' ? ROW_TAP_SCHEMA : ICON_TAP_SCHEMA}
+              .computeLabel=${this._computeLabel}
+              .computeHelper=${this._computeHelper}
+              @value-changed=${this._valueChanged}
+            ></ha-form>`
+          : html`<p class="stratum-group-hint">${hint}</p>`}
+      </div>
     `;
   }
 
@@ -595,14 +672,18 @@ export class StratumCardEditor extends LitElement {
           </div>
         </summary>
         <div class="stratum-panel-body">
-          <ha-form
-            .hass=${this.hass}
-            .data=${this._config}
-            .schema=${TAP_SCHEMA}
-            .computeLabel=${this._computeLabel}
-            .computeHelper=${this._computeHelper}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
+          ${this._renderTapGroup(
+            'room_tap_action',
+            'Klik na wiersz',
+            'Popup pokoju (domyślnie)',
+            'Reakcja na kliknięcie całego wiersza. Dotyczy też kafli. Per pokój nadpiszesz w sekcji „Pomieszczenia".',
+          )}
+          ${this._renderTapGroup(
+            'room_icon_tap_action',
+            'Klik na ikonę',
+            'Tak jak wiersz (domyślnie)',
+            'Osobna reakcja dla stadionu ikony — np. ikona otwiera popup, a wiersz przełącza światła.',
+          )}
           <stratum-display-editor
             mode="row"
             .config=${this._effectiveRowConfig()}

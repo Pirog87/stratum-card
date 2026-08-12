@@ -114,6 +114,13 @@ export class StratumCardRoomRow extends LitElement {
   /** Czy pokój ma jakiekolwiek światła — warunek działania suwaka gestem. */
   @property({ type: Boolean, attribute: 'has-lights' }) public hasLights = false;
 
+  /**
+   * Czy ikona ma własną, niezależną akcję kliknięcia. Gdy true — klik
+   * w stadion ikony emituje `icon-tap` (nie bąbelkuje do akcji wiersza).
+   */
+  @property({ type: Boolean, attribute: 'icon-tappable', reflect: true })
+  public iconTappable = false;
+
   /** Jasność (%) trzymana lokalnie podczas przeciągania — nadpisuje fill. */
   @state() private _dragPct?: number;
 
@@ -137,6 +144,22 @@ export class StratumCardRoomRow extends LitElement {
     if (!this.clickable) return;
     this.dispatchEvent(
       new CustomEvent('row-tap', {
+        detail: { area_id: this.areaId, area_name: this.name },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+
+  private _onIconClick = (ev: Event): void => {
+    if (!this.iconTappable) return; // klik bąbelkuje do akcji wiersza
+    ev.stopPropagation();
+    if (this._suppressClick) {
+      this._suppressClick = false;
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('icon-tap', {
         detail: { area_id: this.areaId, area_name: this.name },
         bubbles: true,
         composed: true,
@@ -423,7 +446,7 @@ export class StratumCardRoomRow extends LitElement {
           : nothing}
         ${preset === 'rail' ? html`<span class="bar" aria-hidden="true"></span>` : nothing}
         ${showIcon
-          ? html`<span class="iconwrap">
+          ? html`<span class="iconwrap" @click=${this._onIconClick}>
               <ha-icon
                 class="icon ${iconAnim ? `icon-anim-${iconAnim}` : ''}"
                 .icon=${effectiveIcon}
@@ -563,6 +586,14 @@ export class StratumCardRoomRow extends LitElement {
       transform: scale(var(--stratum-room-row-press-scale, 0.98));
     }
 
+    :host([icon-tappable]) .iconwrap {
+      cursor: pointer;
+    }
+
+    :host([icon-tappable]) .iconwrap:hover .icon {
+      filter: brightness(1.25);
+    }
+
     :host([clickable]) .row:focus-visible {
       outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
       outline-offset: -2px;
@@ -622,7 +653,8 @@ export class StratumCardRoomRow extends LitElement {
        wysokość = 4/5 wiersza, szerokość 1.35× wysokości stadionu,
        dolna krawędź flush z dołem pigułki. Górna ćwiartka wiersza
        zostaje „lekka" — fill i nazwa oddychają.
-       Tło zawsze neutralne, nieprzezroczyste; fill startuje za stadionem. */
+       Tło zawsze neutralne i nieprzezroczyste — fill biegnie od lewej
+       krawędzi wiersza i „oblewa" stadion (jak w bubble-card). */
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
       align-self: flex-end;
@@ -742,21 +774,6 @@ export class StratumCardRoomRow extends LitElement {
         );
       transition: width 0.3s ease-out;
       pointer-events: none;
-    }
-
-    /* Gdy stadion ikony jest widoczny, fill startuje ZA nim — inaczej
-       prześwitywał wokół zaokrągleń stadionu jako kolorowe „półksiężyce".
-       Prawa krawędź fill nadal ląduje dokładnie na X% szerokości wiersza. */
-    .row[data-preset='fill']:has(.iconwrap) .fill {
-      left: calc(var(--stratum-room-row-min-height, 64px) * 1.08 + 4px);
-      width: max(
-        0px,
-        calc(
-          var(--stratum-room-row-fill, 0%) -
-            (var(--stratum-room-row-min-height, 64px) * 1.08 + 4px)
-        )
-      );
-      border-radius: 999px;
     }
 
     /* pill: ring aktywności zamiast wypełnienia */

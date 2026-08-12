@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.47.0';
+const VERSION = '1.48.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -759,6 +759,7 @@ export class StratumCard extends LitElement {
           display,
           room.field_entities,
           room.style_override,
+          room.icon_tap_action,
         );
       })}`;
     }
@@ -816,6 +817,7 @@ export class StratumCard extends LitElement {
     display: 'row' | 'tile' = 'row',
     fieldEntities?: import('./types.js').TileFieldEntities,
     styleOverride?: string,
+    perRoomIconTapAction?: import('./types.js').TapActionConfig,
   ): TemplateResult {
     const primary = areaIds[0];
     // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
@@ -860,6 +862,14 @@ export class StratumCard extends LitElement {
       : isSet(this._config?.room_tap_action)
       ? this._config?.room_tap_action
       : undefined;
+    // Osobna akcja dla ikony — gdy ustawiona, klik w stadion ikony NIE
+    // odpala akcji wiersza (np. ikona → popup, wiersz → toggle świateł).
+    const effectiveIconTap = isSet(perRoomIconTapAction)
+      ? perRoomIconTapAction
+      : isSet(this._config?.room_icon_tap_action)
+      ? this._config?.room_icon_tap_action
+      : undefined;
+    const iconTappable = effectiveIconTap !== undefined && effectiveIconTap.action !== 'none';
     // Klikalność: jawna akcja (nie none) LUB brak akcji (default → popup).
     const explicitNone = effectiveTap?.action === 'none';
     const clickable = !explicitNone;
@@ -887,7 +897,7 @@ export class StratumCard extends LitElement {
         .styleOverride=${styleOverride}
         .clickable=${clickable}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-          this._onRoomTap(ev, effectiveTap, popupOverrides)}
+          this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
       ></stratum-card-room-tile>`;
     }
     return html`<stratum-card-room-row
@@ -914,10 +924,13 @@ export class StratumCard extends LitElement {
         .length > 0}
       .styleOverride=${styleOverride}
       .clickable=${clickable}
+      .iconTappable=${iconTappable}
       @row-brightness=${(ev: CustomEvent<{ pct: number; live: boolean }>) =>
         this._onRowBrightness(entries, fieldEntities, ev.detail.pct, ev.detail.live)}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-        this._onRoomTap(ev, effectiveTap, popupOverrides)}
+        this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
+      @icon-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
+        this._onRoomTap(ev, effectiveIconTap, popupOverrides, entries, fieldEntities)}
     ></stratum-card-room-row>`;
   }
 
@@ -955,6 +968,8 @@ export class StratumCard extends LitElement {
       scenes?: import('./types.js').SceneBarConfig;
       chips?: import('./types.js').ChipConfig[];
     },
+    entries?: HassEntityRegistryEntry[],
+    fieldEntities?: import('./types.js').TileFieldEntities,
   ): void {
     // Rozwiązywanie akcji: per-room > global > domyślny popup.
     // `action: 'default'` z ha-form = „nie ustawione" — przechodzimy głębiej.
@@ -967,6 +982,16 @@ export class StratumCard extends LitElement {
 
     if (effective?.action === 'none') return;
 
+    if (effective?.action === 'popup') {
+      this._openRoomPopup(ev.detail.area_id, roomOverrides);
+      return;
+    }
+
+    if (effective?.action === 'toggle-lights') {
+      this._toggleRoomLights(entries ?? [], fieldEntities);
+      return;
+    }
+
     if (effective) {
       void runTapAction(this.hass, effective, {
         source: this,
@@ -977,6 +1002,24 @@ export class StratumCard extends LitElement {
     }
 
     this._openRoomPopup(ev.detail.area_id, roomOverrides);
+  }
+
+  /**
+   * Akcja `toggle-lights`: jeśli JAKIEKOLWIEK światło pokoju świeci —
+   * gasimy wszystkie; inaczej zapalamy wszystkie. (Zwykły `light.toggle`
+   * per encja dawałby szachownicę przy mieszanych stanach.)
+   */
+  private _toggleRoomLights(
+    entries: HassEntityRegistryEntry[],
+    fieldEntities?: import('./types.js').TileFieldEntities,
+  ): void {
+    if (!this.hass) return;
+    const ids = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
+    if (ids.length === 0) return;
+    const anyOn = ids.some((id) => this.hass!.states[id]?.state === 'on');
+    void this.hass.callService('light', anyOn ? 'turn_off' : 'turn_on', {
+      entity_id: ids,
+    });
   }
 
   private _openRoomPopup(
