@@ -292,6 +292,15 @@ export interface RoomSectionConfig {
    */
   group_by?: 'helpers' | 'none';
   /**
+   * Tylko `covers`: pasek akcji zbiorczych nad listą (Otwórz / Stop / Zamknij
+   * + szybkie pozycje %) działający na wszystkie rolety sekcji. Default: true.
+   */
+  master?: boolean;
+  /**
+   * Tylko `covers`: szybkie pozycje % w pasku master. Default: [50, 75].
+   */
+  positions?: number[];
+  /**
    * Layout grid: `1` | `2` | `3` kolumn albo `'auto'`. Default: zgodny z typem
    * (covers/climate/media → 1, scenes → 3, reszta → 2).
    */
