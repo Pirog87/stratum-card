@@ -4,6 +4,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.52.0] — 2026-08-12
+
+### Added (popup pomieszczenia — krok 3 redesignu)
+- **Pasek akcji zbiorczych rolet** nad listą w sekcji Covers: Otwórz /
+  Stop / Zamknij + szybkie pozycje % (default 50 i 75) — działa na
+  WSZYSTKIE rolety sekcji naraz (jak w dashboardzie usera). Wyłączenie:
+  `master: false`; własne pozycje: `positions: [30, 60]`.
+- Edytor sekcji (Covers): przełącznik „Pasek akcji zbiorczych" i pole
+  „Szybkie pozycje (%)" z możliwością własnych wartości.
+
 ## [1.51.0] — 2026-08-12
 
 ### Added (popup pomieszczenia — krok 2 redesignu)

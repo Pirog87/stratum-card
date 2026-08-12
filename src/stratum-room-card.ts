@@ -340,6 +340,7 @@ export class StratumRoomCard extends LitElement {
           <span>${title}</span>
           <span class="count">${items.length}</span>
         </div>
+        ${type === 'covers' ? this._renderCoversMaster(section, items) : nothing}
         <div class="tiles ${layout}">
           ${items.map(
             (e) =>
@@ -351,6 +352,54 @@ export class StratumRoomCard extends LitElement {
               ></stratum-room-tile>`,
           )}
         </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Pasek akcji zbiorczych rolet (Otwórz / Stop / Zamknij + szybkie pozycje
+   * %) — działa na WSZYSTKIE covery sekcji naraz. `master: false` chowa.
+   */
+  private _renderCoversMaster(
+    section: RoomSectionConfig,
+    items: HassEntityRegistryEntry[],
+  ): TemplateResult | typeof nothing {
+    if (section.master === false || items.length === 0) return nothing;
+    const ids = items.map((e) => e.entity_id);
+    const positions = (
+      section.positions && section.positions.length > 0
+        ? section.positions
+        : [50, 75]
+    )
+      .filter((p) => Number.isFinite(p) && p > 0 && p < 100)
+      .sort((a, b) => a - b);
+    const call = (service: string, data: Record<string, unknown> = {}): void => {
+      void this.hass?.callService('cover', service, { entity_id: ids, ...data });
+    };
+    return html`
+      <div class="cover-master" part="cover-master">
+        <button class="cm-btn cm-open" @click=${() => call('open_cover')}>
+          <ha-icon .icon=${'mdi:arrow-up'}></ha-icon>
+          Otwórz
+        </button>
+        <button class="cm-btn cm-stop" @click=${() => call('stop_cover')}>
+          <ha-icon .icon=${'mdi:square'}></ha-icon>
+          Stop
+        </button>
+        <button class="cm-btn cm-close" @click=${() => call('close_cover')}>
+          <ha-icon .icon=${'mdi:arrow-down'}></ha-icon>
+          Zamknij
+        </button>
+        ${positions.map(
+          (p) => html`<button
+            class="cm-btn cm-pct"
+            title="Ustaw wszystkie na ${p}%"
+            @click=${() => call('set_cover_position', { position: p })}
+          >
+            <ha-icon .icon=${'mdi:percent-outline'}></ha-icon>
+            ${p}%
+          </button>`,
+        )}
       </div>
     `;
   }
@@ -947,6 +996,60 @@ export class StratumRoomCard extends LitElement {
       padding: 20px;
       text-align: center;
       color: var(--secondary-text-color);
+    }
+
+    .cover-master {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .cm-btn {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 0;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.12s ease, transform 0.08s ease;
+    }
+
+    .cm-btn:hover {
+      filter: brightness(1.2);
+    }
+
+    .cm-btn:active {
+      transform: scale(0.95);
+    }
+
+    .cm-btn ha-icon {
+      --mdc-icon-size: 16px;
+    }
+
+    .cm-open {
+      background: rgba(102, 187, 106, 0.16);
+      color: #66bb6a;
+    }
+
+    .cm-stop {
+      background: rgba(255, 183, 77, 0.15);
+      color: #ffb74d;
+    }
+
+    .cm-close {
+      background: rgba(239, 83, 80, 0.15);
+      color: #ef5350;
+    }
+
+    .cm-pct {
+      background: rgba(100, 169, 232, 0.13);
+      color: #64a9e8;
     }
 
     .rest-toggle {

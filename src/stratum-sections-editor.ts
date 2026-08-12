@@ -175,6 +175,24 @@ function buildSchema(section: RoomSectionConfig) {
       selector: { entity: { filter: [{ domain: 'media_player' }] } },
     });
   }
+  // Covers: pasek akcji zbiorczych + szybkie pozycje %.
+  if (section.type === 'covers') {
+    extra.push({ name: 'master', selector: { boolean: {} } });
+    extra.push({
+      name: 'positions',
+      selector: {
+        select: {
+          multiple: true,
+          custom_value: true,
+          options: [
+            { value: '25', label: '25 %' },
+            { value: '50', label: '50 %' },
+            { value: '75', label: '75 %' },
+          ],
+        },
+      },
+    });
+  }
   if (entityDomains.length > 0) {
     extra.push({
       name: 'entities',
@@ -245,6 +263,8 @@ const LABELS: Record<string, string> = {
   columns: 'Liczba kolumn',
   mode: 'Tryb wyświetlania',
   fields: 'Co pokazać w podsumowaniu',
+  master: 'Pasek akcji zbiorczych (Otwórz / Stop / Zamknij)',
+  positions: 'Szybkie pozycje (%)',
 };
 
 const HELPERS: Record<string, string> = {
@@ -252,6 +272,8 @@ const HELPERS: Record<string, string> = {
     'Puste = auto: ten, który aktualnie gra (playing > pauza > włączony). Reszta w zwijanym „Pozostałe".',
   entities: 'Puste = wszystkie encje tego typu z pomieszczenia. Wybranie kilku ogranicza.',
   mode: 'Slider działa dla light (brightness) i cover (position).',
+  positions:
+    'Przyciski ustawiające WSZYSTKIE rolety na zadany procent. Własna wartość: wpisz liczbę i Enter. Default: 50, 75.',
 };
 
 @customElement('stratum-sections-editor')
@@ -274,6 +296,16 @@ export class StratumSectionsEditor extends LitElement {
     );
   }
 
+  /** Dane dla ha-form — defaulty widoczne w formularzu + positions jako stringi. */
+  private _formData(section: RoomSectionConfig): Record<string, unknown> {
+    const d: Record<string, unknown> = { columns: 'auto', ...section };
+    if (section.type === 'covers') {
+      d.master = section.master ?? true;
+      d.positions = (section.positions ?? [50, 75]).map(String);
+    }
+    return d;
+  }
+
   private _updateAt(index: number, patch: Partial<RoomSectionConfig>): void {
     const next = [...this.sections];
     const prev = next[index]!;
@@ -282,6 +314,18 @@ export class StratumSectionsEditor extends LitElement {
     if (!merged.icon) delete merged.icon;
     if (!merged.entity) delete merged.entity;
     if (!merged.entities || merged.entities.length === 0) delete merged.entities;
+    // Covers: master default true (zapisujemy tylko false); positions z ha-form
+    // przychodzą jako stringi — normalizujemy do liczb, default [50, 75] kasujemy.
+    if (merged.master !== false) delete merged.master;
+    if (merged.positions !== undefined) {
+      const nums = (merged.positions as Array<string | number>)
+        .map(Number)
+        .filter((n) => Number.isFinite(n) && n > 0 && n < 100)
+        .sort((a, b) => a - b);
+      const isDefault = nums.length === 2 && nums[0] === 50 && nums[1] === 75;
+      if (nums.length === 0 || isDefault) delete merged.positions;
+      else merged.positions = nums;
+    }
     if (!merged.fields || (merged.fields as SummaryField[]).length === 0) {
       delete merged.fields;
     }
@@ -446,7 +490,7 @@ export class StratumSectionsEditor extends LitElement {
                     ${this._renderModePicker(section, idx)}
                     <ha-form
                       .hass=${this.hass}
-                      .data=${{ columns: 'auto', ...section }}
+                      .data=${this._formData(section)}
                       .schema=${buildSchema(section)}
                       .computeLabel=${(s: { name: string }) => LABELS[s.name] ?? s.name}
                       .computeHelper=${(s: { name: string }) => HELPERS[s.name] ?? ''}
