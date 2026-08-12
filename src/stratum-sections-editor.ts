@@ -79,6 +79,7 @@ const MODE_OPTIONS_BY_TYPE: Partial<Record<RoomSectionType, Array<{ value: strin
     { value: 'icon', label: 'Icon (sama ikona)' },
   ],
   media: [
+    { value: 'player', label: 'Player (okładka + sterowanie, reszta zwinięta)' },
     { value: 'tile', label: 'Tile (play/pause)' },
     { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
     { value: 'chips', label: 'Chips (play/pause)' },
@@ -167,6 +168,13 @@ function buildSchema(section: RoomSectionConfig) {
   }
 
   const extra: Array<Record<string, unknown>> = [];
+  // Media (mode player, default): wybór głównego odtwarzacza.
+  if (section.type === 'media') {
+    extra.push({
+      name: 'entity',
+      selector: { entity: { filter: [{ domain: 'media_player' }] } },
+    });
+  }
   if (entityDomains.length > 0) {
     extra.push({
       name: 'entities',
@@ -232,6 +240,7 @@ const LABELS: Record<string, string> = {
   type: 'Typ sekcji',
   title: 'Nazwa (override)',
   icon: 'Ikona (override)',
+  entity: 'Główny odtwarzacz',
   entities: 'Ograniczenie do encji',
   columns: 'Liczba kolumn',
   mode: 'Tryb wyświetlania',
@@ -239,6 +248,8 @@ const LABELS: Record<string, string> = {
 };
 
 const HELPERS: Record<string, string> = {
+  entity:
+    'Puste = auto: ten, który aktualnie gra (playing > pauza > włączony). Reszta w zwijanym „Pozostałe".',
   entities: 'Puste = wszystkie encje tego typu z pomieszczenia. Wybranie kilku ogranicza.',
   mode: 'Slider działa dla light (brightness) i cover (position).',
 };
@@ -269,6 +280,7 @@ export class StratumSectionsEditor extends LitElement {
     const merged: RoomSectionConfig = { ...prev, ...patch };
     if (!merged.title) delete merged.title;
     if (!merged.icon) delete merged.icon;
+    if (!merged.entity) delete merged.entity;
     if (!merged.entities || merged.entities.length === 0) delete merged.entities;
     if (!merged.fields || (merged.fields as SummaryField[]).length === 0) {
       delete merged.fields;

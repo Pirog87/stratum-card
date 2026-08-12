@@ -4,6 +4,20 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.51.0] — 2026-08-12
+
+### Added (popup pomieszczenia — krok 2 redesignu)
+- **Sekcja Media = jeden duży player z okładką** (default, mode `player`):
+  okładka (entity_picture) jako tło z gradientem, tytuł i artysta, pasek
+  postępu, przyciski poprzedni / play-pauza / następny + suwak głośności.
+  Klik w okładkę = more-info. Bez okładki — kompaktowa neutralna karta.
+- **Auto-wybór głównego odtwarzacza**: playing > pauza > włączony >
+  pierwszy dostępny. Ręczny wybór: pole „Główny odtwarzacz" w edytorze
+  sekcji (`entity` w YAML). Pozostałe odtwarzacze (w tym unavailable,
+  posortowane wg stanu) w zwijanym „Pozostałe odtwarzacze (n)".
+- Edytor sekcji: tryb „Player" (default) na liście trybów media; preset
+  „Media — Player". `mode: tile` przywraca starą płaską listę.
+
 ## [1.50.0] — 2026-08-12
 
 ### Changed

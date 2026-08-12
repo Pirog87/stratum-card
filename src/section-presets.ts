@@ -72,6 +72,14 @@ export const SECTION_PRESETS: SectionPreset[] = [
     config: { type: 'lights', mode: 'ambient' },
   },
   {
+    id: 'builtin_media_player',
+    label: 'Media — Player',
+    hint: 'Jeden duży player z okładką (auto: ten, który gra), reszta zwinięta',
+    avatar: 'mdi:album',
+    category: 'builtin',
+    config: { type: 'media', mode: 'player' },
+  },
+  {
     id: 'builtin_covers_tile',
     label: 'Rolety — Tile',
     hint: 'Wbudowany tile z ↑/⏹/↓ + position bar',
