@@ -12,7 +12,7 @@
 // kontrolkami otwiera `more-info`.
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import type { HassEntity, HomeAssistant } from './types.js';
 import { buildDefaultCustomConfig } from './custom-cards.js';
 
@@ -44,6 +44,21 @@ export class StratumRoomTile extends LitElement {
    * mushroom-light-card) które odnoszą się do wszystkich encji w sekcji.
    */
   @property({ attribute: false }) public cardTemplate?: Record<string, unknown>;
+
+  /** Jasność (%) trzymana lokalnie podczas swipe — nadpisuje stan z hass. */
+  @state() private _dragPct?: number;
+
+  /** Stan aktywnego gestu swipe (rail/tint). */
+  private _drag?: {
+    startX: number;
+    startPct: number;
+    width: number;
+    sliding: boolean;
+    lastLive: number;
+  };
+
+  /** Tłumi click bezpośrednio po zakończonym swipe. */
+  private _suppressClick = false;
 
   private _state(): HassEntity | undefined {
     return this.hass?.states?.[this.entity];
@@ -95,6 +110,9 @@ export class StratumRoomTile extends LitElement {
     if (this.mode === 'icon') return this._renderIconMode(state, domain);
     if (this.mode === 'ambient' && domain === 'light') {
       return this._renderAmbientLight(state);
+    }
+    if ((this.mode === 'rail' || this.mode === 'tint') && domain === 'light') {
+      return this._renderGroupLight(state, this.mode);
     }
 
     switch (domain) {
@@ -294,6 +312,142 @@ export class StratumRoomTile extends LitElement {
         />
       </div>
     `;
+  }
+
+  /**
+   * Kafel grupy świateł (mode `rail` / `tint`) — wzorowany na dashboardzie
+   * bubble-card: rail = pionowy pasek jasności z lewej + ikona w ciemnym kółku,
+   * tint = tło kafla podbarwione kolorem światła + pasek jasności na dole.
+   * Tap = toggle, swipe poziomy = jasność (live), contextmenu/long-press =
+   * more-info (dla grup HA pokazuje tam listę encji-składowych).
+   */
+  private _renderGroupLight(state: HassEntity, variant: 'rail' | 'tint'): TemplateResult {
+    const on = state.state === 'on';
+    const dragging = typeof this._dragPct === 'number';
+    const bright = (state.attributes?.brightness as number | undefined) ?? 0;
+    const statePct = on ? Math.round((bright / 255) * 100) : 0;
+    const pct = dragging ? Math.round(this._dragPct!) : statePct;
+    const rgb = state.attributes?.rgb_color as [number, number, number] | undefined;
+    const color = on && rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : undefined;
+    const isGroup = Array.isArray(state.attributes?.entity_id);
+    const icon =
+      (state.attributes?.icon as string | undefined) ??
+      (isGroup
+        ? on
+          ? 'mdi:lightbulb-group'
+          : 'mdi:lightbulb-group-off-outline'
+        : on
+        ? 'mdi:lightbulb-on'
+        : 'mdi:lightbulb-outline');
+
+    const style = [
+      color ? `--stratum-glight-accent:${color};` : '',
+      `--stratum-glight-pct:${pct}%;`,
+    ].join('');
+
+    return html`
+      <div
+        class="glight ${variant} ${on ? 'on' : 'off'}"
+        part="tile"
+        style=${style}
+        role="button"
+        tabindex="0"
+        title=${friendlyName(state, this.entity)}
+        @click=${this._onGroupClick}
+        @keydown=${this._onGroupKey}
+        @contextmenu=${this._openMoreInfo}
+        @pointerdown=${this._onGroupPointerDown}
+        @pointermove=${this._onGroupPointerMove}
+        @pointerup=${this._onGroupPointerUp}
+        @pointercancel=${this._onGroupPointerUp}
+      >
+        ${variant === 'rail'
+          ? html`<span class="glight-rail" aria-hidden="true"></span>`
+          : nothing}
+        <span class="glight-name">${friendlyName(state, this.entity)}</span>
+        <span class="glight-row">
+          <span class="glight-bubble"><ha-icon .icon=${icon}></ha-icon></span>
+          <span class="glight-pct">${on || dragging ? `${pct} %` : 'wył.'}</span>
+        </span>
+        ${variant === 'tint'
+          ? html`<span class="glight-bar" aria-hidden="true"></span>`
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _onGroupClick = (ev: Event): void => {
+    if (this._suppressClick) {
+      this._suppressClick = false;
+      return;
+    }
+    this._callService(ev, 'light', 'toggle');
+  };
+
+  private _onGroupKey = (ev: KeyboardEvent): void => {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      void this.hass?.callService('light', 'toggle', { entity_id: this.entity });
+    }
+  };
+
+  private _onGroupPointerDown = (ev: PointerEvent): void => {
+    if (ev.button !== 0) return;
+    const el = ev.currentTarget as HTMLElement;
+    const state = this._state();
+    const on = state?.state === 'on';
+    const bright = (state?.attributes?.brightness as number | undefined) ?? 0;
+    this._drag = {
+      startX: ev.clientX,
+      startPct: on ? Math.round((bright / 255) * 100) : 0,
+      width: Math.max(1, el.getBoundingClientRect().width),
+      sliding: false,
+      lastLive: 0,
+    };
+  };
+
+  private _onGroupPointerMove = (ev: PointerEvent): void => {
+    const d = this._drag;
+    if (!d) return;
+    const dx = ev.clientX - d.startX;
+    if (!d.sliding) {
+      // Próg 8 px odróżnia swipe od tapnięcia (pionowy scroll → pan-y).
+      if (Math.abs(dx) < 8) return;
+      d.sliding = true;
+      (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    }
+    const pct = Math.max(0, Math.min(100, d.startPct + (dx / d.width) * 100));
+    this._dragPct = pct;
+    const now = Date.now();
+    if (now - d.lastLive > 300) {
+      d.lastLive = now;
+      this._setBrightness(pct, true);
+    }
+  };
+
+  private _onGroupPointerUp = (ev: PointerEvent): void => {
+    const d = this._drag;
+    this._drag = undefined;
+    if (!d?.sliding) return;
+    ev.stopPropagation();
+    this._suppressClick = true;
+    const pct = this._dragPct ?? d.startPct;
+    this._setBrightness(pct, false);
+    // Po 1.5 s wracamy do realnego stanu z hass (unik skoku paska).
+    window.setTimeout(() => {
+      this._dragPct = undefined;
+    }, 1500);
+  };
+
+  private _setBrightness(pct: number, live: boolean): void {
+    if (pct <= 2 && !live) {
+      void this.hass?.callService('light', 'turn_off', { entity_id: this.entity });
+      return;
+    }
+    void this.hass?.callService('light', 'turn_on', {
+      entity_id: this.entity,
+      brightness_pct: Math.max(1, Math.min(100, Math.round(pct))),
+    });
   }
 
   private _renderLightSlider(state: HassEntity): TemplateResult {
@@ -1069,6 +1223,163 @@ export class StratumRoomTile extends LitElement {
     .custom-slot > * {
       display: block;
       width: 100%;
+    }
+
+    /* ===== Kafel grupy świateł: rail / tint ===== */
+    .glight {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: var(--stratum-glight-min-height, 96px);
+      border-radius: var(--stratum-glight-radius, 16px);
+      padding: 12px;
+      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.04));
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.06));
+      color: var(--primary-text-color);
+      cursor: pointer;
+      overflow: hidden;
+      touch-action: pan-y;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+    }
+
+    .glight:active {
+      transform: scale(0.98);
+    }
+
+    .glight:focus-visible {
+      outline: 2px solid var(--primary-color, #ff9b42);
+      outline-offset: -2px;
+    }
+
+    .glight.rail {
+      padding-left: 22px;
+    }
+
+    .glight-rail {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 10px;
+      border-radius: var(--stratum-glight-radius, 16px) 0 0 var(--stratum-glight-radius, 16px);
+      background: linear-gradient(
+        to bottom,
+        var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107))
+          var(--stratum-glight-pct, 0%),
+        rgba(255, 255, 255, 0.07) var(--stratum-glight-pct, 0%)
+      );
+    }
+
+    .glight.off .glight-rail {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .glight-name {
+      font-size: 14.5px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .glight.off .glight-name {
+      color: var(--secondary-text-color);
+    }
+
+    .glight-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .glight-bubble {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--card-background-color, #1c1e22) 55%, #000);
+    }
+
+    .glight-bubble ha-icon {
+      --mdc-icon-size: 22px;
+      color: var(--secondary-text-color);
+    }
+
+    .glight.on .glight-bubble ha-icon {
+      color: var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107));
+    }
+
+    .glight-pct {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--secondary-text-color);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    /* tint: tło kafla w kolorze światła + pasek jasności na dole */
+    .glight.tint {
+      padding-bottom: 20px;
+    }
+
+    .glight.tint.on {
+      background: linear-gradient(
+          135deg,
+          color-mix(
+            in srgb,
+            var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107)) 24%,
+            transparent
+          ),
+          color-mix(
+            in srgb,
+            var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107)) 6%,
+            transparent
+          ) 65%
+        ),
+        var(--stratum-tile-background, rgba(255, 255, 255, 0.04));
+      border-color: color-mix(
+        in srgb,
+        var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107)) 35%,
+        transparent
+      );
+    }
+
+    .glight.tint .glight-bubble {
+      background: rgba(0, 0, 0, 0.28);
+    }
+
+    .glight-bar {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 8px;
+      height: 4px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+    }
+
+    .glight-bar::after {
+      content: '';
+      display: block;
+      height: 100%;
+      width: var(--stratum-glight-pct, 0%);
+      border-radius: 4px;
+      background: var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107));
+      transition: width 0.25s ease-out;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .glight,
+      .glight-bar::after {
+        transition: none;
+      }
     }
 
     /* Per-domain akcenty w chips mode */

@@ -23,7 +23,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.16.0';
+const VERSION = '1.17.0';
 
 interface SummaryDatum {
   label: string;
@@ -144,6 +144,9 @@ export class StratumRoomCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
   @state() private _config?: StratumRoomCardConfig;
+
+  /** Rozwinięte listy „Pozostałe" w sekcjach grupowanych (klucz = sekcja). */
+  @state() private _openRest = new Set<string>();
 
   private _templates = new TemplateRenderer(() => this.requestUpdate());
 
@@ -299,6 +302,14 @@ export class StratumRoomCard extends LitElement {
     }
     if (items.length === 0) return html``;
 
+    // Światła: grupowanie po pomocnikach „Grupa światła" (default). Gdy area
+    // ma light-grupy — pokazujemy TYLKO je, składowe chowamy, resztę do
+    // zwijanego „Pozostałe". Bez grup (albo group_by: none) — płaska lista.
+    if (type === 'lights' && (section.group_by ?? 'helpers') === 'helpers') {
+      const grouped = this._renderLightsGrouped(section, items, title, iconName);
+      if (grouped) return grouped;
+    }
+
     const mode = section.mode ?? 'tile';
     const layoutOverride =
       mode === 'chips' ? 'chips-layout'
@@ -336,6 +347,78 @@ export class StratumRoomCard extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Sekcja lights pogrupowana po light-grupach (pomocnikach) z area.
+   * Zwraca null gdy area nie ma żadnej grupy — wtedy caller renderuje
+   * płaską listę jak dotychczas.
+   */
+  private _renderLightsGrouped(
+    section: RoomSectionConfig,
+    items: HassEntityRegistryEntry[],
+    title: string,
+    iconName: string,
+  ): TemplateResult | null {
+    const hass = this.hass!;
+    const isGroup = (id: string): boolean =>
+      Array.isArray(hass.states?.[id]?.attributes?.entity_id);
+    const groups = items.filter((e) => isGroup(e.entity_id));
+    if (groups.length === 0) return null;
+
+    const members = new Set<string>();
+    for (const g of groups) {
+      const ids = hass.states![g.entity_id]!.attributes!.entity_id as string[];
+      for (const m of ids) members.add(m);
+    }
+    const rest = items.filter(
+      (e) => !isGroup(e.entity_id) && !members.has(e.entity_id),
+    );
+
+    const mode = section.mode ?? 'rail';
+    const layout =
+      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
+    const restKey = `lights:${title}`;
+    const restOpen = this._openRest.has(restKey);
+    const tile = (e: HassEntityRegistryEntry): TemplateResult =>
+      html`<stratum-room-tile
+        .hass=${this.hass}
+        .entity=${e.entity_id}
+        .mode=${mode}
+        .cardTemplate=${section.card_template}
+      ></stratum-room-tile>`;
+
+    return html`
+      <div class="section" part="section">
+        <div class="section-header" part="section-header">
+          <ha-icon .icon=${iconName}></ha-icon>
+          <span>${title}</span>
+          <span class="count">${groups.length}</span>
+        </div>
+        <div class="tiles ${layout}">${groups.map(tile)}</div>
+        ${rest.length > 0
+          ? html`
+              <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
+                <ha-icon
+                  .icon=${restOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
+                ></ha-icon>
+                <span>Pozostałe światła</span>
+                <span class="rest-count">${rest.length}</span>
+              </button>
+              ${restOpen
+                ? html`<div class="tiles ${layout}">${rest.map(tile)}</div>`
+                : nothing}
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _toggleRest(key: string): void {
+    const next = new Set(this._openRest);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this._openRest = next;
   }
 
   private _renderCustomCard(
@@ -765,6 +848,39 @@ export class StratumRoomCard extends LitElement {
       padding: 20px;
       text-align: center;
       color: var(--secondary-text-color);
+    }
+
+    .rest-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.03));
+      border: 1px dashed var(--divider-color, rgba(255, 255, 255, 0.14));
+      border-radius: 10px;
+      padding: 8px 12px;
+      color: var(--secondary-text-color);
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .rest-toggle:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .rest-toggle ha-icon {
+      --mdc-icon-size: 16px;
+    }
+
+    .rest-count {
+      margin-left: auto;
+      padding: 1px 8px;
+      border-radius: 999px;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
+      font-size: 11px;
     }
   `;
 }

@@ -4,6 +4,23 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.49.0] — 2026-08-12
+
+### Added (popup pomieszczenia — krok 1 redesignu)
+- **Światła jako GRUPY z pomocników** — sekcja `lights` w popupie wykrywa
+  light-grupy (pomocniki „Grupa światła") przypisane do obszaru i pokazuje
+  TYLKO je; encje-składowe są chowane automatycznie. Światła spoza grup
+  lądują w zwijanym przycisku „Pozostałe światła (n)". Wyłączenie:
+  `group_by: none` w configu sekcji.
+- **Nowe kafle świateł `rail` i `tint`** (default dla widoku grup: `rail`):
+  - `rail` — pionowy pasek jasności z lewej w kolorze światła, ikona
+    w ciemnym kółku (jak dashboard bubble-card usera)
+  - `tint` — tło kafla podbarwione kolorem światła + pasek jasności na dole
+  Oba: tap = toggle, **swipe poziomy = jasność** (live), long-press /
+  prawy klik = more-info (dla grupy HA pokazuje listę składowych).
+- Edytor sekcji: tryby „Rail" i „Tint" na liście trybów świateł; nowy preset
+  „Światła — Grupy" w presetach sekcji.
+
 ## [1.48.0] — 2026-08-12
 
 ### Fixed

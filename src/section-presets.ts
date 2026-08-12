@@ -40,6 +40,14 @@ export const SECTION_PRESETS: SectionPreset[] = [
   // WBUDOWANE (natywne Stratum tile'y)
   // ======================================================================
   {
+    id: 'builtin_lights_groups',
+    label: 'Światła — Grupy',
+    hint: 'Kafle GRUP (pomocników) z paskiem jasności + swipe; składowe schowane',
+    avatar: 'mdi:lightbulb-group',
+    category: 'builtin',
+    config: { type: 'lights', mode: 'rail' },
+  },
+  {
     id: 'builtin_lights_tile',
     label: 'Światła — Tile',
     hint: 'Wbudowany tile z toggle + rgb tint + brightness bar',

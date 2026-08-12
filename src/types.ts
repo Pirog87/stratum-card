@@ -271,10 +271,18 @@ export interface RoomSectionConfig {
     | 'bubble'
     | 'icon'
     | 'ambient'
+    | 'rail'
+    | 'tint'
     | 'cards'
     | 'inline'
     | 'icons'
     | `custom:${string}`;
+  /**
+   * Tylko `lights`: grupowanie po pomocnikach „Grupa światła" przypisanych do
+   * obszaru. `helpers` (default) — pokazuj kafle GRUP, chowaj ich encje-składowe,
+   * światła spoza grup w zwijanym „Pozostałe". `none` — płaska lista jak dotąd.
+   */
+  group_by?: 'helpers' | 'none';
   /**
    * Layout grid: `1` | `2` | `3` kolumn albo `'auto'`. Default: zgodny z typem
    * (covers/climate/media → 1, scenes → 3, reszta → 2).
