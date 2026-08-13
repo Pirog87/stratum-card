@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.66.0';
+const VERSION = '1.67.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -500,10 +500,51 @@ export class StratumCard extends LitElement {
       icon: resolveChipIcon(chip) ?? 'mdi:label-outline',
       color: resolveChipColor(chip) ?? colors[chip.type] ?? 'var(--primary-color)',
     };
+    this._pushBackGuard();
+  }
+
+  /**
+   * Liczba wpisów historii wypchniętych przez otwarte popupy Stratum.
+   * Android „wstecz" (popstate) zamyka najwyższy popup zamiast opuszczać
+   * widok — jak natywne dialogi HA.
+   */
+  private _historyDepth = 0;
+
+  private _pushBackGuard(): void {
+    window.history.pushState({ stratum: true }, '');
+    this._historyDepth++;
+    if (this._historyDepth === 1) {
+      window.addEventListener('popstate', this._onPopState);
+    }
+  }
+
+  private _onPopState = (): void => {
+    if (this._historyDepth === 0) return;
+    this._historyDepth--;
+    if (this._historyDepth === 0) {
+      window.removeEventListener('popstate', this._onPopState);
+    }
+    // Zamykamy najwyższy otwarty popup (historia już cofnięta przez system).
+    if (this._popupChip) this._closeChipListNow();
+    else if (this._popupRoom) this._closeRoomPopupNow();
+  };
+
+  /** Programowe zamknięcie (×/Escape/backdrop) — zdejmij też wpis historii. */
+  private _consumeBackGuard(): boolean {
+    if (this._historyDepth > 0) {
+      window.history.back(); // popstate zamknie popup
+      return true;
+    }
+    return false;
+  }
+
+  private _closeChipListNow(): void {
+    this._popupChip = undefined;
   }
 
   private _closeChipList = (): void => {
-    this._popupChip = undefined;
+    if (this._consumeBackGuard()) return;
+    this._closeChipListNow();
   };
 
   /** Unsubscribe dla entity registry — wywołujemy w disconnect. */
@@ -528,6 +569,8 @@ export class StratumCard extends LitElement {
     this._templates.destroy();
     this._clearAutoCollapse();
     document.removeEventListener('keydown', this._onPopupKey);
+    window.removeEventListener('popstate', this._onPopState);
+    this._historyDepth = 0;
     this._unsubRegistry?.();
     this._unsubRegistry = undefined;
   }
@@ -1088,11 +1131,17 @@ export class StratumCard extends LitElement {
       chips: overrides?.chips,
     };
     document.addEventListener('keydown', this._onPopupKey);
+    this._pushBackGuard();
+  }
+
+  private _closeRoomPopupNow(): void {
+    this._popupRoom = undefined;
+    document.removeEventListener('keydown', this._onPopupKey);
   }
 
   private _closeRoomPopup = (): void => {
-    this._popupRoom = undefined;
-    document.removeEventListener('keydown', this._onPopupKey);
+    if (this._consumeBackGuard()) return;
+    this._closeRoomPopupNow();
   };
 
   private _onPopupKey = (ev: KeyboardEvent): void => {

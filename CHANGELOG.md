@@ -4,6 +4,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.67.0] — 2026-08-13
+
+### Added
+- **Przycisk „wstecz" na Androidzie zamyka popup** zamiast wychodzić
+  z widoku — otwarcie popupu pokoju albo listy chipa dopisuje wpis do
+  historii przeglądarki (jak natywne dialogi HA), a gest/przycisk wstecz
+  cofa o jeden poziom: lista chipa → popup → dashboard. Zamknięcie przez
+  × / Escape / tło zdejmuje wpis historii, więc nic się nie rozjeżdża.
+
 ## [1.66.0] — 2026-08-13
 
 ### Added
