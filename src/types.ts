@@ -183,6 +183,8 @@ export interface StratumRoomCardConfig {
   lights?: RoomLightsConfig;
   /** Kolejność i widoczność bloków popupu. Puste = domyślna. */
   popup_order?: RoomPopupOrderItem[];
+  /** Encje spoza obszaru doliczane do bloków popupu. */
+  popup_extra?: RoomPopupExtraConfig;
   /** Debug log do konsoli. */
   debug?: boolean;
 }
@@ -250,6 +252,15 @@ export interface RoomPopupOrderItem {
   section: RoomPopupSectionKey;
   hidden?: boolean;
 }
+
+/**
+ * Dodatkowe encje (spoza obszaru) doliczane do auto-list bloków popupu.
+ * Klucze: `light_entities`, `covers`, `media` (sceny/grupy/chipy mają
+ * własne listy z pickerami bez ograniczenia do obszaru).
+ */
+export type RoomPopupExtraConfig = Partial<
+  Record<RoomPopupSectionKey, string[]>
+>;
 
 /** Domyślna kolejność bloków popupu pomieszczenia. */
 export const DEFAULT_POPUP_ORDER: RoomPopupSectionKey[] = [
@@ -541,6 +552,9 @@ export interface RoomConfig {
 
   /** Kolejność i widoczność bloków popupu tego pokoju. */
   popup_order?: RoomPopupOrderItem[];
+
+  /** Encje spoza obszaru doliczane do bloków popupu tego pokoju. */
+  popup_extra?: RoomPopupExtraConfig;
 
   /** Chipy w headerze popup pokoju. Puste = default per room-card. */
   chips?: ChipConfig[];

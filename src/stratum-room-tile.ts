@@ -381,7 +381,12 @@ export class StratumRoomTile extends LitElement {
           : nothing}
         <span class="glight-name">${this._displayName(state)}</span>
         <span class="glight-row">
-          <span class="glight-bubble"><ha-icon .icon=${icon}></ha-icon></span>
+          <span
+            class="glight-bubble"
+            title="Szczegóły encji"
+            @click=${this._onIconMoreInfo}
+            ><ha-icon .icon=${icon}></ha-icon
+          ></span>
           <span class="glight-pct">${on || dragging ? `${pct} %` : 'wył.'}</span>
         </span>
         ${variant === 'tint'
@@ -397,6 +402,16 @@ export class StratumRoomTile extends LitElement {
       return;
     }
     this._callService(ev, 'light', 'toggle');
+  };
+
+  /** Klik w ikonę kafla = domyślna akcja encji HA (dialog more-info). */
+  private _onIconMoreInfo = (ev: Event): void => {
+    ev.stopPropagation();
+    if (this._suppressClick) {
+      this._suppressClick = false;
+      return;
+    }
+    this._openMoreInfo(ev);
   };
 
   private _onGroupKey = (ev: KeyboardEvent): void => {
@@ -578,7 +593,7 @@ export class StratumRoomTile extends LitElement {
         @click=${(ev: Event) => this._callService(ev, domain, 'toggle')}
         @contextmenu=${this._openMoreInfo}
       >
-        <span class="tile-icon-wrap">
+        <span class="tile-icon-wrap" title="Szczegóły encji" @click=${this._onIconMoreInfo}>
           <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         </span>
         <span class="tile-name">${this._displayName(state)}</span>
@@ -1567,6 +1582,18 @@ export class StratumRoomTile extends LitElement {
       align-items: center;
       justify-content: center;
       background: color-mix(in srgb, var(--card-background-color, #1c1e22) 55%, #000);
+    }
+
+    .glight-bubble {
+      cursor: pointer;
+    }
+
+    .glight-bubble:hover ha-icon {
+      filter: brightness(1.3);
+    }
+
+    .tile-icon-wrap {
+      cursor: pointer;
     }
 
     .glight-bubble ha-icon {

@@ -4,6 +4,26 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.58.0] — 2026-08-13
+
+### Fixed (podział bloków świateł wg intencji usera)
+- **„Grupy świateł" = wyłącznie pomocniki „Grupa światła"** — koniec
+  fallbacku na wszystkie encje. Obszar bez grup: blok się nie renderuje,
+  a edytor pokazuje wskazówkę zamiast zasysać pojedyncze encje.
+- **„Encje światła" = WSZYSTKIE pojedyncze światła pomieszczenia** (nie
+  tylko „poza grupami"). Gdy pokój ma grupy — zwinięte pod przyciskiem;
+  bez grup — zwykła otwarta sekcja.
+
+### Added
+- **Klik w ikonę kafla = domyślna akcja encji HA (more-info)** — na
+  kaflach rail/tint i tile ikona przechwytuje klik i otwiera dialog
+  encji; reszta kafla dalej robi toggle, swipe dalej steruje jasnością.
+- **„Dodaj encje spoza obszaru" we WSZYSTKICH blokach popupu** — nowe
+  pickery w blokach Encje światła / Rolety / Media (`popup_extra` per
+  pokój, doliczane do auto-list na końcu). Sceny, Grupy świateł i Chipy
+  miały już własne pickery bez ograniczenia do obszaru; w „Dodatkowych
+  sekcjach" służy do tego pole „Ograniczenie do encji".
+
 ## [1.57.0] — 2026-08-13
 
 ### Changed (edycja pokoju: zwijane grupy + kolejność bloków popupu)

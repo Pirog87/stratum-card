@@ -58,15 +58,15 @@ export class StratumLightsEditor extends LitElement {
 
   @state() private _open = new Set<number>();
 
-  /** Auto-lista: grupy-pomocniki obszaru, a bez grup — wszystkie światła. */
+  /** Auto-lista: WYŁĄCZNIE grupy-pomocniki obszaru (pojedyncze encje mają
+   *  własny blok „Encje światła"). */
   private _autoItems(): RoomLightItemConfig[] {
     if (!this.hass || !this.areaId) return [];
-    const lights = filterByDomain(getEntitiesInArea(this.hass, this.areaId), 'light');
-    const groups = lights.filter((e) =>
-      Array.isArray(this.hass!.states?.[e.entity_id]?.attributes?.entity_id),
-    );
-    const base = groups.length > 0 ? groups : lights;
-    return base.map((e) => ({ entity: e.entity_id }));
+    return filterByDomain(getEntitiesInArea(this.hass, this.areaId), 'light')
+      .filter((e) =>
+        Array.isArray(this.hass!.states?.[e.entity_id]?.attributes?.entity_id),
+      )
+      .map((e) => ({ entity: e.entity_id }));
   }
 
   private get _isAuto(): boolean {
@@ -171,15 +171,17 @@ export class StratumLightsEditor extends LitElement {
       ${auto && items.length > 0
         ? html`<p class="auto-hint">
             <ha-icon .icon=${'mdi:auto-fix'}></ha-icon>
-            Światła wykryte automatycznie z obszaru (${items.length}) —
-            ${items.some((i) =>
-              Array.isArray(
-                this.hass?.states?.[i.entity ?? '']?.attributes?.entity_id,
-              ),
-            )
-              ? 'grupy-pomocniki'
-              : 'wszystkie encje'}.
-            Każda zmiana utrwali tę listę w konfiguracji pokoju.
+            Grupy świateł (pomocniki) wykryte automatycznie z obszaru
+            (${items.length}). Każda zmiana utrwali tę listę w konfiguracji
+            pokoju.
+          </p>`
+        : nothing}
+      ${auto && items.length === 0
+        ? html`<p class="auto-hint">
+            <ha-icon .icon=${'mdi:information-outline'}></ha-icon>
+            Obszar nie ma pomocników „Grupa światła" — ten blok nie pokaże
+            się w popupie. Możesz dodać grupy ręcznie (także spoza obszaru);
+            pojedyncze encje są w bloku „Encje światła pomieszczenia".
           </p>`
         : nothing}
       ${!auto && items.length > 0
