@@ -4,6 +4,19 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.54.0] — 2026-08-13
+
+### Changed (czytelność edycji pokoju)
+- **Wyraźny nagłówek edycji pokoju**: przycisk „← Wróć do listy pomieszczeń",
+  duży tytuł z badge „EDYTUJESZ POMIESZCZENIE" i linijka „Wszystko poniżej
+  dotyczy TYLKO pokoju …". Grupy opisane, czego dotyczą (wiersz na karcie
+  vs okno popup po kliknięciu).
+- **Grafika sceny bez selektora z uploadem** — proste pole tekstowe z
+  podglądem miniatury i instrukcją: plik png/jpg wrzucasz do
+  `config/www`, wpisujesz `/local/…` (np. `www/sceny/noc.jpg` →
+  `/local/sceny/noc.jpg`) albo pełny URL. Wbudowane grafiki-presety
+  bez zmian.
+
 ## [1.53.0] — 2026-08-12
 
 ### Changed (przebudowa konfiguracji pomieszczenia)

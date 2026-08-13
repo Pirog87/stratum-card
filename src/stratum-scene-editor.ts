@@ -86,7 +86,6 @@ const SCENE_FIELDS_SCHEMA = [
       { name: 'icon', selector: { icon: {} } },
     ],
   },
-  { name: 'image', selector: { image: {} } },
   { name: 'color', selector: { text: {} } },
   { name: 'tap_action', selector: { ui_action: {} } },
 ];
@@ -95,14 +94,11 @@ const SCENE_LABELS: Record<string, string> = {
   entity: 'Encja sceny (scene.* lub script.*)',
   name: 'Nazwa (override)',
   icon: 'Ikona (gdy brak obrazu)',
-  image: 'URL obrazu tła',
   color: 'Kolor tła (gdy brak obrazu)',
   tap_action: 'Akcja po kliknięciu (override)',
 };
 
 const SCENE_HELPERS: Record<string, string> = {
-  image:
-    'Wgraj plik (trafi do storage HA) albo wpisz ścieżkę z serwera, np. /local/img/HUE_Jasne.png. Puste = tryb ikona+kolor.',
   color: 'np. amber, #ff9b42. Domyślnie primary-color.',
   tap_action:
     'Domyślnie wywołuje scene.turn_on (lub script.turn_on). Nadpisuj tylko gdy potrzebujesz innego.',
@@ -259,6 +255,49 @@ export class StratumSceneEditor extends LitElement {
     this._updateScene(index, { image: id ? `stratum:${id}` : undefined });
   }
 
+  /**
+   * Pole grafiki sceny: podgląd + ścieżka `/local/...` (katalog www w HA)
+   * lub pełny URL. Prosty input tekstowy zamiast selektora z uploadem —
+   * user trzyma grafiki w config/www.
+   */
+  private _renderImageField(index: number, scene: SceneConfig): TemplateResult {
+    const isPreset = Boolean(presetIdFromValue(scene.image));
+    const resolved = resolveSceneImage(scene.image);
+    return html`
+      <div class="img-block">
+        <label class="img-label">Grafika sceny</label>
+        <div class="img-row">
+          <span
+            class="img-preview"
+            style=${resolved ? `background-image:url("${resolved}");` : ''}
+            title=${resolved ? 'Podgląd' : 'Brak grafiki'}
+          >
+            ${resolved
+              ? nothing
+              : html`<ha-icon .icon=${'mdi:image-off-outline'}></ha-icon>`}
+          </span>
+          <input
+            type="text"
+            class="img-input"
+            placeholder="/local/sceny/noc.jpg"
+            .value=${isPreset ? '' : scene.image ?? ''}
+            @change=${(ev: Event) => {
+              const v = (ev.target as HTMLInputElement).value.trim();
+              this._updateScene(index, { image: v || undefined });
+            }}
+          />
+        </div>
+        <p class="img-hint">
+          Wrzuć plik (png/jpg) do katalogu <code>config/www</code> na serwerze
+          HA — jest wtedy dostępny pod <code>/local/…</code>. Przykład:
+          <code>www/sceny/noc.jpg</code> → wpisz <code>/local/sceny/noc.jpg</code>.
+          Możesz też wkleić pełny URL. Puste = ikona + kolor. Alternatywnie
+          wybierz wbudowaną grafikę poniżej.
+        </p>
+      </div>
+    `;
+  }
+
   private _renderPresetPicker(index: number, scene: SceneConfig): TemplateResult {
     const selected = presetIdFromValue(scene.image);
     return html`
@@ -396,6 +435,7 @@ export class StratumSceneEditor extends LitElement {
                       @value-changed=${(ev: CustomEvent<{ value: Partial<SceneConfig> }>) =>
                         this._onSceneFieldChange(idx, ev)}
                     ></ha-form>
+                    ${this._renderImageField(idx, scene)}
                     ${this._renderPresetPicker(idx, scene)}
                   </div>`
                 : nothing}
@@ -467,6 +507,77 @@ export class StratumSceneEditor extends LitElement {
       .scene-thumb {
         background-size: cover;
         background-position: center;
+      }
+
+      .img-block {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--divider-color);
+      }
+
+      .img-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--secondary-text-color);
+        margin-bottom: 6px;
+      }
+
+      .img-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .img-preview {
+        flex-shrink: 0;
+        width: 72px;
+        height: 44px;
+        border-radius: 8px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
+        background-size: cover;
+        background-position: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--secondary-text-color);
+      }
+
+      .img-preview ha-icon {
+        --mdc-icon-size: 18px;
+      }
+
+      .img-input {
+        flex: 1;
+        min-width: 0;
+        font: 13px/1.4 inherit;
+        padding: 9px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.14));
+        background: var(--card-background-color, #2b2d31);
+        color: var(--primary-text-color);
+      }
+
+      .img-input:focus-visible {
+        outline: 2px solid var(--primary-color, #ff9b42);
+        outline-offset: 1px;
+      }
+
+      .img-hint {
+        margin: 8px 0 0;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--secondary-text-color);
+      }
+
+      .img-hint code {
+        font-family: var(--code-font-family, ui-monospace, Menlo, monospace);
+        font-size: 10.5px;
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1px 5px;
+        border-radius: 4px;
       }
 
       .scene-hidden .stratum-row-title,

@@ -467,31 +467,40 @@ export class StratumCardRoomsEditor extends LitElement {
   private _renderDetail(areaId: string): TemplateResult {
     const area = this.hass?.areas?.[areaId];
     const room = this._getRoom(areaId);
+    const roomName = room?.name ?? area?.name ?? areaId;
     return html`
       <div class="detail">
+        <button
+          type="button"
+          class="detail-back"
+          @click=${() => (this._detailRoom = undefined)}
+        >
+          <ha-icon .icon=${'mdi:arrow-left'}></ha-icon>
+          Wróć do listy pomieszczeń
+        </button>
         <div class="detail-head">
-          <button
-            type="button"
-            class="stratum-icon-btn back"
-            title="Wróć do listy pomieszczeń"
-            @click=${() => (this._detailRoom = undefined)}
-          >
-            <ha-icon .icon=${'mdi:arrow-left'}></ha-icon>
-          </button>
-          <span class="stratum-row-avatar">
+          <span class="detail-avatar">
             <ha-icon .icon=${room?.icon ?? area?.icon ?? 'mdi:floor-plan'}></ha-icon>
           </span>
           <div class="detail-title">
-            <h4>${room?.name ?? area?.name ?? areaId}</h4>
-            <p>Ustawienia tylko tego pokoju — nadpisują ustawienia karty.</p>
+            <p class="detail-crumb">Edytujesz pomieszczenie</p>
+            <h4>${roomName}</h4>
           </div>
         </div>
+        <p class="detail-scope">
+          Wszystko poniżej dotyczy TYLKO pokoju „${roomName}" i nadpisuje
+          ustawienia globalne karty.
+        </p>
 
         <div class="detail-group">
           <div class="detail-group-head">
             <ha-icon .icon=${'mdi:tune'}></ha-icon>
             <span>Ogólne</span>
           </div>
+          <p class="detail-group-hint">
+            Nazwa, ikona i reakcja na klik wiersza „${roomName}" na karcie
+            głównej.
+          </p>
           <ha-form
             .hass=${this.hass}
             .data=${room ?? { area_id: areaId }}
@@ -509,7 +518,8 @@ export class StratumCardRoomsEditor extends LitElement {
             <span>Chipy nagłówka popupu</span>
           </div>
           <p class="detail-group-hint">
-            Puste = automatyczne (światła, obecność, okna, drzwi, wyciek +
+            Chipy u góry okna, które otwiera się po kliknięciu pokoju. Puste =
+            automatyczne (światła, obecność, okna, drzwi, wyciek +
             temperatura/wilgotność). Własna lista daje pełną kontrolę.
           </p>
           <stratum-chips-editor
@@ -714,33 +724,79 @@ export class StratumCardRoomsEditor extends LitElement {
         display: block;
       }
 
+      .detail-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 12px;
+        padding: 6px 14px 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.16));
+        background: transparent;
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        cursor: pointer;
+      }
+
+      .detail-back:hover {
+        border-color: var(--primary-color, #ff9b42);
+        color: var(--primary-color, #ff9b42);
+      }
+
+      .detail-back ha-icon {
+        --mdc-icon-size: 16px;
+      }
+
       .detail-head {
         display: flex;
         align-items: center;
-        gap: 10px;
-        margin-bottom: 14px;
+        gap: 12px;
+        margin-bottom: 8px;
       }
 
-      .detail-head .back {
+      .detail-avatar {
         flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--primary-color, #ff9b42) 16%, transparent);
+        color: var(--primary-color, #ff9b42);
+      }
+
+      .detail-avatar ha-icon {
+        --mdc-icon-size: 24px;
       }
 
       .detail-title {
         min-width: 0;
       }
 
-      .detail-title h4 {
+      .detail-crumb {
         margin: 0;
-        font-size: 15px;
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--primary-color, #ff9b42);
+      }
+
+      .detail-title h4 {
+        margin: 2px 0 0;
+        font-size: 19px;
         font-weight: 700;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
-      .detail-title p {
-        margin: 2px 0 0;
-        font-size: 11.5px;
+      .detail-scope {
+        margin: 0 0 14px;
+        font-size: 12px;
         color: var(--secondary-text-color);
       }
 
