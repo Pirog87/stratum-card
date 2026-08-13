@@ -4,6 +4,21 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.56.0] — 2026-08-13
+
+### Added (pełne zarządzanie światłami popupu — jak sceny)
+- **Nowa grupa „Światła popupu"** w edycji pokoju: edytor pokazuje ZAWSZE
+  pełną listę — jawną z konfiguracji, a bez niej auto-wykrytą z obszaru
+  (grupy-pomocniki jeśli są, inaczej wszystkie encje light). Per pozycja:
+  **ukryj okiem**, zmień **nazwę** i **ikonę**, przestaw **kolejność**,
+  usuń. Do tego „**Dodaj światło**" (dowolna encja, także spoza obszaru)
+  i „**Dodaj separator**" — pozioma linia z opcjonalnym podpisem,
+  rozdzielająca kafle w popupie. Pierwsza zmiana utrwala listę;
+  „Przywróć auto-wykrywanie" wraca do auto.
+- Popup: sekcja Światła renderuje jawną listę z separatorami (kafle rail
+  jak dotąd; ukryte pominięte, nazwy/ikony z override'ów).
+- `RoomConfig.lights` / `RoomLightsConfig` w YAML.
+
 ## [1.55.0] — 2026-08-13
 
 ### Fixed (skalowanie popupu na szerokich ekranach)

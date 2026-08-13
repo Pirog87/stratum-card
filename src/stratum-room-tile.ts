@@ -45,6 +45,17 @@ export class StratumRoomTile extends LitElement {
    */
   @property({ attribute: false }) public cardTemplate?: Record<string, unknown>;
 
+  /** Override nazwy (jawna lista świateł popupu). */
+  @property({ type: String, attribute: 'name-override' }) public nameOverride?: string;
+
+  /** Override ikony (jawna lista świateł popupu). */
+  @property({ type: String, attribute: 'icon-override' }) public iconOverride?: string;
+
+  /** Nazwa do wyświetlenia — override wygrywa nad friendly_name. */
+  private _displayName(state: HassEntity): string {
+    return this.nameOverride ?? friendlyName(state, this.entity);
+  }
+
   /** Jasność (%) trzymana lokalnie podczas swipe — nadpisuje stan z hass. */
   @state() private _dragPct?: number;
 
@@ -178,10 +189,10 @@ export class StratumRoomTile extends LitElement {
         part="tile"
         @click=${click}
         @contextmenu=${this._openMoreInfo}
-        title=${friendlyName(state, this.entity)}
+        title=${this._displayName(state)}
       >
         <ha-icon class="chips-icon" .icon=${icon}></ha-icon>
-        <span class="chips-name">${friendlyName(state, this.entity)}</span>
+        <span class="chips-name">${this._displayName(state)}</span>
       </button>
     `;
   }
@@ -251,12 +262,12 @@ export class StratumRoomTile extends LitElement {
         part="tile"
         @click=${click}
         @contextmenu=${this._openMoreInfo}
-        title=${friendlyName(state, this.entity)}
+        title=${this._displayName(state)}
       >
         <span class="bubble-circle">
           <ha-icon .icon=${icon}></ha-icon>
         </span>
-        <span class="bubble-name">${friendlyName(state, this.entity)}</span>
+        <span class="bubble-name">${this._displayName(state)}</span>
       </button>
     `;
   }
@@ -271,7 +282,7 @@ export class StratumRoomTile extends LitElement {
         part="tile"
         @click=${click}
         @contextmenu=${this._openMoreInfo}
-        title=${friendlyName(state, this.entity)}
+        title=${this._displayName(state)}
       >
         <ha-icon .icon=${icon}></ha-icon>
       </button>
@@ -299,7 +310,7 @@ export class StratumRoomTile extends LitElement {
           <ha-icon .icon=${on ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline'} style="color:${color};"></ha-icon>
         </button>
         <div class="ambient-info">
-          <span class="ambient-name">${friendlyName(state, this.entity)}</span>
+          <span class="ambient-name">${this._displayName(state)}</span>
           <span class="ambient-state">${on ? `${pct}%` : 'wyłączone'}</span>
         </div>
         <input
@@ -334,6 +345,7 @@ export class StratumRoomTile extends LitElement {
     const color = on && rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : undefined;
     const isGroup = Array.isArray(state.attributes?.entity_id);
     const icon =
+      this.iconOverride ??
       (state.attributes?.icon as string | undefined) ??
       (isGroup
         ? on
@@ -355,7 +367,7 @@ export class StratumRoomTile extends LitElement {
         style=${style}
         role="button"
         tabindex="0"
-        title=${friendlyName(state, this.entity)}
+        title=${this._displayName(state)}
         @click=${this._onGroupClick}
         @keydown=${this._onGroupKey}
         @contextmenu=${this._openMoreInfo}
@@ -367,7 +379,7 @@ export class StratumRoomTile extends LitElement {
         ${variant === 'rail'
           ? html`<span class="glight-rail" aria-hidden="true"></span>`
           : nothing}
-        <span class="glight-name">${friendlyName(state, this.entity)}</span>
+        <span class="glight-name">${this._displayName(state)}</span>
         <span class="glight-row">
           <span class="glight-bubble"><ha-icon .icon=${icon}></ha-icon></span>
           <span class="glight-pct">${on || dragging ? `${pct} %` : 'wył.'}</span>
@@ -469,7 +481,7 @@ export class StratumRoomTile extends LitElement {
           <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         </button>
         <div class="slider-body">
-          <span class="tile-name">${friendlyName(state, this.entity)}</span>
+          <span class="tile-name">${this._displayName(state)}</span>
           <input
             type="range"
             class="range"
@@ -506,7 +518,7 @@ export class StratumRoomTile extends LitElement {
       <div class="tile slider ${isOpen ? 'on' : 'off'}" part="tile">
         <ha-icon class="tile-icon" .icon=${isOpen ? 'mdi:blinds-open' : 'mdi:blinds'}></ha-icon>
         <div class="slider-body">
-          <span class="tile-name">${friendlyName(state, this.entity)}</span>
+          <span class="tile-name">${this._displayName(state)}</span>
           <input
             type="range"
             class="range"
@@ -569,7 +581,7 @@ export class StratumRoomTile extends LitElement {
         <span class="tile-icon-wrap">
           <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         </span>
-        <span class="tile-name">${friendlyName(state, this.entity)}</span>
+        <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">${stateText}</span>
         ${on && typeof brightnessPct === 'number'
           ? html`<span
@@ -600,7 +612,7 @@ export class StratumRoomTile extends LitElement {
         <span class="tile-icon-wrap">
           <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         </span>
-        <span class="tile-name">${friendlyName(state, this.entity)}</span>
+        <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">
           ${posNum !== undefined ? `${posNum}%` : isOpen ? 'otwarte' : 'zamknięte'}
         </span>
@@ -649,7 +661,7 @@ export class StratumRoomTile extends LitElement {
         @click=${this._openMoreInfo}
       >
         <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
-        <span class="tile-name">${friendlyName(state, this.entity)}</span>
+        <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">${on ? 'otwarte' : 'zamknięte'}</span>
       </button>
     `;
@@ -665,7 +677,7 @@ export class StratumRoomTile extends LitElement {
         @click=${this._openMoreInfo}
       >
         <ha-icon class="tile-icon" .icon=${'mdi:thermostat'}></ha-icon>
-        <span class="tile-name">${friendlyName(state, this.entity)}</span>
+        <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">
           ${typeof current === 'number' ? `${current}°` : '?°'}
           ${typeof setpoint === 'number' ? html`→ ${setpoint}°` : nothing}
@@ -729,7 +741,7 @@ export class StratumRoomTile extends LitElement {
         style=${bg}
         @click=${this._openMoreInfo}
       >
-        <span class="player-tag">${friendlyName(state, this.entity)}</span>
+        <span class="player-tag">${this._displayName(state)}</span>
         <span class="player-title">${title ?? stateText}</span>
         ${artist ? html`<span class="player-artist">${artist}</span>` : nothing}
         ${active && pct > 0
@@ -798,7 +810,7 @@ export class StratumRoomTile extends LitElement {
         @contextmenu=${this._openMoreInfo}
       >
         <ha-icon class="tile-icon" .icon=${playing ? 'mdi:pause' : 'mdi:play'}></ha-icon>
-        <span class="tile-name">${friendlyName(state, this.entity)}</span>
+        <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">${state.state}</span>
       </button>
     `;
@@ -812,7 +824,7 @@ export class StratumRoomTile extends LitElement {
         @click=${(ev: Event) => this._callService(ev, 'scene', 'turn_on')}
       >
         <ha-icon class="tile-icon" .icon=${'mdi:palette'}></ha-icon>
-        <span class="tile-name">${friendlyName(state, this.entity)}</span>
+        <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">aktywuj</span>
       </button>
     `;
@@ -822,7 +834,7 @@ export class StratumRoomTile extends LitElement {
     return html`
       <button class="tile" part="tile" @click=${this._openMoreInfo}>
         <ha-icon class="tile-icon" .icon=${'mdi:tag'}></ha-icon>
-        <span class="tile-name">${friendlyName(state, this.entity)}</span>
+        <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">${state.state}</span>
       </button>
     `;

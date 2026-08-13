@@ -13,6 +13,7 @@ import type {
   ChipConfig,
   HomeAssistant,
   RoomConfig,
+  RoomLightsConfig,
   RoomSectionConfig,
   SceneBarConfig,
   TapActionConfig,
@@ -20,6 +21,7 @@ import type {
 import './stratum-sections-editor.js';
 import './stratum-scene-editor.js';
 import './stratum-chips-editor.js';
+import './stratum-lights-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 const ROOM_LABELS: Record<string, string> = {
@@ -215,6 +217,9 @@ export class StratumCardRoomsEditor extends LitElement {
     if (!merged.scenes || (merged.scenes.items ?? []).length === 0) {
       delete merged.scenes;
     }
+    if (!merged.lights || (merged.lights.items ?? []).length === 0) {
+      delete merged.lights;
+    }
     if (!merged.chips || merged.chips.length === 0) delete merged.chips;
     // `display` zachowujemy zawsze gdy ustawione (row albo tile) — świadomy
     // override globalnego `rooms_display`. Kasujemy tylko gdy pole puste.
@@ -258,6 +263,14 @@ export class StratumCardRoomsEditor extends LitElement {
   ): void {
     ev.stopPropagation();
     this._updateRoom(areaId, { chips: ev.detail.chips });
+  }
+
+  private _onLightsChanged(
+    areaId: string,
+    ev: CustomEvent<{ lights: RoomLightsConfig }>,
+  ): void {
+    ev.stopPropagation();
+    this._updateRoom(areaId, { lights: ev.detail.lights });
   }
 
   private _renderFieldEntitiesPanel(
@@ -547,6 +560,25 @@ export class StratumCardRoomsEditor extends LitElement {
             @scenes-changed=${(ev: CustomEvent<{ scenes: SceneBarConfig }>) =>
               this._onScenesChanged(areaId, ev)}
           ></stratum-scene-editor>
+        </div>
+
+        <div class="detail-group">
+          <div class="detail-group-head">
+            <ha-icon .icon=${'mdi:lightbulb-group-outline'}></ha-icon>
+            <span>Światła popupu</span>
+          </div>
+          <p class="detail-group-hint">
+            Domyślnie grupy świateł obszaru (a bez grup — wszystkie encje).
+            Tu masz pełną kontrolę: widoczność okiem, nazwa, ikona, kolejność,
+            separatory poziome i światła spoza obszaru.
+          </p>
+          <stratum-lights-editor
+            .hass=${this.hass}
+            .areaId=${areaId}
+            .config=${room?.lights ?? { items: [] }}
+            @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
+              this._onLightsChanged(areaId, ev)}
+          ></stratum-lights-editor>
         </div>
 
         <div class="detail-group">
