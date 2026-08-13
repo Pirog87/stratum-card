@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.54.0';
+const VERSION = '1.55.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -1212,8 +1212,10 @@ export class StratumCard extends LitElement {
       }
     }
 
-    /* Popup = niemal fullscreen: 8 px marginesu z każdej strony (override
-       przez --stratum-popup-margin / --stratum-popup-max-width). */
+    /* Popup: na telefonie fullscreen z 8 px marginesu; na szerszych ekranach
+       rozsądny cap szerokości (jak dialogi HA) i wysokość wg treści — kafle
+       nie rozciągają się na pół monitora. Overrides: --stratum-popup-margin,
+       --stratum-popup-max-width, --stratum-popup-radius. */
     .stratum-popup-backdrop {
       position: fixed;
       inset: 0;
@@ -1221,7 +1223,7 @@ export class StratumCard extends LitElement {
       background: rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(6px);
       display: flex;
-      align-items: stretch;
+      align-items: center;
       justify-content: center;
       padding: var(--stratum-popup-margin, 8px);
       animation: stratum-popup-fade 0.15s ease-out;
@@ -1235,29 +1237,49 @@ export class StratumCard extends LitElement {
     .stratum-popup-card {
       position: relative;
       width: 100%;
-      max-width: var(--stratum-popup-max-width, none);
-      height: 100%;
+      max-width: var(--stratum-popup-max-width, min(94vw, 720px));
+      height: auto;
+      max-height: calc(100vh - 2 * var(--stratum-popup-margin, 8px));
+      max-height: calc(100dvh - 2 * var(--stratum-popup-margin, 8px));
       overflow-y: auto;
       border-radius: var(--stratum-popup-radius, 16px);
       background: var(--ha-card-background, var(--card-background-color, #1e1f22));
       animation: stratum-popup-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    /* Karta pokoju wypełnia popup na całą wysokość, bez własnej ramki. */
+    /* Karta pokoju bez własnej ramki wewnątrz popupu. */
     .stratum-popup-card stratum-room-card {
       display: block;
-      min-height: 100%;
       /* Rezerwa w headerze na przycisk × — chipy nie wjadą pod krzyżyk. */
       --stratum-room-header-pad-right: 46px;
     }
 
     .stratum-popup-card stratum-room-card::part(card) {
-      min-height: calc(100vh - 2 * var(--stratum-popup-margin, 8px));
-      min-height: calc(100dvh - 2 * var(--stratum-popup-margin, 8px));
       box-sizing: border-box;
       border-radius: 0;
       border: 0;
       box-shadow: none;
+    }
+
+    /* Telefon: prawdziwy fullscreen — pełna szerokość i wysokość. */
+    @media (max-width: 600px) {
+      .stratum-popup-backdrop {
+        align-items: stretch;
+      }
+
+      .stratum-popup-card {
+        max-width: none;
+        height: 100%;
+      }
+
+      .stratum-popup-card stratum-room-card {
+        min-height: 100%;
+      }
+
+      .stratum-popup-card stratum-room-card::part(card) {
+        min-height: calc(100vh - 2 * var(--stratum-popup-margin, 8px));
+        min-height: calc(100dvh - 2 * var(--stratum-popup-margin, 8px));
+      }
     }
 
     @keyframes stratum-popup-pop {
