@@ -114,3 +114,29 @@ export function getState(
   return hass.states?.[entityId];
 }
 
+
+/**
+ * Odfiltrowuje encje, których user nie chce widzieć w auto-listach popupu:
+ * ukryte/wyłączone w rejestrze HA, kategorie config/diagnostic oraz stany
+ * unavailable/unknown (lub brak stanu). Jawne listy usera NIE są filtrowane.
+ */
+export function filterDisplayable(
+  hass: HomeAssistant,
+  entries: HassEntityRegistryEntry[],
+): HassEntityRegistryEntry[] {
+  return entries.filter((e) => {
+    const frontend = hass.entities?.[e.entity_id] as
+      | (HassEntityRegistryEntry & { hidden?: boolean; entity_category?: string | null })
+      | undefined;
+    const reg = { ...e, ...(frontend ?? {}) } as HassEntityRegistryEntry & {
+      hidden?: boolean;
+      entity_category?: string | null;
+    };
+    if (reg.hidden === true || reg.hidden_by || reg.disabled_by) return false;
+    if (reg.entity_category) return false;
+    const st = hass.states?.[e.entity_id];
+    if (!st) return false;
+    if (st.state === 'unavailable' || st.state === 'unknown') return false;
+    return true;
+  });
+}

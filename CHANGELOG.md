@@ -4,6 +4,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.65.0] — 2026-08-13
+
+### Fixed
+- **Auto-listy nie pokazują już „pustych" encji** — z auto-discovery
+  bloków popupu (i edytorów list) odfiltrowane są encje ukryte lub
+  wyłączone w rejestrze HA (`hidden`/`hidden_by`/`disabled_by`), encje
+  kategorii config/diagnostic oraz stany `unavailable`/`unknown`.
+  Jawnie dodane przez usera pozycje NIE są filtrowane.
+
 ## [1.64.0] — 2026-08-13
 
 ### Added

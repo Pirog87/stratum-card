@@ -17,7 +17,7 @@ import type {
   SummaryField,
 } from './types.js';
 import { DEFAULT_POPUP_ORDER } from './types.js';
-import { getEntitiesInArea, filterByDomain, filterBinarySensorDeviceClass } from './area-entities.js';
+import { getEntitiesInArea, filterByDomain, filterBinarySensorDeviceClass, filterDisplayable } from './area-entities.js';
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
@@ -87,6 +87,14 @@ function normalizeSections(
 
 /** Filtry per sekcja — jakie encje do niej należą. */
 function entitiesForSection(
+  hass: HomeAssistant,
+  entries: HassEntityRegistryEntry[],
+  section: RoomSectionType,
+): HassEntityRegistryEntry[] {
+  return filterDisplayable(hass, rawEntitiesForSection(hass, entries, section));
+}
+
+function rawEntitiesForSection(
   hass: HomeAssistant,
   entries: HassEntityRegistryEntry[],
   section: RoomSectionType,

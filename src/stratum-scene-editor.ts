@@ -17,7 +17,7 @@ import {
   presetIdFromValue,
   resolveSceneImage,
 } from './scene-presets.js';
-import { getEntitiesInArea, filterByDomain } from './area-entities.js';
+import { getEntitiesInArea, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 const GLOBAL_SCHEMA = [
@@ -132,7 +132,11 @@ export class StratumSceneEditor extends LitElement {
     const seen = new Set<string>();
     const out: SceneConfig[] = [];
     for (const id of [this.areaId, ...this.mergeWith]) {
-      for (const e of filterByDomain(getEntitiesInArea(this.hass, id), 'scene')) {
+      const scenes = filterDisplayable(
+        this.hass,
+        filterByDomain(getEntitiesInArea(this.hass, id), 'scene'),
+      );
+      for (const e of scenes) {
         if (seen.has(e.entity_id)) continue;
         seen.add(e.entity_id);
         out.push({ entity: e.entity_id });
