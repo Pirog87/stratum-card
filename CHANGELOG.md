@@ -4,6 +4,14 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.64.0] — 2026-08-13
+
+### Added
+- **Separatory w scenach** — jak w pozostałych sekcjach: przycisk „Dodaj
+  separator" w edytorze scen (opcjonalny podpis, oko, kolejność, kosz),
+  a w popupie linia przecinająca siatkę kafli scen (z podpisem po środku
+  lub sama linia). `separator: true` / `label` w YAML sceny.
+
 ## [1.63.0] — 2026-08-13
 
 ### Added (bubble-card / mushroom jako styl kafli bloków popupu)
