@@ -4,6 +4,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.55.0] — 2026-08-13
+
+### Fixed (skalowanie popupu na szerokich ekranach)
+- **Popup skaluje się rozsądnie**: na telefonie (≤600 px) nadal fullscreen
+  z 8 px marginesu, ale na tablecie/desktopie szerokość jest ograniczona
+  do `min(94vw, 720px)` (jak dialogi HA), a wysokość dopasowuje się do
+  treści — koniec z kaflami rozciągniętymi na pół monitora i pustką na
+  dole. Override: `--stratum-popup-max-width`.
+
 ## [1.54.0] — 2026-08-13
 
 ### Changed (czytelność edycji pokoju)
