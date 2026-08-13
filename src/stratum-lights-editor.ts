@@ -17,56 +17,118 @@ import type {
 import { getEntitiesInArea, filterByDomain } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
-const LIGHT_FIELDS_SCHEMA = [
-  {
-    name: 'entity',
-    required: true,
-    selector: { entity: { filter: [{ domain: 'light' }] } },
-  },
-  {
-    type: 'grid',
-    name: '',
-    schema: [
-      { name: 'name', selector: { text: {} } },
-      { name: 'icon', selector: { icon: {} } },
-    ],
-  },
-];
-
 const SEPARATOR_FIELDS_SCHEMA = [{ name: 'label', selector: { text: {} } }];
 
 const LABELS: Record<string, string> = {
-  entity: 'Encja światła (grupa lub pojedyncza)',
+  entity: 'Encja',
   name: 'Nazwa (override)',
   icon: 'Ikona (override)',
   label: 'Podpis separatora (opcjonalny)',
+  tap_action: 'Akcja kliknięcia kafla (override)',
 };
 
 const HELPERS: Record<string, string> = {
-  entity: 'Może być spoza obszaru — np. grupa z korytarza.',
+  entity: 'Może być spoza obszaru pomieszczenia.',
   label: 'Puste = sama linia. Z podpisem = linia z tekstem po środku.',
+  tap_action:
+    'Domyślnie: toggle (klik w kafel) i more-info (klik w ikonę). Nadpisuje klik w kafel.',
+};
+
+/** Źródło auto-listy — decyduje co edytor wykrywa z obszaru. */
+export type EntityListSource =
+  | 'light_groups'
+  | 'light_singles'
+  | 'covers'
+  | 'media';
+
+const SOURCE_META: Record<
+  EntityListSource,
+  { domain: string; autoLabel: string; emptyHint: string; fallbackIcon: string }
+> = {
+  light_groups: {
+    domain: 'light',
+    autoLabel: 'Grupy świateł (pomocniki) wykryte automatycznie z obszaru',
+    emptyHint:
+      'Obszar nie ma pomocników „Grupa światła" — ten blok nie pokaże się w popupie. Możesz dodać grupy ręcznie (także spoza obszaru).',
+    fallbackIcon: 'mdi:lightbulb-group',
+  },
+  light_singles: {
+    domain: 'light',
+    autoLabel: 'Pojedyncze światła wykryte automatycznie z obszaru',
+    emptyHint: 'Obszar nie ma pojedynczych encji światła. Możesz dodać ręcznie.',
+    fallbackIcon: 'mdi:lightbulb',
+  },
+  covers: {
+    domain: 'cover',
+    autoLabel: 'Rolety wykryte automatycznie z obszaru',
+    emptyHint: 'Obszar nie ma rolet. Możesz dodać ręcznie (także spoza obszaru).',
+    fallbackIcon: 'mdi:blinds',
+  },
+  media: {
+    domain: 'media_player',
+    autoLabel: 'Odtwarzacze wykryte automatycznie z obszaru',
+    emptyHint:
+      'Obszar nie ma odtwarzaczy. Możesz dodać ręcznie (także spoza obszaru).',
+    fallbackIcon: 'mdi:speaker',
+  },
 };
 
 @customElement('stratum-lights-editor')
 export class StratumLightsEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
-  /** Obszar do auto-wykrywania świateł (grupy > wszystkie encje). */
+  /** Obszar do auto-wykrywania encji. */
   @property({ type: String, attribute: 'area-id' }) public areaId = '';
+
+  /** Co wykrywamy: grupy świateł / pojedyncze światła / rolety / media. */
+  @property({ type: String }) public source: EntityListSource = 'light_groups';
 
   @property({ attribute: false }) public config: RoomLightsConfig = { items: [] };
 
   @state() private _open = new Set<number>();
 
-  /** Auto-lista: WYŁĄCZNIE grupy-pomocniki obszaru (pojedyncze encje mają
-   *  własny blok „Encje światła"). */
+  private get _meta() {
+    return SOURCE_META[this.source] ?? SOURCE_META.light_groups;
+  }
+
+  /** Schema pól encji — domena zależna od źródła. */
+  private _entitySchema() {
+    return [
+      {
+        name: 'entity',
+        required: true,
+        selector: { entity: { filter: [{ domain: this._meta.domain }] } },
+      },
+      {
+        type: 'grid',
+        name: '',
+        schema: [
+          { name: 'name', selector: { text: {} } },
+          { name: 'icon', selector: { icon: {} } },
+        ],
+      },
+      { name: 'tap_action', selector: { ui_action: {} } },
+    ];
+  }
+
+  private _isGroupEntity(id: string): boolean {
+    return Array.isArray(this.hass?.states?.[id]?.attributes?.entity_id);
+  }
+
+  /** Auto-lista wg źródła. */
   private _autoItems(): RoomLightItemConfig[] {
     if (!this.hass || !this.areaId) return [];
-    return filterByDomain(getEntitiesInArea(this.hass, this.areaId), 'light')
-      .filter((e) =>
-        Array.isArray(this.hass!.states?.[e.entity_id]?.attributes?.entity_id),
-      )
-      .map((e) => ({ entity: e.entity_id }));
+    const all = filterByDomain(
+      getEntitiesInArea(this.hass, this.areaId),
+      this._meta.domain,
+    );
+    const filtered =
+      this.source === 'light_groups'
+        ? all.filter((e) => this._isGroupEntity(e.entity_id))
+        : this.source === 'light_singles'
+        ? all.filter((e) => !this._isGroupEntity(e.entity_id))
+        : all;
+    return filtered.map((e) => ({ entity: e.entity_id }));
   }
 
   private get _isAuto(): boolean {
@@ -97,6 +159,12 @@ export class StratumLightsEditor extends LitElement {
     if (!merged.label) delete merged.label;
     if (!merged.hidden) delete merged.hidden;
     if (!merged.separator) delete merged.separator;
+    if (
+      !merged.tap_action ||
+      (merged.tap_action as { action?: string }).action === 'default'
+    ) {
+      delete merged.tap_action;
+    }
     items[index] = merged;
     this._emit(items);
   }
@@ -160,8 +228,12 @@ export class StratumLightsEditor extends LitElement {
     if (item.icon) return item.icon;
     const state = item.entity ? this.hass?.states?.[item.entity] : undefined;
     if (state?.attributes?.icon) return state.attributes.icon as string;
-    const isGroup = Array.isArray(state?.attributes?.entity_id);
-    return isGroup ? 'mdi:lightbulb-group' : 'mdi:lightbulb';
+    if (this.source === 'light_groups' || this.source === 'light_singles') {
+      return Array.isArray(state?.attributes?.entity_id)
+        ? 'mdi:lightbulb-group'
+        : 'mdi:lightbulb';
+    }
+    return this._meta.fallbackIcon;
   }
 
   protected render(): TemplateResult {
@@ -171,17 +243,14 @@ export class StratumLightsEditor extends LitElement {
       ${auto && items.length > 0
         ? html`<p class="auto-hint">
             <ha-icon .icon=${'mdi:auto-fix'}></ha-icon>
-            Grupy świateł (pomocniki) wykryte automatycznie z obszaru
-            (${items.length}). Każda zmiana utrwali tę listę w konfiguracji
-            pokoju.
+            ${this._meta.autoLabel} (${items.length}). Każda zmiana utrwali
+            tę listę w konfiguracji pokoju.
           </p>`
         : nothing}
       ${auto && items.length === 0
         ? html`<p class="auto-hint">
             <ha-icon .icon=${'mdi:information-outline'}></ha-icon>
-            Obszar nie ma pomocników „Grupa światła" — ten blok nie pokaże
-            się w popupie. Możesz dodać grupy ręcznie (także spoza obszaru);
-            pojedyncze encje są w bloku „Encje światła pomieszczenia".
+            ${this._meta.emptyHint}
           </p>`
         : nothing}
       ${!auto && items.length > 0
@@ -256,7 +325,7 @@ export class StratumLightsEditor extends LitElement {
                     <ha-form
                       .hass=${this.hass}
                       .data=${item}
-                      .schema=${sep ? SEPARATOR_FIELDS_SCHEMA : LIGHT_FIELDS_SCHEMA}
+                      .schema=${sep ? SEPARATOR_FIELDS_SCHEMA : this._entitySchema()}
                       .computeLabel=${(s: { name: string }) =>
                         LABELS[s.name] ?? s.name}
                       .computeHelper=${(s: { name: string }) =>
@@ -278,7 +347,7 @@ export class StratumLightsEditor extends LitElement {
       <div class="add-row">
         <button class="stratum-add-btn" @click=${() => this._add({ entity: '' })}>
           <ha-icon .icon=${'mdi:plus'}></ha-icon>
-          Dodaj światło
+          Dodaj encję (także spoza obszaru)
         </button>
         <button
           class="stratum-add-btn"

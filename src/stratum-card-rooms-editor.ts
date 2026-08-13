@@ -15,7 +15,6 @@ import type {
   HomeAssistant,
   RoomConfig,
   RoomLightsConfig,
-  RoomPopupExtraConfig,
   RoomPopupOrderItem,
   RoomPopupSectionKey,
   RoomSectionConfig,
@@ -235,6 +234,15 @@ export class StratumCardRoomsEditor extends LitElement {
     if (!merged.lights || (merged.lights.items ?? []).length === 0) {
       delete merged.lights;
     }
+    if (!merged.light_singles || (merged.light_singles.items ?? []).length === 0) {
+      delete merged.light_singles;
+    }
+    if (!merged.covers_list || (merged.covers_list.items ?? []).length === 0) {
+      delete merged.covers_list;
+    }
+    if (!merged.media_list || (merged.media_list.items ?? []).length === 0) {
+      delete merged.media_list;
+    }
     // popup_order: kasujemy gdy = default (ta sama kolejność, nic nie ukryte).
     if (merged.popup_order) {
       const def = DEFAULT_POPUP_ORDER;
@@ -304,46 +312,13 @@ export class StratumCardRoomsEditor extends LitElement {
     this._updateRoom(areaId, { lights: ev.detail.lights });
   }
 
-  /** Zapis dodatkowych encji (spoza obszaru) dla bloku popupu. */
-  private _setPopupExtra(
+  private _onListChanged(
     areaId: string,
-    key: RoomPopupSectionKey,
-    ids: string[] | undefined,
+    field: 'light_singles' | 'covers_list' | 'media_list',
+    ev: CustomEvent<{ lights: RoomLightsConfig }>,
   ): void {
-    const room = this._getRoom(areaId);
-    const extra: RoomPopupExtraConfig = { ...(room?.popup_extra ?? {}) };
-    if (ids && ids.length > 0) extra[key] = ids;
-    else delete extra[key];
-    this._updateRoom(areaId, { popup_extra: extra });
-  }
-
-  /** Picker „Dodaj encje spoza obszaru" dla bloku popupu. */
-  private _renderExtraPicker(
-    areaId: string,
-    key: RoomPopupSectionKey,
-    domain: string,
-  ): TemplateResult {
-    const room = this._getRoom(areaId);
-    const value = room?.popup_extra?.[key] ?? [];
-    return html`
-      <ha-form
-        .hass=${this.hass}
-        .data=${{ extra: value }}
-        .schema=${[
-          {
-            name: 'extra',
-            selector: { entity: { multiple: true, filter: [{ domain }] } },
-          },
-        ]}
-        .computeLabel=${() => 'Dodaj encje spoza obszaru'}
-        .computeHelper=${() =>
-          'Doliczane do automatycznej listy tego bloku (na końcu).'}
-        @value-changed=${(ev: CustomEvent<{ value: { extra?: string[] } }>) => {
-          ev.stopPropagation();
-          this._setPopupExtra(areaId, key, ev.detail.value.extra);
-        }}
-      ></ha-form>
-    `;
+    ev.stopPropagation();
+    this._updateRoom(areaId, { [field]: ev.detail.lights });
   }
 
   private _renderFieldEntitiesPanel(
@@ -613,6 +588,7 @@ export class StratumCardRoomsEditor extends LitElement {
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
+            .source=${'light_groups'}
             .config=${room?.lights ?? { items: [] }}
             @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
               this._onLightsChanged(areaId, ev)}
@@ -621,30 +597,52 @@ export class StratumCardRoomsEditor extends LitElement {
       case 'light_entities':
         return html`
           <p class="detail-group-hint">
-            WSZYSTKIE pojedyncze encje światła pomieszczenia — automatycznie.
-            Gdy pokój ma grupy, w popupie są zwinięte pod przyciskiem
-            „Encje światła"; bez grup — widoczne od razu. Okiem obok
-            wyłączysz je całkiem.
+            WSZYSTKIE pojedyncze encje światła pomieszczenia. Ten sam schemat
+            co grupy: oko, nazwa, ikona, akcja kliknięcia, kolejność,
+            separatory, encje spoza obszaru. Gdy pokój ma grupy — w popupie
+            zwinięte pod przyciskiem; bez grup — widoczne od razu.
           </p>
-          ${this._renderExtraPicker(areaId, 'light_entities', 'light')}
+          <stratum-lights-editor
+            .hass=${this.hass}
+            .areaId=${areaId}
+            .source=${'light_singles'}
+            .config=${room?.light_singles ?? { items: [] }}
+            @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
+              this._onListChanged(areaId, 'light_singles', ev)}
+          ></stratum-lights-editor>
         `;
       case 'covers':
         return html`
           <p class="detail-group-hint">
-            Lista rolet + pasek akcji zbiorczych (Otwórz / Stop / Zamknij,
-            pozycje %). Pasek i pozycje dostosujesz w „Dodatkowych sekcjach",
-            dodając sekcję Rolety.
+            Wszystkie rolety pomieszczenia — oko, nazwa, ikona, akcja
+            kliknięcia, kolejność, separatory, encje spoza obszaru. Pasek
+            akcji zbiorczych (Otwórz/Stop/Zamknij, pozycje %) dostosujesz
+            w „Dodatkowych sekcjach" (sekcja Rolety).
           </p>
-          ${this._renderExtraPicker(areaId, 'covers', 'cover')}
+          <stratum-lights-editor
+            .hass=${this.hass}
+            .areaId=${areaId}
+            .source=${'covers'}
+            .config=${room?.covers_list ?? { items: [] }}
+            @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
+              this._onListChanged(areaId, 'covers_list', ev)}
+          ></stratum-lights-editor>
         `;
       case 'media':
         return html`
           <p class="detail-group-hint">
-            Jeden duży player z okładką (auto: ten, który gra) + reszta
-            zwinięta. Głównego playera wskażesz w „Dodatkowych sekcjach",
-            dodając sekcję Media.
+            Wszystkie odtwarzacze pomieszczenia — oko, nazwa, kolejność,
+            encje spoza obszaru. W popupie: pierwszy widoczny (albo grający)
+            jako duży player z okładką, reszta zwinięta.
           </p>
-          ${this._renderExtraPicker(areaId, 'media', 'media_player')}
+          <stratum-lights-editor
+            .hass=${this.hass}
+            .areaId=${areaId}
+            .source=${'media'}
+            .config=${room?.media_list ?? { items: [] }}
+            @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
+              this._onListChanged(areaId, 'media_list', ev)}
+          ></stratum-lights-editor>
         `;
       case 'extra':
         return html`

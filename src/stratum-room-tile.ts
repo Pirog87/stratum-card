@@ -13,7 +13,8 @@
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { HassEntity, HomeAssistant } from './types.js';
+import type { HassEntity, HomeAssistant, TapActionConfig } from './types.js';
+import { runTapAction } from './tap-action.js';
 import { buildDefaultCustomConfig } from './custom-cards.js';
 
 function domainOf(entityId: string): string {
@@ -50,6 +51,18 @@ export class StratumRoomTile extends LitElement {
 
   /** Override ikony (jawna lista świateł popupu). */
   @property({ type: String, attribute: 'icon-override' }) public iconOverride?: string;
+
+  /** Override akcji kliknięcia kafla (jawne listy popupu). */
+  @property({ attribute: false }) public tapAction?: TapActionConfig;
+
+  /** Wykonuje override akcji kliknięcia. true = obsłużone. */
+  private _customTap(ev: Event): boolean {
+    if (!this.tapAction) return false;
+    ev.stopPropagation();
+    ev.preventDefault();
+    void runTapAction(this.hass, this.tapAction, { source: this });
+    return true;
+  }
 
   /** Nazwa do wyświetlenia — override wygrywa nad friendly_name. */
   private _displayName(state: HassEntity): string {
@@ -401,6 +414,7 @@ export class StratumRoomTile extends LitElement {
       this._suppressClick = false;
       return;
     }
+    if (this._customTap(ev)) return;
     this._callService(ev, 'light', 'toggle');
   };
 
@@ -590,7 +604,7 @@ export class StratumRoomTile extends LitElement {
         class="tile toggle ${on ? 'on' : 'off'} ${domain}"
         part="tile"
         style=${style}
-        @click=${(ev: Event) => this._callService(ev, domain, 'toggle')}
+        @click=${(ev: Event) => this._customTap(ev) || this._callService(ev, domain, 'toggle')}
         @contextmenu=${this._openMoreInfo}
       >
         <span class="tile-icon-wrap" title="Szczegóły encji" @click=${this._onIconMoreInfo}>
@@ -622,7 +636,7 @@ export class StratumRoomTile extends LitElement {
       <div
         class="tile cover ${isOpen ? 'on' : 'off'}"
         part="tile"
-        @click=${this._openMoreInfo}
+        @click=${(ev: Event) => this._customTap(ev) || this._openMoreInfo(ev)}
       >
         <span class="tile-icon-wrap">
           <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
@@ -821,7 +835,7 @@ export class StratumRoomTile extends LitElement {
         class="tile media ${playing ? 'on' : 'off'}"
         part="tile"
         @click=${(ev: Event) =>
-          this._callService(ev, 'media_player', 'media_play_pause')}
+          this._customTap(ev) || this._callService(ev, 'media_player', 'media_play_pause')}
         @contextmenu=${this._openMoreInfo}
       >
         <ha-icon class="tile-icon" .icon=${playing ? 'mdi:pause' : 'mdi:play'}></ha-icon>
