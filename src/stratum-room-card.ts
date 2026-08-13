@@ -23,7 +23,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.17.0';
+const VERSION = '1.18.0';
 
 interface SummaryDatum {
   label: string;
@@ -316,6 +316,12 @@ export class StratumRoomCard extends LitElement {
       return this._renderMediaSection(section, items, title, iconName);
     }
 
+    // Sceny: default = graficzne kafle (scene-bar), także dla auto-wykrytych.
+    // Explicit mode (tile/bubble/chips/icon) przywraca stare renderowanie.
+    if (type === 'scenes' && !section.mode) {
+      return this._renderScenesBar(section, items, title, iconName);
+    }
+
     const mode = section.mode ?? 'tile';
     const layoutOverride =
       mode === 'chips' ? 'chips-layout'
@@ -352,6 +358,39 @@ export class StratumRoomCard extends LitElement {
               ></stratum-room-tile>`,
           )}
         </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Sekcja scen jako graficzne kafle — auto-wykryte sceny obszaru dostają
+   * domyślny wygląd scene-bara (ikona z encji + kolor). Pełną kontrolę
+   * (nazwy, grafiki, ukrywanie, sceny spoza obszaru) daje panel „Sceny"
+   * w edycji pokoju — wtedy explicit config zastępuje tę sekcję.
+   */
+  private _renderScenesBar(
+    section: RoomSectionConfig,
+    items: HassEntityRegistryEntry[],
+    title: string,
+    iconName: string,
+  ): TemplateResult {
+    const barConfig: import('./types.js').SceneBarConfig = {
+      items: items.map((e) => {
+        const icon = this.hass!.states?.[e.entity_id]?.attributes?.icon as
+          | string
+          | undefined;
+        return icon ? { entity: e.entity_id, icon } : { entity: e.entity_id };
+      }),
+      columns: typeof section.columns === 'number' ? section.columns : 3,
+    };
+    return html`
+      <div class="section" part="section">
+        <div class="section-header" part="section-header">
+          <ha-icon .icon=${iconName}></ha-icon>
+          <span>${title}</span>
+          <span class="count">${items.length}</span>
+        </div>
+        <stratum-scene-bar .hass=${this.hass} .config=${barConfig}></stratum-scene-bar>
       </div>
     `;
   }

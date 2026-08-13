@@ -4,6 +4,26 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.53.0] — 2026-08-12
+
+### Changed (przebudowa konfiguracji pomieszczenia)
+- **Widok szczegółu pokoju zamiast zagnieżdżonych zwijek** — ołówek przy
+  pokoju otwiera pełny panel (ze strzałką powrotu) z płaskimi, opisanymi
+  grupami: Ogólne · Chipy nagłówka popupu · Sceny popupu · Sekcje popupu ·
+  Zaawansowane (łączenie pokojów, encje pól, custom CSS). Koniec z trzema
+  poziomami rozwijania.
+- **Auto-wykryte sceny obszaru renderują się jako graficzne kafle**
+  (scene-bar: grafika/kolor + nazwa) zamiast listy „aktywuj". Explicit
+  `mode` w sekcji scen przywraca stare renderowanie.
+
+### Added (pełne zarządzanie scenami — także auto)
+- **Edytor scen pokazuje sceny wykryte automatycznie z obszaru** jako
+  edytowalną listę — widzisz WSZYSTKIE, możesz każdej zmienić nazwę,
+  grafikę (upload / `/local/...`), ikonę, kolejność, **ukryć okiem** albo
+  usunąć; da się też dodać scenę spoza obszaru. Pierwsza zmiana utrwala
+  listę w konfiguracji; przycisk „Przywróć auto-wykrywanie" wraca do auto.
+- `hidden` w konfiguracji sceny + miniatury grafik na liście edytora.
+
 ## [1.52.0] — 2026-08-12
 
 ### Added (popup pomieszczenia — krok 3 redesignu)

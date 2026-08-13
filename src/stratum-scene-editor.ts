@@ -17,6 +17,7 @@ import {
   presetIdFromValue,
   resolveSceneImage,
 } from './scene-presets.js';
+import { getEntitiesInArea, filterByDomain } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 const GLOBAL_SCHEMA = [
@@ -113,7 +114,33 @@ export class StratumSceneEditor extends LitElement {
 
   @property({ attribute: false }) public config: SceneBarConfig = { items: [] };
 
+  /**
+   * Obszar do auto-wykrywania scen. Gdy `config.items` puste, edytor pokazuje
+   * sceny obszaru jako edytowalną listę — pierwsza zmiana (nazwa, grafika,
+   * ukrycie, kolejność) utrwala całą listę w konfiguracji.
+   */
+  @property({ type: String, attribute: 'area-id' }) public areaId = '';
+
   @state() private _openScenes = new Set<number>();
+
+  /** Sceny obszaru jako domyślne itemy (auto-discovery). */
+  private _autoItems(): SceneConfig[] {
+    if (!this.hass || !this.areaId) return [];
+    return filterByDomain(getEntitiesInArea(this.hass, this.areaId), 'scene').map(
+      (e) => ({ entity: e.entity_id }),
+    );
+  }
+
+  /** Czy pracujemy na liście auto (nic nie zapisano w configu). */
+  private get _isAuto(): boolean {
+    return (this.config.items ?? []).length === 0;
+  }
+
+  /** Lista robocza: explicit z configu albo zmaterializowane auto. */
+  private _workingItems(): SceneConfig[] {
+    const items = this.config.items ?? [];
+    return items.length > 0 ? items : this._autoItems();
+  }
 
   private _computeGlobalLabel = (schema: { name: string }): string =>
     GLOBAL_LABELS[schema.name] ?? schema.name;
@@ -152,7 +179,7 @@ export class StratumSceneEditor extends LitElement {
   }
 
   private _updateScene(index: number, patch: Partial<SceneConfig>): void {
-    const items = [...(this.config.items ?? [])];
+    const items = [...this._workingItems()];
     if (index < 0 || index >= items.length) return;
     const prev = items[index]!;
     const merged: SceneConfig = { ...prev, ...patch };
@@ -160,6 +187,7 @@ export class StratumSceneEditor extends LitElement {
     if (!merged.icon) delete merged.icon;
     if (!merged.image) delete merged.image;
     if (!merged.color) delete merged.color;
+    if (!merged.hidden) delete merged.hidden;
     if (!merged.tap_action || (merged.tap_action as TapActionConfig).action === 'none') {
       delete merged.tap_action;
     }
@@ -176,13 +204,13 @@ export class StratumSceneEditor extends LitElement {
   }
 
   private _addScene(): void {
-    const items = [...(this.config.items ?? []), { entity: '' } as SceneConfig];
+    const items = [...this._workingItems(), { entity: '' } as SceneConfig];
     this._emit({ ...this.config, items });
     this._openScenes = new Set([...this._openScenes, items.length - 1]);
   }
 
   private _removeScene(index: number): void {
-    const items = (this.config.items ?? []).filter((_, i) => i !== index);
+    const items = this._workingItems().filter((_, i) => i !== index);
     this._emit({ ...this.config, items });
     const nextOpen = new Set<number>();
     for (const i of this._openScenes) {
@@ -192,8 +220,14 @@ export class StratumSceneEditor extends LitElement {
     this._openScenes = nextOpen;
   }
 
+  /** Powrót do auto-wykrywania — kasuje zapisaną listę scen. */
+  private _resetToAuto(): void {
+    this._openScenes = new Set();
+    this._emit({ ...this.config, items: [] });
+  }
+
   private _moveScene(index: number, direction: -1 | 1): void {
-    const items = [...(this.config.items ?? [])];
+    const items = [...this._workingItems()];
     const target = index + direction;
     if (target < 0 || target >= items.length) return;
     [items[index], items[target]] = [items[target]!, items[index]!];
@@ -259,8 +293,23 @@ export class StratumSceneEditor extends LitElement {
   }
 
   protected render(): TemplateResult {
-    const items = this.config.items ?? [];
+    const items = this._workingItems();
+    const auto = this._isAuto;
     return html`
+      ${auto && items.length > 0
+        ? html`<p class="auto-hint">
+            <ha-icon .icon=${'mdi:auto-fix'}></ha-icon>
+            Sceny wykryte automatycznie z obszaru (${items.length}). Każda
+            zmiana — nazwa, grafika, ukrycie, kolejność — utrwali tę listę
+            w konfiguracji pokoju.
+          </p>`
+        : nothing}
+      ${!auto && items.length > 0
+        ? html`<button class="reset-auto" @click=${this._resetToAuto}>
+            <ha-icon .icon=${'mdi:auto-fix'}></ha-icon>
+            Przywróć auto-wykrywanie z obszaru
+          </button>`
+        : nothing}
       ${items.length > 0
         ? html`<ha-form
             .hass=${this.hass}
@@ -275,14 +324,35 @@ export class StratumSceneEditor extends LitElement {
       <div class="stratum-list scenes-list">
         ${items.map((scene, idx) => {
           const open = this._openScenes.has(idx);
+          const thumb = resolveSceneImage(scene.image);
           return html`
-            <div class="stratum-row active">
+            <div class="stratum-row active ${scene.hidden ? 'scene-hidden' : ''}">
               <div class="stratum-row-head">
-                <span class="stratum-row-avatar">
-                  <ha-icon .icon=${scene.icon ?? (scene.image ? 'mdi:image' : 'mdi:palette')}></ha-icon>
+                <span
+                  class="stratum-row-avatar ${thumb ? 'scene-thumb' : ''}"
+                  style=${thumb ? `background-image:url("${thumb}");` : ''}
+                >
+                  ${thumb
+                    ? nothing
+                    : html`<ha-icon
+                        .icon=${scene.icon ?? 'mdi:palette'}
+                      ></ha-icon>`}
                 </span>
                 <span class="stratum-row-title">${this._sceneTitle(scene)}</span>
+                ${scene.hidden
+                  ? html`<span class="stratum-badge ghost">ukryta</span>`
+                  : nothing}
                 <div class="stratum-row-actions">
+                  <button
+                    class="stratum-icon-btn"
+                    title=${scene.hidden ? 'Pokaż scenę' : 'Ukryj scenę'}
+                    @click=${() =>
+                      this._updateScene(idx, { hidden: !scene.hidden })}
+                  >
+                    <ha-icon
+                      .icon=${scene.hidden ? 'mdi:eye-off' : 'mdi:eye'}
+                    ></ha-icon>
+                  </button>
                   <button
                     class="stratum-icon-btn"
                     title="Przesuń w górę"
@@ -349,6 +419,59 @@ export class StratumSceneEditor extends LitElement {
 
       .scenes-list {
         margin-top: 12px;
+      }
+
+      .auto-hint {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 0 0 10px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px dashed var(--divider-color, rgba(255, 255, 255, 0.16));
+        background: rgba(255, 255, 255, 0.03);
+        font-size: 12px;
+        color: var(--secondary-text-color);
+      }
+
+      .auto-hint ha-icon {
+        --mdc-icon-size: 16px;
+        flex-shrink: 0;
+        margin-top: 1px;
+        color: var(--primary-color, #ff9b42);
+      }
+
+      .reset-auto {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 0 10px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.16));
+        background: transparent;
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        cursor: pointer;
+      }
+
+      .reset-auto:hover {
+        border-color: var(--primary-color, #ff9b42);
+        color: var(--primary-color, #ff9b42);
+      }
+
+      .reset-auto ha-icon {
+        --mdc-icon-size: 14px;
+      }
+
+      .scene-thumb {
+        background-size: cover;
+        background-position: center;
+      }
+
+      .scene-hidden .stratum-row-title,
+      .scene-hidden .stratum-row-avatar {
+        opacity: 0.4;
       }
 
       .preset-block {
