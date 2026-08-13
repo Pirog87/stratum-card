@@ -390,9 +390,14 @@ export class StratumRoomTile extends LitElement {
         @pointercancel=${this._onGroupPointerUp}
       >
         ${variant === 'rail'
-          ? html`<span class="glight-rail" aria-hidden="true"></span>`
+          ? html`<span class="glight-fill" aria-hidden="true"></span>`
           : nothing}
-        <span class="glight-name">${this._displayName(state)}</span>
+        <span class="glight-head">
+          <span class="glight-name">${this._displayName(state)}</span>
+          <span class="glight-state"
+            >${on || dragging ? `${pct}%` : 'wyłączono'}</span
+          >
+        </span>
         <span class="glight-row">
           <span
             class="glight-bubble"
@@ -400,7 +405,6 @@ export class StratumRoomTile extends LitElement {
             @click=${this._onIconMoreInfo}
             ><ha-icon .icon=${icon}></ha-icon
           ></span>
-          <span class="glight-pct">${on || dragging ? `${pct} %` : 'wył.'}</span>
         </span>
         ${variant === 'tint'
           ? html`<span class="glight-bar" aria-hidden="true"></span>`
@@ -634,43 +638,42 @@ export class StratumRoomTile extends LitElement {
     const icon = isOpen ? 'mdi:blinds-open' : 'mdi:blinds';
     return html`
       <div
-        class="tile cover ${isOpen ? 'on' : 'off'}"
+        class="cover-row ${isOpen ? 'on' : 'off'}"
         part="tile"
         @click=${(ev: Event) => this._customTap(ev) || this._openMoreInfo(ev)}
       >
-        <span class="tile-icon-wrap">
+        <span class="tile-icon-wrap" title="Szczegóły encji" @click=${this._onIconMoreInfo}>
           <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         </span>
-        <span class="tile-name">${this._displayName(state)}</span>
-        <span class="tile-state">
-          ${posNum !== undefined ? `${posNum}%` : isOpen ? 'otwarte' : 'zamknięte'}
+        <span class="cover-body">
+          <span class="tile-name">${this._displayName(state)}</span>
+          <span class="cover-state">
+            ${posNum !== undefined ? `${posNum}%` : isOpen ? 'otwarte' : 'zamknięte'}
+          </span>
         </span>
-        ${posNum !== undefined
-          ? html`<span class="progress-bar" style="--pct:${posNum}%;"></span>`
-          : nothing}
-        <div class="controls">
+        <span class="cover-ctrl">
           <button
-            class="ctrl-btn up"
-            @click=${(ev: Event) => this._callService(ev, 'cover', 'open_cover')}
+            class="cover-btn"
             title="Otwórz"
+            @click=${(ev: Event) => this._callService(ev, 'cover', 'open_cover')}
           >
-            <ha-icon .icon=${'mdi:chevron-up'}></ha-icon>
+            <ha-icon .icon=${'mdi:arrow-up'}></ha-icon>
           </button>
           <button
-            class="ctrl-btn stop"
-            @click=${(ev: Event) => this._callService(ev, 'cover', 'stop_cover')}
+            class="cover-btn"
             title="Stop"
+            @click=${(ev: Event) => this._callService(ev, 'cover', 'stop_cover')}
           >
             <ha-icon .icon=${'mdi:square'}></ha-icon>
           </button>
           <button
-            class="ctrl-btn down"
-            @click=${(ev: Event) => this._callService(ev, 'cover', 'close_cover')}
+            class="cover-btn"
             title="Zamknij"
+            @click=${(ev: Event) => this._callService(ev, 'cover', 'close_cover')}
           >
-            <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
+            <ha-icon .icon=${'mdi:arrow-down'}></ha-icon>
           </button>
-        </div>
+        </span>
       </div>
     `;
   }
@@ -988,6 +991,70 @@ export class StratumRoomTile extends LitElement {
 
     .mini-toggle.on .mini-toggle-knob {
       transform: translateX(16px);
+    }
+
+    /* Zwarta roleta (jak bubble): ikona | nazwa+% | ↑ ■ ↓ bez ramek. */
+    .cover-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 56px;
+      padding: 8px 14px 8px 10px;
+      border-radius: 14px;
+      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.04));
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.06));
+      color: var(--primary-text-color);
+      cursor: pointer;
+    }
+
+    .cover-body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .cover-body .tile-name {
+      grid-area: unset;
+    }
+
+    .cover-state {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--secondary-text-color);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cover-ctrl {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding-right: 4px;
+    }
+
+    .cover-btn {
+      border: 0;
+      background: transparent;
+      padding: 6px;
+      color: var(--primary-text-color);
+      opacity: 0.85;
+      cursor: pointer;
+      display: inline-flex;
+      transition: opacity 0.12s ease, transform 0.08s ease;
+    }
+
+    .cover-btn:hover {
+      opacity: 1;
+    }
+
+    .cover-btn:active {
+      transform: scale(0.88);
+    }
+
+    .cover-btn ha-icon {
+      --mdc-icon-size: 20px;
     }
 
     .tile.cover {
@@ -1545,27 +1612,38 @@ export class StratumRoomTile extends LitElement {
       outline-offset: -2px;
     }
 
-    .glight.rail {
-      padding-left: 22px;
+    /* Wszystko poza fill nad wypełnieniem. */
+    .glight > *:not(.glight-fill) {
+      position: relative;
+      z-index: 1;
     }
 
-    .glight-rail {
+    /* Poziome wypełnienie = jasność (jak bubble slider): pełna wysokość,
+       solidny blok koloru światła od lewej krawędzi. */
+    .glight-fill {
       position: absolute;
       left: 0;
       top: 0;
       bottom: 0;
-      width: 10px;
-      border-radius: var(--stratum-glight-radius, 16px) 0 0 var(--stratum-glight-radius, 16px);
-      background: linear-gradient(
-        to bottom,
-        var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107))
-          var(--stratum-glight-pct, 0%),
-        rgba(255, 255, 255, 0.07) var(--stratum-glight-pct, 0%)
+      width: var(--stratum-glight-pct, 0%);
+      background: color-mix(
+        in srgb,
+        var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107)) 80%,
+        transparent
       );
+      transition: width 0.25s ease-out;
+      z-index: 0;
     }
 
-    .glight.off .glight-rail {
-      background: rgba(255, 255, 255, 0.05);
+    .glight.off .glight-fill {
+      display: none;
+    }
+
+    .glight-head {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
     }
 
     .glight-name {
@@ -1576,7 +1654,23 @@ export class StratumRoomTile extends LitElement {
       white-space: nowrap;
     }
 
-    .glight.off .glight-name {
+    .glight.on .glight-name {
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+
+    .glight-state {
+      font-size: 11.5px;
+      font-weight: 600;
+      opacity: 0.8;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .glight.on .glight-state {
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+
+    .glight.off .glight-name,
+    .glight.off .glight-state {
       color: var(--secondary-text-color);
     }
 
@@ -1617,14 +1711,6 @@ export class StratumRoomTile extends LitElement {
 
     .glight.on .glight-bubble ha-icon {
       color: var(--stratum-glight-accent, var(--stratum-chip-lights-color, #ffc107));
-    }
-
-    .glight-pct {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--secondary-text-color);
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
     }
 
     /* tint: tło kafla w kolorze światła + pasek jasności na dole */
