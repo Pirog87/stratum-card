@@ -197,6 +197,8 @@ export interface SceneConfig {
   color?: string;
   /** Nadpisanie akcji — domyślnie `scene.turn_on` (albo odpowiednik script). */
   tap_action?: TapActionConfig;
+  /** Ukryj scenę bez usuwania z listy (np. auto-wykrytą z obszaru). */
+  hidden?: boolean;
 }
 
 /** Pasek scen w karcie: pozycja + layout + lista elementów. */

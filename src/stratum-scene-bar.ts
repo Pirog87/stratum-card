@@ -63,7 +63,8 @@ export class StratumSceneBar extends LitElement {
   }
 
   protected render(): TemplateResult {
-    if (!this.config || !this.config.items || this.config.items.length === 0) {
+    const items = (this.config?.items ?? []).filter((s) => !s.hidden);
+    if (!this.config || items.length === 0) {
       return html``;
     }
     const columns = this.config.columns ?? 3;
@@ -75,7 +76,7 @@ export class StratumSceneBar extends LitElement {
         part="scene-bar"
         style=${`--scene-columns:${columns};--scene-aspect:${aspect};`}
       >
-        ${this.config.items.map((s) => this._renderTile(s))}
+        ${items.map((s) => this._renderTile(s))}
       </div>
     `;
   }
