@@ -23,7 +23,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.18.0';
+const VERSION = '1.19.0';
 
 interface SummaryDatum {
   label: string;
@@ -302,6 +302,12 @@ export class StratumRoomCard extends LitElement {
     }
     if (items.length === 0) return html``;
 
+    // Światła — jawna lista z konfiguracji pokoju (widoczność, nazwy,
+    // kolejność, separatory) wygrywa nad auto-discovery.
+    if (type === 'lights' && (this._config?.lights?.items?.length ?? 0) > 0) {
+      return this._renderLightsExplicit(section, title, iconName);
+    }
+
     // Światła: grupowanie po pomocnikach „Grupa światła" (default). Gdy area
     // ma light-grupy — pokazujemy TYLKO je, składowe chowamy, resztę do
     // zwijanego „Pozostałe". Bez grup (albo group_by: none) — płaska lista.
@@ -439,6 +445,64 @@ export class StratumRoomCard extends LitElement {
             ${p}%
           </button>`,
         )}
+      </div>
+    `;
+  }
+
+  /**
+   * Sekcja lights z jawnej listy (konfiguracja pokoju): kolejność jak
+   * w configu, ukryte pomijamy, separatory przecinają siatkę kafli.
+   */
+  private _renderLightsExplicit(
+    section: RoomSectionConfig,
+    title: string,
+    iconName: string,
+  ): TemplateResult {
+    const all = (this._config?.lights?.items ?? []).filter((i) => !i.hidden);
+    const mode = section.mode ?? 'rail';
+    const layout =
+      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
+
+    const blocks: TemplateResult[] = [];
+    let run: import('./types.js').RoomLightItemConfig[] = [];
+    const flush = (): void => {
+      if (run.length === 0) return;
+      const tiles = run.map(
+        (i) => html`<stratum-room-tile
+          .hass=${this.hass}
+          .entity=${i.entity!}
+          .mode=${mode}
+          .nameOverride=${i.name}
+          .iconOverride=${i.icon}
+          .cardTemplate=${section.card_template}
+        ></stratum-room-tile>`,
+      );
+      blocks.push(html`<div class="tiles ${layout}">${tiles}</div>`);
+      run = [];
+    };
+    for (const item of all) {
+      if (item.separator) {
+        flush();
+        blocks.push(
+          item.label
+            ? html`<div class="lights-sep"><span>${item.label}</span></div>`
+            : html`<div class="lights-sep plain"></div>`,
+        );
+      } else if (item.entity) {
+        run.push(item);
+      }
+    }
+    flush();
+
+    const count = all.filter((i) => !i.separator && i.entity).length;
+    return html`
+      <div class="section" part="section">
+        <div class="section-header" part="section-header">
+          <ha-icon .icon=${iconName}></ha-icon>
+          <span>${title}</span>
+          <span class="count">${count}</span>
+        </div>
+        ${blocks}
       </div>
     `;
   }
@@ -1035,6 +1099,31 @@ export class StratumRoomCard extends LitElement {
       padding: 20px;
       text-align: center;
       color: var(--secondary-text-color);
+    }
+
+    .lights-sep {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 4px 0;
+      color: var(--secondary-text-color);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .lights-sep::before,
+    .lights-sep::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--divider-color, rgba(255, 255, 255, 0.12));
+    }
+
+    .lights-sep.plain {
+      gap: 0;
+      margin: 6px 0;
     }
 
     .cover-master {

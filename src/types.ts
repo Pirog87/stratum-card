@@ -179,6 +179,8 @@ export interface StratumRoomCardConfig {
   sections?: RoomSectionSpec[];
   /** Pasek scen — zastępuje auto-sekcję scen, pełna kontrola layoutu. */
   scenes?: SceneBarConfig;
+  /** Jawna lista świateł sekcji lights — zastępuje auto-discovery. */
+  lights?: RoomLightsConfig;
   /** Debug log do konsoli. */
   debug?: boolean;
 }
@@ -199,6 +201,33 @@ export interface SceneConfig {
   tap_action?: TapActionConfig;
   /** Ukryj scenę bez usuwania z listy (np. auto-wykrytą z obszaru). */
   hidden?: boolean;
+}
+
+/**
+ * Element listy świateł popupu pomieszczenia: encja światła (grupa lub
+ * pojedyncza) ALBO separator poziomy.
+ */
+export interface RoomLightItemConfig {
+  /** Encja `light.*`. Pomijane gdy `separator: true`. */
+  entity?: string;
+  /** Override nazwy na kaflu. */
+  name?: string;
+  /** Override ikony na kaflu. */
+  icon?: string;
+  /** Ukryj bez usuwania z listy. */
+  hidden?: boolean;
+  /** Separator poziomy zamiast kafla. */
+  separator?: boolean;
+  /** Opcjonalny podpis separatora. */
+  label?: string;
+}
+
+/**
+ * Jawna lista świateł popupu pomieszczenia. Gdy ustawiona (items niepuste),
+ * zastępuje auto-discovery sekcji lights (grupy z pomocników / płaska lista).
+ */
+export interface RoomLightsConfig {
+  items: RoomLightItemConfig[];
 }
 
 /** Pasek scen w karcie: pozycja + layout + lista elementów. */
@@ -475,6 +504,9 @@ export interface RoomConfig {
 
   /** Pasek scen w popup pokoju. */
   scenes?: SceneBarConfig;
+
+  /** Jawna lista świateł popupu (widoczność, nazwy, kolejność, separatory). */
+  lights?: RoomLightsConfig;
 
   /** Chipy w headerze popup pokoju. Puste = default per room-card. */
   chips?: ChipConfig[];
