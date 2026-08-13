@@ -4,6 +4,18 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.61.0] — 2026-08-13
+
+### Changed (kafle popupu jak w bubble-dashboardzie usera)
+- **Kafel światła (rail)**: poziome wypełnienie NA CAŁĄ WYSOKOŚĆ kafla
+  w kolorze światła (solidny blok jak bubble slider — LED przy 86% jest
+  w ~86% bursztynowy), nazwa u góry, pod nią stan („86%" / „wyłączono"),
+  ikona w ciemnym kółku na dole. Zniknął procent w prawym rogu. Swipe,
+  toggle i klik w ikonę (more-info) bez zmian.
+- **Roleta = zwarty jeden wiersz**: ikona | nazwa + pozycja % pod nazwą |
+  ↑ ■ ↓ jako czyste ikony bez ramek (jak w starym dashboardzie). Klik w
+  wiersz = more-info, klik w ikonę = more-info, strzałki sterują.
+
 ## [1.60.0] — 2026-08-13
 
 ### Fixed (połączone pomieszczenia w edytorach list)
