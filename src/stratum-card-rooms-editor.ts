@@ -18,9 +18,11 @@ import type {
   RoomPopupOrderItem,
   RoomPopupSectionKey,
   RoomSectionConfig,
+  RoomSectionType,
   SceneBarConfig,
   TapActionConfig,
 } from './types.js';
+import { getCustomCardOptions } from './custom-cards.js';
 import { DEFAULT_POPUP_ORDER } from './types.js';
 import './stratum-sections-editor.js';
 import './stratum-scene-editor.js';
@@ -557,6 +559,66 @@ export class StratumCardRoomsEditor extends LitElement {
     this._updateRoom(areaId, { popup_order: order });
   }
 
+  /** Aktualny mode sekcji danego typu (z room.sections). */
+  private _sectionModeFor(room: RoomConfig | undefined, type: RoomSectionType): string {
+    const sections = this._normalizedRoomSections(room);
+    return sections.find((s) => s.type === type)?.mode ?? '';
+  }
+
+  /** Ustawia mode sekcji typu (styl kafli bloku popupu). */
+  private _setSectionMode(
+    areaId: string,
+    type: RoomSectionType,
+    mode: string | undefined,
+  ): void {
+    const room = this._getRoom(areaId);
+    const sections = [...this._normalizedRoomSections(room)];
+    const idx = sections.findIndex((s) => s.type === type);
+    if (idx === -1) {
+      sections.push(mode ? { type, mode: mode as RoomSectionConfig['mode'] } : { type });
+    } else {
+      const merged = { ...sections[idx]! };
+      if (mode) merged.mode = mode as RoomSectionConfig['mode'];
+      else delete merged.mode;
+      sections[idx] = merged;
+    }
+    this._updateRoom(areaId, { sections });
+  }
+
+  /**
+   * Chipy „Styl kafli": Stratum vs karty z HACS (bubble/mushroom).
+   * Niezainstalowane karty są wyszarzone z dopiskiem.
+   */
+  private _renderStylePicker(
+    areaId: string,
+    type: RoomSectionType,
+    options: Array<{ mode?: string; label: string; requires?: string }>,
+  ): TemplateResult {
+    const room = this._getRoom(areaId);
+    const current = this._sectionModeFor(room, type);
+    const installed = new Set(getCustomCardOptions().map((o) => o.value));
+    return html`
+      <div class="style-picker">
+        <span class="style-picker-label">Styl kafli</span>
+        <div class="style-picker-chips">
+          ${options.map((o) => {
+            const missing = Boolean(o.requires && !installed.has(o.requires));
+            const active = (o.mode ?? '') === current;
+            return html`<button
+              type="button"
+              class="style-chip ${active ? 'on' : ''}"
+              ?disabled=${missing}
+              title=${missing ? 'Karta nie jest zainstalowana w HACS' : o.label}
+              @click=${() => this._setSectionMode(areaId, type, o.mode)}
+            >
+              ${o.label}${missing ? ' (brak)' : ''}
+            </button>`;
+          })}
+        </div>
+      </div>
+    `;
+  }
+
   /** Zawartość konfigurowalnej grupy popupu (per klucz). */
   private _renderPopupGroupBody(
     key: RoomPopupSectionKey,
@@ -587,6 +649,11 @@ export class StratumCardRoomsEditor extends LitElement {
             (+ dodane ręcznie, także spoza obszaru). Pełna kontrola:
             widoczność okiem, nazwa, ikona, kolejność, separatory poziome.
           </p>
+          ${this._renderStylePicker(areaId, 'lights', [
+            { label: 'Stratum (wypełnienie)' },
+            { mode: 'custom:bubble-card', label: 'Bubble Card', requires: 'custom:bubble-card' },
+            { mode: 'custom:mushroom-light-card', label: 'Mushroom', requires: 'custom:mushroom-light-card' },
+          ])}
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
@@ -650,6 +717,11 @@ export class StratumCardRoomsEditor extends LitElement {
             akcji zbiorczych (Otwórz/Stop/Zamknij, pozycje %) dostosujesz
             w „Dodatkowych sekcjach" (sekcja Rolety).
           </p>
+          ${this._renderStylePicker(areaId, 'covers', [
+            { label: 'Stratum (wiersz)' },
+            { mode: 'custom:bubble-card', label: 'Bubble Card', requires: 'custom:bubble-card' },
+            { mode: 'custom:mushroom-cover-card', label: 'Mushroom', requires: 'custom:mushroom-cover-card' },
+          ])}
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
@@ -667,6 +739,11 @@ export class StratumCardRoomsEditor extends LitElement {
             encje spoza obszaru. W popupie: pierwszy widoczny (albo grający)
             jako duży player z okładką, reszta zwinięta.
           </p>
+          ${this._renderStylePicker(areaId, 'media', [
+            { label: 'Stratum (player)' },
+            { mode: 'custom:bubble-card', label: 'Bubble Card', requires: 'custom:bubble-card' },
+            { mode: 'custom:mushroom-media-player-card', label: 'Mushroom', requires: 'custom:mushroom-media-player-card' },
+          ])}
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
@@ -1064,6 +1141,56 @@ export class StratumCardRoomsEditor extends LitElement {
         margin: 0 0 14px;
         font-size: 12px;
         color: var(--secondary-text-color);
+      }
+
+      .style-picker {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+
+      .style-picker-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--secondary-text-color);
+      }
+
+      .style-picker-chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .style-chip {
+        padding: 5px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.16));
+        background: transparent;
+        color: var(--primary-text-color);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+      }
+
+      .style-chip:hover:not(:disabled) {
+        border-color: var(--primary-color, #ff9b42);
+      }
+
+      .style-chip.on {
+        background: color-mix(in srgb, var(--primary-color, #ff9b42) 18%, transparent);
+        border-color: var(--primary-color, #ff9b42);
+        color: var(--primary-color, #ff9b42);
+      }
+
+      .style-chip:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
       }
 
       details.popup-group {

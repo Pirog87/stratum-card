@@ -25,7 +25,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.22.0';
+const VERSION = '1.23.0';
 
 interface SummaryDatum {
   label: string;
@@ -65,13 +65,24 @@ function autoRoomChips(
 
 import { SECTION_ICON, SECTION_LABEL, SECTION_LAYOUT } from './section-defaults.js';
 
-/** Normalizuje spec sekcji do pełnego configu. */
+/**
+ * Normalizuje spec sekcji do pełnego configu. Explicit wpisy NADPISUJĄ
+ * konfigurację auto-wykrytych typów; auto-typy spoza listy są DOKLEJANE
+ * (wyłączanie bloków robi popup_order.hidden albo section.hidden).
+ */
 function normalizeSections(
   input: RoomSectionSpec[] | undefined,
   autoDetected: RoomSectionType[],
 ): RoomSectionConfig[] {
-  if (!input || input.length === 0) return autoDetected.map((t) => ({ type: t }));
-  return input.map((s) => (typeof s === 'string' ? { type: s } : s));
+  const explicit = (input ?? []).map((s) =>
+    typeof s === 'string' ? ({ type: s } as RoomSectionConfig) : s,
+  );
+  if (explicit.length === 0) return autoDetected.map((t) => ({ type: t }));
+  const seen = new Set(explicit.map((s) => s.type));
+  return [
+    ...explicit,
+    ...autoDetected.filter((t) => !seen.has(t)).map((t) => ({ type: t }) as RoomSectionConfig),
+  ];
 }
 
 /** Filtry per sekcja — jakie encje do niej należą. */
@@ -410,7 +421,13 @@ export class StratumRoomCard extends LitElement {
     if (groups.length === 0) return html``;
     const mode = section.mode ?? 'rail';
     const layout =
-      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
+      section.columns === 1
+        ? 'grid-1'
+        : section.columns === 3
+        ? 'grid-3'
+        : mode.startsWith('custom:')
+        ? 'grid-1'
+        : 'grid-2';
     return html`
       <div class="section" part="section">
         <div class="section-header" part="section-header">
@@ -453,6 +470,8 @@ export class StratumRoomCard extends LitElement {
           ? 'grid-1'
           : section.columns === 3
           ? 'grid-3'
+          : mode.startsWith('custom:')
+          ? 'grid-1'
           : 'grid-2';
       return html`
         <div class="section" part="section">
@@ -475,7 +494,13 @@ export class StratumRoomCard extends LitElement {
 
     const mode = section.mode ?? 'rail';
     const layout =
-      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
+      section.columns === 1
+        ? 'grid-1'
+        : section.columns === 3
+        ? 'grid-3'
+        : mode.startsWith('custom:')
+        ? 'grid-1'
+        : 'grid-2';
     const tiles = html`<div class="tiles ${layout}">
       ${singles.map(
         (e) => html`<stratum-room-tile
@@ -769,7 +794,13 @@ export class StratumRoomCard extends LitElement {
     const all = this._visibleListItems(this._config?.lights);
     const mode = section.mode ?? 'rail';
     const layout =
-      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
+      section.columns === 1
+        ? 'grid-1'
+        : section.columns === 3
+        ? 'grid-3'
+        : mode.startsWith('custom:')
+        ? 'grid-1'
+        : 'grid-2';
     const count = all.filter((i) => !i.separator && i.entity).length;
     if (count === 0) return html``;
     return html`
@@ -816,6 +847,20 @@ export class StratumRoomCard extends LitElement {
     const all = this._visibleListItems(this._config?.media_list);
     const entityItems = all.filter((i) => !i.separator && i.entity);
     if (entityItems.length === 0) return html``;
+    // Styl custom (bubble/mushroom): każda pozycja jako karta HACS.
+    const mMode = section.mode ?? 'player';
+    if (mMode.startsWith('custom:')) {
+      return html`
+        <div class="section" part="section">
+          <div class="section-header" part="section-header">
+            <ha-icon .icon=${section.icon ?? SECTION_ICON['media']}></ha-icon>
+            <span>${section.title ?? SECTION_LABEL['media']}</span>
+            <span class="count">${entityItems.length}</span>
+          </div>
+          ${this._renderListBlocks(all, mMode, 'grid-1', section.card_template)}
+        </div>
+      `;
+    }
     const featured =
       entityItems.find((i) => i.entity === section.entity) ?? entityItems[0]!;
     const rest = all.filter((i) => i !== featured);
