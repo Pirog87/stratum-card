@@ -197,10 +197,10 @@ export interface StratumRoomCardConfig {
   debug?: boolean;
 }
 
-/** Pojedyncza scena w pasku `SceneBarConfig`. */
+/** Pojedyncza scena w pasku `SceneBarConfig` (albo separator poziomy). */
 export interface SceneConfig {
-  /** Encja typu `scene.*` albo `script.*` — cel wywołania. */
-  entity: string;
+  /** Encja typu `scene.*` albo `script.*`. Pomijane gdy `separator: true`. */
+  entity?: string;
   /** Override nazwy (default: friendly_name encji). */
   name?: string;
   /** Ikona gdy brak `image` (default: mdi:palette). */
@@ -213,6 +213,10 @@ export interface SceneConfig {
   tap_action?: TapActionConfig;
   /** Ukryj scenę bez usuwania z listy (np. auto-wykrytą z obszaru). */
   hidden?: boolean;
+  /** Separator poziomy zamiast kafla sceny. */
+  separator?: boolean;
+  /** Opcjonalny podpis separatora. */
+  label?: string;
 }
 
 /**

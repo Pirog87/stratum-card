@@ -18,7 +18,7 @@ export class StratumSceneBar extends LitElement {
   @property({ attribute: false }) public config?: SceneBarConfig;
 
   private _defaultActivate(scene: SceneConfig): void {
-    if (!this.hass) return;
+    if (!this.hass || !scene.entity) return;
     const domain = scene.entity.split('.')[0];
     const service =
       domain === 'script' ? 'turn_on'
@@ -36,9 +36,12 @@ export class StratumSceneBar extends LitElement {
   }
 
   private _renderTile(scene: SceneConfig): TemplateResult {
-    const state = this.hass?.states?.[scene.entity];
+    const state = scene.entity ? this.hass?.states?.[scene.entity] : undefined;
     const name =
-      scene.name ?? (state?.attributes?.friendly_name as string | undefined) ?? scene.entity;
+      scene.name ??
+      (state?.attributes?.friendly_name as string | undefined) ??
+      scene.entity ??
+      '';
     const resolvedImage = resolveSceneImage(scene.image);
     const hasImage = Boolean(resolvedImage);
     const icon = scene.icon ?? 'mdi:palette';
@@ -64,26 +67,77 @@ export class StratumSceneBar extends LitElement {
 
   protected render(): TemplateResult {
     const items = (this.config?.items ?? []).filter((s) => !s.hidden);
-    if (!this.config || items.length === 0) {
+    const sceneCount = items.filter((s) => !s.separator && s.entity).length;
+    if (!this.config || sceneCount === 0) {
       return html``;
     }
     const columns = this.config.columns ?? 3;
     const aspect = this.config.aspect ?? '16/9';
     const size = this.config.size ?? 'md';
-    return html`
-      <div
-        class="bar size-${size}"
-        part="scene-bar"
-        style=${`--scene-columns:${columns};--scene-aspect:${aspect};`}
-      >
-        ${items.map((s) => this._renderTile(s))}
-      </div>
-    `;
+    const gridStyle = `--scene-columns:${columns};--scene-aspect:${aspect};`;
+
+    // Separatory przecinają siatkę — renderujemy ciągi kafli między nimi.
+    const blocks: TemplateResult[] = [];
+    let run: SceneConfig[] = [];
+    const flush = (): void => {
+      if (run.length === 0) return;
+      const tiles = run.map((sc) => this._renderTile(sc));
+      blocks.push(
+        html`<div class="bar size-${size}" style=${gridStyle}>${tiles}</div>`,
+      );
+      run = [];
+    };
+    for (const item of items) {
+      if (item.separator) {
+        flush();
+        blocks.push(
+          item.label
+            ? html`<div class="scene-sep"><span>${item.label}</span></div>`
+            : html`<div class="scene-sep plain"></div>`,
+        );
+      } else if (item.entity) {
+        run.push(item);
+      }
+    }
+    flush();
+
+    return html`<div class="scene-wrap" part="scene-bar">${blocks}</div>`;
   }
 
   static styles = css`
     :host {
       display: block;
+    }
+
+    .scene-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .scene-sep {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 2px 0;
+      color: var(--secondary-text-color);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .scene-sep::before,
+    .scene-sep::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--divider-color, rgba(255, 255, 255, 0.12));
+    }
+
+    .scene-sep.plain {
+      gap: 0;
+      margin: 4px 0;
     }
 
     .bar {

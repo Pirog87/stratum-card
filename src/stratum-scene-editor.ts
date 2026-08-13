@@ -96,12 +96,16 @@ const SCENE_LABELS: Record<string, string> = {
   icon: 'Ikona (gdy brak obrazu)',
   color: 'Kolor tła (gdy brak obrazu)',
   tap_action: 'Akcja po kliknięciu (override)',
+  label: 'Podpis separatora (opcjonalny)',
 };
+
+const SEPARATOR_FIELDS_SCHEMA = [{ name: 'label', selector: { text: {} } }];
 
 const SCENE_HELPERS: Record<string, string> = {
   color: 'np. amber, #ff9b42. Domyślnie primary-color.',
   tap_action:
     'Domyślnie wywołuje scene.turn_on (lub script.turn_on). Nadpisuj tylko gdy potrzebujesz innego.',
+  label: 'Puste = sama linia. Z podpisem = linia z tekstem po środku.',
 };
 
 @customElement('stratum-scene-editor')
@@ -194,6 +198,8 @@ export class StratumSceneEditor extends LitElement {
     if (!merged.image) delete merged.image;
     if (!merged.color) delete merged.color;
     if (!merged.hidden) delete merged.hidden;
+    if (!merged.label) delete merged.label;
+    if (!merged.separator) delete merged.separator;
     if (!merged.tap_action || (merged.tap_action as TapActionConfig).action === 'none') {
       delete merged.tap_action;
     }
@@ -213,6 +219,11 @@ export class StratumSceneEditor extends LitElement {
     const items = [...this._workingItems(), { entity: '' } as SceneConfig];
     this._emit({ ...this.config, items });
     this._openScenes = new Set([...this._openScenes, items.length - 1]);
+  }
+
+  private _addSeparator(): void {
+    const items = [...this._workingItems(), { separator: true } as SceneConfig];
+    this._emit({ ...this.config, items });
   }
 
   private _removeScene(index: number): void {
@@ -256,9 +267,16 @@ export class StratumSceneEditor extends LitElement {
   }
 
   private _sceneTitle(scene: SceneConfig): string {
+    if (scene.separator) {
+      return scene.label ? `— ${scene.label} —` : '— separator —';
+    }
     if (scene.name) return scene.name;
-    const state = this.hass?.states?.[scene.entity];
-    return (state?.attributes?.friendly_name as string | undefined) ?? scene.entity ?? '(nowa scena)';
+    const state = scene.entity ? this.hass?.states?.[scene.entity] : undefined;
+    return (
+      (state?.attributes?.friendly_name as string | undefined) ??
+      scene.entity ??
+      '(nowa scena)'
+    );
   }
 
   private _selectPreset(index: number, id: string | null): void {
@@ -373,9 +391,14 @@ export class StratumSceneEditor extends LitElement {
       <div class="stratum-list scenes-list">
         ${items.map((scene, idx) => {
           const open = this._openScenes.has(idx);
-          const thumb = resolveSceneImage(scene.image);
+          const sep = Boolean(scene.separator);
+          const thumb = sep ? undefined : resolveSceneImage(scene.image);
           return html`
-            <div class="stratum-row active ${scene.hidden ? 'scene-hidden' : ''}">
+            <div
+              class="stratum-row active ${scene.hidden ? 'scene-hidden' : ''} ${sep
+                ? 'row-sep'
+                : ''}"
+            >
               <div class="stratum-row-head">
                 <span
                   class="stratum-row-avatar ${thumb ? 'scene-thumb' : ''}"
@@ -384,7 +407,7 @@ export class StratumSceneEditor extends LitElement {
                   ${thumb
                     ? nothing
                     : html`<ha-icon
-                        .icon=${scene.icon ?? 'mdi:palette'}
+                        .icon=${sep ? 'mdi:minus' : scene.icon ?? 'mdi:palette'}
                       ></ha-icon>`}
                 </span>
                 <span class="stratum-row-title">${this._sceneTitle(scene)}</span>
@@ -439,24 +462,30 @@ export class StratumSceneEditor extends LitElement {
                     <ha-form
                       .hass=${this.hass}
                       .data=${scene}
-                      .schema=${SCENE_FIELDS_SCHEMA}
+                      .schema=${sep ? SEPARATOR_FIELDS_SCHEMA : SCENE_FIELDS_SCHEMA}
                       .computeLabel=${this._computeSceneLabel}
                       .computeHelper=${this._computeSceneHelper}
                       @value-changed=${(ev: CustomEvent<{ value: Partial<SceneConfig> }>) =>
                         this._onSceneFieldChange(idx, ev)}
                     ></ha-form>
-                    ${this._renderImageField(idx, scene)}
-                    ${this._renderPresetPicker(idx, scene)}
+                    ${sep ? nothing : this._renderImageField(idx, scene)}
+                    ${sep ? nothing : this._renderPresetPicker(idx, scene)}
                   </div>`
                 : nothing}
             </div>
           `;
         })}
       </div>
-      <button class="stratum-add-btn" @click=${this._addScene}>
-        <ha-icon .icon=${'mdi:plus'}></ha-icon>
-        Dodaj scenę
-      </button>
+      <div class="add-row">
+        <button class="stratum-add-btn" @click=${this._addScene}>
+          <ha-icon .icon=${'mdi:plus'}></ha-icon>
+          Dodaj scenę (także spoza obszaru)
+        </button>
+        <button class="stratum-add-btn" @click=${this._addSeparator}>
+          <ha-icon .icon=${'mdi:minus'}></ha-icon>
+          Dodaj separator
+        </button>
+      </div>
     `;
   }
 
@@ -593,6 +622,20 @@ export class StratumSceneEditor extends LitElement {
       .scene-hidden .stratum-row-title,
       .scene-hidden .stratum-row-avatar {
         opacity: 0.4;
+      }
+
+      .row-sep .stratum-row-title {
+        color: var(--secondary-text-color);
+        font-style: italic;
+      }
+
+      .add-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .add-row .stratum-add-btn {
+        flex: 1;
       }
 
       .preset-block {
