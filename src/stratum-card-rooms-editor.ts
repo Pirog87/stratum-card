@@ -15,6 +15,7 @@ import type {
   HomeAssistant,
   RoomConfig,
   RoomLightsConfig,
+  RoomPopupExtraConfig,
   RoomPopupOrderItem,
   RoomPopupSectionKey,
   RoomSectionConfig,
@@ -244,6 +245,12 @@ export class StratumCardRoomsEditor extends LitElement {
         );
       if (isDefault || merged.popup_order.length === 0) delete merged.popup_order;
     }
+    if (
+      merged.popup_extra &&
+      Object.values(merged.popup_extra).every((v) => !v || v.length === 0)
+    ) {
+      delete merged.popup_extra;
+    }
     if (!merged.chips || merged.chips.length === 0) delete merged.chips;
     // `display` zachowujemy zawsze gdy ustawione (row albo tile) — świadomy
     // override globalnego `rooms_display`. Kasujemy tylko gdy pole puste.
@@ -295,6 +302,48 @@ export class StratumCardRoomsEditor extends LitElement {
   ): void {
     ev.stopPropagation();
     this._updateRoom(areaId, { lights: ev.detail.lights });
+  }
+
+  /** Zapis dodatkowych encji (spoza obszaru) dla bloku popupu. */
+  private _setPopupExtra(
+    areaId: string,
+    key: RoomPopupSectionKey,
+    ids: string[] | undefined,
+  ): void {
+    const room = this._getRoom(areaId);
+    const extra: RoomPopupExtraConfig = { ...(room?.popup_extra ?? {}) };
+    if (ids && ids.length > 0) extra[key] = ids;
+    else delete extra[key];
+    this._updateRoom(areaId, { popup_extra: extra });
+  }
+
+  /** Picker „Dodaj encje spoza obszaru" dla bloku popupu. */
+  private _renderExtraPicker(
+    areaId: string,
+    key: RoomPopupSectionKey,
+    domain: string,
+  ): TemplateResult {
+    const room = this._getRoom(areaId);
+    const value = room?.popup_extra?.[key] ?? [];
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${{ extra: value }}
+        .schema=${[
+          {
+            name: 'extra',
+            selector: { entity: { multiple: true, filter: [{ domain }] } },
+          },
+        ]}
+        .computeLabel=${() => 'Dodaj encje spoza obszaru'}
+        .computeHelper=${() =>
+          'Doliczane do automatycznej listy tego bloku (na końcu).'}
+        @value-changed=${(ev: CustomEvent<{ value: { extra?: string[] } }>) => {
+          ev.stopPropagation();
+          this._setPopupExtra(areaId, key, ev.detail.value.extra);
+        }}
+      ></ha-form>
+    `;
   }
 
   private _renderFieldEntitiesPanel(
@@ -557,9 +606,9 @@ export class StratumCardRoomsEditor extends LitElement {
       case 'light_groups':
         return html`
           <p class="detail-group-hint">
-            Domyślnie grupy świateł obszaru (a bez grup — wszystkie encje).
-            Pełna kontrola: widoczność okiem, nazwa, ikona, kolejność,
-            separatory poziome i światła spoza obszaru.
+            Wyłącznie pomocniki „Grupa światła" przypisane do obszaru
+            (+ dodane ręcznie, także spoza obszaru). Pełna kontrola:
+            widoczność okiem, nazwa, ikona, kolejność, separatory poziome.
           </p>
           <stratum-lights-editor
             .hass=${this.hass}
@@ -572,9 +621,12 @@ export class StratumCardRoomsEditor extends LitElement {
       case 'light_entities':
         return html`
           <p class="detail-group-hint">
-            Pojedyncze światła spoza grup — automatycznie, zwinięte w popupie
-            pod przyciskiem „Encje światła". Okiem obok wyłączysz je całkiem.
+            WSZYSTKIE pojedyncze encje światła pomieszczenia — automatycznie.
+            Gdy pokój ma grupy, w popupie są zwinięte pod przyciskiem
+            „Encje światła"; bez grup — widoczne od razu. Okiem obok
+            wyłączysz je całkiem.
           </p>
+          ${this._renderExtraPicker(areaId, 'light_entities', 'light')}
         `;
       case 'covers':
         return html`
@@ -583,6 +635,7 @@ export class StratumCardRoomsEditor extends LitElement {
             pozycje %). Pasek i pozycje dostosujesz w „Dodatkowych sekcjach",
             dodając sekcję Rolety.
           </p>
+          ${this._renderExtraPicker(areaId, 'covers', 'cover')}
         `;
       case 'media':
         return html`
@@ -591,6 +644,7 @@ export class StratumCardRoomsEditor extends LitElement {
             zwinięta. Głównego playera wskażesz w „Dodatkowych sekcjach",
             dodając sekcję Media.
           </p>
+          ${this._renderExtraPicker(areaId, 'media', 'media_player')}
         `;
       case 'extra':
         return html`
