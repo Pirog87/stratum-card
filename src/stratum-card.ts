@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.56.0';
+const VERSION = '1.57.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -56,6 +56,7 @@ export class StratumCard extends LitElement {
     sections?: import('./types.js').RoomSectionSpec[];
     scenes?: import('./types.js').SceneBarConfig;
     lights?: import('./types.js').RoomLightsConfig;
+    popup_order?: import('./types.js').RoomPopupOrderItem[];
     chips?: import('./types.js').ChipConfig[];
   };
 
@@ -643,6 +644,7 @@ export class StratumCard extends LitElement {
       sections: this._popupRoom.sections,
       scenes: this._popupRoom.scenes,
       lights: this._popupRoom.lights,
+      popup_order: this._popupRoom.popup_order,
       chips: this._popupRoom.chips,
     };
     return html`
@@ -757,6 +759,7 @@ export class StratumCard extends LitElement {
             sections: room.sections,
             scenes: room.scenes,
             lights: room.lights,
+            popup_order: room.popup_order,
             chips: room.chips,
           },
           display,
@@ -816,6 +819,7 @@ export class StratumCard extends LitElement {
       sections?: import('./types.js').RoomSectionSpec[];
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
+      popup_order?: import('./types.js').RoomPopupOrderItem[];
       chips?: import('./types.js').ChipConfig[];
     },
     display: 'row' | 'tile' = 'row',
@@ -971,6 +975,7 @@ export class StratumCard extends LitElement {
       sections?: import('./types.js').RoomSectionSpec[];
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
+      popup_order?: import('./types.js').RoomPopupOrderItem[];
       chips?: import('./types.js').ChipConfig[];
     },
     entries?: HassEntityRegistryEntry[],
@@ -1034,6 +1039,7 @@ export class StratumCard extends LitElement {
       sections?: import('./types.js').RoomSectionSpec[];
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
+      popup_order?: import('./types.js').RoomPopupOrderItem[];
       chips?: import('./types.js').ChipConfig[];
     },
   ): void {
@@ -1043,6 +1049,7 @@ export class StratumCard extends LitElement {
       sections: overrides?.sections,
       scenes: overrides?.scenes,
       lights: overrides?.lights,
+      popup_order: overrides?.popup_order,
       chips: overrides?.chips,
     };
     document.addEventListener('keydown', this._onPopupKey);

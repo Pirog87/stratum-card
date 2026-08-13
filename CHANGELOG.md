@@ -4,6 +4,22 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.57.0] — 2026-08-13
+
+### Changed (edycja pokoju: zwijane grupy + kolejność bloków popupu)
+- **Wszystkie grupy edycji pokoju domyślnie ZWINIĘTE** — panel pokoju to
+  teraz czytelna lista: Ogólne · Chipy nagłówka · Sceny pomieszczenia ·
+  Grupy świateł pomieszczenia · Encje światła pomieszczenia · Rolety
+  pomieszczenia · Media · Dodatkowe sekcje · Zaawansowane (połącz z innymi,
+  encje pól, custom CSS).
+- **Kolejność bloków popupu jest konfigurowalna** — strzałki przy każdej
+  grupie (poza Chipami nagłówka) przestawiają bloki, a **oko włącza/wyłącza
+  widoczność** bloku w popupie. Zapis w `popup_order` per pokój; default
+  kasowany z configu.
+- **Popup renderuje bloki wg tej kolejności**: sceny → grupy świateł →
+  encje światła (poza grupami, zwinięte pod przyciskiem) → rolety → media →
+  pozostałe sekcje. „Encje światła" to teraz osobny, wyłączalny blok.
+
 ## [1.56.0] — 2026-08-13
 
 ### Added (pełne zarządzanie światłami popupu — jak sceny)

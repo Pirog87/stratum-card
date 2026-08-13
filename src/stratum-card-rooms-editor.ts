@@ -8,16 +8,20 @@
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { getAreasInFloor } from './area-entities.js';
 import type {
   ChipConfig,
   HomeAssistant,
   RoomConfig,
   RoomLightsConfig,
+  RoomPopupOrderItem,
+  RoomPopupSectionKey,
   RoomSectionConfig,
   SceneBarConfig,
   TapActionConfig,
 } from './types.js';
+import { DEFAULT_POPUP_ORDER } from './types.js';
 import './stratum-sections-editor.js';
 import './stratum-scene-editor.js';
 import './stratum-chips-editor.js';
@@ -31,6 +35,16 @@ const ROOM_LABELS: Record<string, string> = {
   tap_action: 'Akcja po kliknięciu (override)',
   merge_with: 'Połącz z innymi pomieszczeniami',
   aggregate: 'Sposób agregacji',
+};
+
+/** Tytuły i ikony konfigurowalnych bloków popupu. */
+const POPUP_GROUP_META: Record<RoomPopupSectionKey, { title: string; icon: string }> = {
+  scenes: { title: 'Sceny pomieszczenia', icon: 'mdi:palette-outline' },
+  light_groups: { title: 'Grupy świateł pomieszczenia', icon: 'mdi:lightbulb-group-outline' },
+  light_entities: { title: 'Encje światła pomieszczenia', icon: 'mdi:lightbulb-outline' },
+  covers: { title: 'Rolety pomieszczenia', icon: 'mdi:blinds' },
+  media: { title: 'Media', icon: 'mdi:speaker' },
+  extra: { title: 'Dodatkowe sekcje', icon: 'mdi:view-dashboard-outline' },
 };
 
 const ROOM_HELPERS: Record<string, string> = {
@@ -219,6 +233,16 @@ export class StratumCardRoomsEditor extends LitElement {
     }
     if (!merged.lights || (merged.lights.items ?? []).length === 0) {
       delete merged.lights;
+    }
+    // popup_order: kasujemy gdy = default (ta sama kolejność, nic nie ukryte).
+    if (merged.popup_order) {
+      const def = DEFAULT_POPUP_ORDER;
+      const isDefault =
+        merged.popup_order.length === def.length &&
+        merged.popup_order.every(
+          (i, idx) => i.section === def[idx] && !i.hidden,
+        );
+      if (isDefault || merged.popup_order.length === 0) delete merged.popup_order;
     }
     if (!merged.chips || merged.chips.length === 0) delete merged.chips;
     // `display` zachowujemy zawsze gdy ustawione (row albo tile) — świadomy
@@ -476,11 +500,121 @@ export class StratumCardRoomsEditor extends LitElement {
     return { index: idx, total: this.rooms.length };
   }
 
-  /** Pełny widok szczegółu jednego pokoju — płaskie grupy zamiast zagnieżdżeń. */
+  /** Kolejność bloków popupu dla pokoju: config + brakujące klucze wg defaultu. */
+  private _orderFor(room: RoomConfig | undefined): RoomPopupOrderItem[] {
+    const cfg = room?.popup_order ?? [];
+    const seen = new Set(cfg.map((i) => i.section));
+    return [
+      ...cfg.filter((i) => DEFAULT_POPUP_ORDER.includes(i.section)),
+      ...DEFAULT_POPUP_ORDER.filter((k) => !seen.has(k)).map((k) => ({
+        section: k,
+      })),
+    ];
+  }
+
+  private _moveOrder(areaId: string, key: RoomPopupSectionKey, dir: -1 | 1): void {
+    const order = [...this._orderFor(this._getRoom(areaId))];
+    const idx = order.findIndex((i) => i.section === key);
+    const target = idx + dir;
+    if (idx === -1 || target < 0 || target >= order.length) return;
+    [order[idx], order[target]] = [order[target]!, order[idx]!];
+    this._updateRoom(areaId, { popup_order: order });
+  }
+
+  private _toggleOrderHidden(areaId: string, key: RoomPopupSectionKey): void {
+    const order = this._orderFor(this._getRoom(areaId)).map((i) =>
+      i.section === key
+        ? i.hidden
+          ? { section: i.section }
+          : { section: i.section, hidden: true }
+        : i,
+    );
+    this._updateRoom(areaId, { popup_order: order });
+  }
+
+  /** Zawartość konfigurowalnej grupy popupu (per klucz). */
+  private _renderPopupGroupBody(
+    key: RoomPopupSectionKey,
+    areaId: string,
+    room: RoomConfig | undefined,
+  ): TemplateResult {
+    switch (key) {
+      case 'scenes':
+        return html`
+          <p class="detail-group-hint">
+            Wszystkie sceny pokoju — także wykryte automatycznie. Zmień nazwę
+            i grafikę, ukryj okiem, przestaw kolejność albo dodaj scenę spoza
+            obszaru.
+          </p>
+          <stratum-scene-editor
+            .hass=${this.hass}
+            .areaId=${areaId}
+            .config=${room?.scenes ?? { items: [] }}
+            @scenes-changed=${(ev: CustomEvent<{ scenes: SceneBarConfig }>) =>
+              this._onScenesChanged(areaId, ev)}
+          ></stratum-scene-editor>
+        `;
+      case 'light_groups':
+        return html`
+          <p class="detail-group-hint">
+            Domyślnie grupy świateł obszaru (a bez grup — wszystkie encje).
+            Pełna kontrola: widoczność okiem, nazwa, ikona, kolejność,
+            separatory poziome i światła spoza obszaru.
+          </p>
+          <stratum-lights-editor
+            .hass=${this.hass}
+            .areaId=${areaId}
+            .config=${room?.lights ?? { items: [] }}
+            @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
+              this._onLightsChanged(areaId, ev)}
+          ></stratum-lights-editor>
+        `;
+      case 'light_entities':
+        return html`
+          <p class="detail-group-hint">
+            Pojedyncze światła spoza grup — automatycznie, zwinięte w popupie
+            pod przyciskiem „Encje światła". Okiem obok wyłączysz je całkiem.
+          </p>
+        `;
+      case 'covers':
+        return html`
+          <p class="detail-group-hint">
+            Lista rolet + pasek akcji zbiorczych (Otwórz / Stop / Zamknij,
+            pozycje %). Pasek i pozycje dostosujesz w „Dodatkowych sekcjach",
+            dodając sekcję Rolety.
+          </p>
+        `;
+      case 'media':
+        return html`
+          <p class="detail-group-hint">
+            Jeden duży player z okładką (auto: ten, który gra) + reszta
+            zwinięta. Głównego playera wskażesz w „Dodatkowych sekcjach",
+            dodając sekcję Media.
+          </p>
+        `;
+      case 'extra':
+        return html`
+          <p class="detail-group-hint">
+            Pozostałe sekcje: okna, drzwi, klimat, przełączniki, karty
+            custom z HACS… Tu też pełna konfiguracja sekcji Rolety / Media /
+            Światła (tryby, kolumny, encje).
+          </p>
+          <stratum-sections-editor
+            .hass=${this.hass}
+            .sections=${this._normalizedRoomSections(room)}
+            @sections-changed=${(ev: CustomEvent<{ sections: RoomSectionConfig[] }>) =>
+              this._onSectionsChanged(areaId, ev)}
+          ></stratum-sections-editor>
+        `;
+    }
+  }
+
+  /** Pełny widok szczegółu jednego pokoju — zwijane grupy w konfigurowalnej kolejności. */
   private _renderDetail(areaId: string): TemplateResult {
     const area = this.hass?.areas?.[areaId];
     const room = this._getRoom(areaId);
     const roomName = room?.name ?? area?.name ?? areaId;
+    const order = this._orderFor(room);
     return html`
       <div class="detail">
         <button
@@ -502,127 +636,142 @@ export class StratumCardRoomsEditor extends LitElement {
         </div>
         <p class="detail-scope">
           Wszystko poniżej dotyczy TYLKO pokoju „${roomName}" i nadpisuje
-          ustawienia globalne karty.
+          ustawienia globalne karty. Strzałkami zmienisz kolejność bloków
+          w popupie, okiem — ich widoczność.
         </p>
 
-        <div class="detail-group">
-          <div class="detail-group-head">
-            <ha-icon .icon=${'mdi:tune'}></ha-icon>
-            <span>Ogólne</span>
+        <details class="popup-group">
+          <summary>
+            <ha-icon class="g-icon" .icon=${'mdi:tune'}></ha-icon>
+            <span class="g-title">Ogólne</span>
+            <ha-icon class="g-chevron" .icon=${'mdi:chevron-down'}></ha-icon>
+          </summary>
+          <div class="g-body">
+            <p class="detail-group-hint">
+              Nazwa, ikona i reakcja na klik wiersza „${roomName}" na karcie
+              głównej.
+            </p>
+            <ha-form
+              .hass=${this.hass}
+              .data=${room ?? { area_id: areaId }}
+              .schema=${this._generalSchema()}
+              .computeLabel=${this._computeRoomLabel}
+              .computeHelper=${this._computeRoomHelper}
+              @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
+                this._onFieldChange(areaId, ev)}
+            ></ha-form>
           </div>
-          <p class="detail-group-hint">
-            Nazwa, ikona i reakcja na klik wiersza „${roomName}" na karcie
-            głównej.
-          </p>
-          <ha-form
-            .hass=${this.hass}
-            .data=${room ?? { area_id: areaId }}
-            .schema=${this._generalSchema()}
-            .computeLabel=${this._computeRoomLabel}
-            .computeHelper=${this._computeRoomHelper}
-            @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
-              this._onFieldChange(areaId, ev)}
-          ></ha-form>
-        </div>
+        </details>
 
-        <div class="detail-group">
-          <div class="detail-group-head">
-            <ha-icon .icon=${'mdi:label-multiple-outline'}></ha-icon>
-            <span>Chipy nagłówka popupu</span>
+        <details class="popup-group">
+          <summary>
+            <ha-icon class="g-icon" .icon=${'mdi:label-multiple-outline'}></ha-icon>
+            <span class="g-title">Chipy nagłówka</span>
+            <ha-icon class="g-chevron" .icon=${'mdi:chevron-down'}></ha-icon>
+          </summary>
+          <div class="g-body">
+            <p class="detail-group-hint">
+              Chipy u góry popupu. Puste = automatyczne (światła, obecność,
+              okna, drzwi, wyciek + temperatura/wilgotność).
+            </p>
+            <stratum-chips-editor
+              .hass=${this.hass}
+              .chips=${room?.chips ?? []}
+              @chips-changed=${(ev: CustomEvent<{ chips: ChipConfig[] }>) =>
+                this._onChipsChanged(areaId, ev)}
+            ></stratum-chips-editor>
           </div>
-          <p class="detail-group-hint">
-            Chipy u góry okna, które otwiera się po kliknięciu pokoju. Puste =
-            automatyczne (światła, obecność, okna, drzwi, wyciek +
-            temperatura/wilgotność). Własna lista daje pełną kontrolę.
-          </p>
-          <stratum-chips-editor
-            .hass=${this.hass}
-            .chips=${room?.chips ?? []}
-            @chips-changed=${(ev: CustomEvent<{ chips: ChipConfig[] }>) =>
-              this._onChipsChanged(areaId, ev)}
-          ></stratum-chips-editor>
-        </div>
+        </details>
 
-        <div class="detail-group">
-          <div class="detail-group-head">
-            <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
-            <span>Sceny popupu</span>
-          </div>
-          <p class="detail-group-hint">
-            Wszystkie sceny pokoju — także wykryte automatycznie z obszaru.
-            Zmień nazwę i grafikę, ukryj okiem, przestaw kolejność albo dodaj
-            scenę spoza obszaru.
-          </p>
-          <stratum-scene-editor
-            .hass=${this.hass}
-            .areaId=${areaId}
-            .config=${room?.scenes ?? { items: [] }}
-            @scenes-changed=${(ev: CustomEvent<{ scenes: SceneBarConfig }>) =>
-              this._onScenesChanged(areaId, ev)}
-          ></stratum-scene-editor>
-        </div>
+        ${repeat(
+          order,
+          (i) => i.section,
+          (item, idx) => {
+            const meta = POPUP_GROUP_META[item.section];
+            const hidden = Boolean(item.hidden);
+            return html`
+              <details class="popup-group ${hidden ? 'hidden-group' : ''}">
+                <summary>
+                  <ha-icon class="g-icon" .icon=${meta.icon}></ha-icon>
+                  <span class="g-title">${meta.title}</span>
+                  <span class="g-actions">
+                    <button
+                      type="button"
+                      class="stratum-icon-btn"
+                      title=${hidden ? 'Pokaż blok w popupie' : 'Ukryj blok w popupie'}
+                      @click=${(ev: Event) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        this._toggleOrderHidden(areaId, item.section);
+                      }}
+                    >
+                      <ha-icon .icon=${hidden ? 'mdi:eye-off' : 'mdi:eye'}></ha-icon>
+                    </button>
+                    <button
+                      type="button"
+                      class="stratum-icon-btn"
+                      title="Przesuń wyżej"
+                      ?disabled=${idx === 0}
+                      @click=${(ev: Event) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        this._moveOrder(areaId, item.section, -1);
+                      }}
+                    >
+                      <ha-icon .icon=${'mdi:chevron-up'}></ha-icon>
+                    </button>
+                    <button
+                      type="button"
+                      class="stratum-icon-btn"
+                      title="Przesuń niżej"
+                      ?disabled=${idx === order.length - 1}
+                      @click=${(ev: Event) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        this._moveOrder(areaId, item.section, 1);
+                      }}
+                    >
+                      <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
+                    </button>
+                  </span>
+                  <ha-icon class="g-chevron" .icon=${'mdi:chevron-down'}></ha-icon>
+                </summary>
+                <div class="g-body">
+                  ${this._renderPopupGroupBody(item.section, areaId, room)}
+                </div>
+              </details>
+            `;
+          },
+        )}
 
-        <div class="detail-group">
-          <div class="detail-group-head">
-            <ha-icon .icon=${'mdi:lightbulb-group-outline'}></ha-icon>
-            <span>Światła popupu</span>
+        <details class="popup-group">
+          <summary>
+            <ha-icon class="g-icon" .icon=${'mdi:cog-outline'}></ha-icon>
+            <span class="g-title">Zaawansowane</span>
+            <ha-icon class="g-chevron" .icon=${'mdi:chevron-down'}></ha-icon>
+          </summary>
+          <div class="g-body">
+            <details class="stratum-collapsible">
+              <summary>
+                <ha-icon .icon=${'mdi:link-variant'}></ha-icon>
+                <span>Połącz z innymi pomieszczeniami</span>
+              </summary>
+              <div class="stratum-collapsible-body">
+                <ha-form
+                  .hass=${this.hass}
+                  .data=${room ?? { area_id: areaId }}
+                  .schema=${this._mergeSchemaFor(areaId)}
+                  .computeLabel=${this._computeRoomLabel}
+                  .computeHelper=${this._computeRoomHelper}
+                  @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
+                    this._onFieldChange(areaId, ev)}
+                ></ha-form>
+              </div>
+            </details>
+            ${this._renderFieldEntitiesPanel(areaId, room)}
+            ${this._renderStyleOverridePanel(areaId, room)}
           </div>
-          <p class="detail-group-hint">
-            Domyślnie grupy świateł obszaru (a bez grup — wszystkie encje).
-            Tu masz pełną kontrolę: widoczność okiem, nazwa, ikona, kolejność,
-            separatory poziome i światła spoza obszaru.
-          </p>
-          <stratum-lights-editor
-            .hass=${this.hass}
-            .areaId=${areaId}
-            .config=${room?.lights ?? { items: [] }}
-            @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
-              this._onLightsChanged(areaId, ev)}
-          ></stratum-lights-editor>
-        </div>
-
-        <div class="detail-group">
-          <div class="detail-group-head">
-            <ha-icon .icon=${'mdi:view-dashboard-outline'}></ha-icon>
-            <span>Sekcje popupu</span>
-          </div>
-          <p class="detail-group-hint">
-            Kolejność i zawartość sekcji popupu (światła, rolety, media…).
-            Puste = auto-discover z encji obszaru.
-          </p>
-          <stratum-sections-editor
-            .hass=${this.hass}
-            .sections=${this._normalizedRoomSections(room)}
-            @sections-changed=${(ev: CustomEvent<{ sections: RoomSectionConfig[] }>) =>
-              this._onSectionsChanged(areaId, ev)}
-          ></stratum-sections-editor>
-        </div>
-
-        <div class="detail-group">
-          <div class="detail-group-head">
-            <ha-icon .icon=${'mdi:cog-outline'}></ha-icon>
-            <span>Zaawansowane</span>
-          </div>
-          <details class="stratum-collapsible">
-            <summary>
-              <ha-icon .icon=${'mdi:link-variant'}></ha-icon>
-              <span>Połącz z innymi pomieszczeniami</span>
-            </summary>
-            <div class="stratum-collapsible-body">
-              <ha-form
-                .hass=${this.hass}
-                .data=${room ?? { area_id: areaId }}
-                .schema=${this._mergeSchemaFor(areaId)}
-                .computeLabel=${this._computeRoomLabel}
-                .computeHelper=${this._computeRoomHelper}
-                @value-changed=${(ev: CustomEvent<{ value: Partial<RoomConfig> }>) =>
-                  this._onFieldChange(areaId, ev)}
-              ></ha-form>
-            </div>
-          </details>
-          ${this._renderFieldEntitiesPanel(areaId, room)}
-          ${this._renderStyleOverridePanel(areaId, room)}
-        </div>
+        </details>
       </div>
     `;
   }
@@ -830,6 +979,72 @@ export class StratumCardRoomsEditor extends LitElement {
         margin: 0 0 14px;
         font-size: 12px;
         color: var(--secondary-text-color);
+      }
+
+      details.popup-group {
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
+        border-radius: 12px;
+        margin-bottom: 10px;
+        background: var(--stratum-editor-group-bg, rgba(255, 255, 255, 0.02));
+        overflow: hidden;
+      }
+
+      details.popup-group > summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 12px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--secondary-text-color);
+        user-select: none;
+      }
+
+      details.popup-group > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .popup-group summary .g-icon {
+        --mdc-icon-size: 16px;
+        color: var(--primary-color, #ff9b42);
+        flex-shrink: 0;
+      }
+
+      .popup-group summary .g-title {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .popup-group summary .g-actions {
+        margin-left: auto;
+        display: flex;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+
+      .popup-group summary .g-chevron {
+        --mdc-icon-size: 18px;
+        flex-shrink: 0;
+        transition: transform 0.15s ease;
+      }
+
+      details.popup-group[open] > summary .g-chevron {
+        transform: rotate(180deg);
+      }
+
+      .popup-group .g-body {
+        padding: 0 12px 12px;
+      }
+
+      .popup-group.hidden-group summary .g-title,
+      .popup-group.hidden-group summary .g-icon {
+        opacity: 0.4;
       }
 
       .detail-group {
