@@ -234,6 +234,7 @@ export class StratumCardRoomsEditor extends LitElement {
     if (!merged.lights || (merged.lights.items ?? []).length === 0) {
       delete merged.lights;
     }
+    if (!merged.light_auto_entity) delete merged.light_auto_entity;
     if (!merged.light_singles || (merged.light_singles.items ?? []).length === 0) {
       delete merged.light_singles;
     }
@@ -595,6 +596,33 @@ export class StratumCardRoomsEditor extends LitElement {
             @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
               this._onLightsChanged(areaId, ev)}
           ></stratum-lights-editor>
+          <ha-form
+            .hass=${this.hass}
+            .data=${{ light_auto_entity: room?.light_auto_entity ?? '' }}
+            .schema=${[
+              {
+                name: 'light_auto_entity',
+                selector: {
+                  entity: {
+                    filter: [
+                      { domain: 'input_boolean' },
+                      { domain: 'switch' },
+                      { domain: 'automation' },
+                    ],
+                  },
+                },
+              },
+            ]}
+            .computeLabel=${() => 'Pomocnik auto-świateł (badge „Auto")'}
+            .computeHelper=${() =>
+              'Badge „Auto" w nagłówku bloku świateł popupu — klik przełącza pomocnika (jak w Twoim dashboardzie).'}
+            @value-changed=${(ev: CustomEvent<{ value: { light_auto_entity?: string } }>) => {
+              ev.stopPropagation();
+              this._updateRoom(areaId, {
+                light_auto_entity: ev.detail.value.light_auto_entity || undefined,
+              });
+            }}
+          ></ha-form>
         `;
       case 'light_entities':
         return html`
