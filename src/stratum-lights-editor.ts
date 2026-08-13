@@ -14,7 +14,7 @@ import type {
   RoomLightItemConfig,
   RoomLightsConfig,
 } from './types.js';
-import { getEntitiesInArea, filterByDomain } from './area-entities.js';
+import { getEntitiesInArea, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 const SEPARATOR_FIELDS_SCHEMA = [{ name: 'label', selector: { text: {} } }];
@@ -130,7 +130,10 @@ export class StratumLightsEditor extends LitElement {
         entries.push(e);
       }
     }
-    const all = filterByDomain(entries, this._meta.domain);
+    const all = filterDisplayable(
+      this.hass,
+      filterByDomain(entries, this._meta.domain),
+    );
     const filtered =
       this.source === 'light_groups'
         ? all.filter((e) => this._isGroupEntity(e.entity_id))
