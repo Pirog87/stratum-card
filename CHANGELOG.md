@@ -4,6 +4,22 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.59.0] — 2026-08-13
+
+### Added (jeden schemat edycji dla wszystkich bloków popupu)
+- **Encje światła / Rolety / Media mają teraz TEN SAM edytor list co Grupy
+  świateł**: pełna auto-wykryta lista z obszaru + per pozycja oko
+  (ukryj/pokaż), nazwa, ikona, **akcja kliknięcia** (override), kolejność
+  strzałkami, usuwanie, **separatory poziome** z podpisem i dodawanie
+  encji **spoza obszaru**. Pierwsza zmiana utrwala listę; „Przywróć
+  auto-wykrywanie" cofa. (Sceny i Chipy miały już swoje pełne edytory.)
+- **Popup renderuje jawne listy**: rolety z paskiem master + kafle wg
+  configu; media — pierwszy widoczny (albo wskazany) jako duży player,
+  reszta zwinięta; encje światła jako otwarta sekcja wg configu.
+- **`tap_action` per pozycja listy** — nadpisuje klik w kafel (toggle);
+  klik w ikonę nadal otwiera more-info. Nowe pola YAML per pokój:
+  `light_singles`, `covers_list`, `media_list` (format jak `lights`).
+
 ## [1.58.0] — 2026-08-13
 
 ### Fixed (podział bloków świateł wg intencji usera)

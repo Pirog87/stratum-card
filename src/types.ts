@@ -179,8 +179,14 @@ export interface StratumRoomCardConfig {
   sections?: RoomSectionSpec[];
   /** Pasek scen — zastępuje auto-sekcję scen, pełna kontrola layoutu. */
   scenes?: SceneBarConfig;
-  /** Jawna lista świateł sekcji lights — zastępuje auto-discovery. */
+  /** Jawna lista GRUP świateł — zastępuje auto-discovery bloku grup. */
   lights?: RoomLightsConfig;
+  /** Jawna lista pojedynczych świateł (blok „Encje światła"). */
+  light_singles?: RoomEntityListConfig;
+  /** Jawna lista rolet (blok „Rolety"). */
+  covers_list?: RoomEntityListConfig;
+  /** Jawna lista odtwarzaczy (blok „Media"). */
+  media_list?: RoomEntityListConfig;
   /** Kolejność i widoczność bloków popupu. Puste = domyślna. */
   popup_order?: RoomPopupOrderItem[];
   /** Encje spoza obszaru doliczane do bloków popupu. */
@@ -212,7 +218,7 @@ export interface SceneConfig {
  * pojedyncza) ALBO separator poziomy.
  */
 export interface RoomLightItemConfig {
-  /** Encja `light.*`. Pomijane gdy `separator: true`. */
+  /** Encja (domena zależna od bloku). Pomijane gdy `separator: true`. */
   entity?: string;
   /** Override nazwy na kaflu. */
   name?: string;
@@ -224,7 +230,13 @@ export interface RoomLightItemConfig {
   separator?: boolean;
   /** Opcjonalny podpis separatora. */
   label?: string;
+  /** Override akcji kliknięcia kafla (domyślnie toggle / more-info). */
+  tap_action?: TapActionConfig;
 }
+
+/** Alias — ten sam format list encji dla wszystkich bloków popupu. */
+export type RoomEntityItemConfig = RoomLightItemConfig;
+export type RoomEntityListConfig = RoomLightsConfig;
 
 /**
  * Jawna lista świateł popupu pomieszczenia. Gdy ustawiona (items niepuste),
@@ -547,8 +559,17 @@ export interface RoomConfig {
   /** Pasek scen w popup pokoju. */
   scenes?: SceneBarConfig;
 
-  /** Jawna lista świateł popupu (widoczność, nazwy, kolejność, separatory). */
+  /** Jawna lista GRUP świateł popupu (widoczność, nazwy, kolejność, separatory). */
   lights?: RoomLightsConfig;
+
+  /** Jawna lista pojedynczych świateł popupu. */
+  light_singles?: RoomEntityListConfig;
+
+  /** Jawna lista rolet popupu. */
+  covers_list?: RoomEntityListConfig;
+
+  /** Jawna lista odtwarzaczy popupu. */
+  media_list?: RoomEntityListConfig;
 
   /** Kolejność i widoczność bloków popupu tego pokoju. */
   popup_order?: RoomPopupOrderItem[];

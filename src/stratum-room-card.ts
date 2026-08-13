@@ -25,7 +25,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.21.0';
+const VERSION = '1.22.0';
 
 interface SummaryDatum {
   label: string;
@@ -316,22 +316,30 @@ export class StratumRoomCard extends LitElement {
           out.push(this._renderLightsRest(findSec('lights'), entries));
           break;
         case 'covers':
-          out.push(
-            this._renderSection(
-              findSec('covers'),
-              entries,
-              this._config?.popup_extra?.covers,
-            ),
-          );
+          if ((this._config?.covers_list?.items?.length ?? 0) > 0) {
+            out.push(this._renderCoversExplicit(findSec('covers')));
+          } else {
+            out.push(
+              this._renderSection(
+                findSec('covers'),
+                entries,
+                this._config?.popup_extra?.covers,
+              ),
+            );
+          }
           break;
         case 'media':
-          out.push(
-            this._renderSection(
-              findSec('media'),
-              entries,
-              this._config?.popup_extra?.media,
-            ),
-          );
+          if ((this._config?.media_list?.items?.length ?? 0) > 0) {
+            out.push(this._renderMediaExplicit(findSec('media')));
+          } else {
+            out.push(
+              this._renderSection(
+                findSec('media'),
+                entries,
+                this._config?.popup_extra?.media,
+              ),
+            );
+          }
           break;
         case 'extra':
           for (const s of sections) {
@@ -429,6 +437,30 @@ export class StratumRoomCard extends LitElement {
     section: RoomSectionConfig,
     entries: HassEntityRegistryEntry[],
   ): TemplateResult {
+    // Jawna lista pojedynczych świateł — otwarta sekcja wg configu.
+    if ((this._config?.light_singles?.items?.length ?? 0) > 0) {
+      const all = this._visibleListItems(this._config?.light_singles);
+      const count = all.filter((i) => !i.separator && i.entity).length;
+      if (count === 0) return html``;
+      const mode = section.mode ?? 'rail';
+      const layout =
+        section.columns === 1
+          ? 'grid-1'
+          : section.columns === 3
+          ? 'grid-3'
+          : 'grid-2';
+      return html`
+        <div class="section" part="section">
+          <div class="section-header" part="section-header">
+            <ha-icon .icon=${'mdi:lightbulb-outline'}></ha-icon>
+            <span>Encje światła</span>
+            <span class="count">${count}</span>
+          </div>
+          ${this._renderListBlocks(all, mode, layout)}
+        </div>
+      `;
+    }
+
     const items = this._lightItems(section, entries);
     const singles = items.filter((e) => !this._isLightGroup(e.entity_id));
     if (singles.length === 0) return html``;
@@ -668,20 +700,24 @@ export class StratumRoomCard extends LitElement {
     `;
   }
 
-  /**
-   * Sekcja lights z jawnej listy (konfiguracja pokoju): kolejność jak
-   * w configu, ukryte pomijamy, separatory przecinają siatkę kafli.
-   */
-  private _renderLightsExplicit(
-    section: RoomSectionConfig,
-    title: string,
-    iconName: string,
-  ): TemplateResult {
-    const all = (this._config?.lights?.items ?? []).filter((i) => !i.hidden);
-    const mode = section.mode ?? 'rail';
-    const layout =
-      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
+  /** Widoczne pozycje jawnej listy (bez ukrytych, encje muszą istnieć). */
+  private _visibleListItems(
+    cfg: import('./types.js').RoomLightsConfig | undefined,
+  ): import('./types.js').RoomLightItemConfig[] {
+    return (cfg?.items ?? []).filter(
+      (i) =>
+        !i.hidden &&
+        (i.separator || (i.entity && Boolean(this.hass?.states?.[i.entity]))),
+    );
+  }
 
+  /** Kafle jawnej listy: separatory przecinają siatkę, overridy per pozycja. */
+  private _renderListBlocks(
+    items: import('./types.js').RoomLightItemConfig[],
+    mode: string,
+    layout: string,
+    cardTemplate?: Record<string, unknown>,
+  ): TemplateResult[] {
     const blocks: TemplateResult[] = [];
     let run: import('./types.js').RoomLightItemConfig[] = [];
     const flush = (): void => {
@@ -693,13 +729,14 @@ export class StratumRoomCard extends LitElement {
           .mode=${mode}
           .nameOverride=${i.name}
           .iconOverride=${i.icon}
-          .cardTemplate=${section.card_template}
+          .tapAction=${i.tap_action}
+          .cardTemplate=${cardTemplate}
         ></stratum-room-tile>`,
       );
       blocks.push(html`<div class="tiles ${layout}">${tiles}</div>`);
       run = [];
     };
-    for (const item of all) {
+    for (const item of items) {
       if (item.separator) {
         flush();
         blocks.push(
@@ -712,8 +749,24 @@ export class StratumRoomCard extends LitElement {
       }
     }
     flush();
+    return blocks;
+  }
 
+  /**
+   * Sekcja z jawnej listy (konfiguracja pokoju): kolejność jak w configu,
+   * ukryte pomijamy, separatory przecinają siatkę kafli.
+   */
+  private _renderLightsExplicit(
+    section: RoomSectionConfig,
+    title: string,
+    iconName: string,
+  ): TemplateResult {
+    const all = this._visibleListItems(this._config?.lights);
+    const mode = section.mode ?? 'rail';
+    const layout =
+      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
     const count = all.filter((i) => !i.separator && i.entity).length;
+    if (count === 0) return html``;
     return html`
       <div class="section" part="section">
         <div class="section-header" part="section-header">
@@ -721,7 +774,78 @@ export class StratumRoomCard extends LitElement {
           <span>${title}</span>
           <span class="count">${count}</span>
         </div>
-        ${blocks}
+        ${this._renderListBlocks(all, mode, layout, section.card_template)}
+      </div>
+    `;
+  }
+
+  /** Jawna lista rolet: pasek master + kafle wg configu. */
+  private _renderCoversExplicit(section: RoomSectionConfig): TemplateResult {
+    const all = this._visibleListItems(this._config?.covers_list);
+    const entityItems = all.filter((i) => !i.separator && i.entity);
+    if (entityItems.length === 0) return html``;
+    const mode = section.mode ?? 'tile';
+    const layout =
+      section.columns === 2 ? 'grid-2' : section.columns === 3 ? 'grid-3' : 'grid-1';
+    const entries = entityItems.map(
+      (i) =>
+        this.hass!.entities?.[i.entity!] ??
+        ({ entity_id: i.entity! } as HassEntityRegistryEntry),
+    );
+    return html`
+      <div class="section" part="section">
+        <div class="section-header" part="section-header">
+          <ha-icon .icon=${section.icon ?? SECTION_ICON['covers']}></ha-icon>
+          <span>${section.title ?? SECTION_LABEL['covers']}</span>
+          <span class="count">${entityItems.length}</span>
+        </div>
+        ${this._renderCoversMaster(section, entries)}
+        ${this._renderListBlocks(all, mode, layout, section.card_template)}
+      </div>
+    `;
+  }
+
+  /** Jawna lista mediów: pierwszy widoczny (lub wskazany) jako duży player. */
+  private _renderMediaExplicit(section: RoomSectionConfig): TemplateResult {
+    const all = this._visibleListItems(this._config?.media_list);
+    const entityItems = all.filter((i) => !i.separator && i.entity);
+    if (entityItems.length === 0) return html``;
+    const featured =
+      entityItems.find((i) => i.entity === section.entity) ?? entityItems[0]!;
+    const rest = all.filter((i) => i !== featured);
+    const restCount = rest.filter((i) => !i.separator && i.entity).length;
+    const restKey = 'media:list';
+    const restOpen = this._openRest.has(restKey);
+    return html`
+      <div class="section" part="section">
+        <div class="section-header" part="section-header">
+          <ha-icon .icon=${section.icon ?? SECTION_ICON['media']}></ha-icon>
+          <span>${section.title ?? SECTION_LABEL['media']}</span>
+          ${restCount > 0
+            ? html`<span class="count">${entityItems.length}</span>`
+            : nothing}
+        </div>
+        <stratum-room-tile
+          .hass=${this.hass}
+          .entity=${featured.entity!}
+          .mode=${'player'}
+          .nameOverride=${featured.name}
+          .tapAction=${featured.tap_action}
+        ></stratum-room-tile>
+        ${restCount > 0
+          ? html`
+              <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
+                <ha-icon
+                  .icon=${restOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
+                ></ha-icon>
+                <span>Pozostałe odtwarzacze</span>
+                <span class="rest-count">${restCount}</span>
+              </button>
+              ${restOpen
+                ? html`${this._renderListBlocks(rest, 'tile', 'grid-1')}`
+                : nothing}
+            `
+          : nothing}
       </div>
     `;
   }
