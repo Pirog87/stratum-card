@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.61.0';
+const VERSION = '1.62.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -56,6 +56,7 @@ export class StratumCard extends LitElement {
     sections?: import('./types.js').RoomSectionSpec[];
     scenes?: import('./types.js').SceneBarConfig;
     lights?: import('./types.js').RoomLightsConfig;
+    light_auto_entity?: string;
     light_singles?: import('./types.js').RoomEntityListConfig;
     covers_list?: import('./types.js').RoomEntityListConfig;
     media_list?: import('./types.js').RoomEntityListConfig;
@@ -313,20 +314,20 @@ export class StratumCard extends LitElement {
     const chips = this._config?.chips ?? DEFAULT_CHIPS;
     const rendered: TemplateResult[] = [];
     for (const chip of chips) {
-      const { label, active } = evaluateChip(this.hass!, entries, chip, this._templates);
+      const value = evaluateChip(this.hass!, entries, chip, this._templates);
       // Domyślnie chipy są zawsze widoczne (show_when_zero true). User może
       // explicit wyłączyć ten toggle — wtedy chip znika gdy wartość 0 /
       // nieaktywny (typowy use-case: alarm tylko gdy coś się dzieje).
       const showWhenZero = chip.show_when_zero !== false;
-      if (!active && !showWhenZero) continue;
+      if (!value.active && !showWhenZero) continue;
       const tapSet = this._isTapActionSet(chip.tap_action);
       const listAvailable = this._chipSupportsList(chip);
       const clickable = tapSet || listAvailable;
       rendered.push(html`<stratum-card-chip
-        .icon=${resolveChipIcon(chip)}
-        .label=${label}
-        .active=${active}
-        .color=${resolveChipColor(chip)}
+        .icon=${chip.icon ?? value.icon ?? resolveChipIcon(chip)}
+        .label=${value.label}
+        .active=${value.active}
+        .color=${chip.color ?? value.color ?? resolveChipColor(chip)}
         .showWhenZero=${showWhenZero}
         .clickable=${clickable}
         @chip-tap=${() => this._onChipTap(chip)}
@@ -648,6 +649,7 @@ export class StratumCard extends LitElement {
       sections: this._popupRoom.sections,
       scenes: this._popupRoom.scenes,
       lights: this._popupRoom.lights,
+      light_auto_entity: this._popupRoom.light_auto_entity,
       light_singles: this._popupRoom.light_singles,
       covers_list: this._popupRoom.covers_list,
       media_list: this._popupRoom.media_list,
@@ -767,6 +769,7 @@ export class StratumCard extends LitElement {
             sections: room.sections,
             scenes: room.scenes,
             lights: room.lights,
+            light_auto_entity: room.light_auto_entity,
             light_singles: room.light_singles,
             covers_list: room.covers_list,
             media_list: room.media_list,
@@ -831,6 +834,7 @@ export class StratumCard extends LitElement {
       sections?: import('./types.js').RoomSectionSpec[];
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
+      light_auto_entity?: string;
       light_singles?: import('./types.js').RoomEntityListConfig;
       covers_list?: import('./types.js').RoomEntityListConfig;
       media_list?: import('./types.js').RoomEntityListConfig;
@@ -991,6 +995,7 @@ export class StratumCard extends LitElement {
       sections?: import('./types.js').RoomSectionSpec[];
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
+      light_auto_entity?: string;
       light_singles?: import('./types.js').RoomEntityListConfig;
       covers_list?: import('./types.js').RoomEntityListConfig;
       media_list?: import('./types.js').RoomEntityListConfig;
@@ -1059,6 +1064,7 @@ export class StratumCard extends LitElement {
       sections?: import('./types.js').RoomSectionSpec[];
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
+      light_auto_entity?: string;
       light_singles?: import('./types.js').RoomEntityListConfig;
       covers_list?: import('./types.js').RoomEntityListConfig;
       media_list?: import('./types.js').RoomEntityListConfig;
@@ -1073,6 +1079,7 @@ export class StratumCard extends LitElement {
       sections: overrides?.sections,
       scenes: overrides?.scenes,
       lights: overrides?.lights,
+      light_auto_entity: overrides?.light_auto_entity,
       light_singles: overrides?.light_singles,
       covers_list: overrides?.covers_list,
       media_list: overrides?.media_list,

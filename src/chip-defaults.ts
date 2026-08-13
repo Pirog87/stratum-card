@@ -41,6 +41,8 @@ const BUILTIN_ICON: Record<BuiltInChipType, string> = {
   co: 'mdi:molecule-co',
   problem: 'mdi:alert-circle-outline',
   battery_low: 'mdi:battery-alert-variant-outline',
+  temperature: 'mdi:thermometer',
+  humidity: 'mdi:water-percent',
 };
 
 const BUILTIN_COLOR: Record<BuiltInChipType, string> = {
@@ -55,6 +57,8 @@ const BUILTIN_COLOR: Record<BuiltInChipType, string> = {
   co: 'var(--stratum-chip-co-color, #d84315)',
   problem: 'var(--stratum-chip-problem-color, #ff9800)',
   battery_low: 'var(--stratum-chip-battery-color, #ff5252)',
+  temperature: 'var(--stratum-chip-temperature-color, #ffc107)',
+  humidity: 'var(--stratum-chip-humidity-color, #42a5f5)',
 };
 
 const BUILTIN_TYPES: BuiltInChipType[] = [
@@ -69,6 +73,8 @@ const BUILTIN_TYPES: BuiltInChipType[] = [
   'co',
   'problem',
   'battery_low',
+  'temperature',
+  'humidity',
 ];
 
 function isBuiltin(t: string): t is BuiltInChipType {
@@ -113,6 +119,83 @@ export function resolveChipColor(chip: ChipConfig): string {
 export interface ChipValue {
   label: string;
   active: boolean;
+  /** Dynamiczna ikona (np. thermometer-high przy 25°C) — wygrywa nad configiem. */
+  icon?: string;
+  /** Dynamiczny kolor (skala wartości) — wygrywa nad configiem. */
+  color?: string;
+}
+
+/** Czas od `iso` w stylu mushroom: 16s / 5min / 2h / 1d. */
+function ago(iso: string): string {
+  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return `${Math.floor(seconds)}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+}
+
+/** Wariant licznika: czas od ostatniej zmiany najświeższego czujnika. */
+function lastChangedValue(
+  hass: HomeAssistant,
+  entries: HassEntityRegistryEntry[],
+): ChipValue {
+  let newest: string | undefined;
+  let anyOn = false;
+  for (const entry of entries) {
+    const st = hass.states?.[entry.entity_id];
+    if (!st) continue;
+    if (st.state === 'on') anyOn = true;
+    if (!newest || st.last_changed > newest) newest = st.last_changed;
+  }
+  if (!newest) return { label: '—', active: false };
+  return { label: ago(newest), active: anyOn };
+}
+
+/** Chip temperatury/wilgotności: wartość + dynamiczna ikona i kolor (skala). */
+function climateChipValue(
+  hass: HomeAssistant,
+  entries: HassEntityRegistryEntry[],
+  chip: { entity?: string },
+  kind: 'temperature' | 'humidity',
+): ChipValue {
+  const id =
+    chip.entity ??
+    entries.find(
+      (e) =>
+        e.entity_id.startsWith('sensor.') &&
+        hass.states?.[e.entity_id]?.attributes?.device_class === kind,
+    )?.entity_id;
+  const st = id ? hass.states?.[id] : undefined;
+  const v = st ? parseFloat(st.state) : NaN;
+  if (!st || Number.isNaN(v)) return { label: '—', active: false };
+  const unit =
+    (st.attributes?.unit_of_measurement as string | undefined) ??
+    (kind === 'temperature' ? '°C' : '%');
+  const label = `${v.toFixed(1)}${unit.startsWith('%') ? '%' : unit}`;
+  if (kind === 'temperature') {
+    const icon =
+      v < 18 ? 'mdi:thermometer-low'
+      : v < 22 ? 'mdi:thermometer'
+      : v < 26 ? 'mdi:thermometer-high'
+      : 'mdi:thermometer-alert';
+    const color =
+      v < 18 ? '#2196f3'
+      : v < 20 ? '#03a9f4'
+      : v < 22 ? '#4caf50'
+      : v < 24 ? '#ffc107'
+      : v < 26 ? '#ff9800'
+      : '#ff5722';
+    return { label, active: true, icon, color };
+  }
+  const icon =
+    v < 30 ? 'mdi:water-off' : v < 60 ? 'mdi:water-percent' : 'mdi:water-alert';
+  const color =
+    v < 30 ? '#ffc107'
+    : v < 40 ? '#03a9f4'
+    : v < 60 ? '#2196f3'
+    : v < 70 ? '#3f51b5'
+    : '#673ab7';
+  return { label, active: true, icon, color };
 }
 
 /** Liczy/resolve wartość chipu zależnie od typu. */
@@ -124,7 +207,7 @@ export function evaluateChip(
 ): ChipValue {
   switch (chip.type) {
     case 'lights':
-      return countedValue(hass, filterByDomain(entries, 'light'));
+      return countedValue(hass, filterByDomain(entries, 'light'), chip);
     case 'motion': {
       // Spójnie z row/tile: motion chip obejmuje też `device_class: occupancy`
       // (czujki presence mmWave).
@@ -132,10 +215,10 @@ export function evaluateChip(
         filterBinarySensorDeviceClass(hass, entries, 'motion'),
         filterBinarySensorDeviceClass(hass, entries, 'occupancy'),
       ]);
-      return countedValue(hass, merged);
+      return countedValue(hass, merged, chip);
     }
     case 'occupancy':
-      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'occupancy'));
+      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'occupancy'), chip);
     case 'windows': {
       // `device_class: window` albo generyczne `opening` (wiele Aqara /
       // Xiaomi / Zigbee sensorów raportuje jako `opening`).
@@ -177,7 +260,11 @@ export function evaluateChip(
     }
     case 'battery_low':
       // `device_class: battery` + state 'on' = low (konwencja HA).
-      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'battery'));
+      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'battery'), chip);
+    case 'temperature':
+      return climateChipValue(hass, entries, chip, 'temperature');
+    case 'humidity':
+      return climateChipValue(hass, entries, chip, 'humidity');
     case 'filter':
       return filterValue(hass, entries, chip.domain, chip.device_class, chip.state ?? 'on');
     case 'entity':
@@ -187,7 +274,12 @@ export function evaluateChip(
   }
 }
 
-function countedValue(hass: HomeAssistant, entries: HassEntityRegistryEntry[]): ChipValue {
+function countedValue(
+  hass: HomeAssistant,
+  entries: HassEntityRegistryEntry[],
+  chip?: { show_last_changed?: boolean },
+): ChipValue {
+  if (chip?.show_last_changed) return lastChangedValue(hass, entries);
   let n = 0;
   for (const entry of entries) {
     if (hass.states?.[entry.entity_id]?.state === 'on') n++;

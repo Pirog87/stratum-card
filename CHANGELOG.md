@@ -4,6 +4,25 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.62.0] — 2026-08-13
+
+### Added (chipy w stylu mushroom + badge Auto — z YAML usera)
+- **Chip obecności z czasem od ostatniej zmiany** („16s" / „5min" / „2h" /
+  „1d" zamiast licznika) — `show_last_changed: true`, domyślnie włączone
+  dla chipa motion w popupie pomieszczenia. Bursztynowy gdy ruch aktywny.
+- **Nowe wbudowane chipy `temperature` i `humidity`** z dynamiczną ikoną
+  i skalą kolorów jak w mushroom-template usera: temperatura
+  (thermometer-low/high/alert; niebieski → zielony → bursztyn → pomarańcz →
+  czerwień), wilgotność (water-off/percent/alert; bursztyn → błękit →
+  niebieski → indygo → fiolet). Auto-discovery sensora po device_class
+  albo wskazanie `entity`. Domyślne chipy popupu używają nowych typów;
+  dostępne też w edytorze chipów („Temperatura", „Wilgotność").
+- **Badge „Auto" przy Światłach popupu** — pole „Pomocnik auto-świateł"
+  w grupie „Grupy świateł pomieszczenia" (input_boolean / switch /
+  automation): badge w nagłówku bloku, czerwony gdy włączony, klik =
+  toggle (jak `input_boolean.pomocnik_*_light_auto` w dashboardzie usera).
+  YAML: `light_auto_entity` per pokój.
+
 ## [1.61.0] — 2026-08-13
 
 ### Changed (kafle popupu jak w bubble-dashboardzie usera)

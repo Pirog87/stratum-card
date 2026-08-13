@@ -181,6 +181,8 @@ export interface StratumRoomCardConfig {
   scenes?: SceneBarConfig;
   /** Jawna lista GRUP świateł — zastępuje auto-discovery bloku grup. */
   lights?: RoomLightsConfig;
+  /** Pomocnik auto-świateł — badge „Auto" w nagłówku bloku świateł. */
+  light_auto_entity?: string;
   /** Jawna lista pojedynczych świateł (blok „Encje światła"). */
   light_singles?: RoomEntityListConfig;
   /** Jawna lista rolet (blok „Rolety"). */
@@ -429,7 +431,9 @@ export type BuiltInChipType =
   | 'gas'
   | 'co'
   | 'problem'
-  | 'battery_low';
+  | 'battery_low'
+  | 'temperature'
+  | 'humidity';
 
 /** Wspólne pola dla wszystkich typów chipów. */
 interface BaseChipConfig {
@@ -452,6 +456,17 @@ interface BaseChipConfig {
 
 export interface BuiltInChipConfig extends BaseChipConfig {
   type: BuiltInChipType;
+  /**
+   * Zamiast licznika pokaż czas od ostatniej zmiany stanu najświeższego
+   * czujnika (16s / 5min / 2h / 1d) — styl mushroom. Sensowne dla
+   * motion/occupancy, działa dla każdego typu binarnego.
+   */
+  show_last_changed?: boolean;
+  /**
+   * Tylko `temperature` / `humidity`: konkretna encja sensora. Puste =
+   * auto-discovery po device_class z obszaru.
+   */
+  entity?: string;
 }
 
 /** Chip pokazujący stan jednej encji albo wartość atrybutu. */
@@ -561,6 +576,12 @@ export interface RoomConfig {
 
   /** Jawna lista GRUP świateł popupu (widoczność, nazwy, kolejność, separatory). */
   lights?: RoomLightsConfig;
+
+  /**
+   * Pomocnik automatyzacji świateł (input_boolean/switch/automation) —
+   * badge „Auto" w nagłówku bloku świateł popupu, klik = toggle.
+   */
+  light_auto_entity?: string;
 
   /** Jawna lista pojedynczych świateł popupu. */
   light_singles?: RoomEntityListConfig;

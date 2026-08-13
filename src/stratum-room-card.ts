@@ -46,7 +46,8 @@ function autoRoomChips(
 ): ChipConfig[] {
   const chips: ChipConfig[] = [
     { type: 'lights' },
-    { type: 'motion' },
+    // Styl mushroom: czas od ostatniego ruchu (16s / 5min / 2h) zamiast licznika.
+    { type: 'motion', show_last_changed: true },
     { type: 'windows', show_when_zero: false },
     { type: 'doors', show_when_zero: false },
     { type: 'leak', show_when_zero: false },
@@ -54,29 +55,11 @@ function autoRoomChips(
   const temp = entries.find(
     (e) => hass.states?.[e.entity_id]?.attributes?.device_class === 'temperature',
   );
-  if (temp) {
-    chips.push({
-      type: 'entity',
-      entity: temp.entity_id,
-      icon: 'mdi:thermometer',
-      suffix: ' °C',
-      color: 'amber',
-      show_when_zero: true,
-    });
-  }
+  if (temp) chips.push({ type: 'temperature' });
   const hum = entries.find(
     (e) => hass.states?.[e.entity_id]?.attributes?.device_class === 'humidity',
   );
-  if (hum) {
-    chips.push({
-      type: 'entity',
-      entity: hum.entity_id,
-      icon: 'mdi:water-percent',
-      suffix: ' %',
-      color: 'blue',
-      show_when_zero: true,
-    });
-  }
+  if (hum) chips.push({ type: 'humidity' });
   return chips;
 }
 
@@ -221,14 +204,14 @@ export class StratumRoomCard extends LitElement {
     const chips = this._config?.chips ?? autoRoomChips(this.hass, entries);
     const rendered: TemplateResult[] = [];
     for (const chip of chips) {
-      const { label, active } = evaluateChip(this.hass!, entries, chip, this._templates);
+      const value = evaluateChip(this.hass!, entries, chip, this._templates);
       const showWhenZero = chip.show_when_zero !== false;
-      if (!active && !showWhenZero) continue;
+      if (!value.active && !showWhenZero) continue;
       rendered.push(html`<stratum-card-chip
-        .icon=${resolveChipIcon(chip)}
-        .label=${label}
-        .active=${active}
-        .color=${resolveChipColor(chip)}
+        .icon=${chip.icon ?? value.icon ?? resolveChipIcon(chip)}
+        .label=${value.label}
+        .active=${value.active}
+        .color=${chip.color ?? value.color ?? resolveChipColor(chip)}
         .showWhenZero=${showWhenZero}
       ></stratum-card-chip>`);
     }
@@ -386,6 +369,27 @@ export class StratumRoomCard extends LitElement {
     return Array.isArray(this.hass?.states?.[id]?.attributes?.entity_id);
   }
 
+  /** Badge „Auto" w nagłówku świateł — toggle pomocnika automatyzacji. */
+  private _renderAutoBadge(): TemplateResult | typeof nothing {
+    const id = this._config?.light_auto_entity;
+    const st = id ? this.hass?.states?.[id] : undefined;
+    if (!id || !st) return nothing;
+    const on = st.state === 'on';
+    return html`
+      <button
+        class="auto-badge ${on ? 'on' : 'off'}"
+        title=${on ? 'Automatyka świateł włączona — kliknij aby wyłączyć' : 'Automatyka świateł wyłączona — kliknij aby włączyć'}
+        @click=${(ev: Event) => {
+          ev.stopPropagation();
+          void this.hass?.callService('homeassistant', 'toggle', { entity_id: id });
+        }}
+      >
+        <ha-icon .icon=${'mdi:lightbulb-auto'}></ha-icon>
+        Auto
+      </button>
+    `;
+  }
+
   /**
    * Blok „Grupy świateł": WYŁĄCZNIE pomocniki „Grupa światła" (jawna lista
    * z configu ma pierwszeństwo). Brak grup = blok się nie renderuje —
@@ -412,6 +416,7 @@ export class StratumRoomCard extends LitElement {
         <div class="section-header" part="section-header">
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
+          ${this._renderAutoBadge()}
           <span class="count">${groups.length}</span>
         </div>
         <div class="tiles ${layout}">
@@ -772,6 +777,7 @@ export class StratumRoomCard extends LitElement {
         <div class="section-header" part="section-header">
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
+          ${this._renderAutoBadge()}
           <span class="count">${count}</span>
         </div>
         ${this._renderListBlocks(all, mode, layout, section.card_template)}
@@ -1442,6 +1448,40 @@ export class StratumRoomCard extends LitElement {
       padding: 20px;
       text-align: center;
       color: var(--secondary-text-color);
+    }
+
+    .auto-badge {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
+      color: var(--secondary-text-color);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: none;
+      letter-spacing: 0;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .auto-badge ha-icon {
+      --mdc-icon-size: 14px;
+    }
+
+    .auto-badge.on {
+      color: var(--stratum-auto-badge-color, #ef5350);
+      border-color: color-mix(in srgb, var(--stratum-auto-badge-color, #ef5350) 50%, transparent);
+      background: color-mix(in srgb, var(--stratum-auto-badge-color, #ef5350) 14%, transparent);
+    }
+
+    /* Badge zajmuje auto-margines — licznik przestaje go potrzebować. */
+    .section-header .auto-badge + .count {
+      margin-left: 8px;
     }
 
     .lights-sep {

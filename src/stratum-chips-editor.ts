@@ -33,6 +33,8 @@ const QUICK_PICKS: ChipQuickPick[] = [
   { type: 'co', label: 'Tlenek węgla', icon: 'mdi:molecule-co', builtin: 'co' },
   { type: 'problem', label: 'Problemy', icon: 'mdi:alert-circle-outline', builtin: 'problem' },
   { type: 'battery_low', label: 'Słabe baterie', icon: 'mdi:battery-alert-variant-outline', builtin: 'battery_low' },
+  { type: 'temperature', label: 'Temperatura', icon: 'mdi:thermometer', builtin: 'temperature' },
+  { type: 'humidity', label: 'Wilgotność', icon: 'mdi:water-percent', builtin: 'humidity' },
   { type: 'entity', label: 'Encja', icon: 'mdi:pencil-outline' },
   { type: 'filter', label: 'Filtr', icon: 'mdi:filter-variant' },
   { type: 'template', label: 'Template', icon: 'mdi:code-braces' },
