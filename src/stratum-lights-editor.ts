@@ -80,6 +80,9 @@ export class StratumLightsEditor extends LitElement {
   /** Obszar do auto-wykrywania encji. */
   @property({ type: String, attribute: 'area-id' }) public areaId = '';
 
+  /** Dodatkowe obszary (merge_with) — ich encje też trafiają do auto-listy. */
+  @property({ attribute: false }) public mergeWith: string[] = [];
+
   /** Co wykrywamy: grupy świateł / pojedyncze światła / rolety / media. */
   @property({ type: String }) public source: EntityListSource = 'light_groups';
 
@@ -115,13 +118,19 @@ export class StratumLightsEditor extends LitElement {
     return Array.isArray(this.hass?.states?.[id]?.attributes?.entity_id);
   }
 
-  /** Auto-lista wg źródła. */
+  /** Auto-lista wg źródła — ze wszystkich połączonych obszarów. */
   private _autoItems(): RoomLightItemConfig[] {
     if (!this.hass || !this.areaId) return [];
-    const all = filterByDomain(
-      getEntitiesInArea(this.hass, this.areaId),
-      this._meta.domain,
-    );
+    const seen = new Set<string>();
+    const entries = [];
+    for (const id of [this.areaId, ...this.mergeWith]) {
+      for (const e of getEntitiesInArea(this.hass, id)) {
+        if (seen.has(e.entity_id)) continue;
+        seen.add(e.entity_id);
+        entries.push(e);
+      }
+    }
+    const all = filterByDomain(entries, this._meta.domain);
     const filtered =
       this.source === 'light_groups'
         ? all.filter((e) => this._isGroupEntity(e.entity_id))
