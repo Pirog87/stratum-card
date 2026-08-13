@@ -9,12 +9,14 @@ import type {
   ChipConfig,
   HassEntityRegistryEntry,
   HomeAssistant,
+  RoomPopupOrderItem,
   RoomSectionConfig,
   RoomSectionSpec,
   RoomSectionType,
   StratumRoomCardConfig,
   SummaryField,
 } from './types.js';
+import { DEFAULT_POPUP_ORDER } from './types.js';
 import { getEntitiesInArea, filterByDomain, filterBinarySensorDeviceClass } from './area-entities.js';
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
@@ -23,7 +25,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.19.0';
+const VERSION = '1.20.0';
 
 interface SummaryDatum {
   label: string;
@@ -245,12 +247,9 @@ export class StratumRoomCard extends LitElement {
       (s) => !s.hidden,
     );
 
-    // Explicit scenes config zastępuje sekcję scenes (pasek scen is in body top).
+    // Explicit scenes config zastępuje sekcję scenes.
     const hasExplicitScenes =
       this._config.scenes && (this._config.scenes.items ?? []).length > 0;
-    const effectiveSections = hasExplicitScenes
-      ? sections.filter((s) => s.type !== 'scenes')
-      : sections;
 
     return html`
       <ha-card part="card">
@@ -260,19 +259,210 @@ export class StratumRoomCard extends LitElement {
           <div class="chips" part="chips">${this._renderChips(entries)}</div>
         </div>
         <div class="body" part="body">
-          ${hasExplicitScenes
-            ? html`<stratum-scene-bar
-                .hass=${this.hass}
-                .config=${this._config.scenes}
-              ></stratum-scene-bar>`
-            : null}
-          ${effectiveSections.length === 0
+          ${sections.length === 0 && !hasExplicitScenes
             ? html`<div class="placeholder">
                 Brak encji do wyświetlenia — sprawdź przypisanie area.
               </div>`
-            : effectiveSections.map((s) => this._renderSection(s, entries))}
+            : this._renderOrderedBlocks(entries, sections, Boolean(hasExplicitScenes))}
         </div>
       </ha-card>
+    `;
+  }
+
+  /** Kolejność bloków: config popup_order + brakujące klucze wg defaultu. */
+  private _resolvedPopupOrder(): RoomPopupOrderItem[] {
+    const cfg = this._config?.popup_order ?? [];
+    const seen = new Set(cfg.map((i) => i.section));
+    return [
+      ...cfg.filter((i) => DEFAULT_POPUP_ORDER.includes(i.section)),
+      ...DEFAULT_POPUP_ORDER.filter((k) => !seen.has(k)).map((k) => ({
+        section: k,
+      })),
+    ];
+  }
+
+  /**
+   * Body popupu jako bloki w konfigurowalnej kolejności: sceny, grupy
+   * świateł, encje światła (poza grupami), rolety, media, pozostałe sekcje.
+   * `hidden` na pozycji wyłącza blok całkowicie.
+   */
+  private _renderOrderedBlocks(
+    entries: HassEntityRegistryEntry[],
+    sections: RoomSectionConfig[],
+    hasExplicitScenes: boolean,
+  ): TemplateResult[] {
+    const findSec = (t: RoomSectionType): RoomSectionConfig =>
+      sections.find((s) => s.type === t) ?? { type: t };
+    const out: TemplateResult[] = [];
+    for (const item of this._resolvedPopupOrder()) {
+      if (item.hidden) continue;
+      switch (item.section) {
+        case 'scenes':
+          if (hasExplicitScenes) {
+            out.push(
+              html`<stratum-scene-bar
+                .hass=${this.hass}
+                .config=${this._config!.scenes}
+              ></stratum-scene-bar>`,
+            );
+          } else {
+            out.push(this._renderSection(findSec('scenes'), entries));
+          }
+          break;
+        case 'light_groups':
+          out.push(this._renderLightsMain(findSec('lights'), entries));
+          break;
+        case 'light_entities':
+          out.push(this._renderLightsRest(findSec('lights'), entries));
+          break;
+        case 'covers':
+          out.push(this._renderSection(findSec('covers'), entries));
+          break;
+        case 'media':
+          out.push(this._renderSection(findSec('media'), entries));
+          break;
+        case 'extra':
+          for (const s of sections) {
+            if (
+              s.type === 'scenes' ||
+              s.type === 'lights' ||
+              s.type === 'covers' ||
+              s.type === 'media'
+            ) {
+              continue;
+            }
+            out.push(this._renderSection(s, entries));
+          }
+          break;
+      }
+    }
+    return out;
+  }
+
+  /** Encje light sekcji (z filtrem section.entities gdy podany). */
+  private _lightItems(
+    section: RoomSectionConfig,
+    entries: HassEntityRegistryEntry[],
+  ): HassEntityRegistryEntry[] {
+    if (section.entities && section.entities.length > 0) {
+      return section.entities
+        .map(
+          (id) =>
+            this.hass!.entities?.[id] ?? ({ entity_id: id } as HassEntityRegistryEntry),
+        )
+        .filter((e) => Boolean(this.hass!.states?.[e.entity_id]));
+    }
+    return entitiesForSection(this.hass!, entries, 'lights');
+  }
+
+  private _isLightGroup(id: string): boolean {
+    return Array.isArray(this.hass?.states?.[id]?.attributes?.entity_id);
+  }
+
+  /**
+   * Blok „Grupy świateł": jawna lista z configu > grupy-pomocniki > (bez
+   * grup) wszystkie światła. Bez części „pozostałe" — to osobny blok.
+   */
+  private _renderLightsMain(
+    section: RoomSectionConfig,
+    entries: HassEntityRegistryEntry[],
+  ): TemplateResult {
+    const title = section.title ?? SECTION_LABEL['lights'];
+    const iconName = section.icon ?? SECTION_ICON['lights'];
+    if ((this._config?.lights?.items?.length ?? 0) > 0) {
+      return this._renderLightsExplicit(section, title, iconName);
+    }
+    const items = this._lightItems(section, entries);
+    if (items.length === 0) return html``;
+    const groups = items.filter((e) => this._isLightGroup(e.entity_id));
+    const shown = groups.length > 0 ? groups : items;
+    const mode = section.mode ?? 'rail';
+    const layout =
+      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
+    return html`
+      <div class="section" part="section">
+        <div class="section-header" part="section-header">
+          <ha-icon .icon=${iconName}></ha-icon>
+          <span>${title}</span>
+          <span class="count">${shown.length}</span>
+        </div>
+        <div class="tiles ${layout}">
+          ${shown.map(
+            (e) => html`<stratum-room-tile
+              .hass=${this.hass}
+              .entity=${e.entity_id}
+              .mode=${mode}
+              .cardTemplate=${section.card_template}
+            ></stratum-room-tile>`,
+          )}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Blok „Encje światła": światła poza grupami (i poza jawną listą) —
+   * zwinięte pod przyciskiem, jak dotychczasowe „Pozostałe światła".
+   */
+  private _renderLightsRest(
+    section: RoomSectionConfig,
+    entries: HassEntityRegistryEntry[],
+  ): TemplateResult {
+    const items = this._lightItems(section, entries);
+    if (items.length === 0) return html``;
+
+    let rest: HassEntityRegistryEntry[];
+    const explicit = this._config?.lights?.items ?? [];
+    if (explicit.length > 0) {
+      const listed = new Set(
+        explicit.filter((i) => i.entity).map((i) => i.entity!),
+      );
+      const members = new Set<string>();
+      for (const id of listed) {
+        const m = this.hass?.states?.[id]?.attributes?.entity_id;
+        if (Array.isArray(m)) for (const x of m as string[]) members.add(x);
+      }
+      rest = items.filter(
+        (e) => !listed.has(e.entity_id) && !members.has(e.entity_id),
+      );
+    } else {
+      const groups = items.filter((e) => this._isLightGroup(e.entity_id));
+      if (groups.length === 0) return html``; // main pokazał już wszystko
+      const members = new Set<string>();
+      for (const g of groups) {
+        const m = this.hass!.states![g.entity_id]!.attributes!.entity_id as string[];
+        for (const x of m) members.add(x);
+      }
+      rest = items.filter(
+        (e) => !this._isLightGroup(e.entity_id) && !members.has(e.entity_id),
+      );
+    }
+    if (rest.length === 0) return html``;
+
+    const mode = section.mode ?? 'rail';
+    const layout =
+      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
+    const restKey = 'light_entities';
+    const restOpen = this._openRest.has(restKey);
+    return html`
+      <div class="section" part="section">
+        <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
+          <ha-icon .icon=${restOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}></ha-icon>
+          <span>Encje światła (poza grupami)</span>
+          <span class="rest-count">${rest.length}</span>
+        </button>
+        ${restOpen
+          ? html`<div class="tiles ${layout}">
+              ${rest.map(
+                (e) => html`<stratum-room-tile
+                  .hass=${this.hass}
+                  .entity=${e.entity_id}
+                  .mode=${mode}
+                ></stratum-room-tile>`,
+              )}
+            </div>`
+          : nothing}
+      </div>
     `;
   }
 

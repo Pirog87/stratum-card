@@ -181,6 +181,8 @@ export interface StratumRoomCardConfig {
   scenes?: SceneBarConfig;
   /** Jawna lista świateł sekcji lights — zastępuje auto-discovery. */
   lights?: RoomLightsConfig;
+  /** Kolejność i widoczność bloków popupu. Puste = domyślna. */
+  popup_order?: RoomPopupOrderItem[];
   /** Debug log do konsoli. */
   debug?: boolean;
 }
@@ -229,6 +231,35 @@ export interface RoomLightItemConfig {
 export interface RoomLightsConfig {
   items: RoomLightItemConfig[];
 }
+
+/**
+ * Klucze bloków popupu pomieszczenia, których kolejność i widoczność
+ * konfiguruje user. `extra` = pozostałe sekcje (okna, drzwi, klimat,
+ * przełączniki, custom…).
+ */
+export type RoomPopupSectionKey =
+  | 'scenes'
+  | 'light_groups'
+  | 'light_entities'
+  | 'covers'
+  | 'media'
+  | 'extra';
+
+/** Pozycja bloku popupu: klucz + opcjonalne wyłączenie. */
+export interface RoomPopupOrderItem {
+  section: RoomPopupSectionKey;
+  hidden?: boolean;
+}
+
+/** Domyślna kolejność bloków popupu pomieszczenia. */
+export const DEFAULT_POPUP_ORDER: RoomPopupSectionKey[] = [
+  'scenes',
+  'light_groups',
+  'light_entities',
+  'covers',
+  'media',
+  'extra',
+];
 
 /** Pasek scen w karcie: pozycja + layout + lista elementów. */
 export interface SceneBarConfig {
@@ -507,6 +538,9 @@ export interface RoomConfig {
 
   /** Jawna lista świateł popupu (widoczność, nazwy, kolejność, separatory). */
   lights?: RoomLightsConfig;
+
+  /** Kolejność i widoczność bloków popupu tego pokoju. */
+  popup_order?: RoomPopupOrderItem[];
 
   /** Chipy w headerze popup pokoju. Puste = default per room-card. */
   chips?: ChipConfig[];
