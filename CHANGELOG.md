@@ -4,6 +4,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.66.0] — 2026-08-13
+
+### Added
+- **Sceny piętra pod nagłówkiem karty głównej** — panel „Sceny" karty
+  auto-wykrywa teraz sceny ze WSZYSTKICH pomieszczeń piętra (albo obszaru
+  przy `area_id`), z pełnym schematem list: oko, nazwa, grafika,
+  kolejność, separatory (np. z nazwami pokoi), sceny spoza piętra.
+  Pierwsza zmiana utrwala listę i włącza pasek — renderuje się między
+  nagłówkiem (np. „Parter") a listą pomieszczeń (`position: top`,
+  default) albo pod listą (`bottom`).
+
 ## [1.65.0] — 2026-08-13
 
 ### Fixed
