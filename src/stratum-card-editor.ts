@@ -786,8 +786,17 @@ export class StratumCardEditor extends LitElement {
           </div>
         </summary>
         <div class="stratum-panel-body">
+          <p class="stratum-group-hint">
+            Pasek pokazuje się między nagłówkiem a listą pomieszczeń
+            (pozycja „Na górze"). Lista niżej to sceny wykryte ze WSZYSTKICH
+            pomieszczeń piętra — ukryj okiem to, czego nie chcesz, dodaj
+            separatory z nazwami pokoi albo sceny spoza piętra. Pierwsza
+            zmiana utrwala listę i włącza pasek na karcie.
+          </p>
           <stratum-scene-editor
             .hass=${this.hass}
+            .floorId=${this._config.floor_id ?? ''}
+            .areaId=${this._config.area_id ?? ''}
             .config=${this._config.scenes ?? { items: [] }}
             @scenes-changed=${this._scenesChanged}
           ></stratum-scene-editor>

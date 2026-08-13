@@ -17,7 +17,7 @@ import {
   presetIdFromValue,
   resolveSceneImage,
 } from './scene-presets.js';
-import { getEntitiesInArea, filterByDomain, filterDisplayable } from './area-entities.js';
+import { getEntitiesInArea, getAreasInFloor, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 
 const GLOBAL_SCHEMA = [
@@ -124,14 +124,30 @@ export class StratumSceneEditor extends LitElement {
   /** Dodatkowe obszary (merge_with) — ich sceny też trafiają do auto-listy. */
   @property({ attribute: false }) public mergeWith: string[] = [];
 
+  /**
+   * Piętro do auto-wykrywania (pasek scen karty głównej) — sceny ze
+   * WSZYSTKICH obszarów piętra. Wygrywa nad areaId.
+   */
+  @property({ type: String, attribute: 'floor-id' }) public floorId = '';
+
+  /** Obszary, z których zbieramy auto-sceny. */
+  private _areaIds(): string[] {
+    if (this.floorId && this.hass) {
+      return getAreasInFloor(this.hass, this.floorId).map((a) => a.area_id);
+    }
+    return this.areaId ? [this.areaId, ...this.mergeWith] : [];
+  }
+
   @state() private _openScenes = new Set<number>();
 
-  /** Sceny wszystkich połączonych obszarów jako domyślne itemy. */
+  /** Sceny wszystkich połączonych obszarów (lub całego piętra) jako auto-itemy. */
   private _autoItems(): SceneConfig[] {
-    if (!this.hass || !this.areaId) return [];
+    if (!this.hass) return [];
+    const areaIds = this._areaIds();
+    if (areaIds.length === 0) return [];
     const seen = new Set<string>();
     const out: SceneConfig[] = [];
-    for (const id of [this.areaId, ...this.mergeWith]) {
+    for (const id of areaIds) {
       const scenes = filterDisplayable(
         this.hass,
         filterByDomain(getEntitiesInArea(this.hass, id), 'scene'),
