@@ -4,6 +4,27 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.63.0] — 2026-08-13
+
+### Added (bubble-card / mushroom jako styl kafli bloków popupu)
+- **Przełącznik „Styl kafli"** w blokach Grupy świateł (wspólny ze
+  Światłami-encjami), Rolety i Media: **Stratum / Bubble Card / Mushroom**.
+  Wybór karty z HACS renderuje każdą pozycję listy tą kartą (z zachowaniem
+  kolejności, ukrywania i separatorów). Niezainstalowane karty wyszarzone.
+- **Auto-config bubble-card zestrojony z dashboardem usera**: światła jako
+  `button_type: slider` z `relative_slide`, `slider_live_update`,
+  `light_transition`, tap = more-info; rolety jako `card_type: cover`
+  z pozycją; media jako `card_type: media-player`. Mushroom: light z
+  brightness control + kolorem światła, cover z przyciskami, media player
+  z pełnym sterowaniem.
+- Kafle w stylu custom układają się domyślnie w 1 kolumnie (jak u usera).
+
+### Changed
+- **Sekcje explicit MERGE'UJĄ się z auto-wykrytymi** (zamiast je zastępować):
+  wpis sekcji nadpisuje konfigurację swojego typu, a pozostałe auto-typy są
+  doklejane. Wyłączanie bloków: oko przy bloku (popup_order) albo
+  `hidden` sekcji.
+
 ## [1.62.0] — 2026-08-13
 
 ### Added (chipy w stylu mushroom + badge Auto — z YAML usera)

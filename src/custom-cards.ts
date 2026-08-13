@@ -98,8 +98,54 @@ export function buildDefaultCustomConfig(
   const type = cardType.startsWith('custom:') ? cardType : `custom:${cardType}`;
   const bare = type.replace(/^custom:/, '');
 
-  // Bubble Card — wymaga `card_type`. `button` jest bezpiecznym defaultem.
+  const domain = entityId.split('.')[0] ?? '';
+
+  // Bubble Card — config per domena, zestrojony z dashboardem usera
+  // (light = slider z relative_slide, cover = card_type cover z pozycją).
   if (bare === 'bubble-card') {
+    if (domain === 'light') {
+      return {
+        type,
+        card_type: 'button',
+        button_type: 'slider',
+        entity: entityId,
+        relative_slide: true,
+        slider_live_update: true,
+        light_transition: true,
+        scrolling_effect: true,
+        allow_light_slider_to_0: false,
+        show_state: false,
+        show_name: true,
+        show_icon: true,
+        tap_action: { action: 'more-info' },
+      };
+    }
+    if (domain === 'cover') {
+      return {
+        type,
+        card_type: 'cover',
+        entity: entityId,
+        show_state: false,
+        show_attribute: true,
+        attribute: 'current_position',
+      };
+    }
+    if (domain === 'media_player') {
+      return { type, card_type: 'media-player', entity: entityId };
+    }
+    if (domain === 'scene' || domain === 'script') {
+      return {
+        type,
+        card_type: 'button',
+        button_type: 'name',
+        entity: entityId,
+        tap_action: {
+          action: 'call-service',
+          service: `${domain}.turn_on`,
+          service_data: { entity_id: entityId },
+        },
+      };
+    }
     return { type, card_type: 'button', entity: entityId };
   }
 
@@ -108,7 +154,30 @@ export function buildDefaultCustomConfig(
     return { type, entity: entityId };
   }
 
-  // Mushroom — entity wystarczy.
+  // Mushroom — entity wystarczy; light/cover/media z sensownymi kontrolkami.
+  if (bare === 'mushroom-light-card') {
+    return {
+      type,
+      entity: entityId,
+      show_brightness_control: true,
+      use_light_color: true,
+      fill_container: true,
+    };
+  }
+  if (bare === 'mushroom-cover-card') {
+    return { type, entity: entityId, show_buttons_control: true, fill_container: true };
+  }
+  if (bare === 'mushroom-media-player-card') {
+    return {
+      type,
+      entity: entityId,
+      use_media_info: true,
+      show_volume_level: true,
+      media_controls: ['play_pause_stop', 'previous', 'next'],
+      volume_controls: ['volume_set'],
+      fill_container: true,
+    };
+  }
   if (bare.startsWith('mushroom-')) {
     return { type, entity: entityId };
   }
