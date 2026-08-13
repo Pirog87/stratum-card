@@ -4,6 +4,18 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.60.0] — 2026-08-13
+
+### Fixed (połączone pomieszczenia w edytorach list)
+- **Edytory bloków popupu (sceny, grupy świateł, encje światła, rolety,
+  media) wykrywają teraz encje ze WSZYSTKICH połączonych obszarów**
+  (`merge_with`), nie tylko z primary — np. Sypialnia + garderoba +
+  łazienka pokazuje w listach encje trzech obszarów. Popup liczył je tak
+  już wcześniej; teraz edytor i popup są spójne.
+- Chipy: domyślnie agregują wszystkie połączone obszary (nadrzędny zestaw);
+  świadoma zmiana na własne encje — jak dotąd w „Chipy nagłówka".
+- Hint przy „Połącz z innymi pomieszczeniami" opisuje tę zasadę.
+
 ## [1.59.0] — 2026-08-13
 
 ### Added (jeden schemat edycji dla wszystkich bloków popupu)

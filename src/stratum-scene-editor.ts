@@ -117,14 +117,24 @@ export class StratumSceneEditor extends LitElement {
    */
   @property({ type: String, attribute: 'area-id' }) public areaId = '';
 
+  /** Dodatkowe obszary (merge_with) — ich sceny też trafiają do auto-listy. */
+  @property({ attribute: false }) public mergeWith: string[] = [];
+
   @state() private _openScenes = new Set<number>();
 
-  /** Sceny obszaru jako domyślne itemy (auto-discovery). */
+  /** Sceny wszystkich połączonych obszarów jako domyślne itemy. */
   private _autoItems(): SceneConfig[] {
     if (!this.hass || !this.areaId) return [];
-    return filterByDomain(getEntitiesInArea(this.hass, this.areaId), 'scene').map(
-      (e) => ({ entity: e.entity_id }),
-    );
+    const seen = new Set<string>();
+    const out: SceneConfig[] = [];
+    for (const id of [this.areaId, ...this.mergeWith]) {
+      for (const e of filterByDomain(getEntitiesInArea(this.hass, id), 'scene')) {
+        if (seen.has(e.entity_id)) continue;
+        seen.add(e.entity_id);
+        out.push({ entity: e.entity_id });
+      }
+    }
+    return out;
   }
 
   /** Czy pracujemy na liście auto (nic nie zapisano w configu). */

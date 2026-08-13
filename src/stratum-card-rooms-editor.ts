@@ -49,7 +49,7 @@ const POPUP_GROUP_META: Record<RoomPopupSectionKey, { title: string; icon: strin
 
 const ROOM_HELPERS: Record<string, string> = {
   merge_with:
-    'Wybrane pomieszczenia znikną jako osobne wiersze; ich encje doliczą się do tego.',
+    'Wybrane pomieszczenia znikną jako osobne wiersze. Wszystkie bloki popupu (chipy, sceny, światła, rolety, media…) pokazują wtedy encje ze WSZYSTKICH połączonych obszarów.',
   aggregate:
     '„Suma" — światła/motion/temperatura liczone łącznie. „Tylko główne" — tylko encje primary, merge jest hierarchiczny.',
 };
@@ -573,6 +573,7 @@ export class StratumCardRoomsEditor extends LitElement {
           <stratum-scene-editor
             .hass=${this.hass}
             .areaId=${areaId}
+            .mergeWith=${room?.merge_with ?? []}
             .config=${room?.scenes ?? { items: [] }}
             @scenes-changed=${(ev: CustomEvent<{ scenes: SceneBarConfig }>) =>
               this._onScenesChanged(areaId, ev)}
@@ -588,6 +589,7 @@ export class StratumCardRoomsEditor extends LitElement {
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
+            .mergeWith=${room?.merge_with ?? []}
             .source=${'light_groups'}
             .config=${room?.lights ?? { items: [] }}
             @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
@@ -605,6 +607,7 @@ export class StratumCardRoomsEditor extends LitElement {
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
+            .mergeWith=${room?.merge_with ?? []}
             .source=${'light_singles'}
             .config=${room?.light_singles ?? { items: [] }}
             @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
@@ -622,6 +625,7 @@ export class StratumCardRoomsEditor extends LitElement {
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
+            .mergeWith=${room?.merge_with ?? []}
             .source=${'covers'}
             .config=${room?.covers_list ?? { items: [] }}
             @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
@@ -638,6 +642,7 @@ export class StratumCardRoomsEditor extends LitElement {
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
+            .mergeWith=${room?.merge_with ?? []}
             .source=${'media'}
             .config=${room?.media_list ?? { items: [] }}
             @lights-changed=${(ev: CustomEvent<{ lights: RoomLightsConfig }>) =>
