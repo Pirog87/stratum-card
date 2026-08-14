@@ -25,7 +25,7 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.23.0';
+const VERSION = '1.24.0';
 
 interface SummaryDatum {
   label: string;
@@ -388,6 +388,27 @@ export class StratumRoomCard extends LitElement {
     return Array.isArray(this.hass?.states?.[id]?.attributes?.entity_id);
   }
 
+  /**
+   * Styl siatki bloków świateł: columns z configu wygrywa; custom mode =
+   * 1 kolumna; default = auto-fill wg minimalnej szerokości kafla
+   * (tile_min_width, 240 px) — liczba kolumn dopasowuje się do ekranu.
+   * Dokłada też wysokość kafla (tile_height → --stratum-glight-min-height).
+   */
+  private _lightsGridStyle(section: RoomSectionConfig, mode: string): string {
+    const h =
+      typeof section.tile_height === 'number'
+        ? `--stratum-glight-min-height:${section.tile_height}px;`
+        : '';
+    if (typeof section.columns === 'number') {
+      return `grid-template-columns:repeat(${section.columns},minmax(0,1fr));${h}`;
+    }
+    if (mode.startsWith('custom:')) {
+      return `grid-template-columns:1fr;${h}`;
+    }
+    const w = typeof section.tile_min_width === 'number' ? section.tile_min_width : 240;
+    return `grid-template-columns:repeat(auto-fill,minmax(min(${w}px,100%),1fr));${h}`;
+  }
+
   /** Badge „Auto" w nagłówku świateł — toggle pomocnika automatyzacji. */
   private _renderAutoBadge(): TemplateResult | typeof nothing {
     const id = this._config?.light_auto_entity;
@@ -428,14 +449,7 @@ export class StratumRoomCard extends LitElement {
     );
     if (groups.length === 0) return html``;
     const mode = section.mode ?? 'rail';
-    const layout =
-      section.columns === 1
-        ? 'grid-1'
-        : section.columns === 3
-        ? 'grid-3'
-        : mode.startsWith('custom:')
-        ? 'grid-1'
-        : 'grid-2';
+    const gridStyle = this._lightsGridStyle(section, mode);
     return html`
       <div class="section" part="section">
         <div class="section-header" part="section-header">
@@ -444,7 +458,7 @@ export class StratumRoomCard extends LitElement {
           ${this._renderAutoBadge()}
           <span class="count">${groups.length}</span>
         </div>
-        <div class="tiles ${layout}">
+        <div class="tiles" style=${gridStyle}>
           ${groups.map(
             (e) => html`<stratum-room-tile
               .hass=${this.hass}
@@ -473,14 +487,7 @@ export class StratumRoomCard extends LitElement {
       const count = all.filter((i) => !i.separator && i.entity).length;
       if (count === 0) return html``;
       const mode = section.mode ?? 'rail';
-      const layout =
-        section.columns === 1
-          ? 'grid-1'
-          : section.columns === 3
-          ? 'grid-3'
-          : mode.startsWith('custom:')
-          ? 'grid-1'
-          : 'grid-2';
+      const gridStyle = this._lightsGridStyle(section, mode);
       return html`
         <div class="section" part="section">
           <div class="section-header" part="section-header">
@@ -488,7 +495,7 @@ export class StratumRoomCard extends LitElement {
             <span>Encje światła</span>
             <span class="count">${count}</span>
           </div>
-          ${this._renderListBlocks(all, mode, layout)}
+          ${this._renderListBlocks(all, mode, gridStyle)}
         </div>
       `;
     }
@@ -501,15 +508,8 @@ export class StratumRoomCard extends LitElement {
       (this._config?.lights?.items?.length ?? 0) > 0;
 
     const mode = section.mode ?? 'rail';
-    const layout =
-      section.columns === 1
-        ? 'grid-1'
-        : section.columns === 3
-        ? 'grid-3'
-        : mode.startsWith('custom:')
-        ? 'grid-1'
-        : 'grid-2';
-    const tiles = html`<div class="tiles ${layout}">
+    const gridStyle = this._lightsGridStyle(section, mode);
+    const tiles = html`<div class="tiles" style=${gridStyle}>
       ${singles.map(
         (e) => html`<stratum-room-tile
           .hass=${this.hass}
@@ -753,7 +753,7 @@ export class StratumRoomCard extends LitElement {
   private _renderListBlocks(
     items: import('./types.js').RoomLightItemConfig[],
     mode: string,
-    layout: string,
+    gridStyle: string,
     cardTemplate?: Record<string, unknown>,
   ): TemplateResult[] {
     const blocks: TemplateResult[] = [];
@@ -771,7 +771,7 @@ export class StratumRoomCard extends LitElement {
           .cardTemplate=${cardTemplate}
         ></stratum-room-tile>`,
       );
-      blocks.push(html`<div class="tiles ${layout}">${tiles}</div>`);
+      blocks.push(html`<div class="tiles" style=${gridStyle}>${tiles}</div>`);
       run = [];
     };
     for (const item of items) {
@@ -801,14 +801,7 @@ export class StratumRoomCard extends LitElement {
   ): TemplateResult {
     const all = this._visibleListItems(this._config?.lights);
     const mode = section.mode ?? 'rail';
-    const layout =
-      section.columns === 1
-        ? 'grid-1'
-        : section.columns === 3
-        ? 'grid-3'
-        : mode.startsWith('custom:')
-        ? 'grid-1'
-        : 'grid-2';
+    const gridStyle = this._lightsGridStyle(section, mode);
     const count = all.filter((i) => !i.separator && i.entity).length;
     if (count === 0) return html``;
     return html`
@@ -819,7 +812,7 @@ export class StratumRoomCard extends LitElement {
           ${this._renderAutoBadge()}
           <span class="count">${count}</span>
         </div>
-        ${this._renderListBlocks(all, mode, layout, section.card_template)}
+        ${this._renderListBlocks(all, mode, gridStyle, section.card_template)}
       </div>
     `;
   }
@@ -830,8 +823,10 @@ export class StratumRoomCard extends LitElement {
     const entityItems = all.filter((i) => !i.separator && i.entity);
     if (entityItems.length === 0) return html``;
     const mode = section.mode ?? 'tile';
-    const layout =
-      section.columns === 2 ? 'grid-2' : section.columns === 3 ? 'grid-3' : 'grid-1';
+    const gridStyle =
+      typeof section.columns === 'number'
+        ? `grid-template-columns:repeat(${section.columns},minmax(0,1fr));`
+        : 'grid-template-columns:1fr;';
     const entries = entityItems.map(
       (i) =>
         this.hass!.entities?.[i.entity!] ??
@@ -845,7 +840,7 @@ export class StratumRoomCard extends LitElement {
           <span class="count">${entityItems.length}</span>
         </div>
         ${this._renderCoversMaster(section, entries)}
-        ${this._renderListBlocks(all, mode, layout, section.card_template)}
+        ${this._renderListBlocks(all, mode, gridStyle, section.card_template)}
       </div>
     `;
   }
@@ -865,7 +860,7 @@ export class StratumRoomCard extends LitElement {
             <span>${section.title ?? SECTION_LABEL['media']}</span>
             <span class="count">${entityItems.length}</span>
           </div>
-          ${this._renderListBlocks(all, mMode, 'grid-1', section.card_template)}
+          ${this._renderListBlocks(all, mMode, 'grid-template-columns:1fr;', section.card_template)}
         </div>
       `;
     }
@@ -901,7 +896,7 @@ export class StratumRoomCard extends LitElement {
                 <span class="rest-count">${restCount}</span>
               </button>
               ${restOpen
-                ? html`${this._renderListBlocks(rest, 'tile', 'grid-1')}`
+                ? html`${this._renderListBlocks(rest, 'tile', 'grid-template-columns:1fr;')}`
                 : nothing}
             `
           : nothing}

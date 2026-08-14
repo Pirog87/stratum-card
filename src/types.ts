@@ -392,6 +392,14 @@ export interface RoomSectionConfig {
    */
   positions?: number[];
   /**
+   * Bloki świateł: minimalna szerokość kafla (px) — siatka auto-dopasowuje
+   * liczbę kolumn do szerokości ekranu. Default: 240. Ignorowane gdy
+   * ustawiono `columns`.
+   */
+  tile_min_width?: number;
+  /** Bloki świateł: wysokość kafla (px). Default: 96. */
+  tile_height?: number;
+  /**
    * Layout grid: `1` | `2` | `3` kolumn albo `'auto'`. Default: zgodny z typem
    * (covers/climate/media → 1, scenes → 3, reszta → 2).
    */

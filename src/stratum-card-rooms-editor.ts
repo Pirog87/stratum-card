@@ -565,24 +565,88 @@ export class StratumCardRoomsEditor extends LitElement {
     return sections.find((s) => s.type === type)?.mode ?? '';
   }
 
+  /** Merge'uje patch do sekcji danego typu (undefined w patchu = usuń klucz). */
+  private _patchSection(
+    areaId: string,
+    type: RoomSectionType,
+    patch: Partial<RoomSectionConfig>,
+  ): void {
+    const room = this._getRoom(areaId);
+    const sections = [...this._normalizedRoomSections(room)];
+    const idx = sections.findIndex((s) => s.type === type);
+    const base = idx === -1 ? ({ type } as RoomSectionConfig) : { ...sections[idx]! };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) {
+        delete (base as unknown as Record<string, unknown>)[k];
+      } else {
+        (base as unknown as Record<string, unknown>)[k] = v;
+      }
+    }
+    if (idx === -1) sections.push(base);
+    else sections[idx] = base;
+    this._updateRoom(areaId, { sections });
+  }
+
   /** Ustawia mode sekcji typu (styl kafli bloku popupu). */
   private _setSectionMode(
     areaId: string,
     type: RoomSectionType,
     mode: string | undefined,
   ): void {
+    this._patchSection(areaId, type, {
+      mode: mode as RoomSectionConfig['mode'] | undefined,
+    });
+  }
+
+  /** Suwaki wymiarów kafli świateł (wspólne dla grup i encji). */
+  private _renderLightsSizeControls(areaId: string): TemplateResult {
     const room = this._getRoom(areaId);
-    const sections = [...this._normalizedRoomSections(room)];
-    const idx = sections.findIndex((s) => s.type === type);
-    if (idx === -1) {
-      sections.push(mode ? { type, mode: mode as RoomSectionConfig['mode'] } : { type });
-    } else {
-      const merged = { ...sections[idx]! };
-      if (mode) merged.mode = mode as RoomSectionConfig['mode'];
-      else delete merged.mode;
-      sections[idx] = merged;
-    }
-    this._updateRoom(areaId, { sections });
+    const sec = this._normalizedRoomSections(room).find((s) => s.type === 'lights');
+    const w = typeof sec?.tile_min_width === 'number' ? sec.tile_min_width : 240;
+    const h = typeof sec?.tile_height === 'number' ? sec.tile_height : 96;
+    return html`
+      <div class="size-controls">
+        <div class="size-row">
+          <label>Min. szerokość kafla</label>
+          <span class="size-val">${w} px</span>
+          <input
+            type="range"
+            min="140"
+            max="520"
+            step="10"
+            .value=${String(w)}
+            @change=${(ev: Event) => {
+              const v = Number((ev.target as HTMLInputElement).value);
+              this._patchSection(areaId, 'lights', {
+                tile_min_width: v === 240 ? undefined : v,
+              });
+            }}
+          />
+        </div>
+        <div class="size-row">
+          <label>Wysokość kafla</label>
+          <span class="size-val">${h} px</span>
+          <input
+            type="range"
+            min="64"
+            max="180"
+            step="4"
+            .value=${String(h)}
+            @change=${(ev: Event) => {
+              const v = Number((ev.target as HTMLInputElement).value);
+              this._patchSection(areaId, 'lights', {
+                tile_height: v === 96 ? undefined : v,
+              });
+            }}
+          />
+        </div>
+        <p class="detail-group-hint">
+          Liczba kolumn dopasowuje się automatycznie do szerokości ekranu
+          (kafle nie węższe niż ustawiona wartość). Dotyczy grup i encji
+          świateł.
+        </p>
+      </div>
+    `;
   }
 
   /**
@@ -654,6 +718,7 @@ export class StratumCardRoomsEditor extends LitElement {
             { mode: 'custom:bubble-card', label: 'Bubble Card', requires: 'custom:bubble-card' },
             { mode: 'custom:mushroom-light-card', label: 'Mushroom', requires: 'custom:mushroom-light-card' },
           ])}
+          ${this._renderLightsSizeControls(areaId)}
           <stratum-lights-editor
             .hass=${this.hass}
             .areaId=${areaId}
@@ -1141,6 +1206,38 @@ export class StratumCardRoomsEditor extends LitElement {
         margin: 0 0 14px;
         font-size: 12px;
         color: var(--secondary-text-color);
+      }
+
+      .size-controls {
+        margin-bottom: 10px;
+      }
+
+      .size-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--secondary-text-color);
+      }
+
+      .size-row label {
+        flex-shrink: 0;
+        min-width: 140px;
+        font-weight: 600;
+      }
+
+      .size-val {
+        flex-shrink: 0;
+        min-width: 52px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: var(--primary-text-color);
+      }
+
+      .size-row input[type='range'] {
+        flex: 1;
+        accent-color: var(--primary-color, #ff9b42);
       }
 
       .style-picker {
