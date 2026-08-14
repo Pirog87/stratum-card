@@ -4,6 +4,24 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.68.0] — 2026-08-14
+
+### Fixed (skalowanie widgetów popupu na różnych ekranach)
+- **Sceny: responsywna siatka** — bez ustawionych „Kolumn" kafle układają
+  się automatycznie (min 150 px, tyle kolumn ile się mieści) zamiast
+  puchnąć na pół ekranu dużego telefonu. Jawna liczba kolumn dalej wygrywa.
+  Override szerokości: `--stratum-scene-tile-min`.
+- **Grupy i encje świateł: auto-dopasowanie kolumn** — siatka
+  `auto-fill` wg minimalnej szerokości kafla; na wąskim telefonie 1–2
+  kolumny, na szerokim 3–4, koniec kafli na całą szerokość składaka.
+
+### Added
+- **Konfigurowalna szerokość i wysokość kafli świateł** — suwaki
+  „Min. szerokość kafla" (140–520 px, default 240) i „Wysokość kafla"
+  (64–180 px, default 96) w grupie „Grupy świateł pomieszczenia";
+  działają na oba bloki świateł. YAML: `tile_min_width` / `tile_height`
+  w sekcji lights.
+
 ## [1.67.0] — 2026-08-13
 
 ### Added

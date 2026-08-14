@@ -71,10 +71,14 @@ export class StratumSceneBar extends LitElement {
     if (!this.config || sceneCount === 0) {
       return html``;
     }
-    const columns = this.config.columns ?? 3;
+    const columns = this.config.columns;
     const aspect = this.config.aspect ?? '16/9';
     const size = this.config.size ?? 'md';
-    const gridStyle = `--scene-columns:${columns};--scene-aspect:${aspect};`;
+    // Bez `columns`: siatka responsywna — tyle kolumn, ile zmieści szerokość
+    // (kafle min 150 px, bez rozpychania na pół monitora).
+    const gridStyle = columns
+      ? `--scene-aspect:${aspect};grid-template-columns:repeat(${columns},minmax(0,1fr));`
+      : `--scene-aspect:${aspect};grid-template-columns:repeat(auto-fill,minmax(var(--stratum-scene-tile-min,150px),1fr));`;
 
     // Separatory przecinają siatkę — renderujemy ciągi kafli między nimi.
     const blocks: TemplateResult[] = [];
@@ -142,17 +146,7 @@ export class StratumSceneBar extends LitElement {
 
     .bar {
       display: grid;
-      grid-template-columns: repeat(var(--scene-columns, 3), minmax(0, 1fr));
       gap: var(--stratum-scene-gap, 8px);
-    }
-
-    @media (max-width: 480px) {
-      .bar {
-        grid-template-columns: repeat(
-          min(var(--scene-columns, 3), 3),
-          minmax(0, 1fr)
-        );
-      }
     }
 
     .tile {
