@@ -5,6 +5,20 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.73.0] — 2026-08-17
+
+### Changed (grafiki scen)
+- **21 fotograficznych grafik scen** (WebP 640×360, styl Philips Hue,
+  wygenerowane przez usera) zaszytych w bundlu jako data URI — zastępują
+  wbudowane SVG dla 15 scen; nowe warianty jako osobne presety:
+  Czytanie 2, TV 2, Impreza 2, Kąpiel ciepła, Kąpiel fiolet, Noc 2.
+- Istniejące configi `stratum:<id>` działają bez zmian — te same id
+  wskazują teraz zdjęcia. Sceny bez zdjęcia (Praca, Gotowanie, Medytacja,
+  Muzyka, Kino, Gaming, Sport, Goście, Bezpieczeństwo) zostają na SVG.
+- Nowy generowany moduł `src/scene-photos.ts`; `ScenePreset` ma pola
+  `photo`/`svg` (photo wygrywa). Bundle rośnie ~320 KB → ~830 KB
+  (jednorazowe pobranie, cache przeglądarki).
+
 ## [1.72.1] — 2026-08-17
 
 ### Fixed
