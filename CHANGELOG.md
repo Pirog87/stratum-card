@@ -5,6 +5,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.75.0] — 2026-08-17
+
+### Changed (listy chipów)
+- **Odwrócona hierarchia tekstu w wierszach**: wyboldowana nazwa
+  pomieszczenia u góry, pod spodem mniejsza nazwa urządzenia — w
+  światłach dodatkowo z `· %` jasności. Dotyczy wszystkich list
+  (obecność, drzwi, okna, światła, rolety…).
+- **Widok „Wszystkie" sortowany pomieszczeniami** (ta sama kolejność
+  co zakładki, alfabetycznie).
+
 ## [1.74.0] — 2026-08-17
 
 ### Added
