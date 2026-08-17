@@ -1,17 +1,19 @@
 // Popup z listą encji pasujących do chipa.
 //
-// Klik w chip nagłówka otwiera ten panel. Pokazuje encje z per-domain
-// akcjami:
-// - light: toggle + brightness slider + master "wyłącz wszystkie"
-// - switch: toggle + master off
-// - cover: open/close per item + master
-// - binary_sensor (motion/window/door/occupancy): read-only badge
+// Klik w chip nagłówka otwiera ten panel. Układ (wariant C):
+// - zakładki pokojów ("Wszystkie · N" + per pokój) filtrują listę,
+// - light/switch/cover: duży wiersz z kolorową ikoną, toggle i grubym
+//   suwakiem jasności/pozycji, sticky stopka "Wyłącz wszystkie",
+// - czujki (motion/occupancy/drzwi/okna/...): prosty wiersz — ikona,
+//   nazwa + pokój, po prawej czas od zmiany stanu (16s / 4min / 2h).
+//   Klik = more-info. Lista zawiera tylko aktywne encje.
 //
-// Zamykany: klik w backdrop, ×, Escape.
+// Zamykany: klik w backdrop, ×, Escape, Android wstecz.
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import type { ChipConfig, HomeAssistant } from './types.js';
+import { ago } from './chip-defaults.js';
 
 interface AreaGroup {
   /** Area ID albo pusty string dla „Bez pomieszczenia". */
@@ -37,6 +39,9 @@ export class StratumChipList extends LitElement {
 
   /** Kolor akcentu nagłówka (CSS color). */
   @property({ type: String }) public color = 'var(--primary-color, #ff9b42)';
+
+  /** Aktywna zakładka pokoju — null = „Wszystkie". */
+  @state() private _areaFilter: string | null = null;
 
   private _close(): void {
     this.dispatchEvent(
@@ -65,21 +70,23 @@ export class StratumChipList extends LitElement {
     document.removeEventListener('keydown', this._onKeydown);
   }
 
-  /** Grupy encji wg area — każda sekcja to jeden pokój. */
+  private _areaOf(id: string): { key: string; name: string } {
+    const entry = this.hass?.entities?.[id];
+    let areaId = entry?.area_id ?? undefined;
+    if (!areaId && entry?.device_id) {
+      areaId = this.hass?.devices?.[entry.device_id]?.area_id ?? undefined;
+    }
+    if (!areaId) return { key: '__none__', name: 'Bez pomieszczenia' };
+    return { key: areaId, name: this.hass?.areas?.[areaId]?.name ?? areaId };
+  }
+
+  /** Grupy encji wg area — do zakładek. */
   private _groupByArea(): AreaGroup[] {
     const groups = new Map<string, AreaGroup>();
     for (const id of this.entityIds) {
-      const entry = this.hass?.entities?.[id];
-      let areaId = entry?.area_id ?? undefined;
-      if (!areaId && entry?.device_id) {
-        areaId = this.hass?.devices?.[entry.device_id]?.area_id ?? undefined;
-      }
-      const key = areaId ?? '__none__';
-      const areaName = areaId
-        ? this.hass?.areas?.[areaId]?.name ?? areaId
-        : 'Bez pomieszczenia';
+      const { key, name } = this._areaOf(id);
       if (!groups.has(key)) {
-        groups.set(key, { area_id: key, area_name: areaName, entity_ids: [] });
+        groups.set(key, { area_id: key, area_name: name, entity_ids: [] });
       }
       groups.get(key)!.entity_ids.push(id);
     }
@@ -95,7 +102,7 @@ export class StratumChipList extends LitElement {
     return domain === 'light' || domain === 'switch' || domain === 'cover';
   }
 
-  /** Zwraca mapę domain → ids dla zbioru encji — do per-grupowego master off. */
+  /** Zwraca mapę domain → ids dla zbioru encji — do master off. */
   private _splitByDomain(ids: string[]): Map<string, string[]> {
     const map = new Map<string, string[]>();
     for (const id of ids) {
@@ -117,8 +124,8 @@ export class StratumChipList extends LitElement {
     }
   }
 
-  /** Czy jakiekolwiek encje w grupie są kontrolowalne i ON — pokazuje master btn. */
-  private _groupHasControllableOn(ids: string[]): boolean {
+  /** Czy jakiekolwiek encje w zbiorze są kontrolowalne i ON. */
+  private _hasControllableOn(ids: string[]): boolean {
     return ids.some((id) => {
       const domain = id.split('.')[0] ?? '';
       if (!this._canControl(domain)) return false;
@@ -171,15 +178,30 @@ export class StratumChipList extends LitElement {
   protected render(): TemplateResult {
     const groups = this._groupByArea();
     const total = this.entityIds.length;
-    const globalHasControllableOn = this._groupHasControllableOn(this.entityIds);
+    // Zakładka może wskazywać pokój, który właśnie zniknął z listy
+    // (ostatnia encja zgasła) — wtedy wracamy na „Wszystkie".
+    const filter =
+      this._areaFilter && groups.some((g) => g.area_id === this._areaFilter)
+        ? this._areaFilter
+        : null;
+    const visible = filter
+      ? groups.find((g) => g.area_id === filter)!.entity_ids
+      : this.entityIds;
+    const showFooter = this._hasControllableOn(visible);
     return html`
       <div
         class="backdrop"
         part="chip-list-popup"
         @click=${this._onBackdropClick}
       >
-        <div class="panel" role="dialog" aria-modal="true" aria-label=${this.label}>
-          <div class="head" style="--accent:${this.color};">
+        <div
+          class="panel"
+          role="dialog"
+          aria-modal="true"
+          aria-label=${this.label}
+          style="--accent:${this.color};"
+        >
+          <div class="head">
             <span class="avatar">
               <ha-icon .icon=${this.icon}></ha-icon>
             </span>
@@ -190,20 +212,29 @@ export class StratumChipList extends LitElement {
                 ${groups.length} ${groups.length === 1 ? 'pokój' : 'pokoi'}
               </div>
             </div>
-            ${globalHasControllableOn
-              ? html`<button
-                  class="master-global"
-                  title="Wyłącz wszystkie we wszystkich pokojach"
-                  @click=${() => this._masterOffAll(this.entityIds)}
-                >
-                  <ha-icon .icon=${'mdi:power'}></ha-icon>
-                  <span>Wyłącz wszystkie</span>
-                </button>`
-              : nothing}
             <button class="close" title="Zamknij" @click=${this._close}>
               <ha-icon .icon=${'mdi:close'}></ha-icon>
             </button>
           </div>
+
+          ${groups.length > 1
+            ? html`<div class="tabs">
+                <button
+                  class="tab ${filter === null ? 'on' : ''}"
+                  @click=${() => (this._areaFilter = null)}
+                >
+                  Wszystkie · ${total}
+                </button>
+                ${groups.map(
+                  (g) => html`<button
+                    class="tab ${filter === g.area_id ? 'on' : ''}"
+                    @click=${() => (this._areaFilter = g.area_id)}
+                  >
+                    ${g.area_name} · ${g.entity_ids.length}
+                  </button>`,
+                )}
+              </div>`
+            : nothing}
 
           ${total === 0
             ? html`<div class="empty">
@@ -211,52 +242,45 @@ export class StratumChipList extends LitElement {
                 <span>Nic aktywnego — wszystko pod kontrolą.</span>
               </div>`
             : html`<div class="list">
-                ${groups.map((g) => this._renderGroup(g))}
+                ${visible.map((id) => this._renderRow(id, filter !== null))}
               </div>`}
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderGroup(group: AreaGroup): TemplateResult {
-    const hasControllableOn = this._groupHasControllableOn(group.entity_ids);
-    return html`
-      <div class="group">
-        <div class="group-head">
-          <span class="group-area">
-            <ha-icon .icon=${'mdi:floor-plan'}></ha-icon>
-            <span class="group-area-name">${group.area_name}</span>
-            <span class="group-area-count">${group.entity_ids.length}</span>
-          </span>
-          ${hasControllableOn
-            ? html`<button
-                class="master-btn"
-                title="Wyłącz wszystkie w tym pokoju"
-                @click=${() => this._masterOffAll(group.entity_ids)}
-              >
-                <ha-icon .icon=${'mdi:power'}></ha-icon>
-                <span>Wyłącz</span>
-              </button>`
+          ${showFooter
+            ? html`<div class="foot">
+                <button
+                  class="master"
+                  @click=${() => this._masterOffAll(visible)}
+                >
+                  <ha-icon .icon=${'mdi:power'}></ha-icon>
+                  <span>Wyłącz wszystkie (${visible.length})</span>
+                </button>
+              </div>`
             : nothing}
         </div>
-        <div class="group-body">
-          ${group.entity_ids.map((id) =>
-            this._renderItem(id, id.split('.')[0] ?? ''),
-          )}
-        </div>
       </div>
     `;
   }
 
-  private _renderItem(entity_id: string, domain: string): TemplateResult {
+  private _renderRow(entity_id: string, roomFiltered: boolean): TemplateResult {
+    const domain = entity_id.split('.')[0] ?? '';
+    return this._canControl(domain)
+      ? this._renderControlRow(entity_id, domain, roomFiltered)
+      : this._renderSensorRow(entity_id, roomFiltered);
+  }
+
+  /** Duży wiersz sterowalny: ikona + nazwa/pokój + toggle + gruby suwak. */
+  private _renderControlRow(
+    entity_id: string,
+    domain: string,
+    roomFiltered: boolean,
+  ): TemplateResult {
     const state = this.hass?.states?.[entity_id];
     const isOn = state?.state === 'on';
     const name = this._friendlyName(entity_id);
     const icon =
-      (state?.attributes?.icon as string | undefined) ?? this._defaultIcon(domain, isOn);
+      (state?.attributes?.icon as string | undefined) ??
+      this._defaultIcon(domain, isOn);
     const supportsDim =
-      domain === 'light' &&
-      typeof state?.attributes?.brightness === 'number';
+      domain === 'light' && typeof state?.attributes?.brightness === 'number';
     const brightnessPct = supportsDim
       ? Math.round(((state?.attributes?.brightness as number) / 255) * 100)
       : 0;
@@ -265,78 +289,118 @@ export class StratumChipList extends LitElement {
       domain === 'cover' && typeof coverPosRaw === 'number'
         ? Math.round(coverPosRaw)
         : undefined;
-
-    const controllable = this._canControl(domain);
-    const iconColor =
+    const lightColor =
       domain === 'light' && isOn
-        ? this._lightColor(state?.attributes as Record<string, unknown> | undefined)
+        ? this._lightColor(
+            state?.attributes as Record<string, unknown> | undefined,
+          )
         : undefined;
-    const hint = this._stateHint(state, domain);
+    const area = this._areaOf(entity_id).name;
+    const hintParts: string[] = [];
+    if (!roomFiltered) hintParts.push(area);
+    if (supportsDim && isOn) hintParts.push(`${brightnessPct}%`);
+    if (coverPos !== undefined) hintParts.push(`${coverPos}%`);
+    const sub = hintParts.join(' · ');
 
     return html`
-      <div class="item ${isOn ? 'active' : ''}">
-        <button
-          class="item-icon"
-          style=${iconColor ? `--icon-color:${iconColor};` : ''}
-          @click=${() => this._moreInfo(entity_id)}
-          title="Więcej info"
-        >
-          <ha-icon .icon=${icon}></ha-icon>
-        </button>
-        <div class="item-body">
-          <div class="item-row">
-            <span class="item-name">${name}</span>
-            ${hint ? html`<span class="item-hint">${hint}</span>` : nothing}
+      <div
+        class="crow ${isOn ? 'active' : ''}"
+        style=${lightColor ? `--c:${lightColor};` : ''}
+      >
+        <div class="crow-top">
+          <button
+            class="bub"
+            @click=${() => this._moreInfo(entity_id)}
+            title="Więcej info"
+          >
+            <ha-icon .icon=${icon}></ha-icon>
+          </button>
+          <div class="mid">
+            <span class="nm">${name}</span>
+            ${sub ? html`<span class="sub">${sub}</span>` : nothing}
           </div>
-          ${supportsDim && isOn
-            ? html`<input
-                type="range"
-                class="bri-slider"
-                min="1"
-                max="100"
-                step="1"
-                style="--pct:${brightnessPct}%;"
-                .value=${String(brightnessPct)}
-                @input=${(ev: Event) => {
-                  const el = ev.target as HTMLInputElement;
-                  el.style.setProperty('--pct', `${el.value}%`);
-                }}
-                @change=${(ev: Event) => this._setBrightness(entity_id, ev)}
-                @click=${(ev: Event) => ev.stopPropagation()}
-              />`
-            : nothing}
-          ${domain === 'cover' && coverPos !== undefined
-            ? html`<input
-                type="range"
-                class="bri-slider"
-                min="0"
-                max="100"
-                step="1"
-                style="--pct:${coverPos}%;"
-                .value=${String(coverPos)}
-                @input=${(ev: Event) => {
-                  const el = ev.target as HTMLInputElement;
-                  el.style.setProperty('--pct', `${el.value}%`);
-                }}
-                @change=${(ev: Event) => this._setCoverPosition(entity_id, ev)}
-                @click=${(ev: Event) => ev.stopPropagation()}
-              />`
-            : nothing}
+          <button
+            class="toggle ${isOn ? 'on' : ''}"
+            @click=${() => this._toggle(entity_id)}
+            role="switch"
+            aria-checked=${isOn}
+            title=${isOn ? 'Wyłącz' : 'Włącz'}
+          >
+            <span class="toggle-knob"></span>
+          </button>
         </div>
-        ${controllable
-          ? html`<button
-              class="toggle ${isOn ? 'on' : ''}"
-              @click=${() => this._toggle(entity_id)}
-              role="switch"
-              aria-checked=${isOn}
-              title=${isOn ? 'Wyłącz' : 'Włącz'}
-            >
-              <span class="toggle-knob"></span>
-            </button>`
-          : html`<span class="state-badge ${isOn ? 'on' : ''}">
-              ${this._statusText(state, domain)}
-            </span>`}
+        ${supportsDim && isOn
+          ? html`<input
+              type="range"
+              class="bri-slider"
+              min="1"
+              max="100"
+              step="1"
+              style="--pct:${brightnessPct}%;"
+              .value=${String(brightnessPct)}
+              @input=${(ev: Event) => {
+                const el = ev.target as HTMLInputElement;
+                el.style.setProperty('--pct', `${el.value}%`);
+              }}
+              @change=${(ev: Event) => this._setBrightness(entity_id, ev)}
+              @click=${(ev: Event) => ev.stopPropagation()}
+            />`
+          : nothing}
+        ${coverPos !== undefined
+          ? html`<input
+              type="range"
+              class="bri-slider"
+              min="0"
+              max="100"
+              step="1"
+              style="--pct:${coverPos}%;"
+              .value=${String(coverPos)}
+              @input=${(ev: Event) => {
+                const el = ev.target as HTMLInputElement;
+                el.style.setProperty('--pct', `${el.value}%`);
+              }}
+              @change=${(ev: Event) => this._setCoverPosition(entity_id, ev)}
+              @click=${(ev: Event) => ev.stopPropagation()}
+            />`
+          : nothing}
       </div>
+    `;
+  }
+
+  /**
+   * Prosty wiersz czujki (obecność, drzwi, okna, wyciek...): ikona,
+   * nazwa + pokój, po prawej czas od zmiany stanu. Klik = more-info.
+   */
+  private _renderSensorRow(
+    entity_id: string,
+    roomFiltered: boolean,
+  ): TemplateResult {
+    const state = this.hass?.states?.[entity_id];
+    const isOn = state?.state === 'on';
+    const name = this._friendlyName(entity_id);
+    const icon =
+      (state?.attributes?.icon as string | undefined) ??
+      this._defaultIcon(entity_id.split('.')[0] ?? '', isOn);
+    const area = this._areaOf(entity_id).name;
+    const lastChanged = (state as { last_changed?: string } | undefined)
+      ?.last_changed;
+    return html`
+      <button
+        class="prow ${isOn ? 'active' : ''}"
+        @click=${() => this._moreInfo(entity_id)}
+        title="Więcej info"
+      >
+        <span class="bub">
+          <ha-icon .icon=${icon}></ha-icon>
+        </span>
+        <span class="mid">
+          <span class="nm">${name}</span>
+          ${!roomFiltered ? html`<span class="sub">${area}</span>` : nothing}
+        </span>
+        ${lastChanged
+          ? html`<span class="tm">${ago(lastChanged)}</span>`
+          : nothing}
+      </button>
     `;
   }
 
@@ -353,41 +417,6 @@ export class StratumChipList extends LitElement {
     const rgb = attrs.rgb_color as [number, number, number] | undefined;
     if (rgb) return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
     return undefined;
-  }
-
-  private _stateHint(
-    state: { attributes?: Record<string, unknown> } | undefined,
-    domain: string,
-  ): string {
-    if (!state) return '';
-    const attrs = state.attributes ?? {};
-    if (domain === 'light' && typeof attrs.brightness === 'number') {
-      const pct = Math.round(((attrs.brightness as number) / 255) * 100);
-      return `${pct}%`;
-    }
-    if (domain === 'cover' && typeof attrs.current_position === 'number') {
-      return `${attrs.current_position}%`;
-    }
-    return '';
-  }
-
-  private _statusText(
-    state: { state?: string } | undefined,
-    domain: string,
-  ): string {
-    if (!state) return '—';
-    const isOn = state.state === 'on';
-    if (domain === 'binary_sensor') {
-      const cls =
-        ((state as { attributes?: Record<string, unknown> }).attributes?.device_class as
-          | string
-          | undefined) ?? '';
-      if (cls === 'motion' || cls === 'occupancy') return isOn ? 'obecność' : 'brak';
-      if (cls === 'window') return isOn ? 'otwarte' : 'zamknięte';
-      if (cls === 'door') return isOn ? 'otwarte' : 'zamknięte';
-      return isOn ? 'aktywne' : 'nieaktywne';
-    }
-    return state.state ?? '—';
   }
 
   static styles = css`
@@ -437,13 +466,14 @@ export class StratumChipList extends LitElement {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 16px 18px;
+      padding: 16px 18px 14px;
       border-bottom: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
       background: linear-gradient(
         135deg,
         color-mix(in srgb, var(--accent, var(--primary-color, #ff9b42)) 16%, transparent),
         transparent
       );
+      flex-shrink: 0;
     }
 
     .avatar {
@@ -494,6 +524,7 @@ export class StratumChipList extends LitElement {
       align-items: center;
       justify-content: center;
       transition: background 0.12s ease, transform 0.08s ease;
+      flex-shrink: 0;
     }
     .close:hover {
       background: color-mix(in srgb, var(--error-color, #e53935) 22%, transparent);
@@ -501,6 +532,36 @@ export class StratumChipList extends LitElement {
     }
     .close:active {
       transform: scale(0.95);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px 2px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+
+    .tab {
+      flex-shrink: 0;
+      border: 1px solid transparent;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 999px;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+      color: var(--secondary-text-color);
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+      font-variant-numeric: tabular-nums;
+    }
+    .tab.on {
+      background: color-mix(in srgb, var(--accent, var(--primary-color, #ff9b42)) 16%, transparent);
+      border-color: color-mix(in srgb, var(--accent, var(--primary-color, #ff9b42)) 45%, transparent);
+      color: var(--accent, var(--primary-color, #ff9b42));
     }
 
     .empty {
@@ -520,138 +581,40 @@ export class StratumChipList extends LitElement {
 
     .list {
       overflow-y: auto;
-      padding: 6px 0 10px;
-    }
-
-    .master-global {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 7px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--divider-color);
-      background: transparent;
-      color: var(--primary-text-color);
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-      flex-shrink: 0;
-    }
-    .master-global ha-icon { --mdc-icon-size: 16px; }
-    .master-global:hover {
-      background: color-mix(in srgb, var(--error-color, #e53935) 14%, transparent);
-      border-color: var(--error-color, #e53935);
-      color: var(--error-color, #e53935);
-    }
-
-    .group {
-      padding: 0 16px;
-    }
-
-    .group + .group {
-      margin-top: 8px;
-      padding-top: 6px;
-    }
-
-    .group-head {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 10px 0 6px;
-      padding: 0 2px;
-    }
-
-    .group-area {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      flex: 1;
-      min-width: 0;
-      font-size: 12px;
-      color: var(--secondary-text-color);
-    }
-    .group-area ha-icon {
-      --mdc-icon-size: 14px;
-      color: var(--secondary-text-color);
-    }
-    .group-area-name {
-      font-weight: 600;
-      color: var(--primary-text-color);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      font-size: 11px;
-    }
-    .group-area-count {
-      font-variant-numeric: tabular-nums;
-      padding: 1px 6px;
-      border-radius: 999px;
-      background: var(--divider-color, rgba(255, 255, 255, 0.08));
-      font-size: 10px;
-      font-weight: 700;
-    }
-
-    .master-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      padding: 3px 9px;
-      border-radius: 999px;
-      border: 1px solid var(--divider-color);
-      background: transparent;
-      color: var(--secondary-text-color);
-      font-size: 11px;
-      cursor: pointer;
-      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-      flex-shrink: 0;
-    }
-    .master-btn ha-icon { --mdc-icon-size: 13px; }
-    .master-btn:hover {
-      background: color-mix(in srgb, var(--error-color, #e53935) 12%, transparent);
-      border-color: var(--error-color, #e53935);
-      color: var(--error-color, #e53935);
-    }
-
-    .group-body {
+      padding: 12px 16px 14px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
     }
 
-    .item {
+    /* --- wiersz sterowalny (światła / przełączniki / rolety) --- */
+
+    .crow {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      border-radius: 16px;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
+      padding: 12px 14px;
+    }
+
+    .crow-top {
       display: flex;
       align-items: center;
       gap: 12px;
-      min-height: 56px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
-      border: 1px solid transparent;
-      transition: border-color 0.12s ease, background 0.12s ease;
     }
 
-    .item.active {
-      border-color: color-mix(
-        in srgb,
-        var(--icon-color, var(--accent, var(--primary-color, #ff9b42))) 30%,
-        transparent
-      );
-    }
-
-    .item-icon {
-      width: 40px;
-      height: 40px;
+    .crow .bub {
+      width: 42px;
+      height: 42px;
       border-radius: 999px;
       border: 0;
       background: color-mix(
         in srgb,
-        var(--icon-color, var(--secondary-text-color)) 18%,
+        var(--c, var(--accent, var(--primary-color, #ff9b42))) 20%,
         transparent
       );
-      color: var(--icon-color, var(--secondary-text-color));
+      color: var(--c, var(--accent, var(--primary-color, #ff9b42)));
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -659,87 +622,36 @@ export class StratumChipList extends LitElement {
       flex-shrink: 0;
       transition: transform 0.08s ease;
     }
-    .item.active .item-icon {
-      background: color-mix(in srgb, var(--icon-color, #ffc107) 24%, transparent);
-      color: var(--icon-color, #ffc107);
-    }
-    .item-icon:hover { transform: scale(1.06); }
-    .item-icon:active { transform: scale(0.94); }
-    .item-icon ha-icon { --mdc-icon-size: 20px; }
+    .crow .bub:hover { transform: scale(1.06); }
+    .crow .bub:active { transform: scale(0.94); }
+    .crow .bub ha-icon { --mdc-icon-size: 20px; }
 
-    .item-body {
+    .mid {
       flex: 1;
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 1px;
     }
 
-    .item-row {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .item-name {
-      flex: 1;
+    .nm {
       font-size: 14.5px;
       font-weight: 600;
       color: var(--primary-text-color);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      text-align: left;
     }
 
-    .item-hint {
-      font-size: 12px;
-      font-variant-numeric: tabular-nums;
+    .sub {
+      font-size: 11.5px;
       color: var(--secondary-text-color);
-      flex-shrink: 0;
-    }
-
-    .bri-slider {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 10px;
-      margin: 4px 0 2px;
-      border-radius: 999px;
-      background: linear-gradient(
-        90deg,
-        var(--icon-color, var(--primary-color, #ff9b42)) var(--pct, 0%),
-        rgba(255, 255, 255, 0.12) var(--pct, 0%)
-      );
-      cursor: pointer;
-      outline: none;
-    }
-
-    .bri-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #fff;
-      border: 0;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
-      cursor: pointer;
-    }
-
-    .bri-slider::-moz-range-thumb {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #fff;
-      border: 0;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
-      cursor: pointer;
-    }
-
-    .bri-slider:focus-visible {
-      outline: 2px solid var(--icon-color, var(--primary-color, #ff9b42));
-      outline-offset: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+      font-variant-numeric: tabular-nums;
     }
 
     .toggle {
@@ -756,7 +668,7 @@ export class StratumChipList extends LitElement {
     }
 
     .toggle.on {
-      background: var(--primary-color, #ff9b42);
+      background: var(--c, var(--accent, var(--primary-color, #ff9b42)));
     }
 
     .toggle-knob {
@@ -775,22 +687,140 @@ export class StratumChipList extends LitElement {
       transform: translateX(22px);
     }
 
-    .state-badge {
-      padding: 5px 12px;
+    .bri-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 12px;
+      margin: 0;
       border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      background: var(--divider-color, rgba(255, 255, 255, 0.08));
+      background: linear-gradient(
+        90deg,
+        var(--c, var(--accent, var(--primary-color, #ff9b42))) var(--pct, 0%),
+        rgba(255, 255, 255, 0.12) var(--pct, 0%)
+      );
+      cursor: pointer;
+      outline: none;
+    }
+
+    .bri-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      border: 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+
+    .bri-slider::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      border: 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+
+    .bri-slider:focus-visible {
+      outline: 2px solid var(--c, var(--accent, var(--primary-color, #ff9b42)));
+      outline-offset: 2px;
+    }
+
+    /* --- prosty wiersz czujki --- */
+
+    .prow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 58px;
+      padding: 10px 14px;
+      border-radius: 16px;
+      border: 0;
+      font: inherit;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
+      color: var(--primary-text-color);
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.12s ease;
+      width: 100%;
+    }
+    .prow:hover {
+      background: color-mix(
+        in srgb,
+        var(--accent, var(--primary-color, #ff9b42)) 8%,
+        var(--secondary-background-color, rgba(255, 255, 255, 0.04))
+      );
+    }
+
+    .prow .bub {
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--secondary-text-color);
+    }
+    .prow.active .bub {
+      background: color-mix(
+        in srgb,
+        var(--accent, var(--primary-color, #ff9b42)) 18%,
+        transparent
+      );
+      color: var(--accent, var(--primary-color, #ff9b42));
+    }
+    .prow .bub ha-icon { --mdc-icon-size: 20px; }
+
+    .prow .tm {
+      font-size: 12.5px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
       color: var(--secondary-text-color);
       flex-shrink: 0;
     }
-
-    .state-badge.on {
-      background: color-mix(in srgb, var(--primary-color, #ff9b42) 25%, transparent);
-      color: var(--primary-color, #ff9b42);
+    .prow.active .tm {
+      color: var(--accent, var(--primary-color, #ff9b42));
     }
+
+    /* --- sticky stopka --- */
+
+    .foot {
+      padding: 10px 16px 14px;
+      flex-shrink: 0;
+      background: linear-gradient(
+        to top,
+        var(--ha-card-background, var(--card-background-color, #1e1f22)) 65%,
+        transparent
+      );
+    }
+
+    .master {
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      padding: 13px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: color-mix(in srgb, var(--error-color, #e53935) 16%, transparent);
+      color: var(--error-color, #e53935);
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+    .master:hover {
+      background: color-mix(in srgb, var(--error-color, #e53935) 26%, transparent);
+    }
+    .master ha-icon { --mdc-icon-size: 18px; }
 
     @media (prefers-reduced-motion: reduce) {
       .backdrop,
