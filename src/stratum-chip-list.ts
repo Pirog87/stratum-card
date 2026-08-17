@@ -185,9 +185,10 @@ export class StratumChipList extends LitElement {
       this._areaFilter && groups.some((g) => g.area_id === this._areaFilter)
         ? this._areaFilter
         : null;
+    // „Wszystkie" — posortowane pomieszczeniami (kolejność jak zakładki).
     const visible = filter
       ? groups.find((g) => g.area_id === filter)!.entity_ids
-      : this.entityIds;
+      : groups.flatMap((g) => g.entity_ids);
     const showFooter = this._hasControllableOn(visible);
     return html`
       <div
@@ -243,7 +244,7 @@ export class StratumChipList extends LitElement {
                 <span>Nic aktywnego — wszystko pod kontrolą.</span>
               </div>`
             : html`<div class="list">
-                ${visible.map((id) => this._renderRow(id, filter !== null))}
+                ${visible.map((id) => this._renderRow(id))}
               </div>`}
           ${showFooter
             ? html`<div class="foot">
@@ -261,18 +262,17 @@ export class StratumChipList extends LitElement {
     `;
   }
 
-  private _renderRow(entity_id: string, roomFiltered: boolean): TemplateResult {
+  private _renderRow(entity_id: string): TemplateResult {
     const domain = entity_id.split('.')[0] ?? '';
     return this._canControl(domain)
-      ? this._renderControlRow(entity_id, domain, roomFiltered)
-      : this._renderSensorRow(entity_id, roomFiltered);
+      ? this._renderControlRow(entity_id, domain)
+      : this._renderSensorRow(entity_id);
   }
 
-  /** Duży wiersz sterowalny: ikona + nazwa/pokój + toggle + gruby suwak. */
+  /** Duży wiersz sterowalny: ikona + pokój/urządzenie + toggle + gruby suwak. */
   private _renderControlRow(
     entity_id: string,
     domain: string,
-    roomFiltered: boolean,
   ): TemplateResult {
     const state = this.hass?.states?.[entity_id];
     const isOn = state?.state === 'on';
@@ -292,9 +292,9 @@ export class StratumChipList extends LitElement {
         : undefined;
     const lightColor =
       domain === 'light' && isOn ? lightColorOf(state) : undefined;
+    // Pokój wyboldowany u góry, pod spodem urządzenie (+ % gdy jest).
     const area = this._areaOf(entity_id).name;
-    const hintParts: string[] = [];
-    if (!roomFiltered) hintParts.push(area);
+    const hintParts: string[] = [name];
     if (supportsDim && isOn) hintParts.push(`${brightnessPct}%`);
     if (coverPos !== undefined) hintParts.push(`${coverPos}%`);
     const sub = hintParts.join(' · ');
@@ -313,7 +313,7 @@ export class StratumChipList extends LitElement {
             <ha-icon .icon=${icon}></ha-icon>
           </button>
           <div class="mid">
-            <span class="nm">${name}</span>
+            <span class="nm">${area}</span>
             ${sub ? html`<span class="sub">${sub}</span>` : nothing}
           </div>
           <button
@@ -368,10 +368,7 @@ export class StratumChipList extends LitElement {
    * Prosty wiersz czujki (obecność, drzwi, okna, wyciek...): ikona,
    * nazwa + pokój, po prawej czas od zmiany stanu. Klik = more-info.
    */
-  private _renderSensorRow(
-    entity_id: string,
-    roomFiltered: boolean,
-  ): TemplateResult {
+  private _renderSensorRow(entity_id: string): TemplateResult {
     const state = this.hass?.states?.[entity_id];
     const isOn = state?.state === 'on';
     const name = this._friendlyName(entity_id);
@@ -391,8 +388,8 @@ export class StratumChipList extends LitElement {
           <ha-icon .icon=${icon}></ha-icon>
         </span>
         <span class="mid">
-          <span class="nm">${name}</span>
-          ${!roomFiltered ? html`<span class="sub">${area}</span>` : nothing}
+          <span class="nm">${area}</span>
+          <span class="sub">${name}</span>
         </span>
         ${lastChanged
           ? html`<span class="tm">${ago(lastChanged)}</span>`
