@@ -4,6 +4,14 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.71.0] — 2026-08-17
+
+### Changed
+- **Usunięty zielony ring obecności** na tle ikony pomieszczenia (decyzja
+  usera po teście). Obecność pokazuje ikonka statusu po prawej.
+- **Ikony statusów po prawej jeszcze większe**: 25 px (fill/pill),
+  22 px (pozostałe presety i ikonka obecności).
+
 ## [1.70.0] — 2026-08-17
 
 ### Changed (wiersz pomieszczenia)
