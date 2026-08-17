@@ -16,6 +16,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { HassEntity, HomeAssistant, TapActionConfig } from './types.js';
 import { runTapAction } from './tap-action.js';
 import { buildDefaultCustomConfig } from './custom-cards.js';
+import { lightColorOf } from './tile-data.js';
 
 function domainOf(entityId: string): string {
   return entityId.split('.')[0] ?? '';
@@ -306,8 +307,7 @@ export class StratumRoomTile extends LitElement {
     const on = state.state === 'on';
     const bright = (state.attributes?.brightness as number | undefined) ?? 0;
     const pct = on ? Math.round((bright / 255) * 100) : 0;
-    const rgb = state.attributes?.rgb_color as [number, number, number] | undefined;
-    const color = rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : '#ffc107';
+    const color = lightColorOf(state) ?? '#ffc107';
     const bgIntensity = on ? 0.15 + (pct / 100) * 0.55 : 0;
     const bgStyle = on
       ? `background: linear-gradient(135deg, ${color}${Math.round(bgIntensity * 255).toString(16).padStart(2, '0')}, ${color}22);`
@@ -354,8 +354,7 @@ export class StratumRoomTile extends LitElement {
     const bright = (state.attributes?.brightness as number | undefined) ?? 0;
     const statePct = on ? Math.round((bright / 255) * 100) : 0;
     const pct = dragging ? Math.round(this._dragPct!) : statePct;
-    const rgb = state.attributes?.rgb_color as [number, number, number] | undefined;
-    const color = on && rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : undefined;
+    const color = on ? lightColorOf(state) : undefined;
     const isGroup = Array.isArray(state.attributes?.entity_id);
     const icon =
       this.iconOverride ??
@@ -587,12 +586,11 @@ export class StratumRoomTile extends LitElement {
         ? 'mdi:toggle-switch'
         : 'mdi:toggle-switch-off-outline';
     const icon = (state.attributes?.icon as string | undefined) ?? defaultIcon;
-    // Lights: użyj rgb_color żarówki jako akcentu gdy ON.
+    // Lights: użyj aktualnego koloru świecenia jako akcentu gdy ON.
     let accent: string | undefined;
     let brightnessPct: number | undefined;
     if (domain === 'light' && on) {
-      const rgb = state.attributes?.rgb_color as [number, number, number] | undefined;
-      if (rgb) accent = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+      accent = lightColorOf(state);
       const b = state.attributes?.brightness as number | undefined;
       if (typeof b === 'number') brightnessPct = Math.round((b / 255) * 100);
     }

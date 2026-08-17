@@ -284,9 +284,39 @@ function avgBrightness(
 }
 
 /**
- * Pierwsze aktywne światło z `rgb_color` daje nam kolor akcentu.
- * Jeśli żadne nie ma `rgb_color` (np. tryb CT), próbujemy przeliczyć
- * z `color_temp_kelvin`. Jasność z atrybutu `brightness` (0-255 → 0-1).
+ * Aktualny kolor świecenia encji światła jako CSS `rgb(...)`.
+ *
+ * Honoruje `color_mode`: w trybie `color_temp` kolor liczy z
+ * `color_temp_kelvin`, bo `rgb_color` bywa u części integracji
+ * nieaktualne (trzyma ostatni kolor ustawiony w trybie RGB — żarówka
+ * świeci ciepłym białym, a atrybut dalej pokazuje np. czerwony).
+ * `undefined` gdy encja nie świeci albo nie raportuje koloru.
+ */
+export function lightColorOf(
+  state: { state?: string; attributes?: Record<string, unknown> } | undefined,
+): string | undefined {
+  if (!state || state.state !== 'on') return undefined;
+  const attrs = state.attributes ?? {};
+  const mode = attrs.color_mode as string | undefined;
+  const kelvin = attrs.color_temp_kelvin as number | undefined;
+  if (mode === 'color_temp' && typeof kelvin === 'number' && kelvin > 0) {
+    const [r, g, b] = kelvinToRgb(kelvin);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  const rgb = attrs.rgb_color as [number, number, number] | undefined;
+  if (Array.isArray(rgb) && rgb.length === 3) {
+    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  }
+  if (typeof kelvin === 'number' && kelvin > 0) {
+    const [r, g, b] = kelvinToRgb(kelvin);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  return undefined;
+}
+
+/**
+ * Pierwsze aktywne światło z kolorem daje nam kolor akcentu.
+ * Jasność z atrybutu `brightness` (0-255 → 0-1).
  */
 function readLightsColor(
   hass: HomeAssistant,
@@ -300,17 +330,8 @@ function readLightsColor(
       typeof brightnessRaw === 'number'
         ? Math.max(0, Math.min(1, brightnessRaw / 255))
         : undefined;
-    const rgb = state.attributes?.rgb_color as
-      | [number, number, number]
-      | undefined;
-    if (Array.isArray(rgb) && rgb.length === 3) {
-      return { rgb: `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`, brightness };
-    }
-    const kelvin = state.attributes?.color_temp_kelvin as number | undefined;
-    if (typeof kelvin === 'number' && kelvin > 0) {
-      const [r, g, b] = kelvinToRgb(kelvin);
-      return { rgb: `rgb(${r}, ${g}, ${b})`, brightness };
-    }
+    const rgb = lightColorOf(state);
+    if (rgb) return { rgb, brightness };
   }
   return {};
 }
