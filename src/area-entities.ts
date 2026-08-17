@@ -140,3 +140,20 @@ export function filterDisplayable(
     return true;
   });
 }
+
+/** Czy encja `light.*` jest grupą (pomocnik „Grupa światła"). */
+export function isLightGroupEntity(hass: HomeAssistant, entityId: string): boolean {
+  return Array.isArray(hass.states?.[entityId]?.attributes?.entity_id);
+}
+
+/**
+ * Odfiltrowuje grupy świateł — zliczenia i listy chipów operują wyłącznie
+ * na encjach bezpośrednich, żeby jedna żarówka nie liczyła się podwójnie
+ * (raz sama, raz przez grupę pomieszczenia).
+ */
+export function excludeLightGroups(
+  hass: HomeAssistant,
+  entries: HassEntityRegistryEntry[],
+): HassEntityRegistryEntry[] {
+  return entries.filter((e) => !isLightGroupEntity(hass, e.entity_id));
+}

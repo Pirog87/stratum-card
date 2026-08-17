@@ -155,7 +155,11 @@ export function resolveFieldEntityIds(
   switch (field) {
     case 'lights': {
       if (fieldEntities?.lights?.length) return fieldEntities.lights;
-      return filterByDomain(entries, 'light').map((e) => e.entity_id);
+      // Bez grup-pomocników: liczymy/sterujemy encjami bezpośrednimi,
+      // inaczej jedna żarówka liczy się podwójnie (sama + grupa).
+      return filterByDomain(entries, 'light')
+        .filter((e) => !Array.isArray(hass.states?.[e.entity_id]?.attributes?.entity_id))
+        .map((e) => e.entity_id);
     }
     case 'motion': {
       if (fieldEntities?.motion?.length) return fieldEntities.motion;
