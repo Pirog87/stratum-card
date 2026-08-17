@@ -4,6 +4,14 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.68.1] — 2026-08-14
+
+### Fixed
+- **Wybór „Rozmiar tile" / „Pozycja paska" / „Kolumny" w scenach nie
+  znikał już po chwili** — przy liście auto zmiana ustawień globalnych
+  emitowała config bez itemów, który cleanup kasował w całości. Teraz
+  zmiana tych pól materializuje auto-listę (jak każda inna zmiana).
+
 ## [1.68.0] — 2026-08-14
 
 ### Fixed (skalowanie widgetów popupu na różnych ekranach)
