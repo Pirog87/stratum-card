@@ -425,7 +425,10 @@ export class StratumCardRoomRow extends LitElement {
 
     return html`
       <div
-        class="row ${effectiveActive ? 'active' : ''} ${alarmed ? 'alerted' : ''} ${rowAnim
+        class="row ${effectiveActive ? 'active' : ''} ${this.lightsOn > 0 ||
+        lightsActive
+          ? 'lights-on'
+          : ''} ${this.motion ? 'motion-on' : ''} ${alarmed ? 'alerted' : ''} ${rowAnim
           ? `anim-${rowAnim}`
           : ''}"
         part="room"
@@ -607,6 +610,12 @@ export class StratumCardRoomRow extends LitElement {
       transition: background 0.15s ease, color 0.15s ease;
     }
 
+    /* Obecność: zielony ring na tle ikony pomieszczenia. */
+    .row.motion-on .iconwrap {
+      box-shadow: inset 0 0 0 2.5px
+        var(--stratum-room-row-motion-ring, var(--stratum-chip-motion-color, #4caf50));
+    }
+
     .icon {
       --mdc-icon-size: var(--stratum-room-row-icon-size, 20px);
       color: var(--stratum-card-room-icon-color, var(--secondary-text-color));
@@ -645,7 +654,7 @@ export class StratumCardRoomRow extends LitElement {
       border-radius: var(--stratum-room-row-radius, 999px);
       background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.045));
       padding: 0 14px 0 0;
-      min-height: var(--stratum-room-row-min-height, 64px);
+      min-height: var(--stratum-room-row-min-height, 85px);
       touch-action: pan-y;
     }
 
@@ -658,8 +667,8 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
       align-self: flex-end;
-      height: calc(var(--stratum-room-row-min-height, 64px) * 0.8);
-      width: calc(var(--stratum-room-row-min-height, 64px) * 1.08);
+      height: calc(var(--stratum-room-row-min-height, 85px) * 0.8);
+      width: calc(var(--stratum-room-row-min-height, 85px) * 1.08);
       border-radius: 999px;
       overflow: hidden;
       background: var(
@@ -674,7 +683,7 @@ export class StratumCardRoomRow extends LitElement {
          ustawił icon_size explicit — wtedy inline var wygrywa. */
       --mdc-icon-size: var(
         --stratum-room-row-icon-size,
-        calc(var(--stratum-room-row-min-height, 64px) * 0.4)
+        calc(var(--stratum-room-row-min-height, 85px) * 0.4)
       );
     }
 
@@ -693,7 +702,7 @@ export class StratumCardRoomRow extends LitElement {
 
     .row[data-preset='fill'] .info .field ha-icon,
     .row[data-preset='pill'] .info .field ha-icon {
-      --mdc-icon-size: 18px;
+      --mdc-icon-size: 22px;
     }
 
     /* ====== Layout dwuliniowy (fill/pill) ====== */
@@ -738,8 +747,10 @@ export class StratumCardRoomRow extends LitElement {
 
     /* Tło stadionu NIE przejmuje koloru świateł — zostaje neutralne
        (jak w bubble-card). Kolor sygnalizuje sama ikona + warstwa fill. */
-    .row[data-preset='fill'].active .icon,
-    .row[data-preset='pill'].active .icon {
+    /* Ikona koloruje się WYŁĄCZNIE gdy świeci światło — kolorem świateł.
+       Sama obecność (motion) nie barwi ikony. */
+    .row[data-preset='fill'].lights-on .icon,
+    .row[data-preset='pill'].lights-on .icon {
       color: var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107));
     }
 
@@ -819,7 +830,7 @@ export class StratumCardRoomRow extends LitElement {
       border-radius: 10px;
       background: var(--stratum-room-row-iconbg, rgba(255, 255, 255, 0.05));
     }
-    .row[data-preset='rail'].active .icon {
+    .row[data-preset='rail'].lights-on .icon {
       color: var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107));
     }
     .row[data-preset='rail'].alerted .icon {
@@ -865,7 +876,7 @@ export class StratumCardRoomRow extends LitElement {
         transparent
       );
     }
-    .row[data-preset='cards'].active .icon {
+    .row[data-preset='cards'].lights-on .icon {
       color: var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107));
     }
     .row[data-preset='cards'].alerted .icon {
@@ -951,7 +962,7 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .field ha-icon {
-      --mdc-icon-size: 16px;
+      --mdc-icon-size: 20px;
     }
 
     .temp {
@@ -964,7 +975,7 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .motion {
-      --mdc-icon-size: 16px;
+      --mdc-icon-size: 20px;
       color: var(--stratum-chip-motion-color, #4caf50);
     }
 

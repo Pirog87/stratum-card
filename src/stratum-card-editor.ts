@@ -176,7 +176,7 @@ export class StratumCardEditor extends LitElement {
     if (raw.show_name === false) out.show_name = false;
     const defaultRadius = isTile ? 14 : 6;
     const defaultPadding = isTile ? 12 : 10;
-    const defaultMinH = isTile ? 110 : 64;
+    const defaultMinH = isTile ? 110 : 85;
     if (typeof raw.border_radius === 'number' && raw.border_radius !== defaultRadius) {
       out.border_radius = raw.border_radius;
     }
