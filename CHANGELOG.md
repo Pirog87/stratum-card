@@ -4,6 +4,7 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+<<<<<<< HEAD
 ## [1.72.0] — 2026-08-17
 
 ### Changed (popup list chipów — wariant C)
@@ -18,6 +19,8 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 - **Sticky stopka „Wyłącz wszystkie (N)"** dla sterowalnych — działa na
   aktualnie widoczne (wybrana zakładka), zamiast przycisków per sekcja.
 
+=======
+>>>>>>> origin/main
 ## [1.71.0] — 2026-08-17
 
 ### Changed
