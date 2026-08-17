@@ -4,6 +4,20 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.72.0] — 2026-08-17
+
+### Changed (popup list chipów — wariant C)
+- **Zakładki pokojów** zamiast nagłówków sekcji: „Wszystkie · N" + per pokój
+  z licznikiem; klik filtruje listę do jednego pomieszczenia.
+- **Światła / przełączniki / rolety**: duży wiersz — kolorowa okrągła ikona
+  (kolor żarówki, klik = more-info), nazwa + „pokój · %", toggle w kolorze
+  światła, **gruby suwak** jasności/pozycji pod nazwą.
+- **Czujki (obecność, drzwi, okna, wyciek…)**: maksymalnie prosty wiersz —
+  ikona, nazwa + pokój, po prawej **czas od zmiany stanu** (16s / 4min / 2h,
+  format mushroom). Klik w wiersz = more-info. Pokazywane tylko aktywne.
+- **Sticky stopka „Wyłącz wszystkie (N)"** dla sterowalnych — działa na
+  aktualnie widoczne (wybrana zakładka), zamiast przycisków per sekcja.
+
 ## [1.71.0] — 2026-08-17
 
 ### Changed

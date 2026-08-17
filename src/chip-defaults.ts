@@ -126,7 +126,7 @@ export interface ChipValue {
 }
 
 /** Czas od `iso` w stylu mushroom: 16s / 5min / 2h / 1d. */
-function ago(iso: string): string {
+export function ago(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   if (seconds < 60) return `${Math.floor(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
