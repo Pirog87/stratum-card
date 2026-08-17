@@ -5,6 +5,12 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.73.1] — 2026-08-17
+
+### Changed
+- **Nowa grafika sceny „Relaks"** — przytulny salon przy kominku (WebP
+  640×360, podmiana wpisu w `scene-photos.ts`).
+
 ## [1.73.0] — 2026-08-17
 
 ### Changed (grafiki scen)
