@@ -362,6 +362,11 @@ export const SCENE_PRESETS: ScenePreset[] = [
   { id: 'noc', label: 'Noc', photo: SCENE_PHOTOS['noc'] },
   { id: 'noc-2', label: 'Noc 2', photo: SCENE_PHOTOS['noc-2'] },
   { id: 'bezpieczenstwo', label: 'Bezpieczeństwo', svg: SCENES.bezpieczenstwo! },
+  { id: 'kinkiet-cieply', label: 'Kinkiet ciepły', photo: SCENE_PHOTOS['kinkiet-cieply'] },
+  { id: 'kinkiet-przygaszony', label: 'Kinkiet przygaszony', photo: SCENE_PHOTOS['kinkiet-przygaszony'] },
+  { id: 'kinkiet-czerwony', label: 'Kinkiet czerwony', photo: SCENE_PHOTOS['kinkiet-czerwony'] },
+  { id: 'kinkiet-fioletowy', label: 'Kinkiet fioletowy', photo: SCENE_PHOTOS['kinkiet-fioletowy'] },
+  { id: 'kinkiet-niebieski', label: 'Kinkiet niebieski', photo: SCENE_PHOTOS['kinkiet-niebieski'] },
 ];
 
 const PRESET_PREFIX = 'stratum:';

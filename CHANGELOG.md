@@ -5,6 +5,14 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.74.0] — 2026-08-17
+
+### Added
+- **5 nowych presetów „Kinkiet"** (grafiki usera, styl Hue): Kinkiet
+  ciepły, przygaszony, czerwony, fioletowy, niebieski. Oryginały
+  (~230 KB/szt., prawie bezstratne) przekompresowane do WebP q85
+  (~13 KB/szt.) — na kaflu ~200 px bez widocznej różnicy.
+
 ## [1.73.1] — 2026-08-17
 
 ### Changed
