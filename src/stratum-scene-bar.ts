@@ -73,7 +73,7 @@ export class StratumSceneBar extends LitElement {
     }
     const columns = this.config.columns;
     const aspect = this.config.aspect ?? '16/9';
-    const size = this.config.size ?? 'md';
+    const size = this.config.size ?? 'sm';
     // Bez `columns`: siatka responsywna — tyle kolumn, ile zmieści szerokość
     // (kafle min 150 px, bez rozpychania na pół monitora).
     const gridStyle = columns

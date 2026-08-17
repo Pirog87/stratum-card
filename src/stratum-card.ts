@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.68.1';
+const VERSION = '1.69.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -374,7 +374,14 @@ export class StratumCard extends LitElement {
       };
     };
     if (chip.type === 'lights') {
+      // Bez grup-pomocników — lista pokazuje tylko encje bezpośrednie.
       return filterByDomain(entries, 'light')
+        .filter(
+          (e) =>
+            !Array.isArray(
+              this.hass!.states?.[e.entity_id]?.attributes?.entity_id,
+            ),
+        )
         .map((e) => e.entity_id)
         .filter(matches(['on']));
     }

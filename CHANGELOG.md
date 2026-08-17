@@ -4,6 +4,22 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.69.0] — 2026-08-17
+
+### Fixed
+- **Zliczanie świateł bez dublowania** — chipy, pola wiersza/kafla i lista
+  po kliknięciu chipa liczą oraz pokazują WYŁĄCZNIE encje bezpośrednie;
+  grupy-pomocniki są pomijane (jedna świecąca lampka = 1, nie 2). Dotyczy
+  też suwaka jasności wiersza i akcji toggle-lights (bez podwójnych
+  komend grupa+encja). Jawne `field_entities.lights` bez zmian.
+
+### Changed
+- **Sceny: domyślny rozmiar kafla „Mały"** (było „Średni").
+- **Odświeżony popup listy chipa** (Włączone światła itd.): szerszy panel
+  (do 560 px, radius 20), większe wiersze z okrągłą ikoną 40 px, nazwa
+  14.5/600, **gruby suwak jasności z wypełnieniem w kolorze światła**
+  i dużym uchwytem (live), większy przełącznik 48×26.
+
 ## [1.68.1] — 2026-08-14
 
 ### Fixed

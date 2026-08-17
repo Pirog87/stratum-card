@@ -295,7 +295,12 @@ export class StratumChipList extends LitElement {
                 min="1"
                 max="100"
                 step="1"
+                style="--pct:${brightnessPct}%;"
                 .value=${String(brightnessPct)}
+                @input=${(ev: Event) => {
+                  const el = ev.target as HTMLInputElement;
+                  el.style.setProperty('--pct', `${el.value}%`);
+                }}
                 @change=${(ev: Event) => this._setBrightness(entity_id, ev)}
                 @click=${(ev: Event) => ev.stopPropagation()}
               />`
@@ -307,7 +312,12 @@ export class StratumChipList extends LitElement {
                 min="0"
                 max="100"
                 step="1"
+                style="--pct:${coverPos}%;"
                 .value=${String(coverPos)}
+                @input=${(ev: Event) => {
+                  const el = ev.target as HTMLInputElement;
+                  el.style.setProperty('--pct', `${el.value}%`);
+                }}
                 @change=${(ev: Event) => this._setCoverPosition(entity_id, ev)}
                 @click=${(ev: Event) => ev.stopPropagation()}
               />`
@@ -405,12 +415,12 @@ export class StratumChipList extends LitElement {
 
     .panel {
       position: relative;
-      max-width: min(480px, 92vw);
+      max-width: min(560px, 94vw);
       width: 100%;
-      max-height: 82vh;
+      max-height: 86vh;
       display: flex;
       flex-direction: column;
-      border-radius: var(--ha-card-border-radius, 14px);
+      border-radius: 20px;
       background: var(--ha-card-background, var(--card-background-color, #1e1f22));
       color: var(--primary-text-color);
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -427,7 +437,7 @@ export class StratumChipList extends LitElement {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 14px 16px;
+      padding: 16px 18px;
       border-bottom: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
       background: linear-gradient(
         135deg,
@@ -437,9 +447,9 @@ export class StratumChipList extends LitElement {
     }
 
     .avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -452,7 +462,7 @@ export class StratumChipList extends LitElement {
     }
 
     .avatar ha-icon {
-      --mdc-icon-size: 22px;
+      --mdc-icon-size: 24px;
     }
 
     .head-body {
@@ -461,8 +471,8 @@ export class StratumChipList extends LitElement {
     }
 
     .head-title {
-      font-size: 16px;
-      font-weight: 600;
+      font-size: 17px;
+      font-weight: 700;
       color: var(--primary-text-color);
     }
 
@@ -536,7 +546,7 @@ export class StratumChipList extends LitElement {
     }
 
     .group {
-      padding: 0 14px;
+      padding: 0 16px;
     }
 
     .group + .group {
@@ -608,16 +618,17 @@ export class StratumChipList extends LitElement {
     .group-body {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 8px;
     }
 
     .item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 6px 10px;
-      border-radius: 10px;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.03));
+      gap: 12px;
+      min-height: 56px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
       border: 1px solid transparent;
       transition: border-color 0.12s ease, background 0.12s ease;
     }
@@ -631,9 +642,9 @@ export class StratumChipList extends LitElement {
     }
 
     .item-icon {
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
       border: 0;
       background: color-mix(
         in srgb,
@@ -654,7 +665,7 @@ export class StratumChipList extends LitElement {
     }
     .item-icon:hover { transform: scale(1.06); }
     .item-icon:active { transform: scale(0.94); }
-    .item-icon ha-icon { --mdc-icon-size: 16px; }
+    .item-icon ha-icon { --mdc-icon-size: 20px; }
 
     .item-body {
       flex: 1;
@@ -673,8 +684,8 @@ export class StratumChipList extends LitElement {
 
     .item-name {
       flex: 1;
-      font-size: 13px;
-      font-weight: 500;
+      font-size: 14.5px;
+      font-weight: 600;
       color: var(--primary-text-color);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -682,23 +693,59 @@ export class StratumChipList extends LitElement {
     }
 
     .item-hint {
-      font-size: 11px;
+      font-size: 12px;
       font-variant-numeric: tabular-nums;
       color: var(--secondary-text-color);
       flex-shrink: 0;
     }
 
     .bri-slider {
+      -webkit-appearance: none;
+      appearance: none;
       width: 100%;
-      height: 4px;
-      accent-color: var(--icon-color, var(--primary-color, #ff9b42));
+      height: 10px;
+      margin: 4px 0 2px;
+      border-radius: 999px;
+      background: linear-gradient(
+        90deg,
+        var(--icon-color, var(--primary-color, #ff9b42)) var(--pct, 0%),
+        rgba(255, 255, 255, 0.12) var(--pct, 0%)
+      );
       cursor: pointer;
+      outline: none;
+    }
+
+    .bri-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      border: 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+
+    .bri-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      border: 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+
+    .bri-slider:focus-visible {
+      outline: 2px solid var(--icon-color, var(--primary-color, #ff9b42));
+      outline-offset: 2px;
     }
 
     .toggle {
       position: relative;
-      width: 36px;
-      height: 20px;
+      width: 48px;
+      height: 26px;
       border-radius: 999px;
       border: 0;
       background: var(--divider-color, rgba(255, 255, 255, 0.2));
@@ -714,10 +761,10 @@ export class StratumChipList extends LitElement {
 
     .toggle-knob {
       position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 16px;
-      height: 16px;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: #fff;
       transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -725,13 +772,13 @@ export class StratumChipList extends LitElement {
     }
 
     .toggle.on .toggle-knob {
-      transform: translateX(16px);
+      transform: translateX(22px);
     }
 
     .state-badge {
-      padding: 4px 10px;
+      padding: 5px 12px;
       border-radius: 999px;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.05em;

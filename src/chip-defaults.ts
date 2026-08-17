@@ -11,7 +11,7 @@ import type {
   HassEntityRegistryEntry,
   HomeAssistant,
 } from './types.js';
-import { filterByDomain, filterBinarySensorDeviceClass } from './area-entities.js';
+import { filterByDomain, filterBinarySensorDeviceClass, excludeLightGroups } from './area-entities.js';
 import { resolveColor } from './colors.js';
 import type { TemplateRenderer } from './template-renderer.js';
 
@@ -207,7 +207,8 @@ export function evaluateChip(
 ): ChipValue {
   switch (chip.type) {
     case 'lights':
-      return countedValue(hass, filterByDomain(entries, 'light'), chip);
+      // Tylko encje bezpośrednie — grupy-pomocniki dublowałyby zliczenie.
+      return countedValue(hass, excludeLightGroups(hass, filterByDomain(entries, 'light')), chip);
     case 'motion': {
       // Spójnie z row/tile: motion chip obejmuje też `device_class: occupancy`
       // (czujki presence mmWave).
