@@ -5,6 +5,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.72.1] — 2026-08-17
+
+### Fixed
+- **Nieaktualny kolor żarówek** na kaflach świateł i w listach chipów:
+  gdy żarówka świeci w trybie temperatury barwowej (ciepła biel), część
+  integracji zostawia w `rgb_color` ostatni kolor RGB (np. czerwony).
+  Kolor liczymy teraz wg `color_mode` — w trybie `color_temp` z
+  `color_temp_kelvin`, `rgb_color` tylko w trybach kolorowych. Wspólny
+  helper `lightColorOf()` użyty we wszystkich miejscach (kafle rail/tint,
+  ambient, toggle, wiersz pomieszczenia, popup chipów).
+
 ## [1.72.0] — 2026-08-17
 
 ### Changed (popup list chipów — wariant C)

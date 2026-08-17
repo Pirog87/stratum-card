@@ -14,6 +14,7 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { ChipConfig, HomeAssistant } from './types.js';
 import { ago } from './chip-defaults.js';
+import { lightColorOf } from './tile-data.js';
 
 interface AreaGroup {
   /** Area ID albo pusty string dla „Bez pomieszczenia". */
@@ -290,11 +291,7 @@ export class StratumChipList extends LitElement {
         ? Math.round(coverPosRaw)
         : undefined;
     const lightColor =
-      domain === 'light' && isOn
-        ? this._lightColor(
-            state?.attributes as Record<string, unknown> | undefined,
-          )
-        : undefined;
+      domain === 'light' && isOn ? lightColorOf(state) : undefined;
     const area = this._areaOf(entity_id).name;
     const hintParts: string[] = [];
     if (!roomFiltered) hintParts.push(area);
@@ -410,13 +407,6 @@ export class StratumChipList extends LitElement {
     if (domain === 'cover') return 'mdi:window-shutter';
     if (domain === 'binary_sensor') return 'mdi:motion-sensor';
     return 'mdi:label-outline';
-  }
-
-  private _lightColor(attrs: Record<string, unknown> | undefined): string | undefined {
-    if (!attrs) return undefined;
-    const rgb = attrs.rgb_color as [number, number, number] | undefined;
-    if (rgb) return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-    return undefined;
   }
 
   static styles = css`
