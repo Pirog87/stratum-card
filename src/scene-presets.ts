@@ -7,10 +7,15 @@
 //
 // Użycie: `image: 'stratum:<id>'` w configu — runtime zamienia na data URI.
 
+import { SCENE_PHOTOS } from './scene-photos.js';
+
 export interface ScenePreset {
   id: string;
   label: string;
-  svg: string;
+  /** Grafika wektorowa (fallback dla scen bez zdjęcia). */
+  svg?: string;
+  /** Zdjęcie WebP jako data URI — wygrywa nad `svg`. */
+  photo?: string;
 }
 
 /** Wrapper SVG z soft-glow filterem. */
@@ -322,30 +327,40 @@ const SCENES: Record<string, string> = {
   ]),
 };
 
+// Sceny ze zdjęciem dostają `photo` (wygrywa nad svg — patrz
+// resolveSceneImage); pozostałe zostają na wbudowanym SVG. Istniejące
+// configi `stratum:<id>` działają bez zmian — te same id wskazują teraz
+// nową grafikę.
 export const SCENE_PRESETS: ScenePreset[] = [
-  { id: 'jasne', label: 'Jasne', svg: SCENES.jasne! },
-  { id: 'poranek', label: 'Poranek', svg: SCENES.poranek! },
-  { id: 'kawa', label: 'Kawa', svg: SCENES.kawa! },
+  { id: 'jasne', label: 'Jasne', photo: SCENE_PHOTOS['jasne'] },
+  { id: 'poranek', label: 'Poranek', photo: SCENE_PHOTOS['poranek'] },
+  { id: 'kawa', label: 'Kawa', photo: SCENE_PHOTOS['kawa'] },
   { id: 'praca', label: 'Praca', svg: SCENES.praca! },
-  { id: 'nauka', label: 'Nauka', svg: SCENES.nauka! },
-  { id: 'czytanie', label: 'Czytanie', svg: SCENES.czytanie! },
+  { id: 'nauka', label: 'Nauka', photo: SCENE_PHOTOS['nauka'] },
+  { id: 'czytanie', label: 'Czytanie', photo: SCENE_PHOTOS['czytanie'] },
+  { id: 'czytanie-2', label: 'Czytanie 2', photo: SCENE_PHOTOS['czytanie-2'] },
   { id: 'gotowanie', label: 'Gotowanie', svg: SCENES.gotowanie! },
-  { id: 'relaks', label: 'Relaks', svg: SCENES.relaks! },
+  { id: 'relaks', label: 'Relaks', photo: SCENE_PHOTOS['relaks'] },
   { id: 'medytacja', label: 'Medytacja', svg: SCENES.medytacja! },
   { id: 'muzyka', label: 'Muzyka', svg: SCENES.muzyka! },
-  { id: 'tv', label: 'TV', svg: SCENES.tv! },
+  { id: 'tv', label: 'TV', photo: SCENE_PHOTOS['tv'] },
+  { id: 'tv-2', label: 'TV 2', photo: SCENE_PHOTOS['tv-2'] },
   { id: 'kino', label: 'Kino', svg: SCENES.kino! },
   { id: 'gaming', label: 'Gaming', svg: SCENES.gaming! },
   { id: 'sport', label: 'Sport', svg: SCENES.sport! },
   { id: 'goscie', label: 'Goście', svg: SCENES.goscie! },
-  { id: 'impreza', label: 'Impreza', svg: SCENES.impreza! },
-  { id: 'disco', label: 'Disco', svg: SCENES.disco! },
-  { id: 'romantyczne', label: 'Romantyczne', svg: SCENES.romantyczne! },
-  { id: 'kapiel', label: 'Kąpiel', svg: SCENES.kapiel! },
-  { id: 'ogrod', label: 'Ogród', svg: SCENES.ogrod! },
-  { id: 'wieczor', label: 'Wieczór', svg: SCENES.wieczor! },
-  { id: 'usypianie', label: 'Usypianie', svg: SCENES.usypianie! },
-  { id: 'noc', label: 'Noc', svg: SCENES.noc! },
+  { id: 'impreza', label: 'Impreza', photo: SCENE_PHOTOS['impreza'] },
+  { id: 'impreza-2', label: 'Impreza 2', photo: SCENE_PHOTOS['impreza-2'] },
+  { id: 'disco', label: 'Disco', photo: SCENE_PHOTOS['disco'] },
+  { id: 'romantyczne', label: 'Romantyczne', photo: SCENE_PHOTOS['romantyczne'] },
+  { id: 'kapiel', label: 'Kąpiel', photo: SCENE_PHOTOS['kapiel'] },
+  { id: 'kapiel-cieply', label: 'Kąpiel ciepła', photo: SCENE_PHOTOS['kapiel-cieply'] },
+  { id: 'kapiel-fiolet', label: 'Kąpiel fiolet', photo: SCENE_PHOTOS['kapiel-fiolet'] },
+  { id: 'ogrod', label: 'Ogród', photo: SCENE_PHOTOS['ogrod'] },
+  { id: 'wieczor', label: 'Wieczór', photo: SCENE_PHOTOS['wieczor'] },
+  { id: 'usypianie', label: 'Usypianie', photo: SCENE_PHOTOS['usypianie'] },
+  { id: 'noc', label: 'Noc', photo: SCENE_PHOTOS['noc'] },
+  { id: 'noc-2', label: 'Noc 2', photo: SCENE_PHOTOS['noc-2'] },
   { id: 'bezpieczenstwo', label: 'Bezpieczeństwo', svg: SCENES.bezpieczenstwo! },
 ];
 
@@ -361,7 +376,9 @@ export function resolveSceneImage(value: string | undefined): string | undefined
   const id = value.slice(PRESET_PREFIX.length);
   const preset = SCENE_PRESETS.find((p) => p.id === id);
   if (!preset) return undefined;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(preset.svg)}`;
+  if (preset.photo) return preset.photo;
+  if (preset.svg) return `data:image/svg+xml;utf8,${encodeURIComponent(preset.svg)}`;
+  return undefined;
 }
 
 export function presetIdFromValue(value: string | undefined): string | undefined {
