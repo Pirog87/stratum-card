@@ -196,10 +196,17 @@ export class StratumSceneEditor extends LitElement {
 
   private _onGlobalChange(ev: CustomEvent<{ value: Partial<SceneBarConfig> }>): void {
     ev.stopPropagation();
+    // Przy liście auto (items puste) zmiana pozycji/rozmiaru/kolumn musi
+    // zmaterializować listę — inaczej cleanup wyżej skasuje cały config
+    // scen (brak items) i wybór „zniknie" po chwili.
+    const baseItems =
+      (this.config.items ?? []).length > 0
+        ? this.config.items!
+        : this._workingItems();
     const next: SceneBarConfig = {
       ...this.config,
       ...ev.detail.value,
-      items: this.config.items ?? [],
+      items: baseItems,
     };
     if (!next.position) delete next.position;
     if (!next.size) delete next.size;
