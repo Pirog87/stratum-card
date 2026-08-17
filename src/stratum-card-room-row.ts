@@ -610,12 +610,6 @@ export class StratumCardRoomRow extends LitElement {
       transition: background 0.15s ease, color 0.15s ease;
     }
 
-    /* Obecność: zielony ring na tle ikony pomieszczenia. */
-    .row.motion-on .iconwrap {
-      box-shadow: inset 0 0 0 2.5px
-        var(--stratum-room-row-motion-ring, var(--stratum-chip-motion-color, #4caf50));
-    }
-
     .icon {
       --mdc-icon-size: var(--stratum-room-row-icon-size, 20px);
       color: var(--stratum-card-room-icon-color, var(--secondary-text-color));
@@ -702,7 +696,7 @@ export class StratumCardRoomRow extends LitElement {
 
     .row[data-preset='fill'] .info .field ha-icon,
     .row[data-preset='pill'] .info .field ha-icon {
-      --mdc-icon-size: 22px;
+      --mdc-icon-size: 25px;
     }
 
     /* ====== Layout dwuliniowy (fill/pill) ====== */
@@ -962,7 +956,7 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .field ha-icon {
-      --mdc-icon-size: 20px;
+      --mdc-icon-size: 22px;
     }
 
     .temp {
@@ -975,7 +969,7 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .motion {
-      --mdc-icon-size: 20px;
+      --mdc-icon-size: 22px;
       color: var(--stratum-chip-motion-color, #4caf50);
     }
 
