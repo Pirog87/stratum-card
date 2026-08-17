@@ -4,6 +4,21 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.70.0] — 2026-08-17
+
+### Changed (wiersz pomieszczenia)
+- **Domyślna wysokość wiersza: 85 px** (było 64) — stadion ikony i rozmiar
+  ikony skalują się proporcjonalnie; suwak w edytorze pokazuje nowy default.
+- **Ikona pomieszczenia koloruje się WYŁĄCZNIE gdy świeci światło** —
+  kolorem świateł. Sama obecność (motion) nie barwi już ikony.
+- **Większe ikony statusów po prawej** (18 → 22 px w fill/pill, 16 → 20 px
+  w pozostałych presetach).
+
+### Added
+- **Zielony ring tła ikony przy wykrytej obecności** — stadion ikony
+  dostaje zielone obramowanie, gdy w pomieszczeniu jest ruch. Kolor:
+  `--stratum-room-row-motion-ring` (default kolor motion #4caf50).
+
 ## [1.69.0] — 2026-08-17
 
 ### Fixed
