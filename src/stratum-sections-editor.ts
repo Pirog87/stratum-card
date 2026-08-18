@@ -300,7 +300,7 @@ export class StratumSectionsEditor extends LitElement {
   private _formData(section: RoomSectionConfig): Record<string, unknown> {
     const d: Record<string, unknown> = { columns: 'auto', ...section };
     if (section.type === 'covers') {
-      d.master = section.master ?? true;
+      d.master = section.master ?? false;
       d.positions = (section.positions ?? [50, 75]).map(String);
     }
     return d;
@@ -314,9 +314,9 @@ export class StratumSectionsEditor extends LitElement {
     if (!merged.icon) delete merged.icon;
     if (!merged.entity) delete merged.entity;
     if (!merged.entities || merged.entities.length === 0) delete merged.entities;
-    // Covers: master default true (zapisujemy tylko false); positions z ha-form
+    // Covers: master default false (zapisujemy tylko true); positions z ha-form
     // przychodzą jako stringi — normalizujemy do liczb, default [50, 75] kasujemy.
-    if (merged.master !== false) delete merged.master;
+    if (merged.master !== true) delete merged.master;
     if (merged.positions !== undefined) {
       const nums = (merged.positions as Array<string | number>)
         .map(Number)

@@ -5,6 +5,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.75.1] — 2026-08-17
+
+### Changed (popup pomieszczenia)
+- **Pasek akcji zbiorczych rolet ukryty domyślnie** (Otwórz / Stop /
+  Zamknij / %) — per-roleta ↑■↓ wystarcza; `master: true` w sekcji
+  covers przywraca pasek.
+- **Sekcje „Drzwi" i „Przełączniki" usunięte z auto-wykrywania** —
+  jawna sekcja w configu nadal działa.
+
 ## [1.75.0] — 2026-08-17
 
 ### Changed (listy chipów)
