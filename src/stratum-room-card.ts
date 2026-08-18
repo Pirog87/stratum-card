@@ -129,16 +129,17 @@ function autoSections(
   hass: HomeAssistant,
   entries: HassEntityRegistryEntry[],
 ): RoomSectionType[] {
+  // Bez `doors` i `switches` — decyzja usera: te sekcje nie wnoszą nic
+  // w popupie (drzwi widać w chipach, przełączniki-żarówki dublują światła).
+  // Jawna sekcja w configu (`sections: [{type: 'doors'}]`) nadal działa.
   const order: RoomSectionType[] = [
     'scenes',
     'lights',
     'covers',
     'windows',
-    'doors',
     'climate',
     'media',
     'fans',
-    'switches',
   ];
   return order.filter((s) => entitiesForSection(hass, entries, s).length > 0);
 }
@@ -692,13 +693,14 @@ export class StratumRoomCard extends LitElement {
 
   /**
    * Pasek akcji zbiorczych rolet (Otwórz / Stop / Zamknij + szybkie pozycje
-   * %) — działa na WSZYSTKIE covery sekcji naraz. `master: false` chowa.
+   * %) — działa na WSZYSTKIE covery sekcji naraz. Domyślnie UKRYTY
+   * (decyzja usera — per-roleta ↑■↓ wystarcza); `master: true` włącza.
    */
   private _renderCoversMaster(
     section: RoomSectionConfig,
     items: HassEntityRegistryEntry[],
   ): TemplateResult | typeof nothing {
-    if (section.master === false || items.length === 0) return nothing;
+    if (section.master !== true || items.length === 0) return nothing;
     const ids = items.map((e) => e.entity_id);
     const positions = (
       section.positions && section.positions.length > 0
