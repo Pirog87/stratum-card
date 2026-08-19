@@ -357,8 +357,9 @@ export class StratumCardEditor extends LitElement {
 
   private _onAutoCollapseInput(ev: Event): void {
     const v = parseInt((ev.target as HTMLInputElement).value, 10);
-    // Default = 60; zapisujemy tylko gdy inne.
-    this._updateField('auto_collapse', v === 60 ? undefined : v);
+    // Default = 0 (wyłączone — zwijaniem rządzi mechanizm sesyjny);
+    // zapisujemy tylko gdy user jawnie ustawi timer.
+    this._updateField('auto_collapse', v === 0 ? undefined : v);
   }
 
   private _onToggleChange(
@@ -391,7 +392,7 @@ export class StratumCardEditor extends LitElement {
 
   private _renderBasePanel(): TemplateResult {
     const cfg = this._config!;
-    const autoCollapse = cfg.auto_collapse ?? 60;
+    const autoCollapse = cfg.auto_collapse ?? 0;
     const roomsDisplay = cfg.rooms_display ?? 'row';
     const cols: 'auto' | 1 | 2 | 3 | 4 | 5 | 6 =
       cfg.rooms_tile_columns ?? 'auto';
@@ -494,6 +495,11 @@ export class StratumCardEditor extends LitElement {
               @input=${this._onAutoCollapseInput}
             />
           </div>
+          <p class="stratum-group-hint">
+            Karta zwija się sama przy wyjściu z widoku i wygaszeniu ekranu
+            (mechanizm sesyjny) — timer jest opcjonalnym dodatkiem, np. dla
+            tabletu ściennego. „Wyłączone" = tylko mechanizm sesyjny.
+          </p>
 
           <div class="stratum-toggles-row">
             <label class="stratum-toggle">

@@ -5,6 +5,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.76.0] — 2026-08-18
+
+### Changed
+- **Sesyjne zwijanie zamiast timera**: karta zwija się do stanu
+  domyślnego przy wyjściu z widoku (re-render) i przy zejściu do tła
+  (wygaszony ekran / inna aplikacja). Dopóki jesteś w widoku,
+  rozwinięcie trzyma się bez limitu czasu — koniec ze zwijaniem „pod
+  ręką". Timer „Auto-zwijanie po" zostaje jako opcja (np. tablet
+  ścienny), domyślnie **wyłączony**.
+
 ## [1.75.1] — 2026-08-17
 
 ### Changed (popup pomieszczenia)
