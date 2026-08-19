@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.75.1';
+const VERSION = '1.76.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -136,9 +136,29 @@ export class StratumCard extends LitElement {
   }
 
   private _autoCollapseSeconds(): number {
+    // Domyślnie 0 (wyłączone) — zwijaniem rządzi mechanizm sesyjny
+    // (_resetExpanded): reset przy wyjściu z widoku / zejściu do tła.
+    // Timer zostaje jako opcjonalny dodatek dla kiosków.
     const v = this._config?.auto_collapse;
-    return typeof v === 'number' ? v : 60;
+    return typeof v === 'number' ? v : 0;
   }
+
+  /**
+   * Reset do stanu domyślnego — koniec „sesji" użytkownika w widoku.
+   * Wołany gdy karta wypada z DOM (zmiana widoku/dashboardu — HA renderuje
+   * ją od nowa przy powrocie) oraz gdy dokument schodzi do tła (wygaszony
+   * ekran, inna aplikacja). Dopóki user siedzi w widoku, rozwinięcie
+   * trzyma się bez limitu czasu.
+   */
+  private _resetExpanded(): void {
+    if (this._isEditorPreview()) return;
+    this._clearAutoCollapse();
+    this._expanded = Boolean(this._config?.expanded);
+  }
+
+  private _onVisibilityChange = (): void => {
+    if (document.hidden) this._resetExpanded();
+  };
 
   private _scheduleAutoCollapse(): void {
     this._clearAutoCollapse();
@@ -569,10 +589,13 @@ export class StratumCard extends LitElement {
     // chipy / row / popup liczą device_class z overridem (np. SATEL).
     this._unsubRegistry = subscribeRegistry(() => this.requestUpdate());
     if (this.hass) void ensureRegistry(this.hass);
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
   }
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    this._resetExpanded();
     this._templates.destroy();
     this._clearAutoCollapse();
     document.removeEventListener('keydown', this._onPopupKey);
