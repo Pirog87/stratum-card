@@ -38,12 +38,14 @@ function scaleRgb(rgb: string, factor: number): string {
 }
 
 /**
- * Umiarkowany boost nasycenia (przez HSL) — kolory scen mają być żywe jak
- * w galerii Hue, nie „mydlane". Sufit 0.85 chroni przed neonem, a ciepłe
- * biele z żarówek CT (niska saturacja) dostają najwięcej — z beżu robi
- * się złoto zamiast błota.
+ * Toning koloru sceny (przez HSL) — kafle mają świecić jak w galerii Hue:
+ * - nasycenie ×1.35 z podłogą 0.3 i sufitem 0.85 (ciepłe biele → złoto,
+ *   bez neonów),
+ * - jasność sceny NIE mnoży koloru w dół (to robiło brązy) — ustawia
+ *   tylko PODŁOGĘ jasności: bri=100% → L min 0.62, bri=0% → L min 0.40.
+ *   Kolor jaśniejszy od podłogi zostaje jaki jest (sufit 0.8).
  */
-function vivify(rgb: string, satMul = 1.35): string {
+function tone(rgb: string, bri: number): string {
   const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
   if (!m) return rgb;
   const r = parseInt(m[1]!, 10) / 255;
@@ -51,7 +53,7 @@ function vivify(rgb: string, satMul = 1.35): string {
   const b = parseInt(m[3]!, 10) / 255;
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
+  let l = (max + min) / 2;
   const d = max - min;
   let h = 0;
   let s = 0;
@@ -61,7 +63,9 @@ function vivify(rgb: string, satMul = 1.35): string {
     else if (max === g) h = ((b - r) / d + 2) / 6;
     else h = ((r - g) / d + 4) / 6;
   }
-  s = Math.min(0.85, s * satMul);
+  s = Math.min(0.85, Math.max(0.3, s * 1.35));
+  const floor = 0.4 + 0.22 * Math.max(0, Math.min(1, bri));
+  l = Math.min(0.8, Math.max(l, floor));
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
   const p = 2 * l - q;
   const hue = (t: number): number => {
@@ -102,13 +106,9 @@ function buildGradient(
   data: SceneColors,
   entityId: string,
 ): string {
-  // Jasność sceny przyciemnia kolory: 100% → pełny kolor, 0% → ~55%.
-  // Po przyciemnieniu podbijamy nasycenie — inaczej kolory robią się
-  // błotniste (zwłaszcza ciepłe biele z żarówek CT).
-  const factor = 0.55 + 0.45 * data.bri;
-  const scaled = data.colors
-    .slice(0, 4)
-    .map((c) => vivify(scaleRgb(c, factor)));
+  // Toning: nasycenie w górę, jasność z podłogą zależną od bri sceny —
+  // bez mnożenia w dół (patrz komentarz przy tone()).
+  const scaled = data.colors.slice(0, 4).map((c) => tone(c, data.bri));
   const byLum = [...scaled].sort((a, b) => luminance(b) - luminance(a));
   const darkest = byLum[byLum.length - 1]!;
 
