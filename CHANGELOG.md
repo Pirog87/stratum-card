@@ -5,6 +5,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.79.3] — 2026-08-20
+
+### Fixed
+- **Kafle scen nadal ciemne** (sceny „jasne" z brightness ~60–70%
+  robiły się brązowe): jasność sceny już NIE mnoży kolorów w dół —
+  zamiast tego ustawia podłogę jasności w HSL (bri 100% → L min 0.62,
+  bri 0% → L min 0.40, sufit 0.8). Kafle zawsze „świecą" jak w Hue,
+  sceny nocne są tylko odrobinę głębsze. Nasycenie: ×1.35, podłoga 0.3,
+  sufit 0.85.
+
 ## [1.79.2] — 2026-08-20
 
 ### Changed
