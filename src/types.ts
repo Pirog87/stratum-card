@@ -62,6 +62,13 @@ export interface StratumCardConfig {
   rooms_tile_min_width?: number;
 
   /**
+   * Globalny rozmiar kafli scen w popupach WSZYSTKICH pomieszczeń.
+   * Per pomieszczenie nadpisuje `scenes.size` w konfiguracji pokoju.
+   * Default: `sm`.
+   */
+  rooms_scene_size?: 'sm' | 'md' | 'lg';
+
+  /**
    * Konfiguracja wyglądu wiersza (row) — używana gdy `display: row`
    * per-pokój albo `rooms_display: row` globalnie.
    */
@@ -179,6 +186,11 @@ export interface StratumRoomCardConfig {
   sections?: RoomSectionSpec[];
   /** Pasek scen — zastępuje auto-sekcję scen, pełna kontrola layoutu. */
   scenes?: SceneBarConfig;
+  /**
+   * Globalny default rozmiaru kafli scen (z karty głównej,
+   * `rooms_scene_size`). `scenes.size` per pokój wygrywa.
+   */
+  scene_size_default?: 'sm' | 'md' | 'lg';
   /** Jawna lista GRUP świateł — zastępuje auto-discovery bloku grup. */
   lights?: RoomLightsConfig;
   /** Pomocnik auto-świateł — badge „Auto" w nagłówku bloku świateł. */

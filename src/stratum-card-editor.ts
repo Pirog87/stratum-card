@@ -375,6 +375,11 @@ export class StratumCardEditor extends LitElement {
     this._updateField('rooms_display', value === 'tile' ? 'tile' : undefined);
   }
 
+  private _onRoomsSceneSize(value: 'sm' | 'md' | 'lg'): void {
+    // Default = 'sm', więc zapisujemy tylko gdy inne.
+    this._updateField('rooms_scene_size', value === 'sm' ? undefined : value);
+  }
+
   private _onColumnsChange(value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6): void {
     const next: StratumCardConfig = {
       ...this._config!,
@@ -477,6 +482,31 @@ export class StratumCardEditor extends LitElement {
             <p class="stratum-group-hint">
               Auto = auto-fill (dostosowuje liczbę kolumn do szerokości).
               Cyfra = sztywno N kolumn, szerokość kafli dzieli się równo.
+            </p>
+          </div>
+
+          <div class="stratum-group">
+            <label class="stratum-group-label">Kafle scen — rozmiar (globalnie)</label>
+            <div class="stratum-chip-row">
+              ${(
+                [
+                  { value: 'sm', label: 'Mały' },
+                  { value: 'md', label: 'Średni' },
+                  { value: 'lg', label: 'Duży' },
+                ] as const
+              ).map(
+                (c) => html`<button
+                  type="button"
+                  class="stratum-chip ${(cfg.rooms_scene_size ?? 'sm') === c.value ? 'on' : ''}"
+                  @click=${() => this._onRoomsSceneSize(c.value)}
+                >
+                  <span>${c.label}</span>
+                </button>`,
+              )}
+            </div>
+            <p class="stratum-group-hint">
+              Rozmiar kafli scen w popupach wszystkich pomieszczeń. Nadpisujesz
+              per pomieszczenie w edycji pokoju → Sceny → „Rozmiar tile".
             </p>
           </div>
 

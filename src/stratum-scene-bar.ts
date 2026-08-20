@@ -10,6 +10,73 @@ import type { HomeAssistant, SceneBarConfig, SceneConfig } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
 import { runTapAction } from './tap-action.js';
+import { lightColorOf } from './tile-data.js';
+
+/**
+ * Cache gradientów z konfiguracji scen HA (styl Philips Hue): scena bez
+ * grafiki i bez koloru dostaje tło zmiksowane z kolorów świateł, które
+ * ustawia, przyciemnione proporcjonalnie do średniej jasności.
+ * Klucz = entity_id sceny; wartość = CSS background albo null (nie da się
+ * odczytać — scena YAML/z mostka, brak uprawnień itp.). Moduł-level, żeby
+ * wiele scene-barów nie odpytywało API o to samo.
+ */
+const sceneGradientCache = new Map<string, string | null>();
+const sceneGradientPending = new Set<string>();
+
+function scaleRgb(rgb: string, factor: number): string {
+  const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (!m) return rgb;
+  const f = (v: string): number => Math.round(parseInt(v, 10) * factor);
+  return `rgb(${f(m[1]!)}, ${f(m[2]!)}, ${f(m[3]!)})`;
+}
+
+async function computeSceneGradient(
+  hass: HomeAssistant,
+  entityId: string,
+): Promise<string | null> {
+  const state = hass.states?.[entityId];
+  // Tylko sceny edytowalne w UI mają `id` i config dostępny przez REST.
+  const sceneId = state?.attributes?.id as string | undefined;
+  if (!sceneId || !hass.fetchWithAuth) return null;
+  try {
+    const resp = await hass.fetchWithAuth(
+      `/api/config/scene/config/${sceneId}`,
+    );
+    if (!resp.ok) return null;
+    const cfg = (await resp.json()) as {
+      entities?: Record<string, unknown>;
+    };
+    const colors: string[] = [];
+    let briSum = 0;
+    let briN = 0;
+    for (const [id, raw] of Object.entries(cfg.entities ?? {})) {
+      if (!id.startsWith('light.')) continue;
+      const attrs =
+        typeof raw === 'object' && raw !== null
+          ? (raw as Record<string, unknown>)
+          : { state: raw };
+      if (attrs.state === 'off') continue;
+      const color = lightColorOf({ state: 'on', attributes: attrs });
+      if (color && !colors.includes(color)) colors.push(color);
+      const b = attrs.brightness;
+      if (typeof b === 'number') {
+        briSum += Math.max(0, Math.min(255, b));
+        briN += 1;
+      }
+    }
+    if (colors.length === 0) return null;
+    // Jasność sceny przyciemnia kolory: 100% → pełny kolor, 0% → ~40%.
+    const bri = briN > 0 ? briSum / briN / 255 : 1;
+    const factor = 0.4 + 0.6 * bri;
+    const scaled = colors.slice(0, 4).map((c) => scaleRgb(c, factor));
+    if (scaled.length === 1) {
+      return `linear-gradient(135deg, ${scaled[0]}, ${scaleRgb(scaled[0]!, 0.55)})`;
+    }
+    return `linear-gradient(135deg, ${scaled.join(', ')})`;
+  } catch {
+    return null;
+  }
+}
 
 @customElement('stratum-scene-bar')
 export class StratumSceneBar extends LitElement {
@@ -35,6 +102,21 @@ export class StratumSceneBar extends LitElement {
     this._defaultActivate(scene);
   }
 
+  /** Gradient z kolorów sceny — z cache; brak = kick off async fetch. */
+  private _sceneGradient(entityId: string): string | undefined {
+    if (sceneGradientCache.has(entityId)) {
+      return sceneGradientCache.get(entityId) ?? undefined;
+    }
+    if (!this.hass || sceneGradientPending.has(entityId)) return undefined;
+    sceneGradientPending.add(entityId);
+    void computeSceneGradient(this.hass, entityId).then((g) => {
+      sceneGradientCache.set(entityId, g);
+      sceneGradientPending.delete(entityId);
+      if (g) this.requestUpdate();
+    });
+    return undefined;
+  }
+
   private _renderTile(scene: SceneConfig): TemplateResult {
     const state = scene.entity ? this.hass?.states?.[scene.entity] : undefined;
     const name =
@@ -45,10 +127,16 @@ export class StratumSceneBar extends LitElement {
     const resolvedImage = resolveSceneImage(scene.image);
     const hasImage = Boolean(resolvedImage);
     const icon = scene.icon ?? 'mdi:palette';
+    // Bez grafiki i bez jawnego koloru: gradient z kolorów świateł sceny
+    // (styl Hue); fallback — kolor akcentu.
+    const gradient =
+      !hasImage && !scene.color && scene.entity?.startsWith('scene.')
+        ? this._sceneGradient(scene.entity)
+        : undefined;
     const accent = resolveColor(scene.color) ?? 'var(--primary-color, #ff9b42)';
     const style = hasImage
       ? `background-image: url("${resolvedImage}");`
-      : `background: ${accent};`;
+      : `background: ${gradient ?? accent};`;
     return html`
       <button
         class="tile ${hasImage ? 'has-image' : 'no-image'}"

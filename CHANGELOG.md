@@ -5,6 +5,20 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.78.0] — 2026-08-20
+
+### Added
+- **Globalny rozmiar kafli scen** — „Ustawienia ogólne → Kafle scen —
+  rozmiar (globalnie)" (Mały/Średni/Duży, default Mały) obowiązuje w
+  popupach wszystkich pomieszczeń; per pokój nadal nadpisuje
+  `scenes.size` (edycja pokoju → Sceny → Rozmiar tile). YAML:
+  `rooms_scene_size: sm|md|lg`.
+- **Auto-gradient kafla sceny (styl Philips Hue)** — scena bez grafiki
+  i bez jawnego koloru dostaje tło zmiksowane z kolorów świateł, które
+  ustawia (odczyt konfiguracji sceny przez REST, tylko sceny edytowalne
+  w UI), przyciemnione proporcjonalnie do średniej jasności sceny.
+  Fallback: dotychczasowy kolor akcentu.
+
 ## [1.77.1] — 2026-08-20
 
 ### Added

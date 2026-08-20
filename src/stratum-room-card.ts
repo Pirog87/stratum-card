@@ -302,10 +302,14 @@ export class StratumRoomCard extends LitElement {
       switch (item.section) {
         case 'scenes':
           if (hasExplicitScenes) {
+            // Globalny default rozmiaru; `scenes.size` per pokój wygrywa.
             out.push(
               html`<stratum-scene-bar
                 .hass=${this.hass}
-                .config=${this._config!.scenes}
+                .config=${{
+                  size: this._config!.scene_size_default,
+                  ...this._config!.scenes,
+                }}
               ></stratum-scene-bar>`,
             );
           } else {
@@ -678,6 +682,7 @@ export class StratumRoomCard extends LitElement {
         return icon ? { entity: e.entity_id, icon } : { entity: e.entity_id };
       }),
       columns: typeof section.columns === 'number' ? section.columns : 3,
+      size: this._config?.scene_size_default,
     };
     return html`
       <div class="section" part="section">
