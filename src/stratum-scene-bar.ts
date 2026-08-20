@@ -386,15 +386,17 @@ export class StratumSceneBar extends LitElement {
       outline-offset: 2px;
     }
 
+    /* Scrim tylko pod pasem nazwy — wyżej gradient ma świecić pełnym
+       kolorem (szeroki scrim „dusił" dolną połowę kafla). */
     .tile.has-image::after {
       content: '';
       position: absolute;
       inset: 0;
       background: linear-gradient(
         to top,
-        rgba(0, 0, 0, 0.55) 0%,
-        rgba(0, 0, 0, 0.1) 45%,
-        transparent 75%
+        rgba(0, 0, 0, 0.45) 0%,
+        rgba(0, 0, 0, 0.12) 28%,
+        transparent 48%
       );
     }
 
