@@ -5,6 +5,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.80.0] — 2026-08-20
+
+### Changed (ciemność scen — wariant A z makiety)
+- **Jasność sceny nie dotyka już kolorów gradientu** — stała podłoga
+  L 0.55, kolory zawsze żywe.
+- **Ciemność pokazuje winieta**: wewnętrzny cień zaciskający się od
+  krawędzi kafla, skalowany od jasności sceny (bri ≥ 85% → brak,
+  im ciemniej tym mocniejszy — blur 24→72 px, opacity 0.5→0.95).
+
 ## [1.79.4] — 2026-08-20
 
 ### Fixed
