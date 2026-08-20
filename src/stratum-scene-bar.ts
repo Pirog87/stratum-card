@@ -41,11 +41,11 @@ function scaleRgb(rgb: string, factor: number): string {
  * Toning koloru sceny (przez HSL) — kafle mają świecić jak w galerii Hue:
  * - nasycenie ×1.35 z podłogą 0.3 i sufitem 0.85 (ciepłe biele → złoto,
  *   bez neonów),
- * - jasność sceny NIE mnoży koloru w dół (to robiło brązy) — ustawia
- *   tylko PODŁOGĘ jasności: bri=100% → L min 0.62, bri=0% → L min 0.40.
- *   Kolor jaśniejszy od podłogi zostaje jaki jest (sufit 0.8).
+ * - jasność sceny NIE dotyka kolorów W OGÓLE (wariant A z makiety) —
+ *   stała podłoga L 0.55, sufit 0.8. Ciemność sceny pokazuje winieta
+ *   (inset shadow na kaflu), nie kolory.
  */
-function tone(rgb: string, bri: number): string {
+function tone(rgb: string): string {
   const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
   if (!m) return rgb;
   const r = parseInt(m[1]!, 10) / 255;
@@ -64,8 +64,7 @@ function tone(rgb: string, bri: number): string {
     else h = ((r - g) / d + 4) / 6;
   }
   s = Math.min(0.85, Math.max(0.3, s * 1.35));
-  const floor = 0.4 + 0.22 * Math.max(0, Math.min(1, bri));
-  l = Math.min(0.8, Math.max(l, floor));
+  l = Math.min(0.8, Math.max(l, 0.55));
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
   const p = 2 * l - q;
   const hue = (t: number): number => {
@@ -106,9 +105,9 @@ function buildGradient(
   data: SceneColors,
   entityId: string,
 ): string {
-  // Toning: nasycenie w górę, jasność z podłogą zależną od bri sceny —
-  // bez mnożenia w dół (patrz komentarz przy tone()).
-  const scaled = data.colors.slice(0, 4).map((c) => tone(c, data.bri));
+  // Toning: nasycenie w górę, jasność stała — ciemność sceny pokazuje
+  // winieta na kaflu, nie kolory (patrz komentarz przy tone()).
+  const scaled = data.colors.slice(0, 4).map((c) => tone(c));
   const byLum = [...scaled].sort((a, b) => luminance(b) - luminance(a));
   const darkest = byLum[byLum.length - 1]!;
 
@@ -216,6 +215,23 @@ export class StratumSceneBar extends LitElement {
     this._defaultActivate(scene);
   }
 
+  /**
+   * Winieta ciemności (wariant A): im ciemniejsza scena, tym mocniej
+   * ciemność zaciska się od krawędzi kafla — kolory gradientu zostają
+   * żywe w środku. Jasne sceny (bri ≥ 85%) bez winiety.
+   */
+  private _dimShadow(entityId: string): string | undefined {
+    const data = sceneColorsCache.get(entityId);
+    if (!data) return undefined;
+    const bri = Math.max(0, Math.min(1, data.bri));
+    if (bri >= 0.85) return undefined;
+    const d = 1 - bri;
+    const blur = Math.round(24 + 48 * d);
+    const spread = Math.round(2 + 26 * d);
+    const opacity = (0.5 + 0.45 * d).toFixed(2);
+    return `box-shadow: inset 0 0 ${blur}px ${spread}px rgba(8, 5, 2, ${opacity});`;
+  }
+
   /** Gradient z kolorów sceny — z cache; brak = kick off async fetch. */
   private _sceneGradient(entityId: string): string | undefined {
     if (sceneColorsCache.has(entityId)) {
@@ -256,6 +272,7 @@ export class StratumSceneBar extends LitElement {
       : `background: ${gradient ?? accent};`;
     // Gradient traktujemy jak grafikę: nazwa na dole na scrimie, bez ikony.
     const hasBackdrop = hasImage || Boolean(gradient);
+    const dim = gradient && scene.entity ? this._dimShadow(scene.entity) : undefined;
     return html`
       <button
         class="tile ${hasBackdrop ? 'has-image' : 'no-image'}"
@@ -264,6 +281,7 @@ export class StratumSceneBar extends LitElement {
         title=${name}
         @click=${() => this._onTap(scene)}
       >
+        ${dim ? html`<span class="dim" style=${dim}></span>` : null}
         ${!hasBackdrop
           ? html`<ha-icon class="tile-icon" .icon=${icon}></ha-icon>`
           : null}
@@ -405,6 +423,14 @@ export class StratumSceneBar extends LitElement {
       justify-content: center;
       flex-direction: column;
       gap: 6px;
+    }
+
+    /* Winieta ciemności sceny — inset shadow ustawiany inline z bri. */
+    .dim {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
     }
 
     .tile-icon {
