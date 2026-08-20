@@ -62,8 +62,8 @@ function buildGradient(
   data: SceneColors,
   entityId: string,
 ): string {
-  // Jasność sceny przyciemnia kolory: 100% → pełny kolor, 0% → ~40%.
-  const factor = 0.4 + 0.6 * data.bri;
+  // Jasność sceny przyciemnia kolory: 100% → pełny kolor, 0% → ~55%.
+  const factor = 0.55 + 0.45 * data.bri;
   const scaled = data.colors.slice(0, 4).map((c) => scaleRgb(c, factor));
   const byLum = [...scaled].sort((a, b) => luminance(b) - luminance(a));
   const darkest = byLum[byLum.length - 1]!;
@@ -90,14 +90,21 @@ function buildGradient(
     return `linear-gradient(to bottom, ${stops.join(', ')})`;
   }
 
-  // mesh (default) — rozmyte plamy radialne na ciemnym tle, jak w Hue.
+  // mesh (default) — rozmyte plamy radialne jak w Hue. Podkładem jest
+  // pełny gradient z kolorów sceny (nie ciemna baza — inaczej między
+  // plamami prześwituje czerń i kafel wygląda czarniawo nawet przy 100%
+  // jasności); plamy tylko wzbogacają kompozycję.
   const positions = ['12% 12%', '88% 85%', '85% 20%', '15% 80%'];
   const offset = seedOf(entityId) % positions.length;
   const layers = scaled.map((c, i) => {
     const pos = positions[(i + offset) % positions.length]!;
-    return `radial-gradient(90% 115% at ${pos}, ${c} 0%, transparent 62%)`;
+    return `radial-gradient(100% 130% at ${pos}, ${c} 0%, transparent 75%)`;
   });
-  return `${layers.join(', ')}, ${scaleRgb(darkest, 0.4)}`;
+  const base =
+    scaled.length === 1
+      ? `linear-gradient(135deg, ${scaled[0]}, ${scaleRgb(scaled[0]!, 0.7)})`
+      : `linear-gradient(135deg, ${[...scaled].reverse().join(', ')})`;
+  return `${layers.join(', ')}, ${base}`;
 }
 
 async function fetchSceneColors(

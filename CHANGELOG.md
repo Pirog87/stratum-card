@@ -5,6 +5,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.79.1] — 2026-08-20
+
+### Fixed
+- **Czarniawe gradienty mgławicy**: podkładem plam był najciemniejszy
+  kolor ×0.4 (prawie czerń) i prześwitywał między plamami niezależnie od
+  jasności sceny. Teraz podkład to pełny gradient z kolorów sceny, plamy
+  są większe (fade przy 75% zamiast 62%), a krzywa przyciemniania od
+  jasności łagodniejsza (100% → pełny kolor, 0% → 55% zamiast 40%).
+
 ## [1.79.0] — 2026-08-20
 
 ### Changed (auto-gradienty scen)
