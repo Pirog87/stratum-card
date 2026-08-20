@@ -5,6 +5,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.77.1] — 2026-08-20
+
+### Added
+- **Przeglądarka „Pliki z www/img"** w edytorze grafik scen: listuje
+  katalog `www/img` (z podfolderami) przez media source, siatka
+  miniatur z zaznaczeniem, klik = zapis stabilnej ścieżki
+  `/local/img/<plik>`. Wymaga jednorazowego wpisu w
+  `configuration.yaml`:
+  `homeassistant: → media_dirs: → local: /media` + `img: /config/www/img`
+  (+ restart HA) — bez wpisu panel pokazuje instrukcję.
+
 ## [1.77.0] — 2026-08-18
 
 ### Added

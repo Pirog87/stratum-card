@@ -370,6 +370,159 @@ export class StratumSceneEditor extends LitElement {
     }
   }
 
+  // ===== Przeglądarka www/img (media source) =====
+  //
+  // HA nie listuje www/ wprost, ALE media source potrafi listować dowolny
+  // katalog wskazany w `media_dirs`. Konwencja: user dodaje w
+  // configuration.yaml wpis `img: /config/www/img` — wtedy przeglądamy
+  // `media-source://media_source/img/...`, a wybór zapisujemy jako stabilną
+  // ścieżkę `/local/img/<plik>` (ten sam katalog serwowany statycznie).
+
+  @state() private _wwwItems?: Array<{
+    title: string;
+    id: string;
+    dir: boolean;
+    rel: string;
+  }>;
+
+  @state() private _wwwRel = '';
+
+  @state() private _wwwError?: string;
+
+  private static readonly _WWW_ROOT = 'media-source://media_source/img/.';
+
+  private _wwwRelOf(id: string): string {
+    return id
+      .replace(/^media-source:\/\/media_source\/img\/?/, '')
+      .replace(/\/?\.$/, '')
+      .replace(/^\/+|\/+$/g, '');
+  }
+
+  private _wwwLocalUrl(rel: string): string {
+    const encoded = rel.split('/').map(encodeURIComponent).join('/');
+    return `/local/img/${encoded}`;
+  }
+
+  private async _browseWww(id?: string): Promise<void> {
+    const target = id ?? StratumSceneEditor._WWW_ROOT;
+    if (!this.hass?.callWS) {
+      this._wwwError = 'Brak API WebSocket.';
+      return;
+    }
+    try {
+      const res = await this.hass.callWS<{
+        children?: Array<{
+          title: string;
+          media_content_id: string;
+          media_content_type?: string;
+          can_expand?: boolean;
+        }>;
+      }>({ type: 'media_source/browse_media', media_content_id: target });
+      const kids = res.children ?? [];
+      this._wwwItems = kids
+        .filter(
+          (c) =>
+            c.can_expand ||
+            (c.media_content_type ?? '').startsWith('image/') ||
+            /\.(png|jpe?g|webp|gif|svg|avif)$/i.test(c.title),
+        )
+        .map((c) => ({
+          title: c.title,
+          id: c.media_content_id,
+          dir: Boolean(c.can_expand),
+          rel: this._wwwRelOf(c.media_content_id),
+        }));
+      this._wwwRel = this._wwwRelOf(target);
+      this._wwwError = undefined;
+    } catch {
+      this._wwwItems = undefined;
+      this._wwwError = 'brak-media-dir';
+    }
+  }
+
+  private _wwwUp(): void {
+    const parts = this._wwwRel.split('/').filter(Boolean);
+    parts.pop();
+    const id = parts.length
+      ? `media-source://media_source/img/${parts.join('/')}/.`
+      : StratumSceneEditor._WWW_ROOT;
+    void this._browseWww(id);
+  }
+
+  private _renderWwwBrowser(index: number, scene: SceneConfig): TemplateResult {
+    return html`
+      <details class="gallery-block" @toggle=${(ev: Event) => {
+        if ((ev.target as HTMLDetailsElement).open && !this._wwwItems) {
+          void this._browseWww();
+        }
+      }}>
+        <summary class="gallery-summary">
+          <ha-icon .icon=${'mdi:folder-image'}></ha-icon>
+          Pliki z www/img
+        </summary>
+        <div class="gallery-body">
+          ${this._wwwError === 'brak-media-dir'
+            ? html`<p class="gallery-hint">
+                  Żeby karta mogła listować <code>www/img</code>, dodaj w
+                  <code>configuration.yaml</code> i zrestartuj HA:
+                </p>
+                <pre class="gallery-yaml">homeassistant:
+  media_dirs:
+    local: /media
+    img: /config/www/img</pre>
+                <p class="gallery-hint">
+                  (wpis <code>local</code> zachowuje standardowy katalog
+                  mediów). Potem wróć tutaj — pliki pojawią się z podglądem.
+                </p>`
+            : nothing}
+          ${!this._wwwError && this._wwwItems === undefined
+            ? html`<p class="gallery-hint">Ładowanie…</p>`
+            : nothing}
+          ${this._wwwItems && this._wwwRel
+            ? html`<button class="gallery-upload" @click=${() => this._wwwUp()}>
+                <ha-icon .icon=${'mdi:arrow-up-left'}></ha-icon>
+                Wróć (${this._wwwRel})
+              </button>`
+            : nothing}
+          ${this._wwwItems && this._wwwItems.length === 0
+            ? html`<p class="gallery-hint">Pusty katalog.</p>`
+            : nothing}
+          ${this._wwwItems && this._wwwItems.length > 0
+            ? html`<div class="preset-grid">
+                ${this._wwwItems.map((item) => {
+                  if (item.dir) {
+                    return html`<button
+                      class="preset-thumb"
+                      title=${item.title}
+                      @click=${() => void this._browseWww(item.id)}
+                    >
+                      <span class="thumb-image thumb-folder">
+                        <ha-icon .icon=${'mdi:folder'}></ha-icon>
+                      </span>
+                      <span class="thumb-label">${item.title}</span>
+                    </button>`;
+                  }
+                  const url = this._wwwLocalUrl(item.rel);
+                  const selected = scene.image === url;
+                  return html`<button
+                    class="preset-thumb ${selected ? 'selected' : ''}"
+                    title=${item.title}
+                    @click=${() => this._updateScene(index, { image: url })}
+                  >
+                    <span
+                      class="thumb-image"
+                      style=${`background-image:url("${url}");`}
+                    ></span>
+                    <span class="thumb-label">${item.title}</span>
+                  </button>`;
+                })}
+              </div>`
+            : nothing}
+        </div>
+      </details>
+    `;
+  }
+
   private _renderGallery(index: number, scene: SceneConfig): TemplateResult {
     return html`
       <details class="gallery-block" @toggle=${(ev: Event) => {
@@ -608,6 +761,7 @@ export class StratumSceneEditor extends LitElement {
                         this._onSceneFieldChange(idx, ev)}
                     ></ha-form>
                     ${sep ? nothing : this._renderImageField(idx, scene)}
+                    ${sep ? nothing : this._renderWwwBrowser(idx, scene)}
                     ${sep ? nothing : this._renderGallery(idx, scene)}
                     ${sep ? nothing : this._renderPresetPicker(idx, scene)}
                   </div>`
@@ -881,6 +1035,28 @@ export class StratumSceneEditor extends LitElement {
         margin: 0 0 8px;
         font-size: 12px;
         color: var(--secondary-text-color);
+      }
+
+      .gallery-yaml {
+        margin: 0 0 8px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.25);
+        font-size: 11.5px;
+        line-height: 1.5;
+        overflow-x: auto;
+        color: var(--primary-text-color);
+      }
+
+      .thumb-folder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--secondary-text-color);
+      }
+      .thumb-folder ha-icon {
+        --mdc-icon-size: 26px;
       }
 
       .preset-thumb {
