@@ -879,6 +879,8 @@ export interface HomeAssistant {
   ) => Promise<void>;
   /** Synchroniczny WebSocket call (HA frontend API). Używany do fetchu entity registry. */
   callWS?: <T>(msg: Record<string, unknown>) => Promise<T>;
+  /** Uwierzytelniony fetch do REST API HA — używany do uploadu obrazów. */
+  fetchWithAuth?: (path: string, init?: RequestInit) => Promise<Response>;
   /** WebSocket connection — używamy do subskrypcji render_template. */
   connection?: {
     subscribeMessage: <T>(
