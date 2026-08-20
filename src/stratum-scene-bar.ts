@@ -37,6 +37,46 @@ function scaleRgb(rgb: string, factor: number): string {
   return `rgb(${f(m[1]!)}, ${f(m[2]!)}, ${f(m[3]!)})`;
 }
 
+/**
+ * Umiarkowany boost nasycenia (przez HSL) — kolory scen mają być żywe jak
+ * w galerii Hue, nie „mydlane". Sufit 0.85 chroni przed neonem, a ciepłe
+ * biele z żarówek CT (niska saturacja) dostają najwięcej — z beżu robi
+ * się złoto zamiast błota.
+ */
+function vivify(rgb: string, satMul = 1.35): string {
+  const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (!m) return rgb;
+  const r = parseInt(m[1]!, 10) / 255;
+  const g = parseInt(m[2]!, 10) / 255;
+  const b = parseInt(m[3]!, 10) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  let h = 0;
+  let s = 0;
+  if (d > 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  s = Math.min(0.85, s * satMul);
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hue = (t: number): number => {
+    let x = t;
+    if (x < 0) x += 1;
+    if (x > 1) x -= 1;
+    if (x < 1 / 6) return p + (q - p) * 6 * x;
+    if (x < 1 / 2) return q;
+    if (x < 2 / 3) return p + (q - p) * (2 / 3 - x) * 6;
+    return p;
+  };
+  const to255 = (v: number): number => Math.round(v * 255);
+  return `rgb(${to255(hue(h + 1 / 3))}, ${to255(hue(h))}, ${to255(hue(h - 1 / 3))})`;
+}
+
 function luminance(rgb: string): number {
   const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
   if (!m) return 0;
@@ -63,8 +103,12 @@ function buildGradient(
   entityId: string,
 ): string {
   // Jasność sceny przyciemnia kolory: 100% → pełny kolor, 0% → ~55%.
+  // Po przyciemnieniu podbijamy nasycenie — inaczej kolory robią się
+  // błotniste (zwłaszcza ciepłe biele z żarówek CT).
   const factor = 0.55 + 0.45 * data.bri;
-  const scaled = data.colors.slice(0, 4).map((c) => scaleRgb(c, factor));
+  const scaled = data.colors
+    .slice(0, 4)
+    .map((c) => vivify(scaleRgb(c, factor)));
   const byLum = [...scaled].sort((a, b) => luminance(b) - luminance(a));
   const darkest = byLum[byLum.length - 1]!;
 
