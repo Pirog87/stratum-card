@@ -5,6 +5,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.80.1] — 2026-08-20
+
+### Fixed
+- **Łagodniejsza winieta ciemności**: krzywa ^1.6 (średnie jasności
+  ledwie muśnięte, dopiero naprawdę ciemne sceny z wyraźną winietą),
+  mniejszy zasięg (blur max 56 px, spread max 12 px) i pułap krycia
+  0.78 — świecący rdzeń koloru nigdy nie znika, sceny „Noc" przestały
+  być prawie czarne.
+
 ## [1.80.0] — 2026-08-20
 
 ### Changed (ciemność scen — wariant A z makiety)
