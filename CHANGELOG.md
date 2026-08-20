@@ -5,6 +5,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.77.0] — 2026-08-18
+
+### Added
+- **Galeria HA w edytorze scen** — pod polem „Grafika sceny" zwijany
+  panel „Galeria HA": siatka miniatur obrazów z natywnego magazynu
+  obrazów Home Assistanta (WS `image/list`) + przycisk „Wgraj nowy
+  obraz" (POST `/api/image/upload`). Klik w miniaturę ustawia grafikę
+  sceny (`/api/image/serve/<id>/original`). Uwaga: HA nie udostępnia
+  listingu katalogu `www/` — pliki z `www/img` trzeba raz wgrać przez
+  galerię (albo dalej wpisywać ścieżki `/local/...` ręcznie).
+
 ## [1.76.0] — 2026-08-18
 
 ### Changed

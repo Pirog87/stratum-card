@@ -315,6 +315,118 @@ export class StratumSceneEditor extends LitElement {
    * lub pełny URL. Prosty input tekstowy zamiast selektora z uploadem —
    * user trzyma grafiki w config/www.
    */
+  // ===== Galeria HA (image_upload) =====
+  //
+  // HA nie udostępnia listingu katalogu www/ — zamiast tego używamy
+  // natywnego magazynu obrazów HA (tego samego co zdjęcia osób/obszarów):
+  // WS `image/list` + POST `/api/image/upload`. Obrazy serwowane są pod
+  // stabilnym `/api/image/serve/<id>/original` (bez auth — losowe id).
+
+  @state() private _gallery?: Array<{ id: string; name: string }>;
+
+  @state() private _galleryError?: string;
+
+  @state() private _galleryBusy = false;
+
+  private async _loadGallery(force = false): Promise<void> {
+    if (this._gallery && !force) return;
+    if (!this.hass?.callWS) {
+      this._galleryError = 'Brak API WebSocket.';
+      return;
+    }
+    try {
+      const imgs = await this.hass.callWS<Array<{ id: string; name: string }>>({
+        type: 'image/list',
+      });
+      this._gallery = imgs ?? [];
+      this._galleryError = undefined;
+    } catch (e) {
+      this._galleryError = `Nie udało się pobrać galerii: ${String(e)}`;
+    }
+  }
+
+  private async _uploadImage(index: number, ev: Event): Promise<void> {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || !this.hass?.fetchWithAuth) return;
+    this._galleryBusy = true;
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const resp = await this.hass.fetchWithAuth('/api/image/upload', {
+        method: 'POST',
+        body: form,
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const img = (await resp.json()) as { id: string };
+      await this._loadGallery(true);
+      this._updateScene(index, { image: `/api/image/serve/${img.id}/original` });
+      this._galleryError = undefined;
+    } catch (e) {
+      this._galleryError = `Upload nieudany: ${String(e)}`;
+    } finally {
+      this._galleryBusy = false;
+    }
+  }
+
+  private _renderGallery(index: number, scene: SceneConfig): TemplateResult {
+    return html`
+      <details class="gallery-block" @toggle=${(ev: Event) => {
+        if ((ev.target as HTMLDetailsElement).open) void this._loadGallery();
+      }}>
+        <summary class="gallery-summary">
+          <ha-icon .icon=${'mdi:image-multiple-outline'}></ha-icon>
+          Galeria HA — przeglądaj / wgraj obraz
+        </summary>
+        <div class="gallery-body">
+          <label class="gallery-upload ${this._galleryBusy ? 'busy' : ''}">
+            <ha-icon .icon=${'mdi:upload'}></ha-icon>
+            ${this._galleryBusy ? 'Wgrywanie…' : 'Wgraj nowy obraz (png/jpg/webp)'}
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              @change=${(ev: Event) => void this._uploadImage(index, ev)}
+            />
+          </label>
+          ${this._galleryError
+            ? html`<p class="gallery-error">${this._galleryError}</p>`
+            : nothing}
+          ${this._gallery === undefined && !this._galleryError
+            ? html`<p class="gallery-hint">Ładowanie…</p>`
+            : nothing}
+          ${this._gallery && this._gallery.length === 0
+            ? html`<p class="gallery-hint">
+                Galeria pusta — wgraj pierwszy obraz przyciskiem powyżej.
+                Obrazy trafiają do magazynu HA (Ustawienia → zdjęcia osób
+                używają tego samego), nie do katalogu www.
+              </p>`
+            : nothing}
+          ${this._gallery && this._gallery.length > 0
+            ? html`<div class="preset-grid">
+                ${this._gallery.map((img) => {
+                  const url = `/api/image/serve/${img.id}/original`;
+                  const selected = scene.image === url;
+                  return html`<button
+                    class="preset-thumb ${selected ? 'selected' : ''}"
+                    title=${img.name}
+                    @click=${() => this._updateScene(index, { image: url })}
+                  >
+                    <span
+                      class="thumb-image"
+                      style=${`background-image:url("/api/image/serve/${img.id}/512x512");`}
+                    ></span>
+                    <span class="thumb-label">${img.name}</span>
+                  </button>`;
+                })}
+              </div>`
+            : nothing}
+        </div>
+      </details>
+    `;
+  }
+
   private _renderImageField(index: number, scene: SceneConfig): TemplateResult {
     const isPreset = Boolean(presetIdFromValue(scene.image));
     const resolved = resolveSceneImage(scene.image);
@@ -496,6 +608,7 @@ export class StratumSceneEditor extends LitElement {
                         this._onSceneFieldChange(idx, ev)}
                     ></ha-form>
                     ${sep ? nothing : this._renderImageField(idx, scene)}
+                    ${sep ? nothing : this._renderGallery(idx, scene)}
                     ${sep ? nothing : this._renderPresetPicker(idx, scene)}
                   </div>`
                 : nothing}
@@ -704,6 +817,70 @@ export class StratumSceneEditor extends LitElement {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
         gap: 8px;
+      }
+
+      .gallery-block {
+        margin: 10px 0 4px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .gallery-summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        cursor: pointer;
+        user-select: none;
+        list-style: none;
+      }
+      .gallery-summary::-webkit-details-marker { display: none; }
+      .gallery-summary ha-icon {
+        --mdc-icon-size: 16px;
+        color: var(--primary-color, #ff9b42);
+      }
+
+      .gallery-body {
+        padding: 4px 12px 12px;
+      }
+
+      .gallery-upload {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 10px;
+        padding: 7px 14px;
+        border-radius: 999px;
+        border: 1px dashed var(--divider-color, rgba(255, 255, 255, 0.2));
+        font-size: 12px;
+        color: var(--primary-text-color);
+        cursor: pointer;
+        transition: border-color 0.12s ease, background 0.12s ease;
+      }
+      .gallery-upload:hover {
+        border-color: var(--primary-color, #ff9b42);
+        background: color-mix(in srgb, var(--primary-color, #ff9b42) 8%, transparent);
+      }
+      .gallery-upload.busy {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+      .gallery-upload ha-icon { --mdc-icon-size: 15px; }
+
+      .gallery-error {
+        margin: 0 0 8px;
+        font-size: 12px;
+        color: var(--error-color, #e53935);
+      }
+
+      .gallery-hint {
+        margin: 0 0 8px;
+        font-size: 12px;
+        color: var(--secondary-text-color);
       }
 
       .preset-thumb {
