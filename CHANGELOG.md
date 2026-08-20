@@ -5,6 +5,13 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.79.4] — 2026-08-20
+
+### Fixed
+- **Węższy scrim pod nazwą sceny**: przyciemnienie pod tekstem sięgało
+  75% wysokości kafla i dusiło dolną połowę gradientu — teraz wygasa
+  przy 48%, reszta kafla świeci pełnym kolorem.
+
 ## [1.79.3] — 2026-08-20
 
 ### Fixed
