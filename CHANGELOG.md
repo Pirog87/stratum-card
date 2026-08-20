@@ -5,6 +5,18 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.79.0] — 2026-08-20
+
+### Changed (auto-gradienty scen)
+- **Nowy domyślny styl „Mgławica"** (wybór usera z makiety): rozmyte
+  plamy radialne w rogach kafla na ciemnym tle, jak w aplikacji Hue;
+  pozycje plam deterministycznie różne per scena. Kafle z gradientem
+  renderują nazwę na dole na scrimie (jak przy grafice), bez ikony
+  palety.
+- **Styl do wyboru**: Mgławica / Ukos / Poświata / Horyzont — globalnie
+  w „Ustawieniach ogólnych" (`rooms_scene_gradient`), nadpisanie per
+  pasek scen w panelu Sceny (`scenes.gradient`).
+
 ## [1.78.0] — 2026-08-20
 
 ### Added

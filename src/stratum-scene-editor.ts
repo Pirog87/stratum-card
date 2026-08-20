@@ -63,6 +63,20 @@ const GLOBAL_SCHEMA = [
       { name: 'aspect', selector: { text: {} } },
     ],
   },
+  {
+    name: 'gradient',
+    selector: {
+      select: {
+        mode: 'dropdown',
+        options: [
+          { value: 'mesh', label: 'Mgławica (jak Hue)' },
+          { value: 'linear', label: 'Ukos' },
+          { value: 'glow', label: 'Poświata' },
+          { value: 'horizon', label: 'Horyzont' },
+        ],
+      },
+    },
+  },
 ];
 
 const GLOBAL_LABELS: Record<string, string> = {
@@ -70,10 +84,12 @@ const GLOBAL_LABELS: Record<string, string> = {
   size: 'Rozmiar tile',
   columns: 'Kolumny',
   aspect: 'Proporcje tile (CSS)',
+  gradient: 'Gradient scen bez grafiki',
 };
 
 const GLOBAL_HELPERS: Record<string, string> = {
   aspect: 'Przykłady: 1/1 (kwadrat, default), 16/9, 270/150.',
+  gradient: 'Puste = ustawienie globalne karty (default: Mgławica).',
 };
 
 const SCENE_FIELDS_SCHEMA = [

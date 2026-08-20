@@ -69,6 +69,13 @@ export interface StratumCardConfig {
   rooms_scene_size?: 'sm' | 'md' | 'lg';
 
   /**
+   * Globalny styl auto-gradientu kafli scen (bez grafiki) — wszędzie
+   * (pasek główny + popupy pomieszczeń). `scenes.gradient` nadpisuje.
+   * Default: `mesh`.
+   */
+  rooms_scene_gradient?: 'mesh' | 'linear' | 'glow' | 'horizon';
+
+  /**
    * Konfiguracja wyglądu wiersza (row) — używana gdy `display: row`
    * per-pokój albo `rooms_display: row` globalnie.
    */
@@ -191,6 +198,11 @@ export interface StratumRoomCardConfig {
    * `rooms_scene_size`). `scenes.size` per pokój wygrywa.
    */
   scene_size_default?: 'sm' | 'md' | 'lg';
+  /**
+   * Globalny default stylu auto-gradientu (z karty głównej,
+   * `rooms_scene_gradient`). `scenes.gradient` per pokój wygrywa.
+   */
+  scene_gradient_default?: 'mesh' | 'linear' | 'glow' | 'horizon';
   /** Jawna lista GRUP świateł — zastępuje auto-discovery bloku grup. */
   lights?: RoomLightsConfig;
   /** Pomocnik auto-świateł — badge „Auto" w nagłówku bloku świateł. */
@@ -314,6 +326,12 @@ export interface SceneBarConfig {
   columns?: number;
   /** Aspect-ratio tile (CSS: `1/1`, `16/9`, `270/150`). Default: `1/1`. */
   aspect?: string;
+  /**
+   * Styl auto-gradientu dla scen bez grafiki (kolory z konfiguracji sceny):
+   * `mesh` (default, rozmyte plamy jak Hue) / `linear` (ukos 135°) /
+   * `glow` (poświata z dołu) / `horizon` (pionowo).
+   */
+  gradient?: 'mesh' | 'linear' | 'glow' | 'horizon';
 }
 
 /** Typy sekcji w room card. Każda mapuje na domain + ew. device_class. */

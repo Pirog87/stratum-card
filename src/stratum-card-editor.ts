@@ -380,6 +380,16 @@ export class StratumCardEditor extends LitElement {
     this._updateField('rooms_scene_size', value === 'sm' ? undefined : value);
   }
 
+  private _onRoomsSceneGradient(
+    value: 'mesh' | 'linear' | 'glow' | 'horizon',
+  ): void {
+    // Default = 'mesh', więc zapisujemy tylko gdy inne.
+    this._updateField(
+      'rooms_scene_gradient',
+      value === 'mesh' ? undefined : value,
+    );
+  }
+
   private _onColumnsChange(value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6): void {
     const next: StratumCardConfig = {
       ...this._config!,
@@ -507,6 +517,33 @@ export class StratumCardEditor extends LitElement {
             <p class="stratum-group-hint">
               Rozmiar kafli scen w popupach wszystkich pomieszczeń. Nadpisujesz
               per pomieszczenie w edycji pokoju → Sceny → „Rozmiar tile".
+            </p>
+          </div>
+
+          <div class="stratum-group">
+            <label class="stratum-group-label">Kafle scen — gradient (bez grafiki)</label>
+            <div class="stratum-chip-row">
+              ${(
+                [
+                  { value: 'mesh', label: 'Mgławica' },
+                  { value: 'linear', label: 'Ukos' },
+                  { value: 'glow', label: 'Poświata' },
+                  { value: 'horizon', label: 'Horyzont' },
+                ] as const
+              ).map(
+                (c) => html`<button
+                  type="button"
+                  class="stratum-chip ${(cfg.rooms_scene_gradient ?? 'mesh') === c.value ? 'on' : ''}"
+                  @click=${() => this._onRoomsSceneGradient(c.value)}
+                >
+                  <span>${c.label}</span>
+                </button>`,
+              )}
+            </div>
+            <p class="stratum-group-hint">
+              Styl mieszania kolorów sceny na kaflach bez własnej grafiki.
+              Mgławica = rozmyte plamy jak w aplikacji Hue. Nadpisujesz per
+              pomieszczenie w edycji pokoju → Sceny.
             </p>
           </div>
 

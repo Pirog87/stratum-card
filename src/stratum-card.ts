@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.78.0';
+const VERSION = '1.79.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -730,6 +730,7 @@ export class StratumCard extends LitElement {
       popup_extra: this._popupRoom.popup_extra,
       chips: this._popupRoom.chips,
       scene_size_default: this._config?.rooms_scene_size,
+      scene_gradient_default: this._config?.rooms_scene_gradient,
     };
     return html`
       <div
@@ -778,7 +779,10 @@ export class StratumCard extends LitElement {
       scenes && scenes.items && scenes.items.length > 0
         ? html`<stratum-scene-bar
             .hass=${this.hass}
-            .config=${scenes}
+            .config=${{
+              gradient: this._config?.rooms_scene_gradient,
+              ...scenes,
+            }}
           ></stratum-scene-bar>`
         : null;
     const roomsTemplate = this._renderRooms();
