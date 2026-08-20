@@ -5,6 +5,14 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.79.2] — 2026-08-20
+
+### Changed
+- **Żywsze kolory gradientów scen**: umiarkowany boost nasycenia przez
+  HSL (×1,35, sufit 0.85) po przyciemnieniu — ciepłe biele z żarówek CT
+  robią się złote zamiast beżowo-błotnistych, kolory RGB dostają lekki
+  „hue'owy" punch bez wpadania w neon.
+
 ## [1.79.1] — 2026-08-20
 
 ### Fixed
