@@ -308,6 +308,7 @@ export class StratumRoomCard extends LitElement {
                 .hass=${this.hass}
                 .config=${{
                   size: this._config!.scene_size_default,
+                  gradient: this._config!.scene_gradient_default,
                   ...this._config!.scenes,
                 }}
               ></stratum-scene-bar>`,
@@ -683,6 +684,7 @@ export class StratumRoomCard extends LitElement {
       }),
       columns: typeof section.columns === 'number' ? section.columns : 3,
       size: this._config?.scene_size_default,
+      gradient: this._config?.scene_gradient_default,
     };
     return html`
       <div class="section" part="section">

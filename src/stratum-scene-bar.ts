@@ -13,15 +13,22 @@ import { runTapAction } from './tap-action.js';
 import { lightColorOf } from './tile-data.js';
 
 /**
- * Cache gradientów z konfiguracji scen HA (styl Philips Hue): scena bez
- * grafiki i bez koloru dostaje tło zmiksowane z kolorów świateł, które
- * ustawia, przyciemnione proporcjonalnie do średniej jasności.
- * Klucz = entity_id sceny; wartość = CSS background albo null (nie da się
- * odczytać — scena YAML/z mostka, brak uprawnień itp.). Moduł-level, żeby
- * wiele scene-barów nie odpytywało API o to samo.
+ * Cache surowych danych kolorów z konfiguracji scen HA: scena bez grafiki
+ * i bez koloru dostaje tło zmiksowane z kolorów świateł, które ustawia.
+ * Klucz = entity_id sceny; wartość = kolory + jasność albo null (nie da
+ * się odczytać — scena YAML/z mostka, brak uprawnień itp.). Moduł-level,
+ * żeby wiele scene-barów nie odpytywało API o to samo. CSS budowany jest
+ * przy renderze wg wybranego stylu (`gradient` w configu).
  */
-const sceneGradientCache = new Map<string, string | null>();
-const sceneGradientPending = new Set<string>();
+interface SceneColors {
+  colors: string[];
+  bri: number;
+}
+
+const sceneColorsCache = new Map<string, SceneColors | null>();
+const sceneColorsPending = new Set<string>();
+
+export type SceneGradientStyle = 'mesh' | 'linear' | 'glow' | 'horizon';
 
 function scaleRgb(rgb: string, factor: number): string {
   const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
@@ -30,10 +37,73 @@ function scaleRgb(rgb: string, factor: number): string {
   return `rgb(${f(m[1]!)}, ${f(m[2]!)}, ${f(m[3]!)})`;
 }
 
-async function computeSceneGradient(
+function luminance(rgb: string): number {
+  const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (!m) return 0;
+  return (
+    0.2126 * parseInt(m[1]!, 10) +
+    0.7152 * parseInt(m[2]!, 10) +
+    0.0722 * parseInt(m[3]!, 10)
+  );
+}
+
+/** Deterministyczny seed z entity_id — sąsiednie kafle różnią się kompozycją. */
+function seedOf(entityId: string): number {
+  let h = 0;
+  for (let i = 0; i < entityId.length; i++) {
+    h = (h * 31 + entityId.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+/** Buduje CSS background z kolorów sceny wg wybranego stylu. */
+function buildGradient(
+  style: SceneGradientStyle,
+  data: SceneColors,
+  entityId: string,
+): string {
+  // Jasność sceny przyciemnia kolory: 100% → pełny kolor, 0% → ~40%.
+  const factor = 0.4 + 0.6 * data.bri;
+  const scaled = data.colors.slice(0, 4).map((c) => scaleRgb(c, factor));
+  const byLum = [...scaled].sort((a, b) => luminance(b) - luminance(a));
+  const darkest = byLum[byLum.length - 1]!;
+
+  if (style === 'linear') {
+    if (scaled.length === 1) {
+      return `linear-gradient(135deg, ${scaled[0]}, ${scaleRgb(scaled[0]!, 0.55)})`;
+    }
+    return `linear-gradient(135deg, ${scaled.join(', ')})`;
+  }
+
+  if (style === 'glow') {
+    // Najjaśniejszy kolor świeci z lewego dołu jak lampa.
+    const stops =
+      byLum.length === 1
+        ? `${byLum[0]} 0%, ${scaleRgb(byLum[0]!, 0.3)} 100%`
+        : `${byLum[0]} 0%, ${byLum.slice(1).map((c, i) => `${c} ${Math.round(((i + 1) / byLum.length) * 70)}%`).join(', ')}, ${scaleRgb(darkest, 0.3)} 100%`;
+    return `radial-gradient(120% 150% at 30% 105%, ${stops})`;
+  }
+
+  if (style === 'horizon') {
+    // Pionowo: najjaśniejszy u góry, najciemniejszy przy ziemi.
+    const stops = [...byLum, scaleRgb(darkest, 0.55)];
+    return `linear-gradient(to bottom, ${stops.join(', ')})`;
+  }
+
+  // mesh (default) — rozmyte plamy radialne na ciemnym tle, jak w Hue.
+  const positions = ['12% 12%', '88% 85%', '85% 20%', '15% 80%'];
+  const offset = seedOf(entityId) % positions.length;
+  const layers = scaled.map((c, i) => {
+    const pos = positions[(i + offset) % positions.length]!;
+    return `radial-gradient(90% 115% at ${pos}, ${c} 0%, transparent 62%)`;
+  });
+  return `${layers.join(', ')}, ${scaleRgb(darkest, 0.4)}`;
+}
+
+async function fetchSceneColors(
   hass: HomeAssistant,
   entityId: string,
-): Promise<string | null> {
+): Promise<SceneColors | null> {
   const state = hass.states?.[entityId];
   // Tylko sceny edytowalne w UI mają `id` i config dostępny przez REST.
   const sceneId = state?.attributes?.id as string | undefined;
@@ -65,14 +135,7 @@ async function computeSceneGradient(
       }
     }
     if (colors.length === 0) return null;
-    // Jasność sceny przyciemnia kolory: 100% → pełny kolor, 0% → ~40%.
-    const bri = briN > 0 ? briSum / briN / 255 : 1;
-    const factor = 0.4 + 0.6 * bri;
-    const scaled = colors.slice(0, 4).map((c) => scaleRgb(c, factor));
-    if (scaled.length === 1) {
-      return `linear-gradient(135deg, ${scaled[0]}, ${scaleRgb(scaled[0]!, 0.55)})`;
-    }
-    return `linear-gradient(135deg, ${scaled.join(', ')})`;
+    return { colors, bri: briN > 0 ? briSum / briN / 255 : 1 };
   } catch {
     return null;
   }
@@ -104,15 +167,18 @@ export class StratumSceneBar extends LitElement {
 
   /** Gradient z kolorów sceny — z cache; brak = kick off async fetch. */
   private _sceneGradient(entityId: string): string | undefined {
-    if (sceneGradientCache.has(entityId)) {
-      return sceneGradientCache.get(entityId) ?? undefined;
+    if (sceneColorsCache.has(entityId)) {
+      const data = sceneColorsCache.get(entityId);
+      if (!data) return undefined;
+      const style = (this.config?.gradient ?? 'mesh') as SceneGradientStyle;
+      return buildGradient(style, data, entityId);
     }
-    if (!this.hass || sceneGradientPending.has(entityId)) return undefined;
-    sceneGradientPending.add(entityId);
-    void computeSceneGradient(this.hass, entityId).then((g) => {
-      sceneGradientCache.set(entityId, g);
-      sceneGradientPending.delete(entityId);
-      if (g) this.requestUpdate();
+    if (!this.hass || sceneColorsPending.has(entityId)) return undefined;
+    sceneColorsPending.add(entityId);
+    void fetchSceneColors(this.hass, entityId).then((data) => {
+      sceneColorsCache.set(entityId, data);
+      sceneColorsPending.delete(entityId);
+      if (data) this.requestUpdate();
     });
     return undefined;
   }
@@ -137,15 +203,17 @@ export class StratumSceneBar extends LitElement {
     const style = hasImage
       ? `background-image: url("${resolvedImage}");`
       : `background: ${gradient ?? accent};`;
+    // Gradient traktujemy jak grafikę: nazwa na dole na scrimie, bez ikony.
+    const hasBackdrop = hasImage || Boolean(gradient);
     return html`
       <button
-        class="tile ${hasImage ? 'has-image' : 'no-image'}"
+        class="tile ${hasBackdrop ? 'has-image' : 'no-image'}"
         part="scene"
         style=${style}
         title=${name}
         @click=${() => this._onTap(scene)}
       >
-        ${!hasImage
+        ${!hasBackdrop
           ? html`<ha-icon class="tile-icon" .icon=${icon}></ha-icon>`
           : null}
         <span class="tile-name">${name}</span>
