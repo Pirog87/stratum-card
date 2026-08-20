@@ -225,10 +225,14 @@ export class StratumSceneBar extends LitElement {
     if (!data) return undefined;
     const bri = Math.max(0, Math.min(1, data.bri));
     if (bri >= 0.85) return undefined;
-    const d = 1 - bri;
-    const blur = Math.round(24 + 48 * d);
-    const spread = Math.round(2 + 26 * d);
-    const opacity = (0.5 + 0.45 * d).toFixed(2);
+    // Krzywa ^1.6: średnie jasności dostają ledwie muśnięcie, dopiero
+    // naprawdę ciemne sceny wyraźną winietę — a i tak z ograniczonym
+    // zasięgiem (spread max 12 px, krycie max 0.78), żeby świecący
+    // rdzeń koloru nigdy nie znikał.
+    const d = Math.pow(1 - bri, 1.6);
+    const blur = Math.round(18 + 38 * d);
+    const spread = Math.round(1 + 11 * d);
+    const opacity = (0.35 + 0.43 * d).toFixed(2);
     return `box-shadow: inset 0 0 ${blur}px ${spread}px rgba(8, 5, 2, ${opacity});`;
   }
 
