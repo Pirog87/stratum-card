@@ -316,10 +316,51 @@ export class StratumCardEditor extends LitElement {
     </div>`;
   }
 
+  /** Pierwsza area do mini-podglądu popupu (rooms > floor > area). */
+  private _previewAreaId(): string | undefined {
+    const room = this._config?.rooms?.[0];
+    if (room?.area_id) return room.area_id;
+    if (this._config?.area_id) return this._config.area_id;
+    if (this._config?.floor_id && this.hass) {
+      const areas = Object.values(this.hass.areas ?? {}) as Array<{
+        area_id: string;
+        floor_id?: string;
+      }>;
+      return areas.find((a) => a.floor_id === this._config!.floor_id)?.area_id;
+    }
+    return undefined;
+  }
+
+  private _renderPopupHeaderPreview(): TemplateResult | typeof nothing {
+    const areaId = this._previewAreaId();
+    if (!areaId || !this.hass) return nothing;
+    const room = this._config?.rooms?.find((r) => r.area_id === areaId);
+    const previewCfg: import('./types.js').StratumRoomCardConfig = {
+      type: 'custom:stratum-room-card',
+      area_id: areaId,
+      merge_with: room?.merge_with,
+      popup_header: this._config?.popup_header,
+      chips: room?.chips,
+    };
+    return html`<div class="ph-preview-wrap">
+      <label class="stratum-group-label"
+        >Podgląd na żywo (${this.hass.areas?.[areaId]?.name ?? areaId})</label
+      >
+      <div class="ph-preview">
+        <stratum-room-card
+          .hass=${this.hass}
+          .config=${previewCfg}
+        ></stratum-room-card>
+        <div class="ph-preview-fade"></div>
+      </div>
+    </div>`;
+  }
+
   private _renderPopupHeaderPanel(): TemplateResult {
     const ph = this._config?.popup_header ?? {};
     const style = ph.style ?? 'classic';
     return html`
+      ${this._renderPopupHeaderPreview()}
       ${this._phSeg(
         'Styl belki',
         [
@@ -1200,6 +1241,32 @@ export class StratumCardEditor extends LitElement {
       .stratum-panel-avatar.chips-avatar {
         background: color-mix(in srgb, #4caf50 22%, transparent);
         color: #81c784;
+      }
+
+      /* Belka popupu — mini-podgląd na żywo. */
+      .ph-preview-wrap {
+        margin-bottom: 12px;
+      }
+      .ph-preview {
+        position: relative;
+        max-height: 200px;
+        overflow: hidden;
+        border-radius: 14px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
+        /* Podgląd, nie panel sterowania — bez klikania (switche!). */
+        pointer-events: none;
+      }
+      .ph-preview-fade {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 46px;
+        background: linear-gradient(
+          to top,
+          var(--card-background-color, #1e1f22),
+          transparent
+        );
       }
 
       /* Belka popupu — input koloru. */
