@@ -5,6 +5,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.81.0] — 2026-08-21
+
+### Added
+- **Master ⏻ świateł pomieszczenia** w nagłówku bloku świateł popupu
+  (obok badge'a Auto): smart-toggle — cokolwiek świeci → gasi wszystkie
+  światła pomieszczenia, nic nie świeci → włącza wszystkie. Bursztynowy
+  gdy coś świeci. Działa na encjach bezpośrednich (bez pomocników-grup).
+  Renderuje się w pierwszym widocznym bloku świateł (grupy albo encje).
+
 ## [1.80.1] — 2026-08-20
 
 ### Fixed
