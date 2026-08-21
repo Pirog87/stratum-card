@@ -168,6 +168,8 @@ export class StratumCardEditor extends LitElement {
     if (!isTile && raw.preset && raw.preset !== 'fill') out.preset = raw.preset;
     // Suwak gestem — default true, zapisujemy tylko wyłączenie.
     if (!isTile && raw.slider === false) out.slider = false;
+    // Mini-switch świateł (F3) — default false, zapisujemy tylko włączenie.
+    if (!isTile && raw.lights_switch === true) out.lights_switch = true;
     // Układ statusów — default 'right', zapisujemy tylko 'two-line'.
     if (!isTile && raw.status_layout === 'two-line') {
       out.status_layout = 'two-line';

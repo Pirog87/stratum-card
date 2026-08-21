@@ -5,6 +5,13 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.84.1] — 2026-08-21
+
+### Fixed
+- **Toggle „Ikona świateł jako włącznik" nie zapisywał się** —
+  `_cleanStyle` w edytorze karty (whitelist pól przy zapisie) nie znał
+  `lights_switch` i wycinał pole z configu. Dodane do whitelisty.
+
 ## [1.84.0] — 2026-08-21
 
 ### Added (wiersz pomieszczenia — wariant F3)
