@@ -584,7 +584,13 @@ export class StratumCardRoomTile extends LitElement {
 
     .tile[data-icon-pos='center'] .info { justify-content: center; }
 
-    .temp { font-variant-numeric: tabular-nums; }
+    .temp {
+      font-variant-numeric: tabular-nums;
+      color: var(--stratum-field-temp-color, inherit);
+    }
+    .hum {
+      color: var(--stratum-field-hum-color, inherit);
+    }
 
     .lights {
       display: inline-flex;

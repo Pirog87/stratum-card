@@ -814,6 +814,12 @@ export interface TileDisplayConfig {
   lights_switch_glow_off?: number;
   /** Czy switch widoczny też przy zgaszonym pokoju. Default true. */
   lights_switch_show_off?: boolean;
+  /**
+   * Kolory ikon/wartości pól sekcji info per pole (hex/nazwa/var(...)).
+   * Mapowane na CSS vars `--stratum-chip-<pole>-color` (spójnie koloruje
+   * też np. mini-switch świateł). Puste = kolory domyślne.
+   */
+  field_colors?: Partial<Record<TileField, string>>;
   /** Czy pokazywać nazwę area. Default true. */
   show_name?: boolean;
 

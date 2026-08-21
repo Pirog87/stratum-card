@@ -1050,8 +1050,12 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .hum {
-      color: var(--secondary-text-color);
+      color: var(--stratum-field-hum-color, var(--secondary-text-color));
       font-variant-numeric: tabular-nums;
+    }
+
+    .temp {
+      color: var(--stratum-field-temp-color, inherit);
     }
 
     .motion {
