@@ -256,11 +256,7 @@ export class StratumRoomCard extends LitElement {
 
     return html`
       <ha-card part="card">
-        <div class="header" part="header">
-          <ha-icon class="icon" part="room-icon" .icon=${icon}></ha-icon>
-          <span class="title" part="title">${name}</span>
-          <div class="chips" part="chips">${this._renderChips(entries)}</div>
-        </div>
+        ${this._renderHeader(entries, name, icon)}
         <div class="body" part="body">
           ${sections.length === 0 && !hasExplicitScenes
             ? html`<div class="placeholder">
@@ -270,6 +266,114 @@ export class StratumRoomCard extends LitElement {
         </div>
       </ha-card>
     `;
+  }
+
+  /**
+   * Belka nagłówka popupu wg `popup_header` (globalny config z karty):
+   * style classic/avatar/gradient/compact + typografia, ikona, chipy,
+   * podtytuł, separator i akcent — analogicznie do belki karty głównej.
+   */
+  private _renderHeader(
+    entries: HassEntityRegistryEntry[],
+    name: string,
+    icon: string,
+  ): TemplateResult {
+    const ph = this._config?.popup_header ?? {};
+    const style = ph.style ?? 'classic';
+    const compact = style === 'compact';
+    const boxedIcon = style === 'avatar' || style === 'gradient';
+    const accent = ph.accent_color ?? 'var(--primary-color, #ff9b42)';
+
+    const titleSize =
+      ph.title_size === 'sm' ? 15 : ph.title_size === 'lg' ? 23 : compact ? 16 : 20;
+    const titleStyle = [
+      `font-size:${titleSize}px;`,
+      `font-weight:${ph.title_weight ?? 600};`,
+      ph.title_color ? `color:${ph.title_color};` : '',
+    ].join('');
+
+    const iconSize = ph.icon_size ?? (compact ? 18 : boxedIcon ? 20 : 28);
+    const iconStyle = [
+      `--mdc-icon-size:${iconSize}px;`,
+      ph.icon_color ? `color:${ph.icon_color};` : '',
+    ].join('');
+    const iconWrapStyle = `background:${
+      ph.icon_bg_color ?? `color-mix(in srgb, ${accent} 16%, transparent)`
+    };width:${iconSize + 20}px;height:${iconSize + 20}px;`;
+
+    const headerStyle = [
+      typeof ph.padding === 'number'
+        ? `padding-bottom:${ph.padding}px;`
+        : compact
+        ? 'padding-bottom:8px;margin-bottom:10px;'
+        : '',
+      ph.divider === false ? 'border-bottom:0;' : '',
+      style === 'gradient'
+        ? `background:linear-gradient(135deg, color-mix(in srgb, ${accent} 14%, transparent), transparent 60%);border-radius:14px 14px 0 0;padding-top:10px;padding-left:12px;`
+        : '',
+      ph.accent_bar
+        ? `border-left:3px solid ${accent};padding-left:${style === 'gradient' ? 12 : 10}px;`
+        : '',
+    ].join('');
+
+    const subtitleMode = ph.subtitle ?? (style === 'avatar' ? 'areas' : 'none');
+    let subtitleText = '';
+    if (subtitleMode === 'areas') {
+      const m = this._config?.merge_with ?? [];
+      if (m.length > 0) {
+        subtitleText =
+          '+ ' + m.map((id) => this.hass!.areas?.[id]?.name ?? id).join(', ');
+      }
+    } else if (subtitleMode === 'entities') {
+      subtitleText = `${entries.length} encji`;
+    }
+
+    const iconEl = ph.hide_icon
+      ? nothing
+      : boxedIcon
+      ? html`<span
+          class="hicon ${style === 'gradient' ? 'sq' : ''}"
+          style=${iconWrapStyle}
+          ><ha-icon part="room-icon" style=${iconStyle} .icon=${icon}></ha-icon
+        ></span>`
+      : html`<ha-icon
+          class="icon"
+          part="room-icon"
+          style=${iconStyle}
+          .icon=${icon}
+        ></ha-icon>`;
+
+    const titleEl = html`<span class="title" part="title" style=${titleStyle}
+      >${name}${subtitleText
+        ? html`<small class="subtitle">${subtitleText}</small>`
+        : nothing}</span
+    >`;
+
+    const chipsPos = ph.chips_position ?? 'inline';
+    const chipsEl =
+      chipsPos === 'hidden'
+        ? nothing
+        : html`<div class="chips ${chipsPos === 'below' ? 'below' : ''}" part="chips">
+            ${this._renderChips(entries)}
+          </div>`;
+
+    if (chipsPos === 'below') {
+      return html`<div
+        class="header has-below ${compact ? 'compact' : ''}"
+        part="header"
+        style=${headerStyle}
+      >
+        <div class="hrow">${iconEl}${titleEl}</div>
+        ${chipsEl}
+      </div>`;
+    }
+    return html`<div
+      class="header ${compact ? 'compact' : ''}"
+      part="header"
+      style=${headerStyle}
+    >
+      ${iconEl}${titleEl}${chipsEl}
+    </div>`;
   }
 
   /** Kolejność bloków: config popup_order + brakujące klucze wg defaultu. */
@@ -1470,6 +1574,51 @@ export class StratumRoomCard extends LitElement {
       --mdc-icon-size: 28px;
       color: var(--primary-text-color);
       flex-shrink: 0;
+    }
+
+    /* Warianty belki popupu (popup_header). */
+    .header.compact {
+      gap: 8px;
+    }
+    .header .hicon {
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--primary-text-color);
+    }
+    .header .hicon.sq {
+      border-radius: 12px;
+    }
+    .header.has-below {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 9px;
+      padding-right: 0;
+    }
+    .header .hrow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-right: var(--stratum-room-header-pad-right, 0px);
+    }
+    .header .chips.below {
+      overflow-x: auto;
+      scrollbar-width: none;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+    }
+    .header .chips.below::-webkit-scrollbar {
+      display: none;
+    }
+    .title .subtitle {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--secondary-text-color);
+      line-height: 1.25;
+      letter-spacing: 0;
     }
 
     .title {

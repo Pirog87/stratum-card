@@ -139,6 +139,9 @@ export interface StratumCardConfig {
    * zgodnie z `scenes.position`. Nie renderuje się gdy `items` puste/brak.
    */
   scenes?: SceneBarConfig;
+
+  /** Belka nagłówka popupu pomieszczenia — globalnie dla wszystkich pokoi. */
+  popup_header?: PopupHeaderConfig;
 }
 
 /** Predefiniowane rozmiary tytułu nagłówka. */
@@ -170,6 +173,41 @@ export interface HeaderConfig {
 }
 
 /**
+ * Konfiguracja belki nagłówka POPUPU pomieszczenia (ikona + nazwa + chipy).
+ * Globalna w karcie (`popup_header`), obowiązuje we wszystkich popupach.
+ */
+export interface PopupHeaderConfig {
+  /** Styl belki: classic (default) / avatar / gradient / compact. */
+  style?: 'classic' | 'avatar' | 'gradient' | 'compact';
+  /** Rozmiar tytułu: sm (15) / md (20, default) / lg (23). */
+  title_size?: 'sm' | 'md' | 'lg';
+  /** Waga tytułu. Default 600. */
+  title_weight?: 400 | 500 | 600 | 700;
+  /** Kolor tytułu. */
+  title_color?: string;
+  /** Ukryj ikonę pomieszczenia. */
+  hide_icon?: boolean;
+  /** Rozmiar ikony (px). Default 28 (classic) / 20 (avatar/gradient). */
+  icon_size?: number;
+  /** Kolor ikony. */
+  icon_color?: string;
+  /** Kolor tła kółka/kwadracika ikony (avatar/gradient). */
+  icon_bg_color?: string;
+  /** Padding pionowy belki (px). */
+  padding?: number;
+  /** Pozycja chipów: inline (default, przy tytule) / below / hidden. */
+  chips_position?: 'inline' | 'below' | 'hidden';
+  /** Podtytuł pod nazwą: none (default) / areas (strefy scalone) / entities. */
+  subtitle?: 'none' | 'areas' | 'entities';
+  /** Linia oddzielająca pod belką. Default true. */
+  divider?: boolean;
+  /** Akcentowy pasek z lewej. */
+  accent_bar?: boolean;
+  /** Kolor akcentu (pasek/gradient/tła ikony). Default primary. */
+  accent_color?: string;
+}
+
+/**
  * Konfiguracja karty stratum-room-card — widok pojedynczego pomieszczenia
  * z auto-generowanymi sekcjami (Światła, Rolety, Okna, Klimat…).
  */
@@ -193,6 +231,8 @@ export interface StratumRoomCardConfig {
   sections?: RoomSectionSpec[];
   /** Pasek scen — zastępuje auto-sekcję scen, pełna kontrola layoutu. */
   scenes?: SceneBarConfig;
+  /** Belka nagłówka popupu (z karty głównej, `popup_header`). */
+  popup_header?: PopupHeaderConfig;
   /**
    * Globalny default rozmiaru kafli scen (z karty głównej,
    * `rooms_scene_size`). `scenes.size` per pokój wygrywa.
