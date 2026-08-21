@@ -453,9 +453,12 @@ export class StratumRoomCard extends LitElement {
     const ids = this._lightPowerIds();
     if (ids.length === 0) return nothing;
     const anyOn = ids.some((id) => this.hass?.states?.[id]?.state === 'on');
+    // Wariant E1 z makiety: klasyczny switch po prawej stronie nagłówka.
     return html`
       <button
-        class="lights-power ${anyOn ? 'on' : 'off'}"
+        class="lights-switch ${anyOn ? 'on' : ''}"
+        role="switch"
+        aria-checked=${anyOn}
         title=${anyOn
           ? 'Wyłącz wszystkie światła w pomieszczeniu'
           : 'Włącz wszystkie światła w pomieszczeniu'}
@@ -468,7 +471,7 @@ export class StratumRoomCard extends LitElement {
           );
         }}
       >
-        <ha-icon .icon=${'mdi:power'}></ha-icon>
+        <span class="lights-switch-knob"></span>
       </button>
     `;
   }
@@ -498,9 +501,9 @@ export class StratumRoomCard extends LitElement {
         <div class="section-header" part="section-header">
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
+          <span class="count inline">${groups.length}</span>
           ${this._renderAutoBadge()}
           ${this._renderLightsPower()}
-          <span class="count">${groups.length}</span>
         </div>
         <div class="tiles" style=${gridStyle}>
           ${groups.map(
@@ -543,8 +546,10 @@ export class StratumRoomCard extends LitElement {
           <div class="section-header" part="section-header">
             <ha-icon .icon=${'mdi:lightbulb-outline'}></ha-icon>
             <span>Encje światła</span>
-            ${groupsShown ? nothing : this._renderLightsPower()}
-            <span class="count">${count}</span>
+            ${groupsShown
+              ? html`<span class="count">${count}</span>`
+              : html`<span class="count inline">${count}</span>
+                  ${this._renderLightsPower()}`}
           </div>
           ${this._renderListBlocks(all, mode, gridStyle)}
         </div>
@@ -577,8 +582,8 @@ export class StratumRoomCard extends LitElement {
           <div class="section-header" part="section-header">
             <ha-icon .icon=${'mdi:lightbulb-outline'}></ha-icon>
             <span>Encje światła</span>
+            <span class="count inline">${singles.length}</span>
             ${this._renderLightsPower()}
-            <span class="count">${singles.length}</span>
           </div>
           ${tiles}
         </div>
@@ -864,9 +869,9 @@ export class StratumRoomCard extends LitElement {
         <div class="section-header" part="section-header">
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
+          <span class="count inline">${count}</span>
           ${this._renderAutoBadge()}
           ${this._renderLightsPower()}
-          <span class="count">${count}</span>
         </div>
         ${this._renderListBlocks(all, mode, gridStyle, section.card_template)}
       </div>
@@ -1554,45 +1559,43 @@ export class StratumRoomCard extends LitElement {
       color: var(--secondary-text-color);
     }
 
-    /* Master ⏻ świateł pomieszczenia w nagłówku bloku. */
-    .lights-power {
+    /* Master switch świateł pomieszczenia (E1) — prawa strona nagłówka. */
+    .lights-switch {
       margin-left: auto;
-      width: 30px;
-      height: 30px;
+      position: relative;
+      width: 46px;
+      height: 26px;
       border-radius: 999px;
-      border: 1px solid transparent;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
+      border: 0;
       padding: 0;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
-      color: var(--secondary-text-color);
-      transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease,
-        transform 0.08s ease;
+      cursor: pointer;
+      background: var(--divider-color, rgba(255, 255, 255, 0.2));
+      transition: background 0.15s ease;
       flex-shrink: 0;
     }
-    .lights-power ha-icon {
-      --mdc-icon-size: 17px;
+    .lights-switch.on {
+      background: var(--stratum-chip-lights-color, #ffc107);
     }
-    .lights-power.on {
-      background: color-mix(
-        in srgb,
-        var(--stratum-chip-lights-color, #ffc107) 20%,
-        transparent
-      );
-      border-color: color-mix(
-        in srgb,
-        var(--stratum-chip-lights-color, #ffc107) 45%,
-        transparent
-      );
-      color: var(--stratum-chip-lights-color, #ffc107);
+    .lights-switch-knob {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .lights-power:active {
-      transform: scale(0.92);
+    .lights-switch.on .lights-switch-knob {
+      transform: translateX(20px);
     }
-    /* Gdy przed przyciskiem stoi badge Auto — to on dociska do prawej. */
-    .auto-badge + .lights-power {
+    /* Licznik przy tytule (nie na prawej krawędzi) gdy jest switch. */
+    .section-header .count.inline {
+      margin-left: 2px;
+    }
+    /* Gdy przed switchem stoi badge Auto — to on dociska do prawej. */
+    .auto-badge + .lights-switch {
       margin-left: 8px;
     }
 

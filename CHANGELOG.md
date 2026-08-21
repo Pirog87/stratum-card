@@ -5,6 +5,14 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.81.1] — 2026-08-21
+
+### Changed
+- **Master świateł jako switch (wariant E1)**: okrągły ⏻ zastąpiony
+  klasycznym przełącznikiem 46×26 po prawej stronie nagłówka bloku
+  świateł (bursztynowy gdy coś świeci); licznik sekcji przeniesiony
+  do tytułu. Logika bez zmian (smart-toggle na encjach bezpośrednich).
+
 ## [1.81.0] — 2026-08-21
 
 ### Added
