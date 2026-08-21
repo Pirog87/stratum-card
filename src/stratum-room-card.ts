@@ -19,8 +19,15 @@ import type {
 import { DEFAULT_POPUP_ORDER } from './types.js';
 import { getEntitiesInArea, filterByDomain, filterBinarySensorDeviceClass, filterDisplayable } from './area-entities.js';
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
+import {
+  CHIP_LIST_COLORS,
+  CHIP_LIST_LABELS,
+  chipEntityIds,
+  chipSupportsList,
+} from './chip-list-helpers.js';
 import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
+import './stratum-chip-list.js';
 import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
@@ -129,14 +136,14 @@ function autoSections(
   hass: HomeAssistant,
   entries: HassEntityRegistryEntry[],
 ): RoomSectionType[] {
-  // Bez `doors` i `switches` — decyzja usera: te sekcje nie wnoszą nic
-  // w popupie (drzwi widać w chipach, przełączniki-żarówki dublują światła).
-  // Jawna sekcja w configu (`sections: [{type: 'doors'}]`) nadal działa.
+  // Bez `doors`, `windows` i `switches` — decyzja usera: statusy drzwi
+  // i okien żyją w klikalnych chipach nagłówka (popup listy aktywnych),
+  // przełączniki-żarówki dublują światła. Jawna sekcja w configu
+  // (`sections: [{type: 'windows'}]`) nadal działa.
   const order: RoomSectionType[] = [
     'scenes',
     'lights',
     'covers',
-    'windows',
     'climate',
     'media',
     'fans',
@@ -218,6 +225,44 @@ export class StratumRoomCard extends LitElement {
     return 'mdi:floor-plan';
   }
 
+  /** Popup listy encji po kliknięciu chipa nagłówka popupu. */
+  @state() private _popupChip?: {
+    chip: ChipConfig;
+    label: string;
+    icon: string;
+    color: string;
+  };
+
+  private _onChipTap(chip: ChipConfig): void {
+    if (!chipSupportsList(chip)) return;
+    this._popupChip = {
+      chip,
+      label: CHIP_LIST_LABELS[chip.type] ?? 'Lista',
+      icon: resolveChipIcon(chip) ?? 'mdi:label-outline',
+      color:
+        resolveChipColor(chip) ??
+        CHIP_LIST_COLORS[chip.type] ??
+        'var(--primary-color)',
+    };
+  }
+
+  private _renderChipListPopup(entries: HassEntityRegistryEntry[]): TemplateResult {
+    if (!this._popupChip || !this.hass) return html``;
+    // Re-resolve na każdy render — lista aktualizuje się live.
+    const freshIds = chipEntityIds(this.hass, entries, this._popupChip.chip);
+    return html`<stratum-chip-list
+      .hass=${this.hass}
+      .chip=${this._popupChip.chip}
+      .entityIds=${freshIds}
+      .label=${this._popupChip.label}
+      .icon=${this._popupChip.icon}
+      .color=${this._popupChip.color}
+      @close=${() => {
+        this._popupChip = undefined;
+      }}
+    ></stratum-chip-list>`;
+  }
+
   private _renderChips(entries: HassEntityRegistryEntry[]): TemplateResult[] {
     if (!this.hass) return [];
     this._templates.setHass(this.hass);
@@ -227,12 +272,15 @@ export class StratumRoomCard extends LitElement {
       const value = evaluateChip(this.hass!, entries, chip, this._templates);
       const showWhenZero = chip.show_when_zero !== false;
       if (!value.active && !showWhenZero) continue;
+      const clickable = chipSupportsList(chip);
       rendered.push(html`<stratum-card-chip
         .icon=${chip.icon ?? value.icon ?? resolveChipIcon(chip)}
         .label=${value.label}
         .active=${value.active}
         .color=${chip.color ?? value.color ?? resolveChipColor(chip)}
         .showWhenZero=${showWhenZero}
+        .clickable=${clickable}
+        @chip-tap=${() => this._onChipTap(chip)}
       ></stratum-card-chip>`);
     }
     return rendered;
@@ -265,6 +313,7 @@ export class StratumRoomCard extends LitElement {
             : this._renderOrderedBlocks(entries, sections, Boolean(hasExplicitScenes))}
         </div>
       </ha-card>
+      ${this._renderChipListPopup(entries)}
     `;
   }
 

@@ -30,6 +30,12 @@ import {
   resolveChipIcon,
 } from './chip-defaults.js';
 import { runTapAction } from './tap-action.js';
+import {
+  CHIP_LIST_COLORS,
+  CHIP_LIST_LABELS,
+  chipEntityIds,
+  chipSupportsList,
+} from './chip-list-helpers.js';
 import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
@@ -39,7 +45,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.88.1';
+const VERSION = '1.89.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -367,11 +373,7 @@ export class StratumCard extends LitElement {
   }
 
   private _chipSupportsList(chip: import('./types.js').ChipConfig): boolean {
-    // Entity chip → lepiej więcej info. Template → nic konkretnego do
-    // pokazania. show_list: false jawnie wyłącza.
-    if (chip.show_list === false) return false;
-    if (chip.type === 'entity' || chip.type === 'template') return false;
-    return true;
+    return chipSupportsList(chip);
   }
 
   private _onChipTap(chip: import('./types.js').ChipConfig): void {
@@ -388,146 +390,20 @@ export class StratumCard extends LitElement {
     chip: import('./types.js').ChipConfig,
   ): string[] {
     if (!this.hass) return [];
-    const entries = this._getEntries();
-    const matches = (states: string[]): ((id: string) => boolean) => {
-      return (id: string) => {
-        const s = this.hass!.states?.[id]?.state;
-        return Boolean(s && states.includes(s));
-      };
-    };
-    if (chip.type === 'lights') {
-      // Bez grup-pomocników — lista pokazuje tylko encje bezpośrednie.
-      return filterByDomain(entries, 'light')
-        .filter(
-          (e) =>
-            !Array.isArray(
-              this.hass!.states?.[e.entity_id]?.attributes?.entity_id,
-            ),
-        )
-        .map((e) => e.entity_id)
-        .filter(matches(['on']));
-    }
-    if (chip.type === 'motion') {
-      // Spójnie z chip-defaults: motion + occupancy, zdeduplikowane.
-      const motion = filterBinarySensorDeviceClass(this.hass, entries, 'motion')
-        .map((e) => e.entity_id);
-      const occ = filterBinarySensorDeviceClass(this.hass, entries, 'occupancy')
-        .map((e) => e.entity_id);
-      const all = Array.from(new Set([...motion, ...occ]));
-      return all.filter(matches(['on']));
-    }
-    if (chip.type === 'occupancy') {
-      return filterBinarySensorDeviceClass(this.hass, entries, 'occupancy')
-        .map((e) => e.entity_id)
-        .filter(matches(['on']));
-    }
-    if (chip.type === 'windows') {
-      // window + opening (generyczne Aqara/Xiaomi), zdeduplikowane.
-      const w = filterBinarySensorDeviceClass(this.hass, entries, 'window')
-        .map((e) => e.entity_id);
-      const o = filterBinarySensorDeviceClass(this.hass, entries, 'opening')
-        .map((e) => e.entity_id);
-      const all = Array.from(new Set([...w, ...o]));
-      return all.filter(matches(['on']));
-    }
-    if (chip.type === 'doors') {
-      const d = filterBinarySensorDeviceClass(this.hass, entries, 'door')
-        .map((e) => e.entity_id);
-      const g = filterBinarySensorDeviceClass(this.hass, entries, 'garage_door')
-        .map((e) => e.entity_id);
-      const all = Array.from(new Set([...d, ...g]));
-      return all.filter(matches(['on']));
-    }
-    if (chip.type === 'leak') {
-      return filterBinarySensorDeviceClass(this.hass, entries, 'moisture')
-        .map((e) => e.entity_id)
-        .filter(matches(['on']));
-    }
-    if (chip.type === 'smoke') {
-      return filterBinarySensorDeviceClass(this.hass, entries, 'smoke')
-        .map((e) => e.entity_id)
-        .filter(matches(['on']));
-    }
-    if (chip.type === 'gas') {
-      const g = filterBinarySensorDeviceClass(this.hass, entries, 'gas')
-        .map((e) => e.entity_id);
-      const co = filterBinarySensorDeviceClass(this.hass, entries, 'carbon_monoxide')
-        .map((e) => e.entity_id);
-      return Array.from(new Set([...g, ...co])).filter(matches(['on']));
-    }
-    if (chip.type === 'co') {
-      return filterBinarySensorDeviceClass(this.hass, entries, 'carbon_monoxide')
-        .map((e) => e.entity_id)
-        .filter(matches(['on']));
-    }
-    if (chip.type === 'problem') {
-      const p = filterBinarySensorDeviceClass(this.hass, entries, 'problem')
-        .map((e) => e.entity_id);
-      const s = filterBinarySensorDeviceClass(this.hass, entries, 'safety')
-        .map((e) => e.entity_id);
-      const t = filterBinarySensorDeviceClass(this.hass, entries, 'tamper')
-        .map((e) => e.entity_id);
-      return Array.from(new Set([...p, ...s, ...t])).filter(matches(['on']));
-    }
-    if (chip.type === 'battery_low') {
-      return filterBinarySensorDeviceClass(this.hass, entries, 'battery')
-        .map((e) => e.entity_id)
-        .filter(matches(['on']));
-    }
-    if (chip.type === 'filter') {
-      const c = chip as import('./types.js').FilterChipConfig;
-      const activeState = c.state ?? 'on';
-      let pool: import('./types.js').HassEntityRegistryEntry[] = entries;
-      if (c.domain) {
-        pool = filterByDomain(pool, c.domain);
-      }
-      if (c.device_class) {
-        pool = pool.filter(
-          (e) =>
-            this.hass!.states?.[e.entity_id]?.attributes?.device_class === c.device_class,
-        );
-      }
-      return pool.map((e) => e.entity_id).filter(matches([activeState]));
-    }
-    return [];
+    return chipEntityIds(this.hass, this._getEntries(), chip);
   }
 
   private _openChipList(chip: import('./types.js').ChipConfig): void {
     const entityIds = this._getChipEntityIds(chip);
-    const labels: Record<string, string> = {
-      lights: 'Włączone światła',
-      motion: 'Wykryto obecność',
-      occupancy: 'Zajęte strefy',
-      windows: 'Otwarte okna',
-      doors: 'Otwarte drzwi',
-      leak: 'Wykryto wyciek',
-      smoke: 'Alarm dymu',
-      gas: 'Alarm gazu / CO',
-      co: 'Alarm CO',
-      problem: 'Wykryto problemy',
-      battery_low: 'Niska bateria',
-      filter: 'Pasujące encje',
-    };
-    const colors: Record<string, string> = {
-      lights: 'var(--stratum-chip-lights-color, #ffc107)',
-      motion: 'var(--stratum-chip-motion-color, #4caf50)',
-      occupancy: 'var(--stratum-chip-motion-color, #4caf50)',
-      windows: 'var(--stratum-chip-windows-color, #2196f3)',
-      doors: 'var(--stratum-chip-doors-color, #9c27b0)',
-      leak: 'var(--stratum-chip-leak-color, #f44336)',
-      smoke: 'var(--stratum-chip-smoke-color, #e53935)',
-      gas: 'var(--stratum-chip-gas-color, #ff5722)',
-      co: 'var(--stratum-chip-co-color, #d84315)',
-      problem: 'var(--stratum-chip-problem-color, #ff9800)',
-      battery_low: 'var(--stratum-chip-battery-color, #ff5252)',
-      filter: 'var(--primary-color, #ff9b42)',
-    };
     this._popupChip = {
       chip,
       entityIds,
-      label: labels[chip.type] ?? 'Lista',
+      label: CHIP_LIST_LABELS[chip.type] ?? 'Lista',
       icon: resolveChipIcon(chip) ?? 'mdi:label-outline',
-      color: resolveChipColor(chip) ?? colors[chip.type] ?? 'var(--primary-color)',
+      color:
+        resolveChipColor(chip) ??
+        CHIP_LIST_COLORS[chip.type] ??
+        'var(--primary-color)',
     };
     this._pushBackGuard();
   }
