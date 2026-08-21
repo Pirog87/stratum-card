@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.84.2';
+const VERSION = '1.85.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -1037,6 +1037,9 @@ export class StratumCard extends LitElement {
       .hasLights=${resolveFieldEntityIds(this.hass!, entries, 'lights', fieldEntities)
         .length > 0}
       .lightsSwitch=${rowConfig?.lights_switch === true}
+      .lightsGlowOn=${rowConfig?.lights_switch_glow_on ?? 100}
+      .lightsGlowOff=${rowConfig?.lights_switch_glow_off ?? 30}
+      .lightsSwitchShowOff=${rowConfig?.lights_switch_show_off !== false}
       .styleOverride=${styleOverride}
       .clickable=${clickable}
       .iconTappable=${iconTappable}
