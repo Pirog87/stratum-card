@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.83.0';
+const VERSION = '1.84.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -1036,9 +1036,11 @@ export class StratumCard extends LitElement {
       .lightsAvgBrightness=${data.lightsAvgBrightness}
       .hasLights=${resolveFieldEntityIds(this.hass!, entries, 'lights', fieldEntities)
         .length > 0}
+      .lightsSwitch=${rowConfig?.lights_switch === true}
       .styleOverride=${styleOverride}
       .clickable=${clickable}
       .iconTappable=${iconTappable}
+      @row-lights-toggle=${() => this._toggleRoomLights(entries, fieldEntities)}
       @row-brightness=${(ev: CustomEvent<{ pct: number; live: boolean }>) =>
         this._onRowBrightness(entries, fieldEntities, ev.detail.pct, ev.detail.live)}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>

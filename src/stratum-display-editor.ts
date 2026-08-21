@@ -197,6 +197,13 @@ export class StratumDisplayEditor extends LitElement {
     this._emit(next);
   }
 
+  private _toggleLightsSwitch(): void {
+    const next = { ...this.config };
+    if (this.config.lights_switch === true) delete next.lights_switch;
+    else next.lights_switch = true;
+    this._emit(next);
+  }
+
   private _onCustomColor(ev: Event): void {
     const value = (ev.target as HTMLInputElement).value.trim();
     if (!value) {
@@ -343,6 +350,17 @@ export class StratumDisplayEditor extends LitElement {
                   @change=${this._toggleSlider}
                 />
                 <span>Suwak jasności gestem (przeciągnij po wierszu)</span>
+              </label>
+            </div>
+            <div class="toggles-row" style="margin-top:4px">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  .checked=${cfg.lights_switch === true}
+                  @change=${this._toggleLightsSwitch}
+                />
+                <span>Ikona świateł jako włącznik (mini-switch, tap =
+                  wł/wył wszystkich świateł)</span>
               </label>
             </div>
           </div>`
