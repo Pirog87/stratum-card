@@ -5,6 +5,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.84.0] — 2026-08-21
+
+### Added (wiersz pomieszczenia — wariant F3)
+- **Ikona świateł jako mini-switch** (opcja „Ikona świateł jako
+  włącznik" w ustawieniach wiersza, YAML: `row_config.lights_switch`):
+  przełącznik 46×25 z żarówką w gałce zamiast biernego „💡 N" — tap
+  gasi/włącza wszystkie światła pomieszczenia bez otwierania popupu.
+  **Licznik włączonych w torze przełącznika** (lewa, bursztynowa część,
+  gdy gałka ucieka w prawo). Widoczny też przy zgaszonym pokoju.
+  Klik w resztę wiersza bez zmian; gest jasności nie koliduje.
+
 ## [1.83.0] — 2026-08-21
 
 ### Added (podział świateł na strefy)

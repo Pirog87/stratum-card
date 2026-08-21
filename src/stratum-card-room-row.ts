@@ -114,6 +114,10 @@ export class StratumCardRoomRow extends LitElement {
   /** Czy pokój ma jakiekolwiek światła — warunek działania suwaka gestem. */
   @property({ type: Boolean, attribute: 'has-lights' }) public hasLights = false;
 
+  /** Ikona świateł jako mini-switch (F3): tap = toggle świateł pokoju. */
+  @property({ type: Boolean, attribute: 'lights-switch' })
+  public lightsSwitch = false;
+
   /**
    * Czy ikona ma własną, niezależną akcję kliknięcia. Gdy true — klik
    * w stadion ikony emituje `icon-tap` (nie bąbelkuje do akcji wiersza).
@@ -242,6 +246,14 @@ export class StratumCardRoomRow extends LitElement {
     );
   }
 
+  private _onLightsSwitch = (ev: Event): void => {
+    // Nie odpalaj akcji wiersza (popup) — to dedykowany przełącznik.
+    ev.stopPropagation();
+    this.dispatchEvent(
+      new CustomEvent('row-lights-toggle', { bubbles: true, composed: true }),
+    );
+  };
+
   private _onKey = (ev: KeyboardEvent): void => {
     if (!this.clickable) return;
     if (ev.key === 'Enter' || ev.key === ' ') {
@@ -258,7 +270,9 @@ export class StratumCardRoomRow extends LitElement {
       case 'humidity':
         return Boolean(this.humidity);
       case 'lights':
-        return this.lightsOn > 0;
+        // Switch musi być widoczny też przy zgaszonym pokoju — inaczej
+        // nie byłoby czym włączyć.
+        return this.lightsSwitch ? this.hasLights : this.lightsOn > 0;
       case 'motion':
         return this.motion;
       case 'windows':
@@ -519,11 +533,30 @@ export class StratumCardRoomRow extends LitElement {
           .icon=${'mdi:motion-sensor'}
           title="Ktoś jest w pomieszczeniu"
         ></ha-icon>`;
-      case 'lights':
-        return html`<span class="field lights">
-          <ha-icon .icon=${'mdi:lightbulb-on'}></ha-icon>
-          ${this.lightsOn}
-        </span>`;
+      case 'lights': {
+        if (!this.lightsSwitch) {
+          return html`<span class="field lights">
+            <ha-icon .icon=${'mdi:lightbulb-on'}></ha-icon>
+            ${this.lightsOn}
+          </span>`;
+        }
+        // F3: mini-switch z żarówką w gałce; licznik włączonych na lewej,
+        // bursztynowej części toru (gałka ucieka w prawo).
+        const on = this.lightsOn > 0;
+        return html`<button
+          class="field lights-toggle ${on ? 'on' : ''}"
+          role="switch"
+          aria-checked=${on}
+          title=${on
+            ? 'Wyłącz wszystkie światła w pomieszczeniu'
+            : 'Włącz wszystkie światła w pomieszczeniu'}
+          @click=${this._onLightsSwitch}
+          @pointerdown=${(pev: Event) => pev.stopPropagation()}
+        >
+          ${on ? html`<span class="lt-count">${this.lightsOn}</span>` : nothing}
+          <span class="lt-knob"><ha-icon .icon=${'mdi:lightbulb'}></ha-icon></span>
+        </button>`;
+      }
       case 'windows':
         return html`<span class="field windows">
           <ha-icon .icon=${'mdi:window-open-variant'}></ha-icon>
@@ -957,6 +990,56 @@ export class StratumCardRoomRow extends LitElement {
 
     .field ha-icon {
       --mdc-icon-size: 22px;
+    }
+
+    /* F3: mini-switch świateł z licznikiem w torze. */
+    .lights-toggle {
+      position: relative;
+      width: 46px;
+      height: 25px;
+      border-radius: 999px;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.16);
+      transition: background 0.15s ease;
+      flex-shrink: 0;
+    }
+    .lights-toggle.on {
+      background: var(--stratum-chip-lights-color, #ffc107);
+    }
+    .lights-toggle .lt-knob {
+      position: absolute;
+      top: 2.5px;
+      left: 2.5px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--secondary-text-color);
+    }
+    .lights-toggle .lt-knob ha-icon {
+      --mdc-icon-size: 13px;
+    }
+    .lights-toggle.on .lt-knob {
+      transform: translateX(21px);
+      color: #b07908;
+    }
+    .lights-toggle .lt-count {
+      position: absolute;
+      left: 9px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 12px;
+      font-weight: 800;
+      color: #2a1c05;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
     }
 
     .temp {
