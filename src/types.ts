@@ -803,11 +803,17 @@ export interface TileDisplayConfig {
   /** Czy pokazywać ikonę area. Default true. */
   show_icon?: boolean;
   /**
-   * Ikona świateł jako aktywny mini-switch (wariant F3): tap = smart-toggle
+   * Ikona świateł jako aktywny mini-switch (wariant H4): tap = smart-toggle
    * wszystkich świateł pomieszczenia, licznik włączonych w torze przełącznika.
-   * Widoczny też przy zgaszonym pokoju. Default false (bierny licznik).
+   * Default false (bierny licznik).
    */
   lights_switch?: boolean;
+  /** Intensywność poświaty switcha gdy coś świeci (0–100). Default 100. */
+  lights_switch_glow_on?: number;
+  /** Intensywność poświaty switcha gdy zgaszone (0–100). Default 30. */
+  lights_switch_glow_off?: number;
+  /** Czy switch widoczny też przy zgaszonym pokoju. Default true. */
+  lights_switch_show_off?: boolean;
   /** Czy pokazywać nazwę area. Default true. */
   show_name?: boolean;
 

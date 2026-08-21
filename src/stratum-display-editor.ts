@@ -128,6 +128,15 @@ export class StratumDisplayEditor extends LitElement {
     this._emit({ ...this.config, ...patch });
   }
 
+  private _moveField(field: TileField, dir: -1 | 1): void {
+    const current = [...(this.config.fields ?? DEFAULT_FIELDS)];
+    const i = current.indexOf(field);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= current.length) return;
+    [current[i], current[j]] = [current[j]!, current[i]!];
+    this._emit({ ...this.config, fields: current });
+  }
+
   private _toggleField(field: TileField): void {
     const current = this.config.fields ?? DEFAULT_FIELDS;
     const next = current.includes(field)
@@ -201,6 +210,16 @@ export class StratumDisplayEditor extends LitElement {
     const next = { ...this.config };
     if (this.config.lights_switch === true) delete next.lights_switch;
     else next.lights_switch = true;
+    this._emit(next);
+  }
+
+  private _toggleLightsSwitchShowOff(): void {
+    const next = { ...this.config };
+    if (this.config.lights_switch_show_off === false) {
+      delete next.lights_switch_show_off;
+    } else {
+      next.lights_switch_show_off = false;
+    }
     this._emit(next);
   }
 
@@ -363,6 +382,24 @@ export class StratumDisplayEditor extends LitElement {
                   wł/wył wszystkich świateł)</span>
               </label>
             </div>
+            ${cfg.lights_switch === true
+              ? html`
+                  <div style="margin-top:6px">
+                    ${this._renderSlider('Poświata — włączony', 'lights_switch_glow_on', cfg.lights_switch_glow_on ?? 100, 0, 100, 5, '%')}
+                    ${this._renderSlider('Poświata — wyłączony', 'lights_switch_glow_off', cfg.lights_switch_glow_off ?? 30, 0, 100, 5, '%')}
+                  </div>
+                  <div class="toggles-row" style="margin-top:4px">
+                    <label class="toggle">
+                      <input
+                        type="checkbox"
+                        .checked=${cfg.lights_switch_show_off !== false}
+                        @change=${this._toggleLightsSwitchShowOff}
+                      />
+                      <span>Pokazuj przełącznik też gdy wszystko zgaszone</span>
+                    </label>
+                  </div>
+                `
+              : nothing}
           </div>`
         : nothing}
 
@@ -385,6 +422,40 @@ export class StratumDisplayEditor extends LitElement {
           Wybrane wartości pokazuje zarówno kafel jak i wiersz. Kliknij żeby
           włączyć/wyłączyć.
         </p>
+        ${fields.length > 1
+          ? html`
+              <label class="group-label" style="margin-top:10px;">Kolejność pól</label>
+              <div class="chip-row">
+                ${fields.map((key, i) => {
+                  const meta = FIELD_META.find((m) => m.key === key);
+                  return html`<span class="chip order-chip">
+                    <button
+                      class="ord"
+                      title="Wcześniej"
+                      ?disabled=${i === 0}
+                      @click=${() => this._moveField(key, -1)}
+                    >
+                      <ha-icon .icon=${'mdi:chevron-left'}></ha-icon>
+                    </button>
+                    <ha-icon .icon=${meta?.icon ?? 'mdi:help'}></ha-icon>
+                    <span>${meta?.label ?? key}</span>
+                    <button
+                      class="ord"
+                      title="Później"
+                      ?disabled=${i === fields.length - 1}
+                      @click=${() => this._moveField(key, 1)}
+                    >
+                      <ha-icon .icon=${'mdi:chevron-right'}></ha-icon>
+                    </button>
+                  </span>`;
+                })}
+              </div>
+              <p class="group-hint">
+                Strzałki zmieniają kolejność wyświetlania (lewo = wcześniej).
+                Kolejność obowiązuje na wierszu i kaflu.
+              </p>
+            `
+          : nothing}
       </div>
 
       ${this.mode === 'tile'
@@ -667,6 +738,29 @@ export class StratumDisplayEditor extends LitElement {
         flex-wrap: wrap;
         gap: 6px;
         align-items: center;
+      }
+
+      /* Kolejność pól — chip ze strzałkami. */
+      .order-chip {
+        gap: 3px;
+        padding: 4px 6px;
+        cursor: default;
+      }
+      .ord {
+        border: 0;
+        background: transparent;
+        color: var(--secondary-text-color);
+        cursor: pointer;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+      }
+      .ord[disabled] {
+        opacity: 0.25;
+        cursor: default;
+      }
+      .ord ha-icon {
+        --mdc-icon-size: 16px;
       }
 
       .chip {

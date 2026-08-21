@@ -5,6 +5,19 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.85.0] — 2026-08-21
+
+### Added
+- **Suwaki intensywności poświaty mini-switcha** („Poświata — włączony"
+  / „— wyłączony", 0–100%) w ustawieniach wiersza; default wyłączonego
+  zmniejszony do 30%. YAML: `lights_switch_glow_on/off`.
+- **Opcja „Pokazuj przełącznik też gdy wszystko zgaszone"** (default
+  włączona; wyłączenie chowa switch w zgaszonych pokojach jak dawniej
+  ikonkę). YAML: `lights_switch_show_off: false`.
+- **Zmiana kolejności pól sekcji info**: pasek „Kolejność pól" ze
+  strzałkami pod wyborem pól; kolejność listy `fields` w configu jest
+  teraz honorowana na wierszu i kaflu (dotąd stała, narzucona).
+
 ## [1.84.2] — 2026-08-21
 
 ### Changed

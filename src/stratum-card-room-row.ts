@@ -30,19 +30,8 @@ const FIELD_PRIORITY: Record<TileField, number> = {
   humidity: 1,
 };
 
-/** Stała kolejność wyświetlania — niezależna od kolejności w configu. */
-const DISPLAY_ORDER: TileField[] = [
-  'temperature',
-  'humidity',
-  'lights',
-  'motion',
-  'windows',
-  'doors',
-  'leak',
-  'smoke',
-  'gas',
-  'problem',
-];
+// Kolejność wyświetlania pól = kolejność listy `fields` w configu
+// (od v1.85 zmienialna strzałkami w edytorze).
 
 /** Maksymalna liczba widocznych statusów zanim pojawi się „+n". */
 const MAX_VISIBLE_FIELDS = 4;
@@ -114,9 +103,20 @@ export class StratumCardRoomRow extends LitElement {
   /** Czy pokój ma jakiekolwiek światła — warunek działania suwaka gestem. */
   @property({ type: Boolean, attribute: 'has-lights' }) public hasLights = false;
 
-  /** Ikona świateł jako mini-switch (F3): tap = toggle świateł pokoju. */
+  /** Ikona świateł jako mini-switch (H4): tap = toggle świateł pokoju. */
   @property({ type: Boolean, attribute: 'lights-switch' })
   public lightsSwitch = false;
+
+  /** Intensywność poświaty switcha, 0–100 (osobno stan on/off). */
+  @property({ type: Number, attribute: 'lights-glow-on' })
+  public lightsGlowOn = 100;
+
+  @property({ type: Number, attribute: 'lights-glow-off' })
+  public lightsGlowOff = 30;
+
+  /** Czy switch widoczny też gdy w pokoju nic nie świeci. */
+  @property({ type: Boolean, attribute: 'lights-switch-show-off' })
+  public lightsSwitchShowOff = true;
 
   /**
    * Czy ikona ma własną, niezależną akcję kliknięcia. Gdy true — klik
@@ -270,9 +270,11 @@ export class StratumCardRoomRow extends LitElement {
       case 'humidity':
         return Boolean(this.humidity);
       case 'lights':
-        // Switch musi być widoczny też przy zgaszonym pokoju — inaczej
-        // nie byłoby czym włączyć.
-        return this.lightsSwitch ? this.hasLights : this.lightsOn > 0;
+        // Switch widoczny też przy zgaszonym pokoju (chyba że user
+        // wyłączył opcją lights_switch_show_off).
+        return this.lightsSwitch
+          ? this.hasLights && (this.lightsOn > 0 || this.lightsSwitchShowOff)
+          : this.lightsOn > 0;
       case 'motion':
         return this.motion;
       case 'windows':
@@ -292,24 +294,24 @@ export class StratumCardRoomRow extends LitElement {
     }
   }
 
-  /** Pola do pokazania: max 4 wg priorytetu, w stałej kolejności + licznik ukrytych. */
+  /**
+   * Pola do pokazania: max 4 wg priorytetu, w KOLEJNOŚCI z configu
+   * (kolejność listy `fields` = kolejność na wierszu) + licznik ukrytych.
+   */
   private _visibleFields(configured: TileField[]): {
     shown: TileField[];
     hiddenCount: number;
   } {
     const withValue = configured.filter((f) => this._fieldHasValue(f));
     if (withValue.length <= MAX_VISIBLE_FIELDS) {
-      return {
-        shown: DISPLAY_ORDER.filter((f) => withValue.includes(f)),
-        hiddenCount: 0,
-      };
+      return { shown: withValue, hiddenCount: 0 };
     }
     const byPriority = [...withValue].sort(
       (a, b) => (FIELD_PRIORITY[b] ?? 0) - (FIELD_PRIORITY[a] ?? 0),
     );
     const top = new Set(byPriority.slice(0, MAX_VISIBLE_FIELDS));
     return {
-      shown: DISPLAY_ORDER.filter((f) => top.has(f)),
+      shown: withValue.filter((f) => top.has(f)),
       hiddenCount: withValue.length - MAX_VISIBLE_FIELDS,
     };
   }
@@ -324,14 +326,11 @@ export class StratumCardRoomRow extends LitElement {
     hiddenCount: number;
   } {
     const withValue = configured.filter((f) => this._fieldHasValue(f));
-    const sub = SUB_FIELDS.filter((f) => withValue.includes(f));
+    // Kolejność wewnątrz obu grup = kolejność listy `fields` z configu.
+    const sub = withValue.filter((f) => SUB_FIELDS.includes(f));
     const rightCandidates = withValue.filter((f) => !SUB_FIELDS.includes(f));
     if (rightCandidates.length <= MAX_RIGHT_FIELDS) {
-      return {
-        sub,
-        right: DISPLAY_ORDER.filter((f) => rightCandidates.includes(f)),
-        hiddenCount: 0,
-      };
+      return { sub, right: rightCandidates, hiddenCount: 0 };
     }
     const byPriority = [...rightCandidates].sort(
       (a, b) => (FIELD_PRIORITY[b] ?? 0) - (FIELD_PRIORITY[a] ?? 0),
@@ -339,7 +338,7 @@ export class StratumCardRoomRow extends LitElement {
     const top = new Set(byPriority.slice(0, MAX_RIGHT_FIELDS));
     return {
       sub,
-      right: DISPLAY_ORDER.filter((f) => top.has(f)),
+      right: rightCandidates.filter((f) => top.has(f)),
       hiddenCount: rightCandidates.length - MAX_RIGHT_FIELDS,
     };
   }
@@ -540,11 +539,22 @@ export class StratumCardRoomRow extends LitElement {
             ${this.lightsOn}
           </span>`;
         }
-        // F3: mini-switch z żarówką w gałce; licznik włączonych na lewej,
-        // bursztynowej części toru (gałka ucieka w prawo).
+        // H4: mini-switch z czystą gałką; licznik na torze, poświata
+        // w obu stanach — intensywność z configu (inline, bo alpha cieni
+        // nie da się prosto sterować var-ami).
         const on = this.lightsOn > 0;
+        const f =
+          Math.max(0, Math.min(100, on ? this.lightsGlowOn : this.lightsGlowOff)) /
+          100;
+        const glow =
+          f <= 0
+            ? ''
+            : on
+            ? `box-shadow: 0 0 5px 1px rgba(255,224,130,${(0.95 * f).toFixed(2)}), 0 0 16px 5px rgba(255,193,7,${(0.6 * f).toFixed(2)}), 0 0 30px 10px rgba(255,193,7,${(0.25 * f).toFixed(2)});`
+            : `box-shadow: 0 0 5px 1px rgba(255,213,79,${(0.65 * f).toFixed(2)}), 0 0 14px 5px rgba(255,193,7,${(0.35 * f).toFixed(2)});`;
         return html`<button
           class="field lights-toggle ${on ? 'on' : ''}"
+          style=${glow}
           role="switch"
           aria-checked=${on}
           title=${on
@@ -992,9 +1002,8 @@ export class StratumCardRoomRow extends LitElement {
       --mdc-icon-size: 22px;
     }
 
-    /* F3/H4: mini-switch świateł z licznikiem w torze + bursztynowa
-       poświata w OBU stanach (przygaszona gdy wyłączony) — sygnalizuje
-       „to włącznik światła" także obcym. */
+    /* H4: mini-switch świateł z licznikiem w torze; poświata inline
+       (intensywność on/off z configu). */
     .lights-toggle {
       position: relative;
       width: 46px;
@@ -1006,20 +1015,9 @@ export class StratumCardRoomRow extends LitElement {
       background: rgba(255, 255, 255, 0.16);
       transition: background 0.15s ease, box-shadow 0.2s ease;
       flex-shrink: 0;
-      box-shadow:
-        0 0 5px 1px
-          color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 65%, transparent),
-        0 0 14px 5px
-          color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 35%, transparent);
     }
     .lights-toggle.on {
       background: var(--stratum-chip-lights-color, #ffc107);
-      box-shadow:
-        0 0 5px 1px rgba(255, 224, 130, 0.95),
-        0 0 16px 5px
-          color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 60%, transparent),
-        0 0 30px 10px
-          color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 25%, transparent);
     }
     .lights-toggle .lt-knob {
       position: absolute;
