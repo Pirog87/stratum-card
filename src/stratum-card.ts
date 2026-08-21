@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.85.0';
+const VERSION = '1.86.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -968,6 +968,32 @@ export class StratumCard extends LitElement {
         ? data.lightsRgb
         : undefined;
 
+    // Kolory pól sekcji info z configu → CSS vars (doklejane do
+    // styleOverride; kolorują pola + spójnie np. mini-switch świateł).
+    const FIELD_COLOR_VARS: Record<string, string> = {
+      lights: '--stratum-chip-lights-color',
+      motion: '--stratum-chip-motion-color',
+      windows: '--stratum-chip-windows-color',
+      doors: '--stratum-chip-doors-color',
+      leak: '--stratum-chip-leak-color',
+      smoke: '--stratum-chip-smoke-color',
+      gas: '--stratum-chip-gas-color',
+      problem: '--stratum-chip-problem-color',
+      temperature: '--stratum-field-temp-color',
+      humidity: '--stratum-field-hum-color',
+    };
+    const fieldColorStyle = (
+      cfg?: import('./types.js').TileDisplayConfig,
+    ): string =>
+      Object.entries(cfg?.field_colors ?? {})
+        .filter(([k, v]) => Boolean(v) && FIELD_COLOR_VARS[k])
+        .map(([k, v]) => `${FIELD_COLOR_VARS[k]}:${v};`)
+        .join('');
+    const rowStyleOverride =
+      (fieldColorStyle(rowConfig) + (styleOverride ?? '')) || undefined;
+    const tileStyleOverride =
+      (fieldColorStyle(tileConfig) + (styleOverride ?? '')) || undefined;
+
     // Rozwiązywanie akcji dla klikalności wiersza.
     const isSet = (a: import('./types.js').TapActionConfig | undefined): boolean =>
       Boolean(a && (a as { action?: string }).action && (a as { action: string }).action !== 'default');
@@ -1008,7 +1034,7 @@ export class StratumCard extends LitElement {
         .conditionOverride=${conditionOverride}
         .lightsAccent=${tileLightsAccent}
         .lightsBrightness=${data.lightsBrightness}
-        .styleOverride=${styleOverride}
+        .styleOverride=${tileStyleOverride}
         .clickable=${clickable}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
           this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
@@ -1040,7 +1066,7 @@ export class StratumCard extends LitElement {
       .lightsGlowOn=${rowConfig?.lights_switch_glow_on ?? 100}
       .lightsGlowOff=${rowConfig?.lights_switch_glow_off ?? 30}
       .lightsSwitchShowOff=${rowConfig?.lights_switch_show_off !== false}
-      .styleOverride=${styleOverride}
+      .styleOverride=${rowStyleOverride}
       .clickable=${clickable}
       .iconTappable=${iconTappable}
       @row-lights-toggle=${() => this._toggleRoomLights(entries, fieldEntities)}

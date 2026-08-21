@@ -187,6 +187,10 @@ export class StratumCardEditor extends LitElement {
     if (!isTile && raw.lights_switch_show_off === false) {
       out.lights_switch_show_off = false;
     }
+    // Kolory pól sekcji info — zapisujemy niepustą mapę (row i tile).
+    if (raw.field_colors && Object.keys(raw.field_colors).length > 0) {
+      out.field_colors = raw.field_colors;
+    }
     // Układ statusów — default 'right', zapisujemy tylko 'two-line'.
     if (!isTile && raw.status_layout === 'two-line') {
       out.status_layout = 'two-line';

@@ -128,6 +128,17 @@ export class StratumDisplayEditor extends LitElement {
     this._emit({ ...this.config, ...patch });
   }
 
+  private _onFieldColor(field: TileField, ev: Event): void {
+    const value = (ev.target as HTMLInputElement).value.trim();
+    const next = { ...this.config };
+    const map = { ...(next.field_colors ?? {}) };
+    if (value) map[field] = value;
+    else delete map[field];
+    if (Object.keys(map).length > 0) next.field_colors = map;
+    else delete next.field_colors;
+    this._emit(next);
+  }
+
   private _moveField(field: TileField, dir: -1 | 1): void {
     const current = [...(this.config.fields ?? DEFAULT_FIELDS)];
     const i = current.indexOf(field);
@@ -403,60 +414,87 @@ export class StratumDisplayEditor extends LitElement {
           </div>`
         : nothing}
 
-      <div class="group">
-        <label class="group-label">Pola w sekcji info</label>
-        <div class="chip-row">
-          ${FIELD_META.map((f) => {
-            const on = fields.includes(f.key);
-            return html`<button
-              type="button"
-              class="chip field-chip ${on ? 'on' : ''}"
-              @click=${() => this._toggleField(f.key)}
-            >
-              <ha-icon .icon=${f.icon}></ha-icon>
-              <span>${f.label}</span>
-            </button>`;
+      <details class="stratum-collapsible">
+        <summary>
+          <ha-icon .icon=${'mdi:format-list-bulleted-type'}></ha-icon>
+          <span>Pola sekcji info — wybór, kolejność, kolory</span>
+        </summary>
+        <div class="group">
+          <label class="group-label">Pola w sekcji info</label>
+          <div class="chip-row">
+            ${FIELD_META.map((f) => {
+              const on = fields.includes(f.key);
+              return html`<button
+                type="button"
+                class="chip field-chip ${on ? 'on' : ''}"
+                @click=${() => this._toggleField(f.key)}
+              >
+                <ha-icon .icon=${f.icon}></ha-icon>
+                <span>${f.label}</span>
+              </button>`;
+            })}
+          </div>
+          <p class="group-hint">
+            Wybrane wartości pokazuje zarówno kafel jak i wiersz. Kliknij żeby
+            włączyć/wyłączyć.
+          </p>
+          ${fields.length > 1
+            ? html`
+                <label class="group-label" style="margin-top:10px;">Kolejność pól</label>
+                <div class="chip-row">
+                  ${fields.map((key, i) => {
+                    const meta = FIELD_META.find((m) => m.key === key);
+                    return html`<span class="chip order-chip">
+                      <button
+                        class="ord"
+                        title="Wcześniej"
+                        ?disabled=${i === 0}
+                        @click=${() => this._moveField(key, -1)}
+                      >
+                        <ha-icon .icon=${'mdi:chevron-left'}></ha-icon>
+                      </button>
+                      <ha-icon .icon=${meta?.icon ?? 'mdi:help'}></ha-icon>
+                      <span>${meta?.label ?? key}</span>
+                      <button
+                        class="ord"
+                        title="Później"
+                        ?disabled=${i === fields.length - 1}
+                        @click=${() => this._moveField(key, 1)}
+                      >
+                        <ha-icon .icon=${'mdi:chevron-right'}></ha-icon>
+                      </button>
+                    </span>`;
+                  })}
+                </div>
+                <p class="group-hint">
+                  Strzałki zmieniają kolejność wyświetlania (lewo = wcześniej).
+                  Kolejność obowiązuje na wierszu i kaflu.
+                </p>
+              `
+            : nothing}
+          <label class="group-label" style="margin-top:10px;">Kolory pól</label>
+          ${fields.map((key) => {
+            const meta = FIELD_META.find((m) => m.key === key);
+            return html`<div class="fc-row">
+              <span class="fc-label">
+                <ha-icon .icon=${meta?.icon ?? 'mdi:help'}></ha-icon>
+                ${meta?.label ?? key}
+              </span>
+              <input
+                type="text"
+                class="custom-input grow"
+                placeholder="domyślny (#hex, nazwa, var(--...))"
+                .value=${cfg.field_colors?.[key] ?? ''}
+                @change=${(ev: Event) => this._onFieldColor(key, ev)}
+              />
+            </div>`;
           })}
+          <p class="group-hint">
+            Puste = kolor domyślny. Koloruje ikonę i wartość pola; dla
+            świateł także mini-switch i akcenty wiersza.
+          </p>
         </div>
-        <p class="group-hint">
-          Wybrane wartości pokazuje zarówno kafel jak i wiersz. Kliknij żeby
-          włączyć/wyłączyć.
-        </p>
-        ${fields.length > 1
-          ? html`
-              <label class="group-label" style="margin-top:10px;">Kolejność pól</label>
-              <div class="chip-row">
-                ${fields.map((key, i) => {
-                  const meta = FIELD_META.find((m) => m.key === key);
-                  return html`<span class="chip order-chip">
-                    <button
-                      class="ord"
-                      title="Wcześniej"
-                      ?disabled=${i === 0}
-                      @click=${() => this._moveField(key, -1)}
-                    >
-                      <ha-icon .icon=${'mdi:chevron-left'}></ha-icon>
-                    </button>
-                    <ha-icon .icon=${meta?.icon ?? 'mdi:help'}></ha-icon>
-                    <span>${meta?.label ?? key}</span>
-                    <button
-                      class="ord"
-                      title="Później"
-                      ?disabled=${i === fields.length - 1}
-                      @click=${() => this._moveField(key, 1)}
-                    >
-                      <ha-icon .icon=${'mdi:chevron-right'}></ha-icon>
-                    </button>
-                  </span>`;
-                })}
-              </div>
-              <p class="group-hint">
-                Strzałki zmieniają kolejność wyświetlania (lewo = wcześniej).
-                Kolejność obowiązuje na wierszu i kaflu.
-              </p>
-            `
-          : nothing}
-      </div>
+      </details>
 
       ${this.mode === 'tile'
         ? html`<div class="group">
@@ -738,6 +776,25 @@ export class StratumDisplayEditor extends LitElement {
         flex-wrap: wrap;
         gap: 6px;
         align-items: center;
+      }
+
+      /* Kolory pól — wiersz label + input. */
+      .fc-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .fc-row .fc-label {
+        flex: 0 0 116px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--secondary-text-color);
+      }
+      .fc-row .fc-label ha-icon {
+        --mdc-icon-size: 15px;
       }
 
       /* Kolejność pól — chip ze strzałkami. */

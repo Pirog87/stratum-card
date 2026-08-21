@@ -5,6 +5,18 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.86.0] — 2026-08-21
+
+### Added
+- **Kolory pól sekcji info** (`field_colors`: pole → kolor): pod
+  kolejnością pól pole tekstowe per pole (hex/nazwa/var). Kolor idzie
+  przez CSS vars `--stratum-chip-<pole>-color`, więc spójnie koloruje
+  też mini-switch świateł i akcenty wiersza; temp/wilgotność dostały
+  nowe vary `--stratum-field-temp/hum-color`.
+- **Konfiguracja pól zamknięta w zwijanej podsekcji** „Pola sekcji
+  info — wybór, kolejność, kolory" (domyślnie zwinięta) — panel wiersza
+  robił się za długi.
+
 ## [1.85.0] — 2026-08-21
 
 ### Added
