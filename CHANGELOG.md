@@ -5,6 +5,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.89.0] — 2026-08-21
+
+### Changed (okna analogicznie do drzwi)
+- **Sekcja „Okna" usunięta z auto-wykrywania popupu** — status okien
+  żyje w chipie nagłówka (jawna sekcja w configu nadal działa).
+- **Chipy w nagłówku popupu są teraz KLIKALNE** — jak w karcie głównej:
+  klik w chip okien/drzwi/świateł/obecności/wycieku otwiera popup listy
+  aktywnych encji (zakres = pomieszczenie + strefy scalone).
+- Refaktor: wspólna logika list chipów w `chip-list-helpers.ts`
+  (używana przez kartę główną i popup pomieszczenia).
+
 ## [1.88.1] — 2026-08-21
 
 ### Added
