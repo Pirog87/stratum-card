@@ -237,6 +237,229 @@ export class StratumCardEditor extends LitElement {
     return out;
   }
 
+  // ===== Belka popupu pomieszczenia (popup_header) =====
+
+  private _updatePopupHeader(
+    patch: Partial<import('./types.js').PopupHeaderConfig>,
+  ): void {
+    if (!this._config) return;
+    const merged: import('./types.js').PopupHeaderConfig = {
+      ...(this._config.popup_header ?? {}),
+      ...patch,
+    };
+    // Cleanup defaultów — trzymamy w configu tylko odstępstwa.
+    const effStyle = merged.style ?? 'classic';
+    // subtitle 'none' jest znaczący dla stylu avatar (jego default = areas).
+    if (!merged.subtitle || (merged.subtitle === 'none' && effStyle !== 'avatar')) {
+      delete merged.subtitle;
+    }
+    if (merged.style === 'classic') delete merged.style;
+    if (merged.title_size === 'md') delete merged.title_size;
+    if (merged.title_weight === 600) delete merged.title_weight;
+    if (!merged.title_color) delete merged.title_color;
+    if (!merged.hide_icon) delete merged.hide_icon;
+    if (merged.icon_size === undefined) delete merged.icon_size;
+    if (!merged.icon_color) delete merged.icon_color;
+    if (!merged.icon_bg_color) delete merged.icon_bg_color;
+    if (merged.padding === undefined) delete merged.padding;
+    if (merged.chips_position === 'inline') delete merged.chips_position;
+    if (merged.divider !== false) delete merged.divider;
+    if (!merged.accent_bar) delete merged.accent_bar;
+    if (!merged.accent_color) delete merged.accent_color;
+    const next: StratumCardConfig = { ...this._config };
+    if (Object.keys(merged).length === 0) delete next.popup_header;
+    else next.popup_header = merged;
+    this._emitConfig(next);
+  }
+
+  private _phSeg<T extends string | number>(
+    label: string,
+    options: Array<{ value: T; label: string }>,
+    current: T,
+    onPick: (v: T) => void,
+    hint?: string,
+  ): TemplateResult {
+    return html`<div class="stratum-group">
+      <label class="stratum-group-label">${label}</label>
+      <div class="stratum-chip-row">
+        ${options.map(
+          (o) => html`<button
+            type="button"
+            class="stratum-chip ${current === o.value ? 'on' : ''}"
+            @click=${() => onPick(o.value)}
+          >
+            <span>${o.label}</span>
+          </button>`,
+        )}
+      </div>
+      ${hint ? html`<p class="stratum-group-hint">${hint}</p>` : nothing}
+    </div>`;
+  }
+
+  private _phColorInput(
+    label: string,
+    value: string | undefined,
+    onChange: (v: string | undefined) => void,
+  ): TemplateResult {
+    return html`<div class="stratum-group">
+      <label class="stratum-group-label">${label}</label>
+      <input
+        type="text"
+        class="ph-input"
+        placeholder="#hex, nazwa albo var(--color) — puste = domyślny"
+        .value=${value ?? ''}
+        @change=${(ev: Event) => {
+          const v = (ev.target as HTMLInputElement).value.trim();
+          onChange(v || undefined);
+        }}
+      />
+    </div>`;
+  }
+
+  private _renderPopupHeaderPanel(): TemplateResult {
+    const ph = this._config?.popup_header ?? {};
+    const style = ph.style ?? 'classic';
+    return html`
+      ${this._phSeg(
+        'Styl belki',
+        [
+          { value: 'classic', label: 'Klasyczny' },
+          { value: 'avatar', label: 'Avatar' },
+          { value: 'gradient', label: 'Gradient' },
+          { value: 'compact', label: 'Kompakt' },
+        ] as const,
+        style,
+        (v) => this._updatePopupHeader({ style: v }),
+        'Avatar = ikona w kółku + podtytuł; Gradient = belka podbarwiona akcentem; Kompakt = niska belka.',
+      )}
+      ${this._phSeg(
+        'Rozmiar tytułu',
+        [
+          { value: 'sm', label: 'Mały' },
+          { value: 'md', label: 'Średni' },
+          { value: 'lg', label: 'Duży' },
+        ] as const,
+        ph.title_size ?? 'md',
+        (v) => this._updatePopupHeader({ title_size: v }),
+      )}
+      ${this._phSeg(
+        'Waga tytułu',
+        [
+          { value: 400, label: 'Normalna' },
+          { value: 500, label: 'Średnia' },
+          { value: 600, label: 'Semi-bold' },
+          { value: 700, label: 'Bold' },
+        ] as const,
+        ph.title_weight ?? 600,
+        (v) => this._updatePopupHeader({ title_weight: v }),
+      )}
+      ${this._phColorInput('Kolor tytułu', ph.title_color, (v) =>
+        this._updatePopupHeader({ title_color: v }),
+      )}
+      ${this._phSeg(
+        'Pozycja chipów',
+        [
+          { value: 'inline', label: 'Przy tytule' },
+          { value: 'below', label: 'Druga linia' },
+          { value: 'hidden', label: 'Ukryte' },
+        ] as const,
+        ph.chips_position ?? 'inline',
+        (v) => this._updatePopupHeader({ chips_position: v }),
+        'Druga linia = chipy pod tytułem, przewijane — najlepsze na telefonie przy wielu chipach.',
+      )}
+      ${this._phSeg(
+        'Podtytuł pod nazwą',
+        [
+          { value: 'none', label: 'Brak' },
+          { value: 'areas', label: 'Strefy scalone' },
+          { value: 'entities', label: 'Liczba encji' },
+        ] as const,
+        ph.subtitle ?? (style === 'avatar' ? 'areas' : 'none'),
+        (v) => this._updatePopupHeader({ subtitle: v }),
+      )}
+      <div class="stratum-slider-row">
+        <label class="stratum-slider-label">Rozmiar ikony</label>
+        <div class="stratum-slider-value">${ph.icon_size ?? 28} px</div>
+        <input
+          type="range"
+          class="stratum-slider"
+          min="14"
+          max="40"
+          step="1"
+          .value=${String(ph.icon_size ?? 28)}
+          @input=${(ev: Event) =>
+            this._updatePopupHeader({
+              icon_size: parseInt((ev.target as HTMLInputElement).value, 10),
+            })}
+        />
+      </div>
+      <div class="stratum-slider-row">
+        <label class="stratum-slider-label">Padding belki (dół)</label>
+        <div class="stratum-slider-value">${ph.padding ?? 12} px</div>
+        <input
+          type="range"
+          class="stratum-slider"
+          min="4"
+          max="24"
+          step="1"
+          .value=${String(ph.padding ?? 12)}
+          @input=${(ev: Event) =>
+            this._updatePopupHeader({
+              padding: parseInt((ev.target as HTMLInputElement).value, 10),
+            })}
+        />
+      </div>
+      ${this._phColorInput('Kolor ikony', ph.icon_color, (v) =>
+        this._updatePopupHeader({ icon_color: v }),
+      )}
+      ${this._phColorInput(
+        'Kolor tła ikony (avatar/gradient)',
+        ph.icon_bg_color,
+        (v) => this._updatePopupHeader({ icon_bg_color: v }),
+      )}
+      ${this._phColorInput(
+        'Kolor akcentu (gradient / pasek / tło ikony)',
+        ph.accent_color,
+        (v) => this._updatePopupHeader({ accent_color: v }),
+      )}
+      <div class="stratum-toggles-row">
+        <label class="stratum-toggle">
+          <input
+            type="checkbox"
+            .checked=${ph.hide_icon === true}
+            @change=${(ev: Event) =>
+              this._updatePopupHeader({
+                hide_icon: (ev.target as HTMLInputElement).checked || undefined,
+              })}
+          />
+          <span>Ukryj ikonę pomieszczenia</span>
+        </label>
+        <label class="stratum-toggle">
+          <input
+            type="checkbox"
+            .checked=${ph.divider !== false}
+            @change=${(ev: Event) =>
+              this._updatePopupHeader({
+                divider: (ev.target as HTMLInputElement).checked ? undefined : false,
+              })}
+          />
+          <span>Separator pod belką</span>
+        </label>
+        <label class="stratum-toggle">
+          <input
+            type="checkbox"
+            .checked=${ph.accent_bar === true}
+            @change=${(ev: Event) =>
+              this._updatePopupHeader({
+                accent_bar: (ev.target as HTMLInputElement).checked || undefined,
+              })}
+          />
+          <span>Akcentowy pasek z lewej</span>
+        </label>
+      </div>
+    `;
+  }
+
   private _rowConfigChanged(ev: CustomEvent<{ config: RowDisplayConfig }>): void {
     ev.stopPropagation();
     if (!this._config) return;
@@ -729,6 +952,26 @@ export class StratumCardEditor extends LitElement {
 
       <details
         class="stratum-panel"
+        ?open=${this._openSections.has('popup-header')}
+        @toggle=${(ev: Event) => this._onSectionToggle('popup-header', ev)}
+      >
+        <summary class="stratum-panel-header">
+          <span class="stratum-panel-avatar header-avatar">
+            <ha-icon .icon=${'mdi:dock-top'}></ha-icon>
+          </span>
+          <div class="stratum-panel-title">
+            <h3>Belka popupu pomieszczenia</h3>
+            <p class="stratum-panel-hint">
+              Nagłówek popupu: styl, tytuł, ikona, pozycja chipów, podtytuł,
+              separator, akcent. Obowiązuje we wszystkich pokojach.
+            </p>
+          </div>
+        </summary>
+        <div class="stratum-panel-body">${this._renderPopupHeaderPanel()}</div>
+      </details>
+
+      <details
+        class="stratum-panel"
         ?open=${this._openSections.has('chips')}
         @toggle=${(ev: Event) => this._onSectionToggle('chips', ev)}
       >
@@ -919,6 +1162,23 @@ export class StratumCardEditor extends LitElement {
       .stratum-panel-avatar.chips-avatar {
         background: color-mix(in srgb, #4caf50 22%, transparent);
         color: #81c784;
+      }
+
+      /* Belka popupu — input koloru. */
+      .ph-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.14));
+        background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
+        color: var(--primary-text-color);
+        font: inherit;
+        font-size: 13px;
+      }
+      .ph-input::placeholder {
+        color: var(--secondary-text-color);
+        opacity: 0.6;
       }
     `,
     css`

@@ -5,6 +5,23 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.87.0] — 2026-08-21
+
+### Added (belka nagłówka popupu pomieszczenia)
+- **Nowy panel „Belka popupu pomieszczenia"** w edytorze karty —
+  szeroka konfiguracja jak przy belce głównej (`popup_header`, globalnie
+  dla wszystkich pokoi):
+  - styl belki: **Klasyczny / Avatar / Gradient / Kompakt** (avatar =
+    ikona w podbarwionym kółku + podtytuł; gradient = belka podbarwiona
+    akcentem; kompakt = niska belka),
+  - tytuł: rozmiar S/M/L, waga 400–700, kolor,
+  - ikona: pokaż/ukryj, rozmiar (suwak), kolor, kolor tła kółka,
+  - **pozycja chipów**: przy tytule / druga linia (przewijana — dla
+    telefonów) / ukryte,
+  - podtytuł pod nazwą: brak / strefy scalone / liczba encji,
+  - padding belki (suwak), separator pod belką, akcentowy pasek z lewej,
+    kolor akcentu.
+
 ## [1.86.0] — 2026-08-21
 
 ### Added
