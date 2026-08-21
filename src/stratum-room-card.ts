@@ -412,6 +412,7 @@ export class StratumRoomCard extends LitElement {
                 .hass=${this.hass}
                 .config=${{
                   size: this._config!.scene_size_default,
+                  columns: this._config!.scene_columns_default,
                   gradient: this._config!.scene_gradient_default,
                   ...this._config!.scenes,
                 }}
@@ -959,7 +960,10 @@ export class StratumRoomCard extends LitElement {
           | undefined;
         return icon ? { entity: e.entity_id, icon } : { entity: e.entity_id };
       }),
-      columns: typeof section.columns === 'number' ? section.columns : 3,
+      columns:
+        typeof section.columns === 'number'
+          ? section.columns
+          : this._config?.scene_columns_default ?? 3,
       size: this._config?.scene_size_default,
       gradient: this._config?.scene_gradient_default,
     };

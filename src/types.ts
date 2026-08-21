@@ -69,6 +69,13 @@ export interface StratumCardConfig {
   rooms_scene_size?: 'sm' | 'md' | 'lg';
 
   /**
+   * Globalna liczba kolumn kafli scen w popupach pomieszczeń.
+   * Brak = dotychczasowe zachowanie (auto/3). `scenes.columns` per pokój
+   * wygrywa.
+   */
+  rooms_scene_columns?: 1 | 2 | 3 | 4 | 5 | 6;
+
+  /**
    * Globalny styl auto-gradientu kafli scen (bez grafiki) — wszędzie
    * (pasek główny + popupy pomieszczeń). `scenes.gradient` nadpisuje.
    * Default: `mesh`.
@@ -238,6 +245,8 @@ export interface StratumRoomCardConfig {
    * `rooms_scene_size`). `scenes.size` per pokój wygrywa.
    */
   scene_size_default?: 'sm' | 'md' | 'lg';
+  /** Globalny default liczby kolumn kafli scen (`rooms_scene_columns`). */
+  scene_columns_default?: number;
   /**
    * Globalny default stylu auto-gradientu (z karty głównej,
    * `rooms_scene_gradient`). `scenes.gradient` per pokój wygrywa.

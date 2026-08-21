@@ -626,6 +626,14 @@ export class StratumCardEditor extends LitElement {
     this._updateField('rooms_scene_size', value === 'sm' ? undefined : value);
   }
 
+  private _onRoomsSceneColumns(value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6): void {
+    // Brak (auto) = dotychczasowe zachowanie; zapisujemy tylko liczby.
+    this._updateField(
+      'rooms_scene_columns',
+      value === 'auto' ? undefined : value,
+    );
+  }
+
   private _onRoomsSceneGradient(
     value: 'mesh' | 'linear' | 'glow' | 'horizon',
   ): void {
@@ -763,6 +771,36 @@ export class StratumCardEditor extends LitElement {
             <p class="stratum-group-hint">
               Rozmiar kafli scen w popupach wszystkich pomieszczeń. Nadpisujesz
               per pomieszczenie w edycji pokoju → Sceny → „Rozmiar tile".
+            </p>
+          </div>
+
+          <div class="stratum-group">
+            <label class="stratum-group-label">Kafle scen — kolumny (globalnie)</label>
+            <div class="stratum-chip-row">
+              ${(
+                [
+                  { value: 'auto', label: 'Auto' },
+                  { value: 1, label: '1' },
+                  { value: 2, label: '2' },
+                  { value: 3, label: '3' },
+                  { value: 4, label: '4' },
+                  { value: 5, label: '5' },
+                  { value: 6, label: '6' },
+                ] as const
+              ).map(
+                (c) => html`<button
+                  type="button"
+                  class="stratum-chip ${(cfg.rooms_scene_columns ?? 'auto') === c.value ? 'on' : ''}"
+                  @click=${() => this._onRoomsSceneColumns(c.value)}
+                >
+                  <span>${c.label}</span>
+                </button>`,
+              )}
+            </div>
+            <p class="stratum-group-hint">
+              Liczba kafli scen w rzędzie w popupach pomieszczeń. Auto =
+              responsywnie do szerokości. Nadpisujesz per pomieszczenie w
+              edycji pokoju → Sceny → „Kolumny".
             </p>
           </div>
 
