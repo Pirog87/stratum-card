@@ -5,6 +5,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.88.0] — 2026-08-21
+
+### Added
+- **Globalna liczba kolumn kafli scen** w popupach pomieszczeń —
+  „Ustawienia ogólne → Kafle scen — kolumny (globalnie)" (Auto/1–6,
+  YAML: `rooms_scene_columns`). Obowiązuje w auto-sekcjach i jawnych
+  konfiguracjach; per pokój nadal nadpisuje pole „Kolumny" w panelu
+  Sceny (razem z istniejącym globalnym „Rozmiarem").
+
 ## [1.87.0] — 2026-08-21
 
 ### Added (belka nagłówka popupu pomieszczenia)
