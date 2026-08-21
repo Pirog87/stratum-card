@@ -39,7 +39,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.82.0';
+const VERSION = '1.83.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -57,6 +57,8 @@ export class StratumCard extends LitElement {
     scenes?: import('./types.js').SceneBarConfig;
     lights?: import('./types.js').RoomLightsConfig;
     light_auto_entity?: string;
+    light_split_areas?: boolean;
+    light_auto_entities?: Record<string, string>;
     light_singles?: import('./types.js').RoomEntityListConfig;
     covers_list?: import('./types.js').RoomEntityListConfig;
     media_list?: import('./types.js').RoomEntityListConfig;
@@ -723,6 +725,8 @@ export class StratumCard extends LitElement {
       scenes: this._popupRoom.scenes,
       lights: this._popupRoom.lights,
       light_auto_entity: this._popupRoom.light_auto_entity,
+      light_split_areas: this._popupRoom.light_split_areas,
+      light_auto_entities: this._popupRoom.light_auto_entities,
       light_singles: this._popupRoom.light_singles,
       covers_list: this._popupRoom.covers_list,
       media_list: this._popupRoom.media_list,
@@ -848,6 +852,8 @@ export class StratumCard extends LitElement {
             scenes: room.scenes,
             lights: room.lights,
             light_auto_entity: room.light_auto_entity,
+            light_split_areas: room.light_split_areas,
+            light_auto_entities: room.light_auto_entities,
             light_singles: room.light_singles,
             covers_list: room.covers_list,
             media_list: room.media_list,
@@ -913,6 +919,8 @@ export class StratumCard extends LitElement {
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
       light_auto_entity?: string;
+      light_split_areas?: boolean;
+      light_auto_entities?: Record<string, string>;
       light_singles?: import('./types.js').RoomEntityListConfig;
       covers_list?: import('./types.js').RoomEntityListConfig;
       media_list?: import('./types.js').RoomEntityListConfig;
@@ -1074,6 +1082,8 @@ export class StratumCard extends LitElement {
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
       light_auto_entity?: string;
+      light_split_areas?: boolean;
+      light_auto_entities?: Record<string, string>;
       light_singles?: import('./types.js').RoomEntityListConfig;
       covers_list?: import('./types.js').RoomEntityListConfig;
       media_list?: import('./types.js').RoomEntityListConfig;
@@ -1143,6 +1153,8 @@ export class StratumCard extends LitElement {
       scenes?: import('./types.js').SceneBarConfig;
       lights?: import('./types.js').RoomLightsConfig;
       light_auto_entity?: string;
+      light_split_areas?: boolean;
+      light_auto_entities?: Record<string, string>;
       light_singles?: import('./types.js').RoomEntityListConfig;
       covers_list?: import('./types.js').RoomEntityListConfig;
       media_list?: import('./types.js').RoomEntityListConfig;
@@ -1158,6 +1170,8 @@ export class StratumCard extends LitElement {
       scenes: overrides?.scenes,
       lights: overrides?.lights,
       light_auto_entity: overrides?.light_auto_entity,
+      light_split_areas: overrides?.light_split_areas,
+      light_auto_entities: overrides?.light_auto_entities,
       light_singles: overrides?.light_singles,
       covers_list: overrides?.covers_list,
       media_list: overrides?.media_list,

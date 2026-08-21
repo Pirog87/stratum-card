@@ -5,6 +5,19 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.83.0] — 2026-08-21
+
+### Added (podział świateł na strefy)
+- **Opcja „Podziel światła na strefy"** (per pomieszczenie, tylko przy
+  scalonych `merge_with`): blok „Grupy świateł" rozpada się na osobne
+  podsekcje per strefa — nagłówek z nazwą strefy, jej grupami świateł
+  i WŁASNĄ parą przełączników (master wł/wył scope'owany do strefy +
+  switch automatyki).
+- **Pomocnicy automatyki per strefa** (`light_auto_entities`:
+  area_id → encja) — edytor pokazuje pole per strefa po włączeniu
+  podziału; strefa główna ma fallback do `light_auto_entity`.
+- YAML: `light_split_areas: true`, `light_auto_entities: {area: encja}`.
+
 ## [1.82.0] — 2026-08-21
 
 ### Changed (przełączniki nagłówka bloku świateł)

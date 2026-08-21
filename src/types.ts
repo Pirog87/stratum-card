@@ -207,6 +207,16 @@ export interface StratumRoomCardConfig {
   lights?: RoomLightsConfig;
   /** Pomocnik auto-świateł — badge „Auto" w nagłówku bloku świateł. */
   light_auto_entity?: string;
+  /**
+   * Podział bloku świateł na strefy (sensowne przy `merge_with`): osobny
+   * nagłówek per area z własnymi przełącznikami wł/wył i auto.
+   */
+  light_split_areas?: boolean;
+  /**
+   * Pomocniki automatyki per strefa: area_id → encja (input_boolean itp.).
+   * Dla strefy głównej fallback: `light_auto_entity`.
+   */
+  light_auto_entities?: Record<string, string>;
   /** Jawna lista pojedynczych świateł (blok „Encje światła"). */
   light_singles?: RoomEntityListConfig;
   /** Jawna lista rolet (blok „Rolety"). */
@@ -624,6 +634,16 @@ export interface RoomConfig {
    * badge „Auto" w nagłówku bloku świateł popupu, klik = toggle.
    */
   light_auto_entity?: string;
+  /**
+   * Podział bloku świateł na strefy (sensowne przy `merge_with`): osobny
+   * nagłówek per area z własnymi przełącznikami wł/wył i auto.
+   */
+  light_split_areas?: boolean;
+  /**
+   * Pomocniki automatyki per strefa: area_id → encja (input_boolean itp.).
+   * Dla strefy głównej fallback: `light_auto_entity`.
+   */
+  light_auto_entities?: Record<string, string>;
 
   /** Jawna lista pojedynczych świateł popupu. */
   light_singles?: RoomEntityListConfig;
