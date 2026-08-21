@@ -554,7 +554,7 @@ export class StratumCardRoomRow extends LitElement {
           @pointerdown=${(pev: Event) => pev.stopPropagation()}
         >
           ${on ? html`<span class="lt-count">${this.lightsOn}</span>` : nothing}
-          <span class="lt-knob"><ha-icon .icon=${'mdi:lightbulb'}></ha-icon></span>
+          <span class="lt-knob"></span>
         </button>`;
       }
       case 'windows':
@@ -992,7 +992,9 @@ export class StratumCardRoomRow extends LitElement {
       --mdc-icon-size: 22px;
     }
 
-    /* F3: mini-switch świateł z licznikiem w torze. */
+    /* F3/H4: mini-switch świateł z licznikiem w torze + bursztynowa
+       poświata w OBU stanach (przygaszona gdy wyłączony) — sygnalizuje
+       „to włącznik światła" także obcym. */
     .lights-toggle {
       position: relative;
       width: 46px;
@@ -1002,11 +1004,22 @@ export class StratumCardRoomRow extends LitElement {
       padding: 0;
       cursor: pointer;
       background: rgba(255, 255, 255, 0.16);
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, box-shadow 0.2s ease;
       flex-shrink: 0;
+      box-shadow:
+        0 0 5px 1px
+          color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 65%, transparent),
+        0 0 14px 5px
+          color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 35%, transparent);
     }
     .lights-toggle.on {
       background: var(--stratum-chip-lights-color, #ffc107);
+      box-shadow:
+        0 0 5px 1px rgba(255, 224, 130, 0.95),
+        0 0 16px 5px
+          color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 60%, transparent),
+        0 0 30px 10px
+          color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 25%, transparent);
     }
     .lights-toggle .lt-knob {
       position: absolute;
@@ -1018,17 +1031,9 @@ export class StratumCardRoomRow extends LitElement {
       background: #fff;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
       transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--secondary-text-color);
-    }
-    .lights-toggle .lt-knob ha-icon {
-      --mdc-icon-size: 13px;
     }
     .lights-toggle.on .lt-knob {
       transform: translateX(21px);
-      color: #b07908;
     }
     .lights-toggle .lt-count {
       position: absolute;
