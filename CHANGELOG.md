@@ -5,6 +5,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.84.2] — 2026-08-21
+
+### Changed
+- **Mini-switch świateł w wierszu — wariant H4**: bez ikony żarówki w
+  gałce (czysta biała gałka), bursztynowa poświata wokół przełącznika
+  w OBU stanach — pełny trójwarstwowy glow gdy coś świeci, wzmocniona
+  przygaszona łuna gdy zgaszone (sygnalizuje „to włącznik światła"
+  także domownikom, którzy nie znają karty).
+
 ## [1.84.1] — 2026-08-21
 
 ### Fixed
