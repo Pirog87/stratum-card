@@ -5,6 +5,18 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.82.0] — 2026-08-21
+
+### Changed (przełączniki nagłówka bloku świateł)
+- **Master świateł jako duży switch E2** (56×30) z żarówką w gałce —
+  bursztynowy gdy coś świeci.
+- **Badge „Auto" zastąpiony switchem automatyzacji** — obok mastera,
+  ikona `mdi:brightness-auto` w gałce, **czerwony** gdy automatyka
+  aktywna. Toggluje pomocnika z pola „Pomocnik auto-świateł"
+  (`light_auto_entity`, per pomieszczenie — np. input_boolean sterujący
+  automatyzacjami Node-RED). Bez skonfigurowanego pomocnika switch się
+  nie pokazuje.
+
 ## [1.81.1] — 2026-08-21
 
 ### Changed

@@ -416,22 +416,30 @@ export class StratumRoomCard extends LitElement {
   }
 
   /** Badge „Auto" w nagłówku świateł — toggle pomocnika automatyzacji. */
-  private _renderAutoBadge(): TemplateResult | typeof nothing {
+  /**
+   * Switch automatyzacji świateł (pomocnik `light_auto_entity`, np.
+   * input_boolean sterujący automatyzacjami Node-RED): czerwony gdy
+   * automatyka aktywna, ikona mdi:brightness-auto w gałce.
+   */
+  private _renderAutoSwitch(): TemplateResult | typeof nothing {
     const id = this._config?.light_auto_entity;
     const st = id ? this.hass?.states?.[id] : undefined;
     if (!id || !st) return nothing;
     const on = st.state === 'on';
     return html`
       <button
-        class="auto-badge ${on ? 'on' : 'off'}"
-        title=${on ? 'Automatyka świateł włączona — kliknij aby wyłączyć' : 'Automatyka świateł wyłączona — kliknij aby włączyć'}
+        class="hdr-switch auto ${on ? 'on' : ''}"
+        role="switch"
+        aria-checked=${on}
+        title=${on
+          ? 'Automatyka świateł włączona — kliknij aby przejść na sterowanie ręczne'
+          : 'Automatyka świateł wyłączona (sterowanie ręczne) — kliknij aby włączyć'}
         @click=${(ev: Event) => {
           ev.stopPropagation();
           void this.hass?.callService('homeassistant', 'toggle', { entity_id: id });
         }}
       >
-        <ha-icon .icon=${'mdi:lightbulb-auto'}></ha-icon>
-        Auto
+        <span class="knob"><ha-icon .icon=${'mdi:brightness-auto'}></ha-icon></span>
       </button>
     `;
   }
@@ -453,10 +461,10 @@ export class StratumRoomCard extends LitElement {
     const ids = this._lightPowerIds();
     if (ids.length === 0) return nothing;
     const anyOn = ids.some((id) => this.hass?.states?.[id]?.state === 'on');
-    // Wariant E1 z makiety: klasyczny switch po prawej stronie nagłówka.
+    // Wariant E2 z makiety: duży switch z żarówką w gałce.
     return html`
       <button
-        class="lights-switch ${anyOn ? 'on' : ''}"
+        class="hdr-switch lights ${anyOn ? 'on' : ''}"
         role="switch"
         aria-checked=${anyOn}
         title=${anyOn
@@ -471,9 +479,16 @@ export class StratumRoomCard extends LitElement {
           );
         }}
       >
-        <span class="lights-switch-knob"></span>
+        <span class="knob"><ha-icon .icon=${'mdi:lightbulb'}></ha-icon></span>
       </button>
     `;
+  }
+
+  /** Para przełączników nagłówka: automatyka (opcjonalna) + master świateł. */
+  private _renderHeaderSwitches(): TemplateResult {
+    return html`<span class="hdr-switches">
+      ${this._renderAutoSwitch()}${this._renderLightsPower()}
+    </span>`;
   }
 
   /**
@@ -502,8 +517,7 @@ export class StratumRoomCard extends LitElement {
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
           <span class="count inline">${groups.length}</span>
-          ${this._renderAutoBadge()}
-          ${this._renderLightsPower()}
+          ${this._renderHeaderSwitches()}
         </div>
         <div class="tiles" style=${gridStyle}>
           ${groups.map(
@@ -549,7 +563,7 @@ export class StratumRoomCard extends LitElement {
             ${groupsShown
               ? html`<span class="count">${count}</span>`
               : html`<span class="count inline">${count}</span>
-                  ${this._renderLightsPower()}`}
+                  ${this._renderHeaderSwitches()}`}
           </div>
           ${this._renderListBlocks(all, mode, gridStyle)}
         </div>
@@ -583,7 +597,7 @@ export class StratumRoomCard extends LitElement {
             <ha-icon .icon=${'mdi:lightbulb-outline'}></ha-icon>
             <span>Encje światła</span>
             <span class="count inline">${singles.length}</span>
-            ${this._renderLightsPower()}
+            ${this._renderHeaderSwitches()}
           </div>
           ${tiles}
         </div>
@@ -870,8 +884,7 @@ export class StratumRoomCard extends LitElement {
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
           <span class="count inline">${count}</span>
-          ${this._renderAutoBadge()}
-          ${this._renderLightsPower()}
+          ${this._renderHeaderSwitches()}
         </div>
         ${this._renderListBlocks(all, mode, gridStyle, section.card_template)}
       </div>
@@ -1559,12 +1572,18 @@ export class StratumRoomCard extends LitElement {
       color: var(--secondary-text-color);
     }
 
-    /* Master switch świateł pomieszczenia (E1) — prawa strona nagłówka. */
-    .lights-switch {
+    /* Para przełączników nagłówka bloku świateł (E2): automatyka + master. */
+    .hdr-switches {
       margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .hdr-switch {
       position: relative;
-      width: 46px;
-      height: 26px;
+      width: 56px;
+      height: 30px;
       border-radius: 999px;
       border: 0;
       padding: 0;
@@ -1573,64 +1592,42 @@ export class StratumRoomCard extends LitElement {
       transition: background 0.15s ease;
       flex-shrink: 0;
     }
-    .lights-switch.on {
-      background: var(--stratum-chip-lights-color, #ffc107);
-    }
-    .lights-switch-knob {
+    .hdr-switch .knob {
       position: absolute;
       top: 3px;
       left: 3px;
-      width: 20px;
-      height: 20px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       background: #fff;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--secondary-text-color);
     }
-    .lights-switch.on .lights-switch-knob {
-      transform: translateX(20px);
+    .hdr-switch .knob ha-icon {
+      --mdc-icon-size: 15px;
     }
-    /* Licznik przy tytule (nie na prawej krawędzi) gdy jest switch. */
+    .hdr-switch.on .knob {
+      transform: translateX(26px);
+    }
+    .hdr-switch.lights.on {
+      background: var(--stratum-chip-lights-color, #ffc107);
+    }
+    .hdr-switch.lights.on .knob {
+      color: #b07908;
+    }
+    .hdr-switch.auto.on {
+      background: var(--error-color, #e53935);
+    }
+    .hdr-switch.auto.on .knob {
+      color: var(--error-color, #e53935);
+    }
+    /* Licznik przy tytule (nie na prawej krawędzi) gdy są switche. */
     .section-header .count.inline {
       margin-left: 2px;
-    }
-    /* Gdy przed switchem stoi badge Auto — to on dociska do prawej. */
-    .auto-badge + .lights-switch {
-      margin-left: 8px;
-    }
-
-    .auto-badge {
-      margin-left: auto;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 3px 10px;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
-      color: var(--secondary-text-color);
-      font: inherit;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: none;
-      letter-spacing: 0;
-      cursor: pointer;
-      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-    }
-
-    .auto-badge ha-icon {
-      --mdc-icon-size: 14px;
-    }
-
-    .auto-badge.on {
-      color: var(--stratum-auto-badge-color, #ef5350);
-      border-color: color-mix(in srgb, var(--stratum-auto-badge-color, #ef5350) 50%, transparent);
-      background: color-mix(in srgb, var(--stratum-auto-badge-color, #ef5350) 14%, transparent);
-    }
-
-    /* Badge zajmuje auto-margines — licznik przestaje go potrzebować. */
-    .section-header .auto-badge + .count {
-      margin-left: 8px;
     }
 
     .lights-sep {
