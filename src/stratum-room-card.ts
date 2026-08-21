@@ -421,8 +421,8 @@ export class StratumRoomCard extends LitElement {
    * input_boolean sterujący automatyzacjami Node-RED): czerwony gdy
    * automatyka aktywna, ikona mdi:brightness-auto w gałce.
    */
-  private _renderAutoSwitch(): TemplateResult | typeof nothing {
-    const id = this._config?.light_auto_entity;
+  private _renderAutoSwitch(entityId?: string): TemplateResult | typeof nothing {
+    const id = entityId ?? this._config?.light_auto_entity;
     const st = id ? this.hass?.states?.[id] : undefined;
     if (!id || !st) return nothing;
     const on = st.state === 'on';
@@ -450,15 +450,17 @@ export class StratumRoomCard extends LitElement {
    * nic nie świeci → włącz wszystko. Działa na encjach bezpośrednich
    * (bez pomocników-grup — unikamy podwójnych wywołań).
    */
-  private _lightPowerIds(): string[] {
-    const entries = this._getEntries();
+  private _lightPowerIds(areaId?: string): string[] {
+    const entries = areaId
+      ? getEntitiesInArea(this.hass!, areaId)
+      : this._getEntries();
     return entitiesForSection(this.hass!, entries, 'lights')
       .filter((e) => !this._isLightGroup(e.entity_id))
       .map((e) => e.entity_id);
   }
 
-  private _renderLightsPower(): TemplateResult | typeof nothing {
-    const ids = this._lightPowerIds();
+  private _renderLightsPower(areaId?: string): TemplateResult | typeof nothing {
+    const ids = this._lightPowerIds(areaId);
     if (ids.length === 0) return nothing;
     const anyOn = ids.some((id) => this.hass?.states?.[id]?.state === 'on');
     // Wariant E2 z makiety: duży switch z żarówką w gałce.
@@ -484,11 +486,72 @@ export class StratumRoomCard extends LitElement {
     `;
   }
 
-  /** Para przełączników nagłówka: automatyka (opcjonalna) + master świateł. */
-  private _renderHeaderSwitches(): TemplateResult {
+  /**
+   * Para przełączników nagłówka: automatyka (opcjonalna) + master świateł.
+   * Z `areaId` — scope do jednej strefy (podział przy merge_with);
+   * pomocnik auto ze słownika `light_auto_entities[areaId]`, dla strefy
+   * głównej fallback do `light_auto_entity`.
+   */
+  private _renderHeaderSwitches(areaId?: string): TemplateResult {
+    const autoId = areaId
+      ? this._config?.light_auto_entities?.[areaId] ??
+        (areaId === this._config?.area_id
+          ? this._config?.light_auto_entity
+          : undefined)
+      : this._config?.light_auto_entity;
     return html`<span class="hdr-switches">
-      ${this._renderAutoSwitch()}${this._renderLightsPower()}
+      ${this._renderAutoSwitch(autoId)}${this._renderLightsPower(areaId)}
     </span>`;
+  }
+
+  /**
+   * Podział bloku świateł na strefy (light_split_areas + merge_with):
+   * osobny nagłówek per area (nazwa strefy) z własną parą przełączników
+   * i grupami świateł tej strefy. Strefa bez świateł jest pomijana.
+   */
+  private _renderLightsSplit(section: RoomSectionConfig): TemplateResult {
+    const areaIds = [
+      this._config!.area_id,
+      ...(this._config!.merge_with ?? []),
+    ];
+    const mode = section.mode ?? 'rail';
+    const gridStyle = this._lightsGridStyle(section, mode);
+    const blocks: TemplateResult[] = [];
+    for (const areaId of areaIds) {
+      const entriesA = entitiesForSection(
+        this.hass!,
+        getEntitiesInArea(this.hass!, areaId),
+        'lights',
+      );
+      const groups = entriesA.filter((e) => this._isLightGroup(e.entity_id));
+      if (entriesA.length === 0) continue;
+      const name = this.hass!.areas?.[areaId]?.name ?? areaId;
+      blocks.push(html`
+        <div class="section" part="section">
+          <div class="section-header" part="section-header">
+            <ha-icon .icon=${section.icon ?? 'mdi:lightbulb-group'}></ha-icon>
+            <span>${name}</span>
+            ${groups.length > 0
+              ? html`<span class="count inline">${groups.length}</span>`
+              : nothing}
+            ${this._renderHeaderSwitches(areaId)}
+          </div>
+          ${groups.length > 0
+            ? html`<div class="tiles" style=${gridStyle}>
+                ${groups.map(
+                  (e) => html`<stratum-room-tile
+                    .hass=${this.hass}
+                    .entity=${e.entity_id}
+                    .mode=${mode}
+                    .cardTemplate=${section.card_template}
+                  ></stratum-room-tile>`,
+                )}
+              </div>`
+            : nothing}
+        </div>
+      `);
+    }
+    return html`${blocks}`;
   }
 
   /**
@@ -504,6 +567,13 @@ export class StratumRoomCard extends LitElement {
     const iconName = section.icon ?? 'mdi:lightbulb-group';
     if ((this._config?.lights?.items?.length ?? 0) > 0) {
       return this._renderLightsExplicit(section, title, iconName);
+    }
+    // Podział na strefy — osobne nagłówki per area z przełącznikami.
+    if (
+      this._config?.light_split_areas &&
+      (this._config?.merge_with?.length ?? 0) > 0
+    ) {
+      return this._renderLightsSplit(section);
     }
     const groups = this._lightItems(section, entries).filter((e) =>
       this._isLightGroup(e.entity_id),

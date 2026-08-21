@@ -237,6 +237,13 @@ export class StratumCardRoomsEditor extends LitElement {
       delete merged.lights;
     }
     if (!merged.light_auto_entity) delete merged.light_auto_entity;
+    if (!merged.light_split_areas) delete merged.light_split_areas;
+    if (
+      !merged.light_auto_entities ||
+      Object.keys(merged.light_auto_entities).length === 0
+    ) {
+      delete merged.light_auto_entities;
+    }
     if (!merged.light_singles || (merged.light_singles.items ?? []).length === 0) {
       delete merged.light_singles;
     }
@@ -599,6 +606,79 @@ export class StratumCardRoomsEditor extends LitElement {
   }
 
   /** Suwaki wymiarów kafli świateł (wspólne dla grup i encji). */
+  /**
+   * Podział świateł na strefy (tylko przy merge_with): toggle + pomocnicy
+   * automatyki per strefa (`light_auto_entities[area_id]`).
+   */
+  private _renderLightSplitControls(
+    areaId: string,
+    room: RoomConfig | undefined,
+  ): TemplateResult | typeof nothing {
+    const mergeWith = room?.merge_with ?? [];
+    if (mergeWith.length === 0) return nothing;
+    const split = room?.light_split_areas === true;
+    const areaIds = [areaId, ...mergeWith];
+    const areaName = (id: string): string =>
+      this.hass?.areas?.[id]?.name ?? id;
+    return html`
+      <label class="stratum-toggle" style="margin-top:10px;">
+        <input
+          type="checkbox"
+          .checked=${split}
+          @change=${(ev: Event) =>
+            this._updateRoom(areaId, {
+              light_split_areas:
+                (ev.target as HTMLInputElement).checked || undefined,
+            })}
+        />
+        <span>Podziel światła na strefy (osobne nagłówki i przełączniki
+          per pomieszczenie)</span>
+      </label>
+      ${split
+        ? html`<ha-form
+            .hass=${this.hass}
+            .data=${{
+              [areaId]:
+                room?.light_auto_entities?.[areaId] ??
+                room?.light_auto_entity ??
+                '',
+              ...Object.fromEntries(
+                mergeWith.map((id) => [
+                  id,
+                  room?.light_auto_entities?.[id] ?? '',
+                ]),
+              ),
+            }}
+            .schema=${areaIds.map((id) => ({
+              name: id,
+              selector: {
+                entity: {
+                  filter: [
+                    { domain: 'input_boolean' },
+                    { domain: 'switch' },
+                    { domain: 'automation' },
+                  ],
+                },
+              },
+            }))}
+            .computeLabel=${(s: { name: string }) =>
+              `Pomocnik auto — ${areaName(s.name)}`}
+            @value-changed=${(ev: CustomEvent<{ value: Record<string, string> }>) => {
+              ev.stopPropagation();
+              const map: Record<string, string> = {};
+              for (const [id, ent] of Object.entries(ev.detail.value)) {
+                if (ent) map[id] = ent;
+              }
+              this._updateRoom(areaId, {
+                light_auto_entities:
+                  Object.keys(map).length > 0 ? map : undefined,
+              });
+            }}
+          ></ha-form>`
+        : nothing}
+    `;
+  }
+
   private _renderLightsSizeControls(areaId: string): TemplateResult {
     const room = this._getRoom(areaId);
     const sec = this._normalizedRoomSections(room).find((s) => s.type === 'lights');
@@ -745,9 +825,9 @@ export class StratumCardRoomsEditor extends LitElement {
                 },
               },
             ]}
-            .computeLabel=${() => 'Pomocnik auto-świateł (badge „Auto")'}
+            .computeLabel=${() => 'Pomocnik auto-świateł (switch „Auto")'}
             .computeHelper=${() =>
-              'Badge „Auto" w nagłówku bloku świateł popupu — klik przełącza pomocnika (jak w Twoim dashboardzie).'}
+              'Czerwony switch automatyki w nagłówku bloku świateł popupu — klik przełącza pomocnika (np. input_boolean sterujący Node-RED).'}
             @value-changed=${(ev: CustomEvent<{ value: { light_auto_entity?: string } }>) => {
               ev.stopPropagation();
               this._updateRoom(areaId, {
@@ -755,6 +835,7 @@ export class StratumCardRoomsEditor extends LitElement {
               });
             }}
           ></ha-form>
+          ${this._renderLightSplitControls(areaId, room)}
         `;
       case 'light_entities':
         return html`
