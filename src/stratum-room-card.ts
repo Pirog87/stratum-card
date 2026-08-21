@@ -437,6 +437,43 @@ export class StratumRoomCard extends LitElement {
   }
 
   /**
+   * Master ⏻ wszystkich świateł pomieszczenia — wkomponowany w nagłówek
+   * bloku świateł. Smart-toggle: cokolwiek świeci → zgaś wszystko;
+   * nic nie świeci → włącz wszystko. Działa na encjach bezpośrednich
+   * (bez pomocników-grup — unikamy podwójnych wywołań).
+   */
+  private _lightPowerIds(): string[] {
+    const entries = this._getEntries();
+    return entitiesForSection(this.hass!, entries, 'lights')
+      .filter((e) => !this._isLightGroup(e.entity_id))
+      .map((e) => e.entity_id);
+  }
+
+  private _renderLightsPower(): TemplateResult | typeof nothing {
+    const ids = this._lightPowerIds();
+    if (ids.length === 0) return nothing;
+    const anyOn = ids.some((id) => this.hass?.states?.[id]?.state === 'on');
+    return html`
+      <button
+        class="lights-power ${anyOn ? 'on' : 'off'}"
+        title=${anyOn
+          ? 'Wyłącz wszystkie światła w pomieszczeniu'
+          : 'Włącz wszystkie światła w pomieszczeniu'}
+        @click=${(ev: Event) => {
+          ev.stopPropagation();
+          void this.hass?.callService(
+            'light',
+            anyOn ? 'turn_off' : 'turn_on',
+            { entity_id: ids },
+          );
+        }}
+      >
+        <ha-icon .icon=${'mdi:power'}></ha-icon>
+      </button>
+    `;
+  }
+
+  /**
    * Blok „Grupy świateł": WYŁĄCZNIE pomocniki „Grupa światła" (jawna lista
    * z configu ma pierwszeństwo). Brak grup = blok się nie renderuje —
    * pojedyncze encje żyją w bloku „Encje światła".
@@ -462,6 +499,7 @@ export class StratumRoomCard extends LitElement {
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
           ${this._renderAutoBadge()}
+          ${this._renderLightsPower()}
           <span class="count">${groups.length}</span>
         </div>
         <div class="tiles" style=${gridStyle}>
@@ -492,6 +530,12 @@ export class StratumRoomCard extends LitElement {
       const all = this._visibleListItems(this._config?.light_singles);
       const count = all.filter((i) => !i.separator && i.entity).length;
       if (count === 0) return html``;
+      // Power tylko gdy blok grup się nie renderuje — bez dublowania ⏻.
+      const groupsShown =
+        (this._config?.lights?.items?.length ?? 0) > 0 ||
+        this._lightItems(section, entries).some((e) =>
+          this._isLightGroup(e.entity_id),
+        );
       const mode = section.mode ?? 'rail';
       const gridStyle = this._lightsGridStyle(section, mode);
       return html`
@@ -499,6 +543,7 @@ export class StratumRoomCard extends LitElement {
           <div class="section-header" part="section-header">
             <ha-icon .icon=${'mdi:lightbulb-outline'}></ha-icon>
             <span>Encje światła</span>
+            ${groupsShown ? nothing : this._renderLightsPower()}
             <span class="count">${count}</span>
           </div>
           ${this._renderListBlocks(all, mode, gridStyle)}
@@ -532,6 +577,7 @@ export class StratumRoomCard extends LitElement {
           <div class="section-header" part="section-header">
             <ha-icon .icon=${'mdi:lightbulb-outline'}></ha-icon>
             <span>Encje światła</span>
+            ${this._renderLightsPower()}
             <span class="count">${singles.length}</span>
           </div>
           ${tiles}
@@ -819,6 +865,7 @@ export class StratumRoomCard extends LitElement {
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
           ${this._renderAutoBadge()}
+          ${this._renderLightsPower()}
           <span class="count">${count}</span>
         </div>
         ${this._renderListBlocks(all, mode, gridStyle, section.card_template)}
@@ -1505,6 +1552,48 @@ export class StratumRoomCard extends LitElement {
       padding: 20px;
       text-align: center;
       color: var(--secondary-text-color);
+    }
+
+    /* Master ⏻ świateł pomieszczenia w nagłówku bloku. */
+    .lights-power {
+      margin-left: auto;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
+      color: var(--secondary-text-color);
+      transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease,
+        transform 0.08s ease;
+      flex-shrink: 0;
+    }
+    .lights-power ha-icon {
+      --mdc-icon-size: 17px;
+    }
+    .lights-power.on {
+      background: color-mix(
+        in srgb,
+        var(--stratum-chip-lights-color, #ffc107) 20%,
+        transparent
+      );
+      border-color: color-mix(
+        in srgb,
+        var(--stratum-chip-lights-color, #ffc107) 45%,
+        transparent
+      );
+      color: var(--stratum-chip-lights-color, #ffc107);
+    }
+    .lights-power:active {
+      transform: scale(0.92);
+    }
+    /* Gdy przed przyciskiem stoi badge Auto — to on dociska do prawej. */
+    .auto-badge + .lights-power {
+      margin-left: 8px;
     }
 
     .auto-badge {
