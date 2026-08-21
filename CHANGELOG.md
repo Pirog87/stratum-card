@@ -5,6 +5,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.88.1] — 2026-08-21
+
+### Added
+- **Podgląd na żywo w panelu „Belka popupu pomieszczenia"**: mini-render
+  prawdziwego popupu (pierwsze pomieszczenie karty) bezpośrednio nad
+  opcjami — każda zmiana stylu/tytułu/chipów widoczna natychmiast, bez
+  otwierania popupu. Podgląd jest nieklikalny (pointer-events: none) —
+  switche w nim nie przełączą świateł.
+
 ## [1.88.0] — 2026-08-21
 
 ### Added
