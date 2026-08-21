@@ -509,13 +509,28 @@ export class StratumRoomCard extends LitElement {
    * osobny nagłówek per area (nazwa strefy) z własną parą przełączników
    * i grupami świateł tej strefy. Strefa bez świateł jest pomijana.
    */
+  /** Area encji (z registry albo przez device) — do podziału na strefy. */
+  private _entityAreaOf(entityId: string): string | undefined {
+    const entry = this.hass?.entities?.[entityId];
+    if (entry?.area_id) return entry.area_id;
+    if (entry?.device_id) {
+      return this.hass?.devices?.[entry.device_id]?.area_id ?? undefined;
+    }
+    return undefined;
+  }
+
   private _renderLightsSplit(section: RoomSectionConfig): TemplateResult {
-    const areaIds = [
-      this._config!.area_id,
-      ...(this._config!.merge_with ?? []),
-    ];
+    const primary = this._config!.area_id;
+    const areaIds = [primary, ...(this._config!.merge_with ?? [])];
+    const areaSet = new Set(areaIds);
     const mode = section.mode ?? 'rail';
     const gridStyle = this._lightsGridStyle(section, mode);
+    // Jawna lista z edytora (zmaterializowana) — zachowujemy overridy
+    // (nazwy, ikony, ukrycia); pozycję przypisujemy do strefy jej encji,
+    // encje spoza stref (i grupy między-strefowe bez area) → strefa główna.
+    const explicit = this._visibleListItems(this._config?.lights).filter(
+      (i) => !i.separator && i.entity,
+    );
     const blocks: TemplateResult[] = [];
     for (const areaId of areaIds) {
       const entriesA = entitiesForSection(
@@ -523,31 +538,52 @@ export class StratumRoomCard extends LitElement {
         getEntitiesInArea(this.hass!, areaId),
         'lights',
       );
-      const groups = entriesA.filter((e) => this._isLightGroup(e.entity_id));
-      if (entriesA.length === 0) continue;
       const name = this.hass!.areas?.[areaId]?.name ?? areaId;
+      let count: number;
+      let tiles: TemplateResult | typeof nothing = nothing;
+      if (explicit.length > 0) {
+        const itemsA = explicit.filter((i) => {
+          const a = this._entityAreaOf(i.entity!);
+          return a === areaId || (areaId === primary && (!a || !areaSet.has(a)));
+        });
+        count = itemsA.length;
+        if (count > 0) {
+          tiles = html`${this._renderListBlocks(
+            itemsA,
+            mode,
+            gridStyle,
+            section.card_template,
+          )}`;
+        }
+        if (count === 0 && entriesA.length === 0) continue;
+      } else {
+        const groups = entriesA.filter((e) => this._isLightGroup(e.entity_id));
+        count = groups.length;
+        if (entriesA.length === 0) continue;
+        if (count > 0) {
+          tiles = html`<div class="tiles" style=${gridStyle}>
+            ${groups.map(
+              (e) => html`<stratum-room-tile
+                .hass=${this.hass}
+                .entity=${e.entity_id}
+                .mode=${mode}
+                .cardTemplate=${section.card_template}
+              ></stratum-room-tile>`,
+            )}
+          </div>`;
+        }
+      }
       blocks.push(html`
         <div class="section" part="section">
           <div class="section-header" part="section-header">
             <ha-icon .icon=${section.icon ?? 'mdi:lightbulb-group'}></ha-icon>
             <span>${name}</span>
-            ${groups.length > 0
-              ? html`<span class="count inline">${groups.length}</span>`
+            ${count > 0
+              ? html`<span class="count inline">${count}</span>`
               : nothing}
             ${this._renderHeaderSwitches(areaId)}
           </div>
-          ${groups.length > 0
-            ? html`<div class="tiles" style=${gridStyle}>
-                ${groups.map(
-                  (e) => html`<stratum-room-tile
-                    .hass=${this.hass}
-                    .entity=${e.entity_id}
-                    .mode=${mode}
-                    .cardTemplate=${section.card_template}
-                  ></stratum-room-tile>`,
-                )}
-              </div>`
-            : nothing}
+          ${tiles}
         </div>
       `);
     }
@@ -565,15 +601,17 @@ export class StratumRoomCard extends LitElement {
   ): TemplateResult {
     const title = section.title ?? 'Grupy świateł';
     const iconName = section.icon ?? 'mdi:lightbulb-group';
-    if ((this._config?.lights?.items?.length ?? 0) > 0) {
-      return this._renderLightsExplicit(section, title, iconName);
-    }
     // Podział na strefy — osobne nagłówki per area z przełącznikami.
+    // PRZED ścieżką jawnej listy: edytor materializuje listę przy każdej
+    // zmianie, więc split musi umieć działać także z explicit items.
     if (
       this._config?.light_split_areas &&
       (this._config?.merge_with?.length ?? 0) > 0
     ) {
       return this._renderLightsSplit(section);
+    }
+    if ((this._config?.lights?.items?.length ?? 0) > 0) {
+      return this._renderLightsExplicit(section, title, iconName);
     }
     const groups = this._lightItems(section, entries).filter((e) =>
       this._isLightGroup(e.entity_id),
