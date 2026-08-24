@@ -51,6 +51,10 @@ jobs:
         if: steps.tag_check.outputs.exists == 'false'
         run: npm run typecheck
 
+      - name: Test
+        if: steps.tag_check.outputs.exists == 'false'
+        run: npm test
+
       - name: Build
         if: steps.tag_check.outputs.exists == 'false'
         run: npm run build

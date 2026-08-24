@@ -9,6 +9,7 @@
     "build": "rollup -c",
     "watch": "rollup -c -w",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "keywords": [
@@ -29,6 +30,7 @@
     "minify-literals": "^2.1.0",
     "rollup": "^4.18.0",
     "tslib": "^2.6.3",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "vitest": "^4.1.11"
   }
 }
