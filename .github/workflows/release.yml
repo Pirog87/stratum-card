@@ -55,6 +55,14 @@ jobs:
         if: steps.tag_check.outputs.exists == 'false'
         run: npm run build
 
+      - name: Package HACS zip (JS + grafiki scen)
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          mkdir -p build
+          cp dist/stratum-card.js build/
+          cp -r assets/sceny build/sceny
+          (cd build && zip -r ../stratum-card.zip .)
+
       - name: Create tag and release
         if: steps.tag_check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
@@ -62,5 +70,7 @@ jobs:
           tag_name: v${{ steps.ver.outputs.version }}
           name: v${{ steps.ver.outputs.version }}
           generate_release_notes: true
-          files: dist/stratum-card.js
+          files: |
+            stratum-card.zip
+            dist/stratum-card.js
           fail_on_unmatched_files: true
