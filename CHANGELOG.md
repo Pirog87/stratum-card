@@ -4,6 +4,18 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.93.2] — 2026-08-24
+
+### Changed (dług techniczny — podział plików, zero zmian funkcjonalnych)
+- `stratum-room-card.ts` 2258→1604 linii: czysta logika sekcji →
+  `room-sections.ts` (testy), style → `stratum-room-card-styles.ts`.
+- `stratum-card.ts` 1526→1202: style → `stratum-card-styles.ts`,
+  kolory pól → `field-colors.ts` (testy).
+- `stratum-card-editor.ts` 1322→1068: panel „Belka popupu pomieszczenia"
+  → osobny komponent `stratum-popup-header-editor` (emituje
+  `popup-header-changed` z oczyszczoną wartością).
+- Testy: 26→32 (normalizeSections, autoRoomChips, fieldColorStyle).
+
 ## [1.93.1] — 2026-08-24
 
 ### Changed (wąski dwuliniowy wg feedbacku)
