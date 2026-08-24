@@ -60,6 +60,9 @@ jobs:
         run: |
           mkdir -p build
           cp dist/stratum-card.js build/
+          # Świeży .js.gz w zipie nadpisuje ewentualny stary plik z poprzedniej
+          # instalacji — HA serwuje .gz zamiast .js, gdy taki sąsiad istnieje.
+          gzip -9 -k -c dist/stratum-card.js > build/stratum-card.js.gz
           cp -r assets/sceny build/sceny
           (cd build && zip -r ../stratum-card.zip .)
 
