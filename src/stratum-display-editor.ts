@@ -322,7 +322,8 @@ export class StratumDisplayEditor extends LitElement {
     const hover = cfg.hover_effect ?? 'subtle';
 
     const radius = cfg.border_radius ?? 14;
-    const padding = cfg.padding ?? 12;
+    // Wiersz (fill/pill): padding = prawy odstęp, CSS-owy default 14.
+    const padding = cfg.padding ?? (this.mode === 'row' ? 14 : 12);
     const minHeight = cfg.min_height ?? (this.mode === 'tile' ? 110 : 85);
     const iconSize = cfg.icon_size ?? 22;
     const press = cfg.press_scale ?? 0.98;
@@ -653,6 +654,37 @@ export class StratumDisplayEditor extends LitElement {
         </summary>
         <div class="stratum-collapsible-body">
           ${this._renderSlider('Rozmiar ikony', 'icon_size', iconSize, 12, 64, 1, 'px')}
+          ${this.mode === 'row'
+            ? html`
+                ${this._renderSlider(
+                  'Przesunięcie ikonki ↔',
+                  'icon_offset_x',
+                  cfg.icon_offset_x ?? 0,
+                  -40,
+                  40,
+                  1,
+                  'px',
+                )}
+                ${this._renderSlider(
+                  'Przesunięcie tła ikonki ↔',
+                  'icon_bg_offset_x',
+                  cfg.icon_bg_offset_x ?? 0,
+                  -40,
+                  40,
+                  1,
+                  'px',
+                )}
+                ${this._renderSlider(
+                  'Rozmiar tła ikonki',
+                  'icon_bg_scale',
+                  cfg.icon_bg_scale ?? 100,
+                  50,
+                  140,
+                  2,
+                  '%',
+                )}
+              `
+            : nothing}
           <label class="group-label sub">Styl ikony</label>
           <div class="chip-row">
             ${ICON_STYLES.map(

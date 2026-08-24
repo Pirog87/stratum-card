@@ -198,7 +198,8 @@ export class StratumCardEditor extends LitElement {
     if (raw.show_icon === false) out.show_icon = false;
     if (raw.show_name === false) out.show_name = false;
     const defaultRadius = isTile ? 14 : 6;
-    const defaultPadding = isTile ? 12 : 10;
+    // Wiersz fill/pill: padding = prawy odstęp, CSS-owy default 14.
+    const defaultPadding = isTile ? 12 : 14;
     const defaultMinH = isTile ? 110 : 85;
     if (typeof raw.border_radius === 'number' && raw.border_radius !== defaultRadius) {
       out.border_radius = raw.border_radius;
@@ -211,6 +212,16 @@ export class StratumCardEditor extends LitElement {
     }
     if (typeof raw.icon_size === 'number' && raw.icon_size !== 22) {
       out.icon_size = raw.icon_size;
+    }
+    // Przesunięcia/skala ikonki wiersza — zapisujemy tylko odstępstwa od 0/100.
+    if (!isTile && typeof raw.icon_offset_x === 'number' && raw.icon_offset_x !== 0) {
+      out.icon_offset_x = raw.icon_offset_x;
+    }
+    if (!isTile && typeof raw.icon_bg_offset_x === 'number' && raw.icon_bg_offset_x !== 0) {
+      out.icon_bg_offset_x = raw.icon_bg_offset_x;
+    }
+    if (!isTile && typeof raw.icon_bg_scale === 'number' && raw.icon_bg_scale !== 100) {
+      out.icon_bg_scale = raw.icon_bg_scale;
     }
     if (raw.icon_style && raw.icon_style !== 'bubble') {
       out.icon_style = raw.icon_style;

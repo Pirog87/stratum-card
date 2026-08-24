@@ -4,6 +4,24 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.92.0] — 2026-08-24
+
+### Added (wiersz pomieszczenia — pozycjonowanie ikonki)
+- **„Przesunięcie ikonki ↔"** (−40…40 px) — przesuwa samą ikonkę
+  w poziomie względem jej tła.
+- **„Przesunięcie tła ikonki ↔"** (−40…40 px) — przesuwa stadion tła
+  (razem z ikonką).
+- **„Rozmiar tła ikonki"** (50–140 %) — skaluje tło ikonki niezależnie
+  od rozmiaru samej ikonki; działa też w presetach rail/cards.
+  Wszystkie trzy w sekcji „Ikona" edytora wiersza; YAML:
+  `icon_offset_x`, `icon_bg_offset_x`, `icon_bg_scale`.
+
+### Fixed
+- **Suwak „Wewnętrzny padding" nic nie robił w presetach fill/pill**
+  (padding był zahardkodowany). Teraz steruje prawym odstępem wiersza
+  (lewa strona pozostaje flush ze stadionem ikony). Default ujednolicony
+  na 14 px (edytor pokazywał wcześniej 12).
+
 ## [1.91.3] — 2026-08-24
 
 ### Fixed

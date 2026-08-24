@@ -431,6 +431,15 @@ export class StratumCardRoomRow extends LitElement {
       typeof cfg.icon_size === 'number'
         ? `--stratum-room-row-icon-size: ${cfg.icon_size}px;`
         : '',
+      typeof cfg.icon_offset_x === 'number' && cfg.icon_offset_x !== 0
+        ? `--stratum-room-row-icon-offset: ${cfg.icon_offset_x}px;`
+        : '',
+      typeof cfg.icon_bg_offset_x === 'number' && cfg.icon_bg_offset_x !== 0
+        ? `--stratum-room-row-iconbg-offset: ${cfg.icon_bg_offset_x}px;`
+        : '',
+      typeof cfg.icon_bg_scale === 'number' && cfg.icon_bg_scale !== 100
+        ? `--stratum-room-row-iconbg-scale: ${cfg.icon_bg_scale / 100};`
+        : '',
       `--stratum-room-row-press-scale: ${pressScale};`,
       `--stratum-room-row-fill: ${fillPct}%;`,
       borderColorOvr
@@ -681,12 +690,14 @@ export class StratumCardRoomRow extends LitElement {
       align-items: center;
       justify-content: center;
       transition: background 0.15s ease, color 0.15s ease;
+      transform: translateX(var(--stratum-room-row-iconbg-offset, 0px));
     }
 
     .icon {
       --mdc-icon-size: var(--stratum-room-row-icon-size, 20px);
       color: var(--stratum-card-room-icon-color, var(--secondary-text-color));
-      transform: scale(var(--stratum-room-row-icon-scale, 1));
+      transform: translateX(var(--stratum-room-row-icon-offset, 0px))
+        scale(var(--stratum-room-row-icon-scale, 1));
       transform-origin: center center;
     }
 
@@ -720,7 +731,9 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='pill'] {
       border-radius: var(--stratum-room-row-radius, 999px);
       background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.045));
-      padding: 0 14px 0 0;
+      /* Padding tylko z prawej — stadion ikony jest flush z lewą/dolną
+         krawędzią. Suwak „Wewnętrzny padding" steruje tą wartością. */
+      padding: 0 var(--stratum-room-row-padding, 14px) 0 0;
       min-height: var(--stratum-room-row-min-height, 85px);
       touch-action: pan-y;
     }
@@ -734,8 +747,14 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='fill'] .iconwrap,
     .row[data-preset='pill'] .iconwrap {
       align-self: flex-end;
-      height: calc(var(--stratum-room-row-min-height, 85px) * 0.8);
-      width: calc(var(--stratum-room-row-min-height, 85px) * 1.08);
+      height: calc(
+        var(--stratum-room-row-min-height, 85px) * 0.8 *
+          var(--stratum-room-row-iconbg-scale, 1)
+      );
+      width: calc(
+        var(--stratum-room-row-min-height, 85px) * 1.08 *
+          var(--stratum-room-row-iconbg-scale, 1)
+      );
       border-radius: 999px;
       overflow: hidden;
       background: var(
@@ -892,8 +911,8 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .row[data-preset='rail'] .iconwrap {
-      width: 34px;
-      height: 34px;
+      width: calc(34px * var(--stratum-room-row-iconbg-scale, 1));
+      height: calc(34px * var(--stratum-room-row-iconbg-scale, 1));
       border-radius: 10px;
       background: var(--stratum-room-row-iconbg, rgba(255, 255, 255, 0.05));
     }
@@ -931,8 +950,8 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .row[data-preset='cards'] .iconwrap {
-      width: 36px;
-      height: 36px;
+      width: calc(36px * var(--stratum-room-row-iconbg-scale, 1));
+      height: calc(36px * var(--stratum-room-row-iconbg-scale, 1));
       border-radius: 11px;
       background: var(--stratum-room-row-iconbg, rgba(255, 255, 255, 0.05));
     }
