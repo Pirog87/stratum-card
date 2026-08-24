@@ -59,6 +59,38 @@ const ICON_POSITIONS: Array<{ value: IconPosition; label: string; preview: strin
   { value: 'left', label: 'Inline', preview: '⇤' },
 ];
 
+const NARROW_MODES: Array<{
+  value: NonNullable<TileDisplayConfig['narrow_mode']>;
+  label: string;
+  icon: string;
+  hint: string;
+}> = [
+  {
+    value: 'fields',
+    label: 'Zwijaj pola',
+    icon: 'mdi:arrow-collapse-horizontal',
+    hint: 'Statusy zwijają się w chip „+N" — alarm i włącznik zostają',
+  },
+  {
+    value: 'two-line',
+    label: 'Dwie linie',
+    icon: 'mdi:view-headline',
+    hint: 'Wiersz przechodzi w układ dwuliniowy',
+  },
+  {
+    value: 'compact',
+    label: 'Kompakt',
+    icon: 'mdi:arrow-collapse-all',
+    hint: 'Wszystko proporcjonalnie mniejsze',
+  },
+  {
+    value: 'off',
+    label: 'Wył.',
+    icon: 'mdi:cancel',
+    hint: 'Bez reakcji na wąskie ekrany',
+  },
+];
+
 const ICON_STYLES: Array<{ value: IconStyle; label: string; icon: string }> = [
   { value: 'bubble', label: 'Bubble', icon: 'mdi:circle-slice-8' },
   { value: 'flat', label: 'Płasko', icon: 'mdi:circle-outline' },
@@ -643,6 +675,26 @@ export class StratumDisplayEditor extends LitElement {
           ${this._renderSlider('Wewnętrzny padding', 'padding', padding, 0, 40, 1, 'px')}
           ${this.mode === 'tile'
             ? this._renderSlider('Min. wysokość kafla', 'min_height', minHeight, 40, 260, 2, 'px')
+            : nothing}
+          ${this.mode === 'row'
+            ? html`
+                <label class="group-label sub">Wąskie ekrany (≤360 px)</label>
+                <div class="chip-row">
+                  ${NARROW_MODES.map(
+                    (m) => html`<button
+                      type="button"
+                      class="chip ${(cfg.narrow_mode ?? 'fields') === m.value
+                        ? 'on'
+                        : ''}"
+                      title=${m.hint}
+                      @click=${() => this._patch({ narrow_mode: m.value })}
+                    >
+                      <ha-icon .icon=${m.icon}></ha-icon>
+                      <span>${m.label}</span>
+                    </button>`,
+                  )}
+                </div>
+              `
             : nothing}
         </div>
       </details>

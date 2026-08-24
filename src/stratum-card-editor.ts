@@ -195,6 +195,10 @@ export class StratumCardEditor extends LitElement {
     if (!isTile && raw.status_layout === 'two-line') {
       out.status_layout = 'two-line';
     }
+    // Wąskie ekrany — default 'fields', zapisujemy tylko inne tryby.
+    if (!isTile && raw.narrow_mode && raw.narrow_mode !== 'fields') {
+      out.narrow_mode = raw.narrow_mode;
+    }
     if (raw.show_icon === false) out.show_icon = false;
     if (raw.show_name === false) out.show_name = false;
     const defaultRadius = isTile ? 14 : 6;
