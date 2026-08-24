@@ -4,6 +4,22 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.91.3] — 2026-08-24
+
+### Fixed
+- **Dystrybucja: koniec z `zip_release`.** W HACS `zip_release` dla
+  pluginów to ślepy zaułek: pobierany jest asset o nazwie równej
+  `filename` (musi być zipem), ale URL zasobu Lovelace też powstaje z
+  `filename` — oba wymagania się wykluczają (stąd seria 1.91.0–1.91.2:
+  najpierw zasób wskazywał na `.zip`, potem pobieranie padało na
+  rozpakowaniu zwykłego JS). Bez `zip_release` HACS pobiera **wszystkie
+  assety releasu** płasko do `www/community/stratum-card/` — więc
+  grafiki scen są teraz osobnymi assetami `sceny-<id>.webp`, a
+  `filename: stratum-card.js` daje poprawny zasób.
+- Do assetów dołączany świeży `stratum-card.js.gz` — nadpisuje
+  pozostałość po starych instalacjach (HA potrafi serwować `.gz`
+  zamiast `.js`).
+
 ## [1.91.2] — 2026-08-24
 
 ### Fixed
