@@ -140,6 +140,54 @@ export function chipEntityIds(
   return [];
 }
 
+/**
+ * Klasy alarmowe — te same, które zapalają czerwoną otoczkę wiersza.
+ * Aktywna encja którejkolwiek z nich = „sprawca" alarmu pomieszczenia.
+ */
+export const ALARM_CLASSES = [
+  'smoke',
+  'gas',
+  'carbon_monoxide',
+  'moisture',
+  'problem',
+  'safety',
+  'tamper',
+] as const;
+
+export const ALARM_CLASS_LABELS: Record<string, string> = {
+  smoke: 'Dym',
+  gas: 'Gaz',
+  carbon_monoxide: 'CO',
+  moisture: 'Wyciek',
+  problem: 'Problem',
+  safety: 'Bezpieczeństwo',
+  tamper: 'Sabotaż',
+};
+
+export const ALARM_CLASS_ICONS: Record<string, string> = {
+  smoke: 'mdi:smoke-detector-variant-alert',
+  gas: 'mdi:gas-cylinder',
+  carbon_monoxide: 'mdi:molecule-co',
+  moisture: 'mdi:water-alert',
+  problem: 'mdi:alert-circle-outline',
+  safety: 'mdi:shield-alert-outline',
+  tamper: 'mdi:lock-open-alert',
+};
+
+/** Aktywne encje alarmowe (stan `on`) w podanym zbiorze — zdeduplikowane. */
+export function alarmEntityIds(
+  hass: HomeAssistant,
+  entries: HassEntityRegistryEntry[],
+): string[] {
+  const ids = new Set<string>();
+  for (const cls of ALARM_CLASSES) {
+    for (const e of filterBinarySensorDeviceClass(hass, entries, cls)) {
+      if (hass.states?.[e.entity_id]?.state === 'on') ids.add(e.entity_id);
+    }
+  }
+  return [...ids];
+}
+
 /** Tytuł popupu listy dla typu chipa. */
 export const CHIP_LIST_LABELS: Record<string, string> = {
   lights: 'Włączone światła',

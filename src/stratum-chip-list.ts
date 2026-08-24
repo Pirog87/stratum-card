@@ -14,6 +14,7 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { ChipConfig, HomeAssistant } from './types.js';
 import { ago } from './chip-defaults.js';
+import { ALARM_CLASS_LABELS } from './chip-list-helpers.js';
 import { lightColorOf } from './tile-data.js';
 
 interface AreaGroup {
@@ -40,6 +41,10 @@ export class StratumChipList extends LitElement {
 
   /** Kolor akcentu nagłówka (CSS color). */
   @property({ type: String }) public color = 'var(--primary-color, #ff9b42)';
+
+  /** Plakietka typu (device_class) przy wierszach — tryb „Aktywne alarmy". */
+  @property({ type: Boolean, attribute: 'show-class-badge' })
+  public showClassBadge = false;
 
   /** Aktywna zakładka pokoju — null = „Wszystkie". */
   @state() private _areaFilter: string | null = null;
@@ -391,6 +396,15 @@ export class StratumChipList extends LitElement {
           <span class="nm">${area}</span>
           <span class="sub">${name}</span>
         </span>
+        ${this.showClassBadge
+          ? (() => {
+              const cls = state?.attributes?.device_class as string | undefined;
+              const label = cls ? ALARM_CLASS_LABELS[cls] ?? cls : undefined;
+              return label
+                ? html`<span class="cls">${label}</span>`
+                : nothing;
+            })()
+          : nothing}
         ${lastChanged
           ? html`<span class="tm">${ago(lastChanged)}</span>`
           : nothing}
@@ -763,6 +777,22 @@ export class StratumChipList extends LitElement {
       color: var(--accent, var(--primary-color, #ff9b42));
     }
     .prow .bub ha-icon { --mdc-icon-size: 20px; }
+
+    .prow .cls {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: color-mix(
+        in srgb,
+        var(--accent, var(--primary-color, #ff9b42)) 16%,
+        transparent
+      );
+      color: var(--accent, var(--primary-color, #ff9b42));
+      flex-shrink: 0;
+    }
 
     .prow .tm {
       font-size: 12.5px;

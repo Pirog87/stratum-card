@@ -20,11 +20,15 @@ import { DEFAULT_POPUP_ORDER } from './types.js';
 import { getEntitiesInArea, filterByDomain, filterBinarySensorDeviceClass, filterDisplayable } from './area-entities.js';
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import {
+  ALARM_CLASS_ICONS,
+  ALARM_CLASS_LABELS,
   CHIP_LIST_COLORS,
   CHIP_LIST_LABELS,
+  alarmEntityIds,
   chipEntityIds,
   chipSupportsList,
 } from './chip-list-helpers.js';
+import { ago } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
 import './stratum-card-chip.js';
 import './stratum-chip-list.js';
@@ -306,6 +310,7 @@ export class StratumRoomCard extends LitElement {
       <ha-card part="card">
         ${this._renderHeader(entries, name, icon)}
         <div class="body" part="body">
+          ${this._renderAlarmsBlock(entries)}
           ${sections.length === 0 && !hasExplicitScenes
             ? html`<div class="placeholder">
                 Brak encji do wyświetlenia — sprawdź przypisanie area.
@@ -423,6 +428,71 @@ export class StratumRoomCard extends LitElement {
     >
       ${iconEl}${titleEl}${chipsEl}
     </div>`;
+  }
+
+  /**
+   * A3: czerwony blok „Aktywne alarmy" na SAMEJ GÓRZE popupu — lista
+   * sprawców czerwonej otoczki (smoke/gas/CO/moisture/problem/safety/
+   * tamper w stanie on). Klik w wiersz = more-info z historią.
+   */
+  private _renderAlarmsBlock(
+    entries: HassEntityRegistryEntry[],
+  ): TemplateResult | typeof nothing {
+    if (!this.hass) return nothing;
+    const ids = alarmEntityIds(this.hass, entries);
+    if (ids.length === 0) return nothing;
+    return html`
+      <div class="alarms-block" part="alarms">
+        <div class="alarms-head">
+          <ha-icon .icon=${'mdi:alert'}></ha-icon>
+          <span>Aktywne alarmy</span>
+          <span class="alarms-count">${ids.length}</span>
+        </div>
+        ${ids.map((id) => {
+          const st = this.hass!.states?.[id];
+          const cls = st?.attributes?.device_class as string | undefined;
+          const name =
+            (st?.attributes?.friendly_name as string | undefined) ?? id;
+          const entry = this.hass!.entities?.[id];
+          const areaId =
+            entry?.area_id ??
+            (entry?.device_id
+              ? this.hass!.devices?.[entry.device_id]?.area_id
+              : undefined);
+          const areaName = areaId
+            ? this.hass!.areas?.[areaId]?.name ?? areaId
+            : '';
+          return html`<button
+            class="alarm-row"
+            title="Więcej info"
+            @click=${() =>
+              this.dispatchEvent(
+                new CustomEvent('hass-more-info', {
+                  detail: { entityId: id },
+                  bubbles: true,
+                  composed: true,
+                }),
+              )}
+          >
+            <span class="ab-bub">
+              <ha-icon
+                .icon=${(cls && ALARM_CLASS_ICONS[cls]) ?? 'mdi:alert-circle-outline'}
+              ></ha-icon>
+            </span>
+            <span class="ab-mid">
+              <b>${name}</b>
+              ${areaName ? html`<span>${areaName}</span>` : nothing}
+            </span>
+            ${cls
+              ? html`<span class="ab-cls">${ALARM_CLASS_LABELS[cls] ?? cls}</span>`
+              : nothing}
+            ${st?.last_changed
+              ? html`<span class="ab-tm">${ago(st.last_changed)}</span>`
+              : nothing}
+          </button>`;
+        })}
+      </div>
+    `;
   }
 
   /** Kolejność bloków: config popup_order + brakujące klucze wg defaultu. */
@@ -1880,6 +1950,104 @@ export class StratumRoomCard extends LitElement {
       padding: 20px;
       text-align: center;
       color: var(--secondary-text-color);
+    }
+
+    /* A3: blok „Aktywne alarmy" na górze popupu. */
+    .alarms-block {
+      border: 1.5px solid
+        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 50%, transparent);
+      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 7%, transparent);
+      border-radius: 14px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .alarms-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--stratum-chip-leak-color, #f44336);
+      margin-bottom: 4px;
+    }
+    .alarms-head ha-icon {
+      --mdc-icon-size: 16px;
+    }
+    .alarms-count {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
+    }
+    .alarm-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 7px 4px;
+      border: 0;
+      background: transparent;
+      color: var(--primary-text-color);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      border-radius: 10px;
+    }
+    .alarm-row:hover {
+      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 8%, transparent);
+    }
+    .ab-bub {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 16%, transparent);
+      color: var(--stratum-chip-leak-color, #f44336);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .ab-bub ha-icon {
+      --mdc-icon-size: 18px;
+    }
+    .ab-mid {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .ab-mid b {
+      font-size: 13.5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ab-mid span {
+      font-size: 11.5px;
+      color: var(--secondary-text-color);
+    }
+    .ab-cls {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 15%, transparent);
+      color: var(--stratum-chip-leak-color, #f44336);
+      flex-shrink: 0;
+    }
+    .ab-tm {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--stratum-chip-leak-color, #f44336);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
     }
 
     /* Para przełączników nagłówka bloku świateł (E2): automatyka + master. */

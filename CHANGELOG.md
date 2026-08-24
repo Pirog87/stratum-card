@@ -5,6 +5,25 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.90.0] — 2026-08-21
+
+### Added (wizualizacja sprawcy alarmu — A1 + A3)
+- **Badge „⚠ N" na wierszu** przy czerwonej otoczce: pulsująca czerwona
+  pigułka z liczbą aktywnych alarmów; klik otwiera popup „Aktywne
+  alarmy" — lista sprawców (pomieszczenie, nazwa czujki, plakietka typu
+  Dym/Gaz/CO/Wyciek/Problem/Bezpieczeństwo/Sabotaż, czas od
+  wystąpienia; klik = more-info).
+- **Czerwony blok „Aktywne alarmy" na górze popupu pomieszczenia** —
+  nad scenami, z tą samą listą sprawców.
+- Wspólne helpery `ALARM_CLASSES`/`alarmEntityIds` — sprawcy = dokładnie
+  te encje, które zapalają otoczkę.
+
+### Fixed (przypadkowe kliknięcia przy scrollu)
+- **Gest jasności (wiersz + kafle glight) z blokadą kierunku**: pionowy
+  ruch (scroll listy/popupu) natychmiast ubija gest, a swipe jasności
+  startuje dopiero przy zdecydowanie poziomym ruchu (≥12 px i 1.5×
+  więcej niż pion) — koniec z zapalaniem świateł podczas przewijania.
+
 ## [1.89.0] — 2026-08-21
 
 ### Changed (okna analogicznie do drzwi)
