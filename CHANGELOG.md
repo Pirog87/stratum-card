@@ -5,6 +5,14 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.90.1] — 2026-08-24
+
+### Added
+- **Badge alarmu na belce najwyższego poziomu** (piętro/karta): gdy
+  jakikolwiek alarm na piętrze jest aktywny, obok chipów belki pojawia
+  się pulsujące ⚠ N; klik (bez rozwijania karty) otwiera listę
+  „Aktywne alarmy" z całego zakresu karty.
+
 ## [1.90.0] — 2026-08-21
 
 ### Added (wizualizacja sprawcy alarmu — A1 + A3)
