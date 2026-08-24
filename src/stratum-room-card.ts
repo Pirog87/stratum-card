@@ -1194,6 +1194,7 @@ export class StratumRoomCard extends LitElement {
           .hass=${this.hass}
           .entity=${featured.entity!}
           .mode=${'player'}
+          .volumeStep=${section.volume_step}
           .nameOverride=${featured.name}
           .tapAction=${featured.tap_action}
         ></stratum-room-tile>
@@ -1311,6 +1312,18 @@ export class StratumRoomCard extends LitElement {
       }
     };
 
+    // hide_when_off: wszystkie odtwarzacze wyłączone → sekcja znika.
+    if (section.hide_when_off) {
+      const anyActive = items.some((e) => {
+        const s = hass.states?.[e.entity_id]?.state;
+        return (
+          Boolean(s) &&
+          !['off', 'standby', 'unavailable', 'unknown'].includes(s!)
+        );
+      });
+      if (!anyActive) return html``;
+    }
+
     let featured: HassEntityRegistryEntry | undefined;
     if (section.entity) {
       featured = items.find((e) => e.entity_id === section.entity);
@@ -1375,6 +1388,7 @@ export class StratumRoomCard extends LitElement {
             .hass=${this.hass}
             .entity=${selected}
             .mode=${'player'}
+          .volumeStep=${section.volume_step}
           ></stratum-room-tile>
         </div>
       `;
@@ -1399,6 +1413,7 @@ export class StratumRoomCard extends LitElement {
           .hass=${this.hass}
           .entity=${featured.entity_id}
           .mode=${'player'}
+          .volumeStep=${section.volume_step}
         ></stratum-room-tile>
         ${rest.length > 0
           ? html`

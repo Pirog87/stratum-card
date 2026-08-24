@@ -472,6 +472,13 @@ export interface RoomSectionConfig {
    * - `featured` — dawny układ: player + zwijane „Pozostałe odtwarzacze"
    */
   media_style?: 'tabs' | 'featured';
+  /** Tylko `media`: krok przycisków ± głośności w % (1–10). Default 2. */
+  volume_step?: number;
+  /**
+   * Tylko `media`: ukryj całą sekcję, gdy wszystkie odtwarzacze są
+   * wyłączone/niedostępne (mniej scrolla w sypialniach). Default false.
+   */
+  hide_when_off?: boolean;
   /**
    * Tylko `lights`: grupowanie po pomocnikach „Grupa światła" przypisanych do
    * obszaru. `helpers` (default) — pokazuj kafle GRUP, chowaj ich encje-składowe,

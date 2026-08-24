@@ -57,6 +57,9 @@ export class StratumRoomTile extends LitElement {
   /** Override akcji kliknięcia kafla (jawne listy popupu). */
   @property({ attribute: false }) public tapAction?: TapActionConfig;
 
+  /** Player: krok przycisków ± głośności w % (config sekcji). Default 2. */
+  @property({ attribute: false }) public volumeStep?: number;
+
   /** Wykonuje override akcji kliknięcia. true = obsłużone. */
   private _customTap(ev: Event): boolean {
     if (!this.tapAction) return false;
@@ -101,7 +104,8 @@ export class StratumRoomTile extends LitElement {
     const cur =
       this._volPending ??
       ((st?.attributes?.volume_level as number | undefined) ?? 0);
-    const next = Math.max(0, Math.min(1, cur + dir * 0.02));
+    const step = (this.volumeStep ?? 2) / 100;
+    const next = Math.max(0, Math.min(1, cur + dir * step));
     this._volPending = next;
     void this.hass?.callService('media_player', 'volume_set', {
       entity_id: this.entity,
@@ -849,6 +853,17 @@ export class StratumRoomTile extends LitElement {
         ? 'niedostępny'
         : state.state;
 
+    // Bity supported_features media_player (HA): SEEK=2, VOLUME_MUTE=8,
+    // TURN_ON=128, TURN_OFF=256.
+    const features =
+      (state.attributes?.supported_features as number | undefined) ?? 0;
+    const canSeek =
+      (features & 2) !== 0 && typeof duration === 'number' && duration > 0;
+    const canMute = (features & 8) !== 0;
+    const muted = state.attributes?.is_volume_muted === true;
+    const isOff = state.state === 'off' || state.state === 'standby';
+    const canPower = isOff ? (features & 128) !== 0 : (features & 256) !== 0;
+
     // Netflix/Disney+/Prime na TV i Chromecastach zwykle NIE wystawiają
     // okładki ani tytułu — zostaje tylko app_name. Wtedy: brandowany
     // gradient jako tło i nazwa aplikacji jako tytuł (zamiast "playing").
@@ -873,12 +888,43 @@ export class StratumRoomTile extends LitElement {
         @click=${this._openMoreInfo}
       >
         <span class="player-tag">${this._displayName(state)}</span>
+        ${canPower
+          ? html`<button
+              class="player-btn player-power"
+              title=${isOff ? 'Włącz' : 'Wyłącz'}
+              @click=${(ev: Event) =>
+                this._callService(
+                  ev,
+                  'media_player',
+                  isOff ? 'turn_on' : 'turn_off',
+                )}
+            >
+              <ha-icon .icon=${'mdi:power'}></ha-icon>
+            </button>`
+          : nothing}
         <span class="player-title">${displayTitle}</span>
         ${displaySub && displaySub !== displayTitle
           ? html`<span class="player-artist">${displaySub}</span>`
           : nothing}
         ${active && pct > 0
-          ? html`<span class="player-progress"
+          ? html`<span
+              class="player-progress ${canSeek ? 'seekable' : ''}"
+              title=${canSeek ? 'Tapnij, żeby przewinąć' : ''}
+              @click=${(ev: MouseEvent) => {
+                if (!canSeek) return;
+                ev.stopPropagation();
+                const rect = (
+                  ev.currentTarget as HTMLElement
+                ).getBoundingClientRect();
+                const p = Math.max(
+                  0,
+                  Math.min(1, (ev.clientX - rect.left) / rect.width),
+                );
+                void this.hass?.callService('media_player', 'media_seek', {
+                  entity_id: this.entity,
+                  seek_position: p * duration!,
+                });
+              }}
               ><i style="width:${pct.toFixed(1)}%"></i
             ></span>`
           : nothing}
@@ -909,7 +955,23 @@ export class StratumRoomTile extends LitElement {
           </button>
           ${typeof volume === 'number'
             ? html`
-                <ha-icon class="player-vol-icon" .icon=${'mdi:volume-high'}></ha-icon>
+                ${canMute
+                  ? html`<button
+                      class="player-btn vol-btn mute ${muted ? 'muted' : ''}"
+                      title=${muted ? 'Wyłącz wyciszenie' : 'Wycisz'}
+                      @click=${(ev: Event) =>
+                        this._callService(ev, 'media_player', 'volume_mute', {
+                          is_volume_muted: !muted,
+                        })}
+                    >
+                      <ha-icon
+                        .icon=${muted ? 'mdi:volume-off' : 'mdi:volume-high'}
+                      ></ha-icon>
+                    </button>`
+                  : html`<ha-icon
+                      class="player-vol-icon"
+                      .icon=${'mdi:volume-high'}
+                    ></ha-icon>`}
                 <button
                   class="player-btn vol-btn"
                   title="Ciszej (przytrzymaj = płynnie)"
@@ -1599,6 +1661,28 @@ export class StratumRoomTile extends LitElement {
 
     .player-tile.off:not(.has-art) {
       min-height: 96px;
+    }
+
+    .player-power {
+      position: absolute;
+      top: 8px;
+      left: 10px;
+      width: 30px;
+      height: 30px;
+    }
+    .player-power ha-icon {
+      --mdc-icon-size: 16px;
+    }
+
+    .player-progress.seekable {
+      cursor: pointer;
+      /* Wyższy hitbox przy zachowaniu cienkiego paska. */
+      padding: 5px 0;
+      background-clip: content-box;
+    }
+
+    .player-btn.vol-btn.mute.muted {
+      background: color-mix(in srgb, #f44336 35%, transparent);
     }
 
     .player-tag {
