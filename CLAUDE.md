@@ -27,7 +27,10 @@ ma mieć pełną kontrolę nad tym, które metryki się pokazują i jak wygląda
    `ChipConfig`, `HomeAssistant` stub).
 3. **Lokalizacja** — teksty UI w `src/localize/pl.json` i `en.json`.
    Nigdy nie hardcoduj stringów user-facing w komponentach.
-4. **Unit testy** — na razie brak (v0.x). Od v0.7+ dodajemy Vitest.
+4. **Unit testy** — Vitest, `npm test`. Testujemy czyste funkcje (bez
+   DOM/Lit) w `tests/`; helpery wymagające testów wydzielamy z komponentów
+   do osobnych modułów (wzór: `scene-gradient.ts`). CI odpala testy przed
+   buildem releasu.
 5. **Nazwy plików**: kebab-case (`stratum-card.ts`, `chip-renderer.ts`).
 6. **Klasa**: PascalCase (`StratumCard`, `ChipRenderer`).
 7. **Nazwa custom elementu**: kebab-case, prefixed (`stratum-card`,
