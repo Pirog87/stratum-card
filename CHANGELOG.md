@@ -4,6 +4,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.93.1] — 2026-08-24
+
+### Changed (wąski dwuliniowy wg feedbacku)
+- **Nazwa zostaje duża u góry wiersza**, a pod nią JEDEN rządek
+  wszystkich statusów w kolejności z configu — pola z końca, które się
+  nie mieszczą, po prostu wypadają (flex-wrap + clip, bez „+N").
+- Badge alarmu ⚠N przenosi się do rządka statusów (na początek);
+  po prawej zostaje tylko włącznik świateł.
+
 ## [1.93.0] — 2026-08-24
 
 ### Added (wąskie ekrany — wiersz przestaje się ucinać)
