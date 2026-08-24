@@ -1,6 +1,7 @@
 {
   "name": "Stratum",
   "render_readme": true,
-  "filename": "stratum-card.js",
+  "zip_release": true,
+  "filename": "stratum-card.zip",
   "homeassistant": "2024.1.0"
 }

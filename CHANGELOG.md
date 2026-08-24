@@ -5,6 +5,21 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [SemVer](https://semver.org/).
 
 <<<<<<< HEAD
+## [1.91.0] — 2026-08-24
+
+### Changed (dług techniczny — odchudzenie bundle'a)
+- **Bundle JS: 999 KB → ~365 KB.** Zdjęcia scen wyjęte z bundle'a do
+  osobnych plików `assets/sceny/*.webp`; presety wskazują
+  `/hacsfiles/stratum-card/sceny/<id>.webp` (leniwe ładowanie tylko
+  widocznych grafik).
+- **Dystrybucja przez HACS zip release**: `hacs.json` z
+  `zip_release: true` + `stratum-card.zip` (JS + grafiki) w assetach
+  releasu; HACS rozpakowuje do `www/community/stratum-card/`.
+  Aktualizacja w HACS przebiega normalnie. Instalacja RĘCZNA (bez
+  HACS): oprócz JS skopiuj katalog `sceny/` obok pliku karty.
+- `dist/stratum-card.js` nadal dołączany do releasu dla instalacji
+  ręcznych.
+
 ## [1.90.1] — 2026-08-24
 
 ### Added
