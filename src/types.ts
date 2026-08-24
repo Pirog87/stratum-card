@@ -881,6 +881,15 @@ export interface TileDisplayConfig {
   padding?: number;
   /** Rozmiar ikony area (px). Default 22 (kafel) / 20 (wiersz). */
   icon_size?: number;
+  /**
+   * Przesunięcie samej ikonki w poziomie względem jej tła (px,
+   * ujemne = w lewo). Tylko wiersz. Default 0.
+   */
+  icon_offset_x?: number;
+  /** Przesunięcie tła ikonki (razem z ikonką) w poziomie (px). Tylko wiersz. Default 0. */
+  icon_bg_offset_x?: number;
+  /** Skala tła ikonki w % (50–140). Tylko wiersz. Default 100. */
+  icon_bg_scale?: number;
   /** Pozycja ikony na kaflu — `left` dotyczy tylko wiersza. Default `top-left`. */
   icon_position?: IconPosition;
   /** Otoczka ikony: `bubble` (kółko z tłem), `flat` (sama ikona), `none`. Default `bubble`. */
