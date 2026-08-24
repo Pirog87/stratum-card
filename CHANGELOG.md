@@ -4,6 +4,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.91.2] — 2026-08-24
+
+### Fixed
+- **Właściwa przyczyna „Błąd konfiguracji" po 1.91.0**: `filename` w
+  `hacs.json` wskazywał na `stratum-card.zip`, a HACS używa tego pola
+  jako ścieżki zasobu Lovelace — dashboard próbował ładować
+  `/hacsfiles/stratum-card/stratum-card.zip` (404). Przywrócone
+  `filename: stratum-card.js`; zip releasu jest wykrywany po
+  rozszerzeniu asseta, więc `zip_release` działa dalej.
+
 ## [1.91.1] — 2026-08-24
 
 ### Fixed
