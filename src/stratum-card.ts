@@ -33,6 +33,7 @@ import { runTapAction } from './tap-action.js';
 import {
   CHIP_LIST_COLORS,
   CHIP_LIST_LABELS,
+  alarmEntityIds,
   chipEntityIds,
   chipSupportsList,
 } from './chip-list-helpers.js';
@@ -45,7 +46,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.89.0';
+const VERSION = '1.90.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -80,6 +81,8 @@ export class StratumCard extends LitElement {
     label: string;
     icon: string;
     color: string;
+    /** Tryb „Aktywne alarmy" — scope po areas zamiast typu chipa. */
+    alarmAreaIds?: string[];
   };
 
   /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
@@ -637,11 +640,40 @@ export class StratumCard extends LitElement {
     `;
   }
 
+  /** Otwiera listę „Aktywne alarmy" dla pomieszczenia (badge ⚠ na wierszu). */
+  private _openAlarmList(areaIds: string[]): void {
+    this._popupChip = {
+      chip: { type: 'problem' } as import('./types.js').ChipConfig,
+      entityIds: [],
+      label: 'Aktywne alarmy',
+      icon: 'mdi:alert',
+      color: 'var(--stratum-chip-leak-color, #f44336)',
+      alarmAreaIds: areaIds,
+    };
+    this._pushBackGuard();
+  }
+
+  private _alarmScopeIds(areaIds: string[]): string[] {
+    if (!this.hass) return [];
+    const seen = new Set<string>();
+    const entries: HassEntityRegistryEntry[] = [];
+    for (const id of areaIds) {
+      for (const e of getEntitiesInArea(this.hass, id)) {
+        if (seen.has(e.entity_id)) continue;
+        seen.add(e.entity_id);
+        entries.push(e);
+      }
+    }
+    return alarmEntityIds(this.hass, entries);
+  }
+
   private _renderChipListPopup(): TemplateResult {
     if (!this._popupChip) return html``;
     // Re-resolve entity IDs na każdy render — lista się aktualizuje live
     // gdy hass emituje nowe stany podczas otwartego popupu.
-    const freshIds = this._getChipEntityIds(this._popupChip.chip);
+    const freshIds = this._popupChip.alarmAreaIds
+      ? this._alarmScopeIds(this._popupChip.alarmAreaIds)
+      : this._getChipEntityIds(this._popupChip.chip);
     return html`<stratum-chip-list
       .hass=${this.hass}
       .chip=${this._popupChip.chip}
@@ -649,6 +681,7 @@ export class StratumCard extends LitElement {
       .label=${this._popupChip.label}
       .icon=${this._popupChip.icon}
       .color=${this._popupChip.color}
+      .showClassBadge=${Boolean(this._popupChip.alarmAreaIds)}
       @close=${this._closeChipList}
     ></stratum-chip-list>`;
   }
@@ -941,6 +974,8 @@ export class StratumCard extends LitElement {
       .hasLights=${resolveFieldEntityIds(this.hass!, entries, 'lights', fieldEntities)
         .length > 0}
       .lightsSwitch=${rowConfig?.lights_switch === true}
+      .alarmsCount=${alarmEntityIds(this.hass!, entries).length}
+      @row-alarms=${() => this._openAlarmList(areaIds)}
       .lightsGlowOn=${rowConfig?.lights_switch_glow_on ?? 100}
       .lightsGlowOff=${rowConfig?.lights_switch_glow_off ?? 30}
       .lightsSwitchShowOff=${rowConfig?.lights_switch_show_off !== false}

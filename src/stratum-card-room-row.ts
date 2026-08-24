@@ -118,6 +118,10 @@ export class StratumCardRoomRow extends LitElement {
   @property({ type: Boolean, attribute: 'lights-switch-show-off' })
   public lightsSwitchShowOff = true;
 
+  /** Liczba aktywnych encji alarmowych — badge ⚠ N przy alercie (A1). */
+  @property({ type: Number, attribute: 'alarms-count' })
+  public alarmsCount = 0;
+
   /**
    * Czy ikona ma własną, niezależną akcję kliknięcia. Gdy true — klik
    * w stadion ikony emituje `icon-tap` (nie bąbelkuje do akcji wiersza).
@@ -131,6 +135,7 @@ export class StratumCardRoomRow extends LitElement {
   /** Stan aktywnego gestu przeciągania. */
   private _drag?: {
     startX: number;
+    startY: number;
     startPct: number;
     width: number;
     sliding: boolean;
@@ -193,6 +198,7 @@ export class StratumCardRoomRow extends LitElement {
     const row = ev.currentTarget as HTMLElement;
     this._drag = {
       startX: ev.clientX,
+      startY: ev.clientY,
       startPct: this._currentPct(),
       width: Math.max(1, row.getBoundingClientRect().width),
       sliding: false,
@@ -204,10 +210,16 @@ export class StratumCardRoomRow extends LitElement {
     const d = this._drag;
     if (!d) return;
     const dx = ev.clientX - d.startX;
+    const dy = ev.clientY - d.startY;
     if (!d.sliding) {
-      // Próg 8 px odróżnia swipe od tapnięcia; pionowy scroll zostawiamy
-      // przeglądarce (touch-action: pan-y na .row).
-      if (Math.abs(dx) < 8) return;
+      // Pionowy ruch = scroll listy — oddajemy przeglądarce i ubijamy
+      // gest, żeby ukośne przewijanie NIE zmieniało jasności świateł.
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+        this._drag = undefined;
+        return;
+      }
+      // Swipe jasności startuje dopiero przy zdecydowanie poziomym ruchu.
+      if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
       d.sliding = true;
       (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
     }
@@ -245,6 +257,13 @@ export class StratumCardRoomRow extends LitElement {
       }),
     );
   }
+
+  private _onAlarmBadge = (ev: Event): void => {
+    ev.stopPropagation();
+    this.dispatchEvent(
+      new CustomEvent('row-alarms', { bubbles: true, composed: true }),
+    );
+  };
 
   private _onLightsSwitch = (ev: Event): void => {
     // Nie odpalaj akcji wiersza (popup) — to dedykowany przełącznik.
@@ -488,6 +507,17 @@ export class StratumCardRoomRow extends LitElement {
           ? html`<span class="name">${this.name}</span>`
           : html`<span class="name-spacer"></span>`}
         <div class="info">
+          ${alarmed && this.alarmsCount > 0
+            ? html`<button
+                class="alarm-badge"
+                title="Pokaż aktywne alarmy"
+                @click=${this._onAlarmBadge}
+                @pointerdown=${(pev: Event) => pev.stopPropagation()}
+              >
+                <ha-icon .icon=${'mdi:alert'}></ha-icon>
+                ${this.alarmsCount}
+              </button>`
+            : nothing}
           ${(twoLine ? split!.right : single!.shown).map((f) => this._renderField(f))}
           ${(twoLine ? split!.hiddenCount : single!.hiddenCount) > 0
             ? html`<span
@@ -1000,6 +1030,44 @@ export class StratumCardRoomRow extends LitElement {
 
     .field ha-icon {
       --mdc-icon-size: 22px;
+    }
+
+    /* A1: pulsujący badge alarmu — klik otwiera listę sprawców. */
+    .alarm-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1.5px solid
+        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 65%, transparent);
+      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
+      color: var(--stratum-chip-leak-color, #f44336);
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 800;
+      cursor: pointer;
+      flex-shrink: 0;
+      animation: stratum-alarm-pulse 1.6s ease-in-out infinite;
+    }
+    .alarm-badge ha-icon {
+      --mdc-icon-size: 15px;
+    }
+    @keyframes stratum-alarm-pulse {
+      0%,
+      100% {
+        box-shadow: 0 0 0 0
+          color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 40%, transparent);
+      }
+      50% {
+        box-shadow: 0 0 8px 3px
+          color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 25%, transparent);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .alarm-badge {
+        animation: none;
+      }
     }
 
     /* H4: mini-switch świateł z licznikiem w torze; poświata inline

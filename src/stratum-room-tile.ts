@@ -76,6 +76,7 @@ export class StratumRoomTile extends LitElement {
   /** Stan aktywnego gestu swipe (rail/tint). */
   private _drag?: {
     startX: number;
+    startY: number;
     startPct: number;
     width: number;
     sliding: boolean;
@@ -446,6 +447,7 @@ export class StratumRoomTile extends LitElement {
     const bright = (state?.attributes?.brightness as number | undefined) ?? 0;
     this._drag = {
       startX: ev.clientX,
+      startY: ev.clientY,
       startPct: on ? Math.round((bright / 255) * 100) : 0,
       width: Math.max(1, el.getBoundingClientRect().width),
       sliding: false,
@@ -457,9 +459,16 @@ export class StratumRoomTile extends LitElement {
     const d = this._drag;
     if (!d) return;
     const dx = ev.clientX - d.startX;
+    const dy = ev.clientY - d.startY;
     if (!d.sliding) {
-      // Próg 8 px odróżnia swipe od tapnięcia (pionowy scroll → pan-y).
-      if (Math.abs(dx) < 8) return;
+      // Pionowy ruch = scroll listy — oddajemy przeglądarce i ubijamy
+      // gest, żeby ukośne przewijanie NIE zmieniało jasności świateł.
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+        this._drag = undefined;
+        return;
+      }
+      // Swipe jasności startuje dopiero przy zdecydowanie poziomym ruchu.
+      if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
       d.sliding = true;
       (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
     }
