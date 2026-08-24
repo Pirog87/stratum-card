@@ -4,6 +4,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.94.0] — 2026-08-24
+
+### Added (sekcja media — wariant A z makiety)
+- **Zakładki głośników nad playerem** (nowy default): chip per
+  odtwarzacz z kropką stanu (zielona = gra, bursztynowa = pauza),
+  klik przełącza duży player z okładką. Wybór trzymany per sesja
+  popupu. Kolejność zakładek stabilna (nie skacze przy zmianie stanu).
+- Dawny układ (player + zwijane „Pozostałe odtwarzacze") dostępny
+  przez `media_style: featured` w configu sekcji.
+
 ## [1.93.2] — 2026-08-24
 
 ### Changed (dług techniczny — podział plików, zero zmian funkcjonalnych)

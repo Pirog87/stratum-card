@@ -63,6 +63,9 @@ export class StratumRoomCard extends LitElement {
   /** Rozwinięte listy „Pozostałe" w sekcjach grupowanych (klucz = sekcja). */
   @state() private _openRest = new Set<string>();
 
+  /** Sekcja media (tabs): wybrany odtwarzacz per sekcja — trzymany per sesja. */
+  @state() private _mediaTab = new Map<string, string>();
+
   private _templates = new TemplateRenderer(() => this.requestUpdate());
 
   public setConfig(config: StratumRoomCardConfig): void {
@@ -1321,6 +1324,61 @@ export class StratumRoomCard extends LitElement {
       )[0];
     }
     if (!featured) return html``;
+
+    // Default: zakładki głośników (wariant A z makiety) — chip per
+    // odtwarzacz z kropką stanu, klik przełącza player. Kolejność zakładek
+    // stabilna (kolejność encji), wybór trzymany per sesja popupu.
+    if ((section.media_style ?? 'tabs') === 'tabs') {
+      const key = `media:${title}`;
+      const chosen = this._mediaTab.get(key);
+      const selected =
+        chosen && items.some((e) => e.entity_id === chosen)
+          ? chosen
+          : featured.entity_id;
+      const dotClass = (id: string): string => {
+        const s = hass.states?.[id]?.state;
+        if (s === 'playing') return 'play';
+        if (s === 'paused' || s === 'buffering') return 'pause';
+        return 'idle';
+      };
+      return html`
+        <div class="section" part="section">
+          <div class="section-header" part="section-header">
+            <ha-icon .icon=${iconName}></ha-icon>
+            <span>${title}</span>
+            ${items.length > 1
+              ? html`<span class="count">${items.length}</span>`
+              : nothing}
+          </div>
+          ${items.length > 1
+            ? html`<div class="media-tabs">
+                ${items.map((e) => {
+                  const st = hass.states?.[e.entity_id];
+                  const name =
+                    (st?.attributes?.friendly_name as string | undefined) ??
+                    e.entity_id;
+                  return html`<button
+                    class="media-tab ${e.entity_id === selected ? 'on' : ''}"
+                    @click=${() => {
+                      const m = new Map(this._mediaTab);
+                      m.set(key, e.entity_id);
+                      this._mediaTab = m;
+                    }}
+                  >
+                    <span class="mt-dot ${dotClass(e.entity_id)}"></span>
+                    <span class="mt-name">${name}</span>
+                  </button>`;
+                })}
+              </div>`
+            : nothing}
+          <stratum-room-tile
+            .hass=${this.hass}
+            .entity=${selected}
+            .mode=${'player'}
+          ></stratum-room-tile>
+        </div>
+      `;
+    }
 
     const rest = items
       .filter((e) => e.entity_id !== featured!.entity_id)

@@ -466,6 +466,13 @@ export interface RoomSectionConfig {
    */
   entity?: string;
   /**
+   * Tylko `media`: układ przełączania odtwarzaczy.
+   * - `tabs` (default) — chipy-zakładki głośników nad playerem
+   *   (kropka = stan; klik przełącza widok, wybór trzymany per sesja)
+   * - `featured` — dawny układ: player + zwijane „Pozostałe odtwarzacze"
+   */
+  media_style?: 'tabs' | 'featured';
+  /**
    * Tylko `lights`: grupowanie po pomocnikach „Grupa światła" przypisanych do
    * obszaru. `helpers` (default) — pokazuj kafle GRUP, chowaj ich encje-składowe,
    * światła spoza grup w zwijanym „Pozostałe". `none` — płaska lista jak dotąd.
