@@ -521,9 +521,24 @@ export class StratumCardRoomRow extends LitElement {
     if (nl === 2 && narrowMode === 'compact') cap = 3;
     const rightCap = nl === 2 && narrowMode === 'two-line' ? 2 : undefined;
     const single = twoLine ? undefined : this._visibleFields(fields, cap);
-    const split = twoLine ? this._splitFields(fields, rightCap) : undefined;
-    const narrowClass =
-      nl > 0 && narrowMode === 'compact' ? `narrow-c${nl}` : '';
+    let split = twoLine ? this._splitFields(fields, rightCap) : undefined;
+    // Wąski dwuliniowy: nazwa duża u góry, pod nią JEDEN rządek wszystkich
+    // statusów w kolejności z configu — CSS ucina naturalnie te z końca,
+    // które się nie mieszczą. Po prawej zostaje tylko włącznik świateł.
+    const narrowTwo = twoLine && nl > 0;
+    if (narrowTwo) {
+      const withValue = fields.filter((f) => this._fieldHasValue(f));
+      split = {
+        sub: withValue.filter((f) => f !== 'lights'),
+        right: withValue.filter((f) => f === 'lights'),
+        hiddenCount: 0,
+      };
+    }
+    const narrowClass = narrowTwo
+      ? 'narrow-two'
+      : nl > 0 && narrowMode === 'compact'
+      ? `narrow-c${nl}`
+      : '';
 
     return html`
       <div
@@ -563,13 +578,19 @@ export class StratumCardRoomRow extends LitElement {
               ${showName
                 ? html`<span class="name">${this.name}</span>`
                 : nothing}
-              ${split!.sub.length > 0
-                ? html`<span class="sub">
-                    ${split!.sub.map((f, i) =>
-                      i === 0
-                        ? this._renderSubField(f)
-                        : html`<span class="dot">·</span>${this._renderSubField(f)}`,
-                    )}
+              ${split!.sub.length > 0 ||
+              (narrowTwo && alarmed && this.alarmsCount > 0)
+                ? html`<span class="sub ${narrowTwo ? 'flow' : ''}">
+                    ${narrowTwo && alarmed && this.alarmsCount > 0
+                      ? this._renderAlarmBadge()
+                      : nothing}
+                    ${narrowTwo
+                      ? split!.sub.map((f) => this._renderField(f))
+                      : split!.sub.map((f, i) =>
+                          i === 0
+                            ? this._renderSubField(f)
+                            : html`<span class="dot">·</span>${this._renderSubField(f)}`,
+                        )}
                   </span>`
                 : nothing}
             </span>`
@@ -577,16 +598,8 @@ export class StratumCardRoomRow extends LitElement {
           ? html`<span class="name">${this.name}</span>`
           : html`<span class="name-spacer"></span>`}
         <div class="info">
-          ${alarmed && this.alarmsCount > 0
-            ? html`<button
-                class="alarm-badge"
-                title="Pokaż aktywne alarmy"
-                @click=${this._onAlarmBadge}
-                @pointerdown=${(pev: Event) => pev.stopPropagation()}
-              >
-                <ha-icon .icon=${'mdi:alert'}></ha-icon>
-                ${this.alarmsCount}
-              </button>`
+          ${alarmed && this.alarmsCount > 0 && !narrowTwo
+            ? this._renderAlarmBadge()
             : nothing}
           ${(twoLine ? split!.right : single!.shown).map((f) => this._renderField(f))}
           ${(twoLine ? split!.hiddenCount : single!.hiddenCount) > 0
@@ -602,6 +615,18 @@ export class StratumCardRoomRow extends LitElement {
   }
 
   /** Pola sublinii — kompaktowe, wyciszone (temp/wilgotność tekstem, motion ikoną). */
+  private _renderAlarmBadge(): TemplateResult {
+    return html`<button
+      class="alarm-badge"
+      title="Pokaż aktywne alarmy"
+      @click=${this._onAlarmBadge}
+      @pointerdown=${(pev: Event) => pev.stopPropagation()}
+    >
+      <ha-icon .icon=${'mdi:alert'}></ha-icon>
+      ${this.alarmsCount}
+    </button>`;
+  }
+
   private _renderSubField(f: TileField): TemplateResult | typeof nothing {
     switch (f) {
       case 'temperature':
@@ -1028,6 +1053,36 @@ export class StratumCardRoomRow extends LitElement {
     }
     .row[data-preset='cards'].alerted .icon {
       color: var(--stratum-chip-leak-color, #f44336);
+    }
+
+    /* ====== Wąski dwuliniowy: nazwa u góry, rządek statusów pod nią.
+       flex-wrap + max-height + duży row-gap = pola z końca kolejności,
+       które się nie mieszczą, wypadają do niewidocznej drugiej linii. */
+    .row.narrow-two .body {
+      gap: 4px;
+      padding: 10px 0;
+    }
+    .row.narrow-two .sub.flow {
+      flex-wrap: wrap;
+      column-gap: 9px;
+      row-gap: 40px;
+      max-height: 26px;
+      overflow: hidden;
+    }
+    .row.narrow-two .sub.flow .field {
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+    .row.narrow-two .sub.flow .field ha-icon {
+      --mdc-icon-size: 17px;
+    }
+    .row.narrow-two .sub.flow .alarm-badge {
+      flex-shrink: 0;
+      padding: 1px 7px;
+      font-size: 11px;
+    }
+    .row.narrow-two .info {
+      gap: 8px;
     }
 
     /* ====== Kompakt na wąskich ekranach (narrow_mode: 'compact') ====== */
