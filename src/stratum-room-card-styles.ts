@@ -556,4 +556,51 @@ export const roomCardStyles = css`
       background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
       font-size: 11px;
     }
-  `;
+  
+  /* ====== Sekcja media — zakładki głośników (media_style: tabs) ====== */
+  .media-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .media-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: none;
+    cursor: pointer;
+    border-radius: 999px;
+    padding: 6px 13px;
+    font: inherit;
+    font-size: 12.5px;
+    background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+    color: var(--secondary-text-color);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .media-tab.on {
+    background: var(--stratum-card-accent, var(--primary-color, #ff9b42));
+    color: #fff;
+    font-weight: 600;
+  }
+  .mt-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(128, 132, 140, 0.9);
+    flex-shrink: 0;
+  }
+  .mt-dot.play {
+    background: var(--stratum-chip-motion-color, #4caf50);
+    box-shadow: 0 0 5px var(--stratum-chip-motion-color, #4caf50);
+  }
+  .mt-dot.pause {
+    background: var(--stratum-chip-lights-color, #ffc107);
+  }
+  .mt-name {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`;
