@@ -76,3 +76,19 @@ describe('ago', () => {
     expect(ago('2026-08-24T12:00:30Z')).toBe('0s');
   });
 });
+
+describe('appBrandGradient', () => {
+  it('rozpoznaje popularne aplikacje niezależnie od wielkości liter', async () => {
+    const { appBrandGradient } = await import('../src/media-brands.js');
+    expect(appBrandGradient('Netflix')).toContain('#b20710');
+    expect(appBrandGradient('Disney+')).toContain('#1a3ccc');
+    expect(appBrandGradient('Prime Video')).toContain('#0f79af');
+    expect(appBrandGradient('com.spotify.music')).toContain('#169c46');
+  });
+
+  it('nieznana aplikacja / brak → undefined', async () => {
+    const { appBrandGradient } = await import('../src/media-brands.js');
+    expect(appBrandGradient('Kodi')).toBeUndefined();
+    expect(appBrandGradient(undefined)).toBeUndefined();
+  });
+});

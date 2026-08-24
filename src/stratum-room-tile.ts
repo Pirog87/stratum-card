@@ -17,6 +17,7 @@ import type { HassEntity, HomeAssistant, TapActionConfig } from './types.js';
 import { runTapAction } from './tap-action.js';
 import { buildDefaultCustomConfig } from './custom-cards.js';
 import { lightColorOf } from './tile-data.js';
+import { appBrandGradient } from './media-brands.js';
 
 function domainOf(entityId: string): string {
   return entityId.split('.')[0] ?? '';
@@ -72,6 +73,83 @@ export class StratumRoomTile extends LitElement {
 
   /** Jasność (%) trzymana lokalnie podczas swipe — nadpisuje stan z hass. */
   @state() private _dragPct?: number;
+
+  /**
+   * Głośność (player): wartość optymistyczna podczas regulacji ±.
+   * hass potrafi odświeżać stan z opóźnieniem — bez tego suwak by
+   * „skakał" wstecz między tickami przytrzymania.
+   */
+  @state() private _volPending?: number;
+
+  private _volHoldTimer?: number;
+
+  private _volClearTimer?: number;
+
+  private _volTicks = 0;
+
+  public disconnectedCallback(): void {
+    this._volStopHold();
+    if (this._volClearTimer !== undefined) {
+      window.clearTimeout(this._volClearTimer);
+      this._volClearTimer = undefined;
+    }
+    super.disconnectedCallback();
+  }
+
+  private _volStep(dir: 1 | -1): void {
+    const st = this.entity ? this.hass?.states?.[this.entity] : undefined;
+    const cur =
+      this._volPending ??
+      ((st?.attributes?.volume_level as number | undefined) ?? 0);
+    const next = Math.max(0, Math.min(1, cur + dir * 0.02));
+    this._volPending = next;
+    void this.hass?.callService('media_player', 'volume_set', {
+      entity_id: this.entity,
+      volume_level: next,
+    });
+  }
+
+  /**
+   * Przytrzymanie ±: pierwszy krok od razu, powtarzanie po 400 ms —
+   * najpierw spokojnie (260 ms), po chwili delikatnie przyspiesza
+   * (180 ms, potem 110 ms). Krok stały 2%.
+   */
+  private _volHoldStart(ev: PointerEvent, dir: 1 | -1): void {
+    ev.stopPropagation();
+    ev.preventDefault();
+    (ev.target as HTMLElement).setPointerCapture?.(ev.pointerId);
+    this._volStopHold();
+    if (this._volClearTimer !== undefined) {
+      window.clearTimeout(this._volClearTimer);
+      this._volClearTimer = undefined;
+    }
+    this._volTicks = 0;
+    this._volStep(dir);
+    const tick = (): void => {
+      this._volTicks += 1;
+      this._volStep(dir);
+      const delay = this._volTicks > 10 ? 110 : this._volTicks > 4 ? 180 : 260;
+      this._volHoldTimer = window.setTimeout(tick, delay);
+    };
+    this._volHoldTimer = window.setTimeout(tick, 400);
+  }
+
+  private _volHoldEnd = (ev?: Event): void => {
+    ev?.stopPropagation();
+    this._volStopHold();
+    // Po puszczeniu trzymamy wartość optymistyczną chwilę, aż hass dogoni.
+    this._volClearTimer = window.setTimeout(() => {
+      this._volPending = undefined;
+      this._volClearTimer = undefined;
+    }, 1500);
+  };
+
+  private _volStopHold(): void {
+    if (this._volHoldTimer !== undefined) {
+      window.clearTimeout(this._volHoldTimer);
+      this._volHoldTimer = undefined;
+    }
+  }
 
   /** Stan aktywnego gestu swipe (rail/tint). */
   private _drag?: {
@@ -763,26 +841,42 @@ export class StratumRoomTile extends LitElement {
         ? 'wyłączony'
         : state.state === 'idle'
         ? 'bezczynny'
+        : state.state === 'playing'
+        ? 'odtwarza'
         : state.state === 'paused'
         ? 'pauza'
         : state.state === 'unavailable'
         ? 'niedostępny'
         : state.state;
 
+    // Netflix/Disney+/Prime na TV i Chromecastach zwykle NIE wystawiają
+    // okładki ani tytułu — zostaje tylko app_name. Wtedy: brandowany
+    // gradient jako tło i nazwa aplikacji jako tytuł (zamiast "playing").
+    const app = state.attributes?.app_name as string | undefined;
+    const brand = !picture && active ? appBrandGradient(app ?? artist) : undefined;
+    const displayTitle = title ?? app ?? stateText;
+    const displaySub = title ? artist : app ? stateText : undefined;
+
     const bg = picture
       ? `background-image: linear-gradient(to top, rgba(8, 9, 12, 0.92) 25%, rgba(8, 9, 12, 0.35)), url('${picture}');`
+      : brand
+      ? `background-image: linear-gradient(to top, rgba(8, 9, 12, 0.55) 25%, rgba(8, 9, 12, 0.12)), ${brand};`
       : '';
 
     return html`
       <div
-        class="player-tile ${active ? 'on' : 'off'} ${picture ? 'has-art' : ''}"
+        class="player-tile ${active ? 'on' : 'off'} ${picture || brand
+          ? 'has-art'
+          : ''}"
         part="tile"
         style=${bg}
         @click=${this._openMoreInfo}
       >
         <span class="player-tag">${this._displayName(state)}</span>
-        <span class="player-title">${title ?? stateText}</span>
-        ${artist ? html`<span class="player-artist">${artist}</span>` : nothing}
+        <span class="player-title">${displayTitle}</span>
+        ${displaySub && displaySub !== displayTitle
+          ? html`<span class="player-artist">${displaySub}</span>`
+          : nothing}
         ${active && pct > 0
           ? html`<span class="player-progress"
               ><i style="width:${pct.toFixed(1)}%"></i
@@ -816,13 +910,26 @@ export class StratumRoomTile extends LitElement {
           ${typeof volume === 'number'
             ? html`
                 <ha-icon class="player-vol-icon" .icon=${'mdi:volume-high'}></ha-icon>
+                <button
+                  class="player-btn vol-btn"
+                  title="Ciszej (przytrzymaj = płynnie)"
+                  @pointerdown=${(ev: PointerEvent) => this._volHoldStart(ev, -1)}
+                  @pointerup=${this._volHoldEnd}
+                  @pointercancel=${this._volHoldEnd}
+                  @pointerleave=${this._volHoldEnd}
+                  @contextmenu=${(ev: Event) => ev.preventDefault()}
+                >
+                  <ha-icon .icon=${'mdi:minus'}></ha-icon>
+                </button>
                 <input
                   type="range"
                   class="player-volume"
                   min="0"
                   max="100"
                   step="1"
-                  .value=${String(Math.round(volume * 100))}
+                  .value=${String(
+                    Math.round((this._volPending ?? volume) * 100),
+                  )}
                   @change=${(ev: Event) => {
                     const v = Number((ev.target as HTMLInputElement).value);
                     void this.hass?.callService('media_player', 'volume_set', {
@@ -831,6 +938,17 @@ export class StratumRoomTile extends LitElement {
                     });
                   }}
                 />
+                <button
+                  class="player-btn vol-btn"
+                  title="Głośniej (przytrzymaj = płynnie)"
+                  @pointerdown=${(ev: PointerEvent) => this._volHoldStart(ev, 1)}
+                  @pointerup=${this._volHoldEnd}
+                  @pointercancel=${this._volHoldEnd}
+                  @pointerleave=${this._volHoldEnd}
+                  @contextmenu=${(ev: Event) => ev.preventDefault()}
+                >
+                  <ha-icon .icon=${'mdi:plus'}></ha-icon>
+                </button>
               `
             : nothing}
         </div>
@@ -1574,6 +1692,16 @@ export class StratumRoomTile extends LitElement {
       color: #fff;
     }
 
+    .player-btn.vol-btn {
+      width: 30px;
+      height: 30px;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .player-btn.vol-btn ha-icon {
+      --mdc-icon-size: 16px;
+    }
     .player-btn ha-icon {
       --mdc-icon-size: 20px;
     }
