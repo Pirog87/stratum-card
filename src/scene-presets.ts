@@ -8,14 +8,14 @@
 // Użycie: `image: 'stratum:<id>'` w configu — runtime zamienia na data URI.
 
 /**
- * Zdjęcia scen jako osobne pliki dystrybuowane w ZIP-ie HACS (zip_release)
- * — rozpakowane obok stratum-card.js w www/community/stratum-card/sceny/.
+ * Zdjęcia scen jako osobne assety releasu (`sceny-<id>.webp`) — HACS
+ * pobiera wszystkie assety do www/community/stratum-card/ (płasko).
  * Trzyma bundle JS małym (CLAUDE.md), zdjęcia ładują się leniwie.
- * Instalacja ręczna (bez HACS): skopiuj katalog assets/sceny do
- * config/www/community/stratum-card/sceny.
+ * Instalacja ręczna (bez HACS): pobierz z releasu stratum-card.js
+ * i wszystkie sceny-*.webp do jednego katalogu w www.
  */
 function photoUrl(id: string): string {
-  return `/hacsfiles/stratum-card/sceny/${id}.webp`;
+  return `/hacsfiles/stratum-card/sceny-${id}.webp`;
 }
 
 export interface ScenePreset {

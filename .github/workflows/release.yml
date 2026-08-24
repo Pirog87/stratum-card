@@ -55,16 +55,21 @@ jobs:
         if: steps.tag_check.outputs.exists == 'false'
         run: npm run build
 
-      - name: Package HACS zip (JS + grafiki scen)
+      - name: Package release assets (JS + grafiki scen)
         if: steps.tag_check.outputs.exists == 'false'
         run: |
+          # HACS (bez zip_release) pobiera KAŻDY asset releasu płasko do
+          # www/community/stratum-card/ — więc assetami są dokładnie pliki,
+          # które mają wylądować na dysku. Grafiki z prefiksem sceny-.
           mkdir -p build
           cp dist/stratum-card.js build/
-          # Świeży .js.gz w zipie nadpisuje ewentualny stary plik z poprzedniej
-          # instalacji — HA serwuje .gz zamiast .js, gdy taki sąsiad istnieje.
-          gzip -9 -k -c dist/stratum-card.js > build/stratum-card.js.gz
-          cp -r assets/sceny build/sceny
-          (cd build && zip -r ../stratum-card.zip .)
+          # Świeży .js.gz nadpisuje ewentualną pozostałość po starej
+          # instalacji — HA potrafi serwować .gz zamiast .js, gdy istnieje.
+          gzip -9 -c dist/stratum-card.js > build/stratum-card.js.gz
+          for f in assets/sceny/*.webp; do
+            cp "$f" "build/sceny-$(basename "$f")"
+          done
+          ls -la build/
 
       - name: Create tag and release
         if: steps.tag_check.outputs.exists == 'false'
@@ -74,6 +79,7 @@ jobs:
           name: v${{ steps.ver.outputs.version }}
           generate_release_notes: true
           files: |
-            stratum-card.zip
-            dist/stratum-card.js
+            build/stratum-card.js
+            build/stratum-card.js.gz
+            build/sceny-*.webp
           fail_on_unmatched_files: true
