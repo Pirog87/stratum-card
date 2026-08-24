@@ -4,6 +4,19 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.95.0] — 2026-08-24
+
+### Added (player)
+- **Przyciski − / + przy suwaku głośności** z przytrzymaniem:
+  pierwszy krok od razu, powtarzanie po 400 ms — najpierw spokojnie,
+  po chwili delikatnie przyspiesza. Krok 2%, wartość optymistyczna
+  (suwak nie skacze wstecz czekając na hass).
+- **Brandowane tła aplikacji**: Netflix/Disney+/Prime/Spotify/YouTube/
+  HBO Max/Plex/Apple TV/Player.pl — gdy aplikacja nie wystawia okładki
+  (typowe dla TV/Chromecast), player dostaje gradient w kolorach marki,
+  nazwę aplikacji jako tytuł i po polsku stan („odtwarza" zamiast
+  „playing").
+
 ## [1.94.0] — 2026-08-24
 
 ### Added (sekcja media — wariant A z makiety)
