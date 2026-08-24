@@ -4,7 +4,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
-<<<<<<< HEAD
+## [1.91.1] — 2026-08-24
+
+### Fixed
+- **„Custom element doesn't exist" po aktualizacji do 1.91.0.** Po starej
+  instalacji zostawał w `www/community/stratum-card/` plik
+  `stratum-card.js.gz` (gzip poprzedniego ~1 MB bundle'a). Serwer HA
+  preferuje prekompresowany `.gz` obok `.js`, więc przeglądarka dostawała
+  stary kod. Zip releasu zawiera teraz świeży `stratum-card.js.gz`,
+  który nadpisuje pozostałość przy każdej aktualizacji (bonus: transfer
+  ~100 KB zamiast ~365 KB).
+
 ## [1.91.0] — 2026-08-24
 
 ### Changed (dług techniczny — odchudzenie bundle'a)
@@ -369,8 +379,6 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 - **Sticky stopka „Wyłącz wszystkie (N)"** dla sterowalnych — działa na
   aktualnie widoczne (wybrana zakładka), zamiast przycisków per sekcja.
 
-=======
->>>>>>> origin/main
 ## [1.71.0] — 2026-08-17
 
 ### Changed
