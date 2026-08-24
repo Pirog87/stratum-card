@@ -46,7 +46,7 @@ import './stratum-chip-list.js';
 import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.90.0';
+const VERSION = '1.90.1';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -570,6 +570,7 @@ export class StratumCard extends LitElement {
           <ha-icon class="area-icon" part="area-icon" .icon=${icon}></ha-icon>
           <span class="title" part="title">${name}</span>
           <div class="chips" part="chips">
+            ${this._renderHeaderAlarmBadge()}
             ${this._renderChips()}
           </div>
           ${header.hide_expander
@@ -651,6 +652,43 @@ export class StratumCard extends LitElement {
       alarmAreaIds: areaIds,
     };
     this._pushBackGuard();
+  }
+
+  /**
+   * Badge ⚠ N na belce najwyższego poziomu (piętro/karta) — pokazuje się
+   * gdy JAKIKOLWIEK alarm na piętrze jest aktywny; klik otwiera listę
+   * sprawców z całego zakresu karty (bez rozwijania belki).
+   */
+  private _renderHeaderAlarmBadge(): TemplateResult | typeof nothing {
+    if (!this.hass) return nothing;
+    const ids = alarmEntityIds(this.hass, this._getEntries());
+    if (ids.length === 0) return nothing;
+    // Scope po wszystkich areas karty (floor albo pojedyncza area).
+    const areaIds = this._config?.floor_id
+      ? getAreasInFloor(this.hass, this._config.floor_id).map((a) => a.area_id)
+      : this._config?.area_id
+      ? [this._config.area_id]
+      : [];
+    return html`<span
+      class="header-alarm-badge"
+      role="button"
+      tabindex="0"
+      title="Pokaż aktywne alarmy"
+      @click=${(ev: Event) => {
+        ev.stopPropagation();
+        this._openAlarmList(areaIds);
+      }}
+      @keydown=${(ev: KeyboardEvent) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._openAlarmList(areaIds);
+        }
+      }}
+    >
+      <ha-icon .icon=${'mdi:alert'}></ha-icon>
+      ${ids.length}
+    </span>`;
   }
 
   private _alarmScopeIds(areaIds: string[]): string[] {
@@ -1230,6 +1268,43 @@ export class StratumCard extends LitElement {
       overflow-x: auto;
       scrollbar-width: none;
       padding: 4px 0;
+    }
+
+    /* Badge alarmu na belce piętra — jak ⚠ N na wierszach. */
+    .header-alarm-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1.5px solid
+        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 65%, transparent);
+      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
+      color: var(--stratum-chip-leak-color, #f44336);
+      font-size: 12.5px;
+      font-weight: 800;
+      cursor: pointer;
+      flex-shrink: 0;
+      animation: stratum-header-alarm-pulse 1.6s ease-in-out infinite;
+    }
+    .header-alarm-badge ha-icon {
+      --mdc-icon-size: 15px;
+    }
+    @keyframes stratum-header-alarm-pulse {
+      0%,
+      100% {
+        box-shadow: 0 0 0 0
+          color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 40%, transparent);
+      }
+      50% {
+        box-shadow: 0 0 8px 3px
+          color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 25%, transparent);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .header-alarm-badge {
+        animation: none;
+      }
     }
 
     .chips::-webkit-scrollbar {
