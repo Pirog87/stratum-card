@@ -4,6 +4,20 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.96.0] — 2026-08-24
+
+### Added (media plus — pkt 4 + 6 z makiety)
+- **Seek**: tap w pasek postępu przewija utwór/film (dymek podpowiedzi;
+  tylko gdy odtwarzacz wspiera SEEK).
+- **Mute**: klik w ikonę głośnika wycisza/przywraca (czerwone tło gdy
+  wyciszony; tylko gdy odtwarzacz wspiera VOLUME_MUTE).
+- **Power**: przycisk ⏻ w lewym górnym rogu playera — wł/wył TV
+  (tylko gdy encja wspiera TURN_ON/TURN_OFF).
+- **`volume_step`** w configu sekcji media — krok przycisków ±
+  (default 2%).
+- **`hide_when_off`** — sekcja media znika, gdy wszystkie odtwarzacze
+  wyłączone/niedostępne.
+
 ## [1.95.0] — 2026-08-24
 
 ### Added (player)
