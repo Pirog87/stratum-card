@@ -4,6 +4,22 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.93.0] — 2026-08-24
+
+### Added (wąskie ekrany — wiersz przestaje się ucinać)
+- **`narrow_mode`** — zachowanie wiersza, gdy karta jest wąska (Fold,
+  split-screen; progi ≤360 px i ≤310 px szerokości wiersza, mierzone
+  ResizeObserverem). Segmented control „Wąskie ekrany" w sekcji
+  „Wymiary i zaokrąglenia" edytora wiersza:
+  - **Zwijaj pola** (default) — statusy zwijają się w istniejący chip
+    „+N" wg priorytetu (alarmy > światła > ruch > temperatura …);
+    badge alarmu i włącznik świateł nie znikają nigdy, nazwa
+    pomieszczenia dostaje należne miejsce,
+  - **Dwie linie** — automatyczne przejście w układ dwuliniowy,
+  - **Kompakt** — całość proporcjonalnie mniejsza (stadion, fonty,
+    switch ~80%, przy ≤310 px mocniej),
+  - **Wył.** — zachowanie sprzed tej wersji.
+
 ## [1.92.1] — 2026-08-24
 
 ### Fixed

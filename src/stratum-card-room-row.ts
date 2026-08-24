@@ -132,6 +132,30 @@ export class StratumCardRoomRow extends LitElement {
   /** Jasność (%) trzymana lokalnie podczas przeciągania — nadpisuje fill. */
   @state() private _dragPct?: number;
 
+  /**
+   * Poziom ciasnoty wiersza (0 = normalnie, 1 = ≤360 px, 2 = ≤310 px) —
+   * mierzony ResizeObserverem na hoście. Reakcję wybiera `narrow_mode`.
+   */
+  @state() private _narrow = 0;
+
+  private _narrowRo?: ResizeObserver;
+
+  public connectedCallback(): void {
+    super.connectedCallback();
+    this._narrowRo = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      const lvl = w > 0 && w <= 310 ? 2 : w > 0 && w <= 360 ? 1 : 0;
+      if (lvl !== this._narrow) this._narrow = lvl;
+    });
+    this._narrowRo.observe(this);
+  }
+
+  public disconnectedCallback(): void {
+    this._narrowRo?.disconnect();
+    this._narrowRo = undefined;
+    super.disconnectedCallback();
+  }
+
   /** Stan aktywnego gestu przeciągania. */
   private _drag?: {
     startX: number;
@@ -317,21 +341,29 @@ export class StratumCardRoomRow extends LitElement {
    * Pola do pokazania: max 4 wg priorytetu, w KOLEJNOŚCI z configu
    * (kolejność listy `fields` = kolejność na wierszu) + licznik ukrytych.
    */
-  private _visibleFields(configured: TileField[]): {
+  private _visibleFields(
+    configured: TileField[],
+    cap: number = MAX_VISIBLE_FIELDS,
+  ): {
     shown: TileField[];
     hiddenCount: number;
   } {
     const withValue = configured.filter((f) => this._fieldHasValue(f));
-    if (withValue.length <= MAX_VISIBLE_FIELDS) {
+    if (withValue.length <= cap) {
       return { shown: withValue, hiddenCount: 0 };
     }
     const byPriority = [...withValue].sort(
       (a, b) => (FIELD_PRIORITY[b] ?? 0) - (FIELD_PRIORITY[a] ?? 0),
     );
-    const top = new Set(byPriority.slice(0, MAX_VISIBLE_FIELDS));
+    const top = new Set(byPriority.slice(0, cap));
+    // Na wąskich ekranach (cap obniżony) włącznik świateł nie znika nigdy
+    // — to jedyny interaktywny element wiersza poza samym tapnięciem.
+    if (cap < MAX_VISIBLE_FIELDS && withValue.includes('lights')) {
+      top.add('lights');
+    }
     return {
       shown: withValue.filter((f) => top.has(f)),
-      hiddenCount: withValue.length - MAX_VISIBLE_FIELDS,
+      hiddenCount: withValue.length - top.size,
     };
   }
 
@@ -339,7 +371,10 @@ export class StratumCardRoomRow extends LitElement {
    * Layout dwuliniowy (fill/pill): rozdziela pola na sublinię pod nazwą
    * (temp/wilgotność/motion) i prawą stronę (światła + liczniki + alarmy).
    */
-  private _splitFields(configured: TileField[]): {
+  private _splitFields(
+    configured: TileField[],
+    rightCap: number = MAX_RIGHT_FIELDS,
+  ): {
     sub: TileField[];
     right: TileField[];
     hiddenCount: number;
@@ -348,17 +383,20 @@ export class StratumCardRoomRow extends LitElement {
     // Kolejność wewnątrz obu grup = kolejność listy `fields` z configu.
     const sub = withValue.filter((f) => SUB_FIELDS.includes(f));
     const rightCandidates = withValue.filter((f) => !SUB_FIELDS.includes(f));
-    if (rightCandidates.length <= MAX_RIGHT_FIELDS) {
+    if (rightCandidates.length <= rightCap) {
       return { sub, right: rightCandidates, hiddenCount: 0 };
     }
     const byPriority = [...rightCandidates].sort(
       (a, b) => (FIELD_PRIORITY[b] ?? 0) - (FIELD_PRIORITY[a] ?? 0),
     );
-    const top = new Set(byPriority.slice(0, MAX_RIGHT_FIELDS));
+    const top = new Set(byPriority.slice(0, rightCap));
+    if (rightCap < MAX_RIGHT_FIELDS && rightCandidates.includes('lights')) {
+      top.add('lights');
+    }
     return {
       sub,
       right: rightCandidates.filter((f) => top.has(f)),
-      hiddenCount: rightCandidates.length - MAX_RIGHT_FIELDS,
+      hiddenCount: rightCandidates.length - top.size,
     };
   }
 
@@ -415,6 +453,10 @@ export class StratumCardRoomRow extends LitElement {
           : 0
         : 0;
 
+    // Reakcja na wąskie ekrany wg narrow_mode (default: zwijanie pól).
+    const narrowMode = cfg.narrow_mode ?? 'fields';
+    const nl = narrowMode === 'off' ? 0 : this._narrow;
+
     const cssVars: string[] = [
       effectiveActive && accent
         ? `--stratum-room-row-active-color: ${accent};`
@@ -425,9 +467,19 @@ export class StratumCardRoomRow extends LitElement {
       typeof cfg.padding === 'number'
         ? `--stratum-room-row-padding: ${cfg.padding}px;`
         : '',
-      typeof cfg.min_height === 'number'
-        ? `--stratum-room-row-min-height: ${cfg.min_height}px;`
-        : '',
+      (() => {
+        // Kompakt na wąskich ekranach: skalujemy min-height (stadion ikony
+        // i rozmiar ikony liczą się z tej zmiennej, więc kurczą się razem).
+        if (nl > 0 && narrowMode === 'compact') {
+          const base =
+            cfg.min_height ?? (preset === 'rail' ? 48 : preset === 'cards' ? 54 : 85);
+          const f = nl === 2 ? 0.68 : 0.78;
+          return `--stratum-room-row-min-height: ${Math.round(base * f)}px;`;
+        }
+        return typeof cfg.min_height === 'number'
+          ? `--stratum-room-row-min-height: ${cfg.min_height}px;`
+          : '';
+      })(),
       typeof cfg.icon_size === 'number'
         ? `--stratum-room-row-icon-size: ${cfg.icon_size}px;`
         : '',
@@ -457,12 +509,21 @@ export class StratumCardRoomRow extends LitElement {
     const styles = cssVars.filter(Boolean).join(' ');
 
     // Default: jedna linia, wszystkie statusy po prawej. Layout dwuliniowy
-    // (nazwa + sublinia) dostępny przez status_layout: 'two-line'.
+    // (nazwa + sublinia) dostępny przez status_layout: 'two-line' albo
+    // automatycznie na wąskich ekranach (narrow_mode: 'two-line').
     // rail/cards = zawsze klasyczna jedna linia.
     const twoLine =
-      (preset === 'fill' || preset === 'pill') && cfg.status_layout === 'two-line';
-    const single = twoLine ? undefined : this._visibleFields(fields);
-    const split = twoLine ? this._splitFields(fields) : undefined;
+      (preset === 'fill' || preset === 'pill') &&
+      (cfg.status_layout === 'two-line' ||
+        (narrowMode === 'two-line' && nl > 0));
+    let cap: number | undefined;
+    if (nl > 0 && narrowMode === 'fields') cap = nl === 2 ? 1 : 2;
+    if (nl === 2 && narrowMode === 'compact') cap = 3;
+    const rightCap = nl === 2 && narrowMode === 'two-line' ? 2 : undefined;
+    const single = twoLine ? undefined : this._visibleFields(fields, cap);
+    const split = twoLine ? this._splitFields(fields, rightCap) : undefined;
+    const narrowClass =
+      nl > 0 && narrowMode === 'compact' ? `narrow-c${nl}` : '';
 
     return html`
       <div
@@ -471,7 +532,7 @@ export class StratumCardRoomRow extends LitElement {
           ? 'lights-on'
           : ''} ${this.motion ? 'motion-on' : ''} ${alarmed ? 'alerted' : ''} ${rowAnim
           ? `anim-${rowAnim}`
-          : ''}"
+          : ''} ${narrowClass}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -967,6 +1028,27 @@ export class StratumCardRoomRow extends LitElement {
     }
     .row[data-preset='cards'].alerted .icon {
       color: var(--stratum-chip-leak-color, #f44336);
+    }
+
+    /* ====== Kompakt na wąskich ekranach (narrow_mode: 'compact') ====== */
+    .row.narrow-c1,
+    .row.narrow-c2 {
+      gap: 7px;
+    }
+    .row.narrow-c1 .name { font-size: 13px; }
+    .row.narrow-c2 .name { font-size: 12.5px; }
+    .row.narrow-c1 .info { gap: 6px; font-size: 11.5px; }
+    .row.narrow-c2 .info { gap: 5px; font-size: 11px; }
+    .row.narrow-c1 .lights-toggle,
+    .row.narrow-c2 .lights-toggle {
+      transform: scale(0.85);
+      transform-origin: right center;
+    }
+    .row.narrow-c1[data-preset='fill'],
+    .row.narrow-c1[data-preset='pill'],
+    .row.narrow-c2[data-preset='fill'],
+    .row.narrow-c2[data-preset='pill'] {
+      padding-right: calc(var(--stratum-room-row-padding, 14px) * 0.6);
     }
 
     /* ====== hover ====== */

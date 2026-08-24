@@ -922,6 +922,17 @@ export interface TileDisplayConfig {
    *   po prawej tylko liczniki i alarmy
    */
   status_layout?: 'two-line' | 'right';
+
+  /**
+   * Zachowanie wiersza na wąskich ekranach (progi: ≤360 px i ≤310 px
+   * szerokości wiersza, mierzone ResizeObserverem):
+   * - `fields` (default) — statusy zwijają się w chip „+N" wg priorytetu;
+   *   alarm i włącznik świateł nie znikają nigdy
+   * - `two-line` — automatyczne przejście w układ dwuliniowy
+   * - `compact` — wszystko proporcjonalnie mniejsze
+   * - `off` — bez reakcji
+   */
+  narrow_mode?: 'fields' | 'two-line' | 'compact' | 'off';
 }
 
 /** Dostępne presety kształtu wiersza pokoju. */
