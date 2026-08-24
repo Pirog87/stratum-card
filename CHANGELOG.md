@@ -4,6 +4,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.92.1] — 2026-08-24
+
+### Fixed
+- **Gradienty scen działają też u użytkowników bez uprawnień admina.**
+  Kolory sceny czytane były wyłącznie z `/api/config/scene/config/<id>`,
+  a ten endpoint HA udostępnia tylko adminom — u pozostałych kafle bez
+  grafiki zostawały „gołe". Nowy łańcuch fallbacków: config sceny
+  (admin) → bieżące kolory świateł należących do sceny (widoczne dla
+  każdego) → deterministyczny stonowany gradient z hasha sceny.
+  Bonus: gradienty dostają też sceny YAML (bez `id`).
+
 ## [1.92.0] — 2026-08-24
 
 ### Added (wiersz pomieszczenia — pozycjonowanie ikonki)

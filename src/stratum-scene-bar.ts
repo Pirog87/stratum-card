@@ -150,45 +150,97 @@ function buildGradient(
   return `${layers.join(', ')}, ${base}`;
 }
 
+/** HSL → "rgb(r, g, b)" (format zgodny z lightColorOf/tone). */
+function hslToRgbStr(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const to = (v: number): number => Math.round((v + m) * 255);
+  return `rgb(${to(r)}, ${to(g)}, ${to(b)})`;
+}
+
 async function fetchSceneColors(
   hass: HomeAssistant,
   entityId: string,
 ): Promise<SceneColors | null> {
   const state = hass.states?.[entityId];
-  // Tylko sceny edytowalne w UI mają `id` i config dostępny przez REST.
+  // Ścieżka 1: config sceny przez REST — najdokładniejsze (docelowe
+  // kolory sceny), ale tylko sceny edytowalne w UI (`id`) i tylko konto
+  // ADMINA (endpoint /api/config/* jest za bramką uprawnień).
   const sceneId = state?.attributes?.id as string | undefined;
-  if (!sceneId || !hass.fetchWithAuth) return null;
-  try {
-    const resp = await hass.fetchWithAuth(
-      `/api/config/scene/config/${sceneId}`,
-    );
-    if (!resp.ok) return null;
-    const cfg = (await resp.json()) as {
-      entities?: Record<string, unknown>;
-    };
+  if (sceneId && hass.fetchWithAuth) {
+    try {
+      const resp = await hass.fetchWithAuth(
+        `/api/config/scene/config/${sceneId}`,
+      );
+      if (resp.ok) {
+        const cfg = (await resp.json()) as {
+          entities?: Record<string, unknown>;
+        };
+        const colors: string[] = [];
+        let briSum = 0;
+        let briN = 0;
+        for (const [id, raw] of Object.entries(cfg.entities ?? {})) {
+          if (!id.startsWith('light.')) continue;
+          const attrs =
+            typeof raw === 'object' && raw !== null
+              ? (raw as Record<string, unknown>)
+              : { state: raw };
+          if (attrs.state === 'off') continue;
+          const color = lightColorOf({ state: 'on', attributes: attrs });
+          if (color && !colors.includes(color)) colors.push(color);
+          const b = attrs.brightness;
+          if (typeof b === 'number') {
+            briSum += Math.max(0, Math.min(255, b));
+            briN += 1;
+          }
+        }
+        if (colors.length > 0) {
+          return { colors, bri: briN > 0 ? briSum / briN / 255 : 1 };
+        }
+      }
+    } catch {
+      // 401/403 (nie-admin) albo sieć — lecimy do fallbacków niżej.
+    }
+  }
+  // Ścieżka 2 (nie-admin / scena YAML): bieżące kolory świateł należących
+  // do sceny — `attributes.entity_id` widzi każdy użytkownik. Przybliżenie
+  // (kolory „teraz", nie docelowe sceny), ale kafel żyje u wszystkich.
+  const members = state?.attributes?.entity_id;
+  if (Array.isArray(members)) {
     const colors: string[] = [];
     let briSum = 0;
     let briN = 0;
-    for (const [id, raw] of Object.entries(cfg.entities ?? {})) {
-      if (!id.startsWith('light.')) continue;
-      const attrs =
-        typeof raw === 'object' && raw !== null
-          ? (raw as Record<string, unknown>)
-          : { state: raw };
-      if (attrs.state === 'off') continue;
-      const color = lightColorOf({ state: 'on', attributes: attrs });
+    for (const id of members) {
+      if (typeof id !== 'string' || !id.startsWith('light.')) continue;
+      const color = lightColorOf(hass.states?.[id]);
       if (color && !colors.includes(color)) colors.push(color);
-      const b = attrs.brightness;
+      const b = hass.states?.[id]?.attributes?.brightness;
       if (typeof b === 'number') {
         briSum += Math.max(0, Math.min(255, b));
         briN += 1;
       }
     }
-    if (colors.length === 0) return null;
-    return { colors, bri: briN > 0 ? briSum / briN / 255 : 1 };
-  } catch {
-    return null;
+    if (colors.length > 0) {
+      return { colors, bri: briN > 0 ? briSum / briN / 255 : 1 };
+    }
   }
+  // Ścieżka 3: wszystko zgaszone / brak danych — deterministyczny,
+  // stonowany duet z hasha entity_id, żeby kafel nigdy nie był pusty.
+  const h = seedOf(entityId) % 360;
+  return {
+    colors: [hslToRgbStr(h, 0.5, 0.58), hslToRgbStr((h + 42) % 360, 0.45, 0.52)],
+    bri: 1,
+  };
 }
 
 @customElement('stratum-scene-bar')
