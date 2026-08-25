@@ -129,6 +129,9 @@ export class StratumCardRoomRow extends LitElement {
   @property({ type: Boolean, attribute: 'icon-tappable', reflect: true })
   public iconTappable = false;
 
+  /** Całe pomieszczenie niedostępne (wszystkie encje unavailable). */
+  @property({ type: Boolean }) public offline = false;
+
   /** Jasność (%) trzymana lokalnie podczas przeciągania — nadpisuje fill. */
   @state() private _dragPct?: number;
 
@@ -547,7 +550,7 @@ export class StratumCardRoomRow extends LitElement {
           ? 'lights-on'
           : ''} ${this.motion ? 'motion-on' : ''} ${alarmed ? 'alerted' : ''} ${rowAnim
           ? `anim-${rowAnim}`
-          : ''} ${narrowClass}"
+          : ''} ${narrowClass} ${this.offline ? 'offline' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -598,6 +601,9 @@ export class StratumCardRoomRow extends LitElement {
           ? html`<span class="name">${this.name}</span>`
           : html`<span class="name-spacer"></span>`}
         <div class="info">
+          ${this.offline
+            ? html`<span class="off-pill">offline</span>`
+            : nothing}
           ${alarmed && this.alarmsCount > 0 && !narrowTwo
             ? this._renderAlarmBadge()
             : nothing}
@@ -1104,6 +1110,46 @@ export class StratumCardRoomRow extends LitElement {
     .row.narrow-c2[data-preset='fill'],
     .row.narrow-c2[data-preset='pill'] {
       padding-right: calc(var(--stratum-room-row-padding, 14px) * 0.6);
+    }
+
+    /* ====== Pomieszczenie offline (wszystkie encje unavailable) ====== */
+    .row.offline {
+      opacity: 0.55;
+    }
+    .row.offline .iconwrap {
+      position: relative;
+    }
+    .row.offline .iconwrap::after {
+      content: "";
+      position: absolute;
+      left: 24%;
+      right: 24%;
+      top: 50%;
+      height: 2px;
+      border-radius: 1px;
+      background: rgba(160, 163, 170, 0.85);
+      transform: rotate(-40deg);
+    }
+    .row.offline .info > *:not(.off-pill) {
+      display: none;
+    }
+    .off-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 650;
+      color: var(--secondary-text-color);
+      background: rgba(128, 132, 140, 0.18);
+      border-radius: 999px;
+      padding: 3px 10px;
+    }
+    .off-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(128, 132, 140, 0.9);
     }
 
     /* ====== hover ====== */

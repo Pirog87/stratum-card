@@ -147,6 +147,18 @@ export interface StratumCardConfig {
    */
   scenes?: SceneBarConfig;
 
+  /**
+   * Szary chip „N niedostępnych" w nagłówku (klik = lista urządzeń
+   * unavailable). Default true; chip i tak widoczny tylko gdy N > 0.
+   */
+  unavailable_chip?: boolean;
+
+  /**
+   * Migoczące placeholdery zamiast pustki, zanim HA dośle stany
+   * (start aplikacji / wolny WebSocket). Default true.
+   */
+  skeleton?: boolean;
+
   /** Belka nagłówka popupu pomieszczenia — globalnie dla wszystkich pokoi. */
   popup_header?: PopupHeaderConfig;
 }

@@ -4,6 +4,23 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.101.0] — 2026-08-25
+
+### Added (szlify UX — pkt 1 + 2 z makiety)
+- **Niedostępne urządzenia widoczne, nie mylące**:
+  - szary chip „📡 N" w nagłówku karty (klik = lista urządzeń
+    unavailable z czasem od zniknięcia; wyłączanie
+    `unavailable_chip: false`),
+  - wiersz/kafel pomieszczenia, którego WSZYSTKIE encje są unavailable
+    (padły hub), jest przygaszony z przekreśloną ikoną i plakietką
+    „offline" zamiast statusów,
+  - w popupie encja unavailable renderuje się jako przygaszony kafel
+    z plakietką „offline" (klik = more-info) zamiast martwych kontrolek.
+- **Skeleton ładowania**: zanim HA dośle stany (start aplikacji /
+  wolny WebSocket) karta pokazuje migoczące placeholdery o docelowych
+  wymiarach zamiast pustki — zero przeskoków layoutu. Respektuje
+  `prefers-reduced-motion`. Wyłączanie: `skeleton: false`.
+
 ## [1.100.0] — 2026-08-25
 
 ### Added (media plus — pkt 3: źródło i tryb dźwięku)

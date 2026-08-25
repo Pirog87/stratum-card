@@ -389,6 +389,12 @@ export class StratumRoomTile extends LitElement {
     const domain = domainOf(this.entity);
     this.setAttribute('data-domain', domain);
 
+    // Encja niedostępna — jednolity przygaszony kafel z plakietką offline
+    // zamiast martwych kontrolek. Klik = more-info (diagnoza).
+    if (state.state === 'unavailable' && !this.mode.startsWith('custom:')) {
+      return this._renderUnavailable(state);
+    }
+
     // Custom card mode — dowolna karta HACS jako tile.
     if (this.mode.startsWith('custom:')) return this._renderCustomCardMode();
 
@@ -1217,6 +1223,21 @@ export class StratumRoomTile extends LitElement {
             : nothing}
         </div>
       </div>
+    `;
+  }
+
+  private _renderUnavailable(state: HassEntity): TemplateResult {
+    return html`
+      <button class="tile unav" part="tile" @click=${this._openMoreInfo}>
+        <span class="unav-icon">
+          <ha-icon
+            .icon=${(state.attributes?.icon as string | undefined) ??
+            'mdi:help-circle-outline'}
+          ></ha-icon>
+        </span>
+        <span class="tile-name">${this._displayName(state)}</span>
+        <span class="off-pill">offline</span>
+      </button>
     `;
   }
 
@@ -2224,7 +2245,59 @@ export class StratumRoomTile extends LitElement {
       border-color: var(--stratum-tile-chip-accent, #4caf50);
       color: var(--stratum-tile-chip-accent, #4caf50);
     }
-  `;
+  
+    /* ====== Encja niedostępna ====== */
+    .tile.unav {
+      opacity: 0.6;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .tile.unav .unav-icon {
+      position: relative;
+      display: inline-flex;
+      color: var(--secondary-text-color);
+    }
+    .tile.unav .unav-icon::after {
+      content: "";
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 50%;
+      height: 2px;
+      border-radius: 1px;
+      background: rgba(160, 163, 170, 0.85);
+      transform: rotate(-40deg);
+    }
+    .tile.unav .tile-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+    }
+    .off-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10.5px;
+      font-weight: 650;
+      color: var(--secondary-text-color);
+      background: rgba(128, 132, 140, 0.18);
+      border-radius: 999px;
+      padding: 2px 9px;
+      flex-shrink: 0;
+    }
+    .off-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(128, 132, 140, 0.9);
+    }
+`;
 }
 
 declare global {
