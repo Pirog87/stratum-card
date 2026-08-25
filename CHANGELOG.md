@@ -4,6 +4,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.98.0] — 2026-08-25
+
+### Added (media plus — pkt 1: skróty/ulubione)
+- **Chipy-skróty pod playerem** (`shortcuts` w configu sekcji media):
+  klik gra `media_id` (URL radia, spotify URI, media-source://…) na
+  aktualnie wybranym głośniku z zakładek, albo odpala dowolną akcję HA
+  (`tap_action` — np. skrypt; wygrywa nad media_id). Pola: `name`,
+  `icon` (default mdi:playlist-play), `media_id`, `media_type`
+  (default music), `tap_action`. Działa też w układzie `featured`
+  i przy jawnej liście `media_list`.
+
 ## [1.97.1] — 2026-08-25
 
 ### Fixed (krótkofalówka)

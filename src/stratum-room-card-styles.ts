@@ -603,4 +603,37 @@ export const roomCardStyles = css`
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  /* ====== Sekcja media — skróty/ulubione ====== */
+  .media-shortcuts {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .media-sc {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: none;
+    cursor: pointer;
+    border-radius: 999px;
+    padding: 7px 13px;
+    font: inherit;
+    font-size: 12.5px;
+    background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+    color: var(--primary-text-color);
+    transition: background 0.15s ease;
+  }
+  .media-sc:hover {
+    background: color-mix(
+      in srgb,
+      var(--stratum-card-accent, var(--primary-color, #ff9b42)) 20%,
+      transparent
+    );
+  }
+  .media-sc ha-icon {
+    --mdc-icon-size: 16px;
+    color: var(--stratum-card-accent, var(--primary-color, #ff9b42));
+  }
 `;
