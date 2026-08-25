@@ -739,4 +739,47 @@ export const roomCardStyles = css`
     margin-top: 4px;
     padding-top: 10px;
   }
+
+  /* ====== Sekcja media — panel źródła / trybu dźwięku ====== */
+  .media-group-btn .ms-cur {
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--stratum-card-accent, var(--primary-color, #ff9b42));
+    font-weight: 600;
+  }
+  .ms-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    border: none;
+    cursor: pointer;
+    border-radius: 9px;
+    padding: 9px 10px;
+    font: inherit;
+    font-size: 13px;
+    background: none;
+    color: var(--secondary-text-color);
+    text-align: left;
+  }
+  .ms-row.on {
+    background: var(--secondary-background-color, rgba(255, 255, 255, 0.07));
+    color: var(--primary-text-color);
+    font-weight: 600;
+  }
+  .ms-row ha-icon {
+    --mdc-icon-size: 16px;
+    color: var(--stratum-card-accent, var(--primary-color, #ff9b42));
+  }
+  .ms-sub {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--secondary-text-color);
+    padding: 10px 10px 4px;
+    border-top: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
+    margin-top: 6px;
+  }
 `;
