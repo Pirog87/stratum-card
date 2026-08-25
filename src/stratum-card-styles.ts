@@ -309,4 +309,81 @@ export const cardStyles = css`
         animation: none;
       }
     }
-  `;
+  
+  /* ====== Chip niedostepnych urzadzen w naglowku ====== */
+  .header-unav-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1.5px solid
+      color-mix(in srgb, var(--stratum-chip-unavailable-color, #9e9e9e) 55%, transparent);
+    background: color-mix(in srgb, var(--stratum-chip-unavailable-color, #9e9e9e) 14%, transparent);
+    color: var(--stratum-chip-unavailable-color, #9e9e9e);
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .header-unav-badge ha-icon {
+    --mdc-icon-size: 14px;
+  }
+
+  /* ====== Skeleton ladowania ====== */
+  .sk-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+  }
+  .sk-body {
+    padding: 0 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .sk-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--stratum-room-row-bg, rgba(255, 255, 255, 0.035));
+    border-radius: 999px;
+    min-height: var(--stratum-room-row-min-height, 72px);
+    padding: 0 16px 0 8px;
+  }
+  .sk-circle {
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .sk-bar {
+    height: 13px;
+    border-radius: 7px;
+  }
+  .sk-anim {
+    position: relative;
+    overflow: hidden;
+    background: rgba(128, 132, 140, 0.14);
+  }
+  .sk-anim::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.09) 50%,
+      transparent 70%
+    );
+    animation: stratum-shimmer 1.4s infinite;
+  }
+  @keyframes stratum-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sk-anim::after { animation: none; }
+  }
+`;

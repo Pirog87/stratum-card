@@ -27,6 +27,9 @@ export class StratumCardRoomTile extends LitElement {
 
   @property({ type: Boolean, reflect: true }) public clickable = false;
 
+  /** Całe pomieszczenie niedostępne (wszystkie encje unavailable). */
+  @property({ type: Boolean }) public offline = false;
+
   /** Wilgotność (sformatowana, np. "54.2 %"). */
   @property({ type: String }) public humidity?: string;
 
@@ -160,7 +163,7 @@ export class StratumCardRoomTile extends LitElement {
 
     return html`
       <div
-        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''} ${tileAnim ? `anim-${tileAnim}` : ''}"
+        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''} ${tileAnim ? `anim-${tileAnim}` : ''} ${this.offline ? 'offline' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -184,6 +187,7 @@ export class StratumCardRoomTile extends LitElement {
             ></ha-icon>`
           : nothing}
         ${showName ? html`<div class="name">${this.name}</div>` : nothing}
+        ${this.offline ? html`<span class="off-pill">offline</span>` : nothing}
         <div class="info">${this._renderFields(fields)}</div>
       </div>
     `;
@@ -660,7 +664,45 @@ export class StratumCardRoomTile extends LitElement {
       :host([clickable]) .tile:hover,
       :host([clickable]) .tile:active { transform: none; }
     }
-  `;
+  
+    /* ====== Pomieszczenie offline ====== */
+    .tile.offline {
+      opacity: 0.55;
+    }
+    .tile.offline .icon-slot {
+      position: relative;
+    }
+    .tile.offline .icon-slot::after {
+      content: "";
+      position: absolute;
+      left: 22%;
+      right: 22%;
+      top: 50%;
+      height: 2px;
+      border-radius: 1px;
+      background: rgba(160, 163, 170, 0.85);
+      transform: rotate(-40deg);
+    }
+    .off-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10.5px;
+      font-weight: 650;
+      color: var(--secondary-text-color);
+      background: rgba(128, 132, 140, 0.18);
+      border-radius: 999px;
+      padding: 2px 9px;
+      width: fit-content;
+    }
+    .off-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(128, 132, 140, 0.9);
+    }
+`;
 }
 
 declare global {

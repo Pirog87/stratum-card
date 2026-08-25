@@ -16,6 +16,7 @@ import {
   getEntitiesInFloor,
   filterByDomain,
   filterBinarySensorDeviceClass,
+  unavailableEntityIds,
 } from './area-entities.js';
 import {
   computeTileData,
@@ -49,7 +50,7 @@ import './stratum-scene-bar.js';
 import { cardStyles } from './stratum-card-styles.js';
 import { fieldColorStyle } from './field-colors.js';
 
-const VERSION = '1.100.0';
+const VERSION = '1.101.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -86,6 +87,8 @@ export class StratumCard extends LitElement {
     color: string;
     /** Tryb „Aktywne alarmy" — scope po areas zamiast typu chipa. */
     alarmAreaIds?: string[];
+    /** Tryb listy urzadzen niedostepnych - scope po areas. */
+    unavailableAreaIds?: string[];
   };
 
   /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
@@ -525,8 +528,45 @@ export class StratumCard extends LitElement {
     console.groupEnd();
   }
 
+  private _renderSkeleton(): TemplateResult {
+    const rows = Math.min(this._config?.rooms?.length ?? 3, 6);
+    return html`<ha-card part="card">
+      <div class="sk-header">
+        <span class="sk-circle sk-anim"></span>
+        <span class="sk-bar sk-anim" style="width: 34%"></span>
+        <span class="sk-bar sk-anim" style="width: 52px; margin-left: auto"></span>
+      </div>
+      ${this._config?.expanded
+        ? html`<div class="sk-body">
+            ${Array.from(
+              { length: rows },
+              () => html`<div class="sk-row">
+                <span class="sk-circle sk-anim"></span>
+                <span class="sk-bar sk-anim" style="width: 42%"></span>
+                <span
+                  class="sk-bar sk-anim"
+                  style="width: 44px; margin-left: auto"
+                ></span>
+              </div>`,
+            )}
+          </div>`
+        : nothing}
+    </ha-card>`;
+  }
+
   protected render(): TemplateResult | typeof nothing {
     if (!this._config) return nothing;
+
+    // Skeleton: HA jeszcze nie doslal stanow (start aplikacji / wolny
+    // WebSocket) - migoczace placeholdery zamiast pustki i przeskokow.
+    if (
+      this._config.skeleton !== false &&
+      (!this.hass ||
+        !this.hass.states ||
+        Object.keys(this.hass.states).length === 0)
+    ) {
+      return this._renderSkeleton();
+    }
 
     const name = this._resolveName();
     const icon = this._resolveIcon();
@@ -574,6 +614,7 @@ export class StratumCard extends LitElement {
           <span class="title" part="title">${name}</span>
           <div class="chips" part="chips">
             ${this._renderHeaderAlarmBadge()}
+            ${this._renderHeaderUnavailableChip()}
             ${this._renderChips()}
           </div>
           ${header.hide_expander
@@ -708,12 +749,72 @@ export class StratumCard extends LitElement {
     return alarmEntityIds(this.hass, entries);
   }
 
+  private _openUnavailableList(areaIds: string[]): void {
+    this._popupChip = {
+      chip: { type: 'filter' } as import('./types.js').ChipConfig,
+      entityIds: [],
+      label: 'Urządzenia niedostępne',
+      icon: 'mdi:lan-disconnect',
+      color: 'var(--stratum-chip-unavailable-color, #9e9e9e)',
+      unavailableAreaIds: areaIds,
+    };
+    this._pushBackGuard();
+  }
+
+  private _unavailableScopeIds(areaIds: string[]): string[] {
+    if (!this.hass) return [];
+    const seen = new Set<string>();
+    const entries: HassEntityRegistryEntry[] = [];
+    for (const id of areaIds) {
+      for (const e of getEntitiesInArea(this.hass, id)) {
+        if (seen.has(e.entity_id)) continue;
+        seen.add(e.entity_id);
+        entries.push(e);
+      }
+    }
+    return unavailableEntityIds(this.hass, entries);
+  }
+
+  /** Szary chip liczby niedostepnych obok badge alarmu - klik otwiera liste. */
+  private _renderHeaderUnavailableChip(): TemplateResult | typeof nothing {
+    if (!this.hass || this._config?.unavailable_chip === false) return nothing;
+    const ids = unavailableEntityIds(this.hass, this._getEntries());
+    if (ids.length === 0) return nothing;
+    const areaIds = this._config?.floor_id
+      ? getAreasInFloor(this.hass, this._config.floor_id).map((a) => a.area_id)
+      : this._config?.area_id
+      ? [this._config.area_id]
+      : [];
+    return html`<span
+      class="header-unav-badge"
+      role="button"
+      tabindex="0"
+      title="Pokaż niedostępne urządzenia"
+      @click=${(ev: Event) => {
+        ev.stopPropagation();
+        this._openUnavailableList(areaIds);
+      }}
+      @keydown=${(ev: KeyboardEvent) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._openUnavailableList(areaIds);
+        }
+      }}
+    >
+      <ha-icon .icon=${'mdi:lan-disconnect'}></ha-icon>
+      ${ids.length}
+    </span>`;
+  }
+
   private _renderChipListPopup(): TemplateResult {
     if (!this._popupChip) return html``;
     // Re-resolve entity IDs na każdy render — lista się aktualizuje live
     // gdy hass emituje nowe stany podczas otwartego popupu.
     const freshIds = this._popupChip.alarmAreaIds
       ? this._alarmScopeIds(this._popupChip.alarmAreaIds)
+      : this._popupChip.unavailableAreaIds
+      ? this._unavailableScopeIds(this._popupChip.unavailableAreaIds)
       : this._getChipEntityIds(this._popupChip.chip);
     return html`<stratum-chip-list
       .hass=${this.hass}
@@ -899,6 +1000,14 @@ export class StratumCard extends LitElement {
 
     // Jedno wyliczenie dla obu form (row/tile). Override per-pole przez
     // fieldEntities; bez override → auto-discovery z encji area.
+    // Pomieszczenie offline = wszystkie jego encje unavailable (padly hub).
+    const roomOffline =
+      entries.length > 0 &&
+      entries.every((e) => {
+        const st = this.hass!.states?.[e.entity_id]?.state;
+        return !st || st === 'unavailable';
+      });
+
     const data = computeTileData(this.hass!, entries, fieldEntities);
     const rowConfig = this._resolveRowConfig();
     const tileConfig = this._resolveTileConfig();
@@ -967,6 +1076,7 @@ export class StratumCard extends LitElement {
         .lightsBrightness=${data.lightsBrightness}
         .styleOverride=${tileStyleOverride}
         .clickable=${clickable}
+        .offline=${roomOffline}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
           this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
       ></stratum-card-room-tile>`;
@@ -995,6 +1105,7 @@ export class StratumCard extends LitElement {
         .length > 0}
       .lightsSwitch=${rowConfig?.lights_switch === true}
       .alarmsCount=${alarmEntityIds(this.hass!, entries).length}
+      .offline=${roomOffline}
       @row-alarms=${() => this._openAlarmList(areaIds)}
       .lightsGlowOn=${rowConfig?.lights_switch_glow_on ?? 100}
       .lightsGlowOff=${rowConfig?.lights_switch_glow_off ?? 30}

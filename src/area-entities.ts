@@ -157,3 +157,32 @@ export function excludeLightGroups(
 ): HassEntityRegistryEntry[] {
   return entries.filter((e) => !isLightGroupEntity(hass, e.entity_id));
 }
+
+/**
+ * Encje NIEDOSTĘPNE (stan `unavailable`) w podanym zbiorze — z tym samym
+ * filtrem rejestru co filterDisplayable (bez ukrytych/wyłączonych i
+ * kategorii config/diagnostic), ale wybiera właśnie te, które
+ * filterDisplayable odrzuca stanem.
+ */
+export function unavailableEntityIds(
+  hass: HomeAssistant,
+  entries: HassEntityRegistryEntry[],
+): string[] {
+  return entries
+    .filter((e) => {
+      const frontend = hass.entities?.[e.entity_id] as
+        | (HassEntityRegistryEntry & {
+            hidden?: boolean;
+            entity_category?: string | null;
+          })
+        | undefined;
+      const reg = { ...e, ...(frontend ?? {}) } as HassEntityRegistryEntry & {
+        hidden?: boolean;
+        entity_category?: string | null;
+      };
+      if (reg.hidden === true || reg.hidden_by || reg.disabled_by) return false;
+      if (reg.entity_category) return false;
+      return hass.states?.[e.entity_id]?.state === 'unavailable';
+    })
+    .map((e) => e.entity_id);
+}
