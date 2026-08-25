@@ -18,6 +18,7 @@ import { runTapAction } from './tap-action.js';
 import { buildDefaultCustomConfig } from './custom-cards.js';
 import { lightColorOf } from './tile-data.js';
 import { appBrandGradient } from './media-brands.js';
+import { encodeWav } from './audio-wav.js';
 
 function domainOf(entityId: string): string {
   return entityId.split('.')[0] ?? '';
@@ -82,6 +83,35 @@ export class StratumRoomTile extends LitElement {
    * (mikrofon działa tylko po HTTPS), przeglądarka umie nagrywać,
    * a user jest adminem (upload do /media to endpoint admin-only).
    */
+  /** Dekoduje nagranie i przepisuje do WAV 24 kHz mono. null = nie wyszło. */
+  private async _toWav(blob: Blob): Promise<Blob | null> {
+    try {
+      const raw = await blob.arrayBuffer();
+      const Ctx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!Ctx) return null;
+      const ctx = new Ctx();
+      const decoded = await ctx.decodeAudioData(raw);
+      void ctx.close();
+      const rate = 24000;
+      const frames = Math.ceil(decoded.duration * rate);
+      if (frames <= 0) return null;
+      const off = new OfflineAudioContext(1, frames, rate);
+      const src = off.createBufferSource();
+      src.buffer = decoded;
+      src.connect(off.destination);
+      src.start();
+      const rendered = await off.startRendering();
+      return new Blob([encodeWav(rendered.getChannelData(0), rate)], {
+        type: 'audio/wav',
+      });
+    } catch {
+      return null;
+    }
+  }
+
   private get _canIntercom(): boolean {
     if (this.intercom === false) return false;
     if (typeof MediaRecorder === 'undefined') return false;
@@ -159,7 +189,12 @@ export class StratumRoomTile extends LitElement {
       return;
     }
     this._rec = 'sending';
-    const ext = mime.includes('mp4') ? 'm4a' : 'webm';
+    // Przekodowanie do WAV — Cast/TV często nie dekodują WebM/Opus
+    // (przyjmują plik i „grają" ciszę). WAV PCM gra wszędzie.
+    const wav = await this._toWav(blob);
+    const upBlob = wav ?? blob;
+    const ext = wav ? 'wav' : mime.includes('mp4') ? 'm4a' : 'webm';
+    const upMime = wav ? 'audio/wav' : mime;
     const fname = `stratum-intercom.${ext}`;
     const contentId = `media-source://media_source/local/${fname}`;
     try {
@@ -172,7 +207,7 @@ export class StratumRoomTile extends LitElement {
         .catch(() => undefined);
       const form = new FormData();
       form.append('media_content_id', 'media-source://media_source/local/.');
-      form.append('file', new File([blob], fname, { type: mime }));
+      form.append('file', new File([upBlob], fname, { type: upMime }));
       const resp = await this.hass!.fetchWithAuth!(
         '/api/media_source/local_source/upload',
         { method: 'POST', body: form },
