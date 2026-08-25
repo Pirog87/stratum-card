@@ -60,6 +60,137 @@ export class StratumRoomTile extends LitElement {
   /** Player: krok przycisków ± głośności w % (config sekcji). Default 2. */
   @property({ attribute: false }) public volumeStep?: number;
 
+  /** Player: krótkofalówka 🎙 (config sekcji `intercom`). Default true. */
+  @property({ attribute: false }) public intercom?: boolean;
+
+  /** Stan krótkofalówki: nagrywanie / wysyłka (undefined = spoczynek). */
+  @state() private _rec?: 'recording' | 'sending';
+
+  private _recorder?: MediaRecorder;
+
+  private _recChunks: Blob[] = [];
+
+  private _recStream?: MediaStream;
+
+  private _recMaxTimer?: number;
+
+  /** Czy palec nadal trzyma przycisk — getUserMedia jest async. */
+  private _recWanted = false;
+
+  /**
+   * Krótkofalówka dostępna: config nie wyłącza, kontekst bezpieczny
+   * (mikrofon działa tylko po HTTPS), przeglądarka umie nagrywać,
+   * a user jest adminem (upload do /media to endpoint admin-only).
+   */
+  private get _canIntercom(): boolean {
+    if (this.intercom === false) return false;
+    if (typeof MediaRecorder === 'undefined') return false;
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      return false;
+    }
+    if (this.hass?.user?.is_admin === false) return false;
+    return Boolean(this.hass?.fetchWithAuth);
+  }
+
+  private async _intercomStart(ev: PointerEvent): Promise<void> {
+    ev.stopPropagation();
+    ev.preventDefault();
+    (ev.target as HTMLElement).setPointerCapture?.(ev.pointerId);
+    if (this._rec) return;
+    this._recWanted = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!this._recWanted) {
+        // Palec puszczony zanim przeglądarka dała mikrofon.
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : '';
+      const rec = new MediaRecorder(
+        stream,
+        mime ? { mimeType: mime } : undefined,
+      );
+      this._recChunks = [];
+      rec.ondataavailable = (e: BlobEvent): void => {
+        if (e.data.size > 0) this._recChunks.push(e.data);
+      };
+      rec.onstop = (): void => {
+        void this._intercomSend();
+      };
+      rec.start();
+      this._recorder = rec;
+      this._recStream = stream;
+      this._rec = 'recording';
+      // Bezpiecznik: max 30 s nagrania.
+      this._recMaxTimer = window.setTimeout(() => this._intercomStop(), 30000);
+    } catch {
+      // Brak zgody na mikrofon — nic nie robimy.
+      this._recWanted = false;
+      this._rec = undefined;
+    }
+  }
+
+  private _intercomStop = (ev?: Event): void => {
+    ev?.stopPropagation();
+    this._recWanted = false;
+    if (this._recMaxTimer !== undefined) {
+      window.clearTimeout(this._recMaxTimer);
+      this._recMaxTimer = undefined;
+    }
+    if (this._recorder && this._recorder.state === 'recording') {
+      this._recorder.stop(); // onstop → _intercomSend
+    }
+  };
+
+  private async _intercomSend(): Promise<void> {
+    const mime = this._recorder?.mimeType || 'audio/webm';
+    this._recorder = undefined;
+    this._recStream?.getTracks().forEach((t) => t.stop());
+    this._recStream = undefined;
+    const blob = new Blob(this._recChunks, { type: mime });
+    this._recChunks = [];
+    // Muśnięcie przycisku (<0,3 s) — nie wysyłamy szumu.
+    if (blob.size < 2000) {
+      this._rec = undefined;
+      return;
+    }
+    this._rec = 'sending';
+    const ext = mime.includes('mp4') ? 'm4a' : 'webm';
+    const fname = `stratum-intercom.${ext}`;
+    const contentId = `media-source://media_source/local/${fname}`;
+    try {
+      // Poprzednie nagranie precz — inaczej upload dostaje sufiks _2, _3…
+      await this.hass
+        ?.callWS?.({
+          type: 'media_source/local_source/remove',
+          media_content_id: contentId,
+        })
+        .catch(() => undefined);
+      const form = new FormData();
+      form.append('media_content_id', 'media-source://media_source/local/.');
+      form.append('file', new File([blob], fname, { type: mime }));
+      const resp = await this.hass!.fetchWithAuth!(
+        '/api/media_source/local_source/upload',
+        { method: 'POST', body: form },
+      );
+      if (!resp.ok) throw new Error(String(resp.status));
+      const data = (await resp.json()) as { media_content_id?: string };
+      await this.hass!.callService('media_player', 'play_media', {
+        entity_id: this.entity,
+        media_content_id: data.media_content_id ?? contentId,
+        media_content_type: 'music',
+        announce: true,
+      });
+    } catch {
+      // 401/403 (nie-admin), brak media_dirs albo sieć — po prostu cicho.
+    }
+    this._rec = undefined;
+  }
+
   /** Wykonuje override akcji kliknięcia. true = obsłużone. */
   private _customTap(ev: Event): boolean {
     if (!this.tapAction) return false;
@@ -96,6 +227,20 @@ export class StratumRoomTile extends LitElement {
       window.clearTimeout(this._volClearTimer);
       this._volClearTimer = undefined;
     }
+    // Krótkofalówka: zwolnij mikrofon, gdy kafel wypada z DOM.
+    this._recWanted = false;
+    if (this._recMaxTimer !== undefined) {
+      window.clearTimeout(this._recMaxTimer);
+      this._recMaxTimer = undefined;
+    }
+    if (this._recorder && this._recorder.state === 'recording') {
+      this._recorder.onstop = null;
+      this._recorder.stop();
+    }
+    this._recorder = undefined;
+    this._recStream?.getTracks().forEach((t) => t.stop());
+    this._recStream = undefined;
+    this._rec = undefined;
     super.disconnectedCallback();
   }
 
@@ -1013,6 +1158,28 @@ export class StratumRoomTile extends LitElement {
                 </button>
               `
             : nothing}
+          ${this._canIntercom
+            ? html`<button
+                class="player-btn vol-btn mic ${this._rec === 'recording'
+                  ? 'rec'
+                  : this._rec === 'sending'
+                  ? 'sending'
+                  : ''}"
+                title="Przytrzymaj i mów — nagranie poleci na ten głośnik"
+                @pointerdown=${(ev: PointerEvent) => this._intercomStart(ev)}
+                @pointerup=${this._intercomStop}
+                @pointercancel=${this._intercomStop}
+                @contextmenu=${(ev: Event) => ev.preventDefault()}
+              >
+                <ha-icon
+                  .icon=${this._rec === 'sending'
+                    ? 'mdi:send'
+                    : this._rec === 'recording'
+                    ? 'mdi:microphone'
+                    : 'mdi:microphone-outline'}
+                ></ha-icon>
+              </button>`
+            : nothing}
         </div>
       </div>
     `;
@@ -1683,6 +1850,25 @@ export class StratumRoomTile extends LitElement {
 
     .player-btn.vol-btn.mute.muted {
       background: color-mix(in srgb, #f44336 35%, transparent);
+    }
+
+    .player-btn.vol-btn.mic {
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .player-btn.vol-btn.mic.rec {
+      background: #e53935;
+      color: #fff;
+      animation: stratum-mic-pulse 1.1s ease-in-out infinite;
+    }
+    .player-btn.vol-btn.mic.sending {
+      background: color-mix(in srgb, var(--primary-color, #ff9b42) 60%, transparent);
+      color: #fff;
+    }
+    @keyframes stratum-mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.55); }
+      50% { box-shadow: 0 0 0 7px rgba(229, 57, 53, 0); }
     }
 
     .player-tag {

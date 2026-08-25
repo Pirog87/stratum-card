@@ -4,6 +4,22 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.97.0] — 2026-08-24
+
+### Added (krótkofalówka 🎙)
+- **Przycisk mikrofonu w playerze**: przytrzymaj — mówisz, puść —
+  nagranie Twojego głosu leci na TEN głośnik przez `play_media` z
+  `announce: true` (muzyka się przycisza i wraca). Czerwone pulsowanie
+  = nagrywanie, ikona ➤ = wysyłka. Limit 30 s, muśnięcia (<0,3 s)
+  ignorowane.
+- Mechanika: MediaRecorder → upload do `/media`
+  (`/api/media_source/local_source/upload`, plik nadpisywany per
+  nagranie) → `media-source://` w play_media.
+- Przycisk pokazuje się tylko, gdy wszystko może zadziałać: HTTPS
+  (mikrofon), konto ADMINA (upload), oraz wsparcie MediaRecorder.
+  U nie-adminów i po http przycisk po prostu nie istnieje.
+  Wyłączenie: `intercom: false` w configu sekcji media.
+
 ## [1.96.0] — 2026-08-24
 
 ### Added (media plus — pkt 4 + 6 z makiety)

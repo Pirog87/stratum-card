@@ -1195,6 +1195,7 @@ export class StratumRoomCard extends LitElement {
           .entity=${featured.entity!}
           .mode=${'player'}
           .volumeStep=${section.volume_step}
+          .intercom=${section.intercom}
           .nameOverride=${featured.name}
           .tapAction=${featured.tap_action}
         ></stratum-room-tile>
@@ -1389,6 +1390,7 @@ export class StratumRoomCard extends LitElement {
             .entity=${selected}
             .mode=${'player'}
           .volumeStep=${section.volume_step}
+          .intercom=${section.intercom}
           ></stratum-room-tile>
         </div>
       `;
@@ -1414,6 +1416,7 @@ export class StratumRoomCard extends LitElement {
           .entity=${featured.entity_id}
           .mode=${'player'}
           .volumeStep=${section.volume_step}
+          .intercom=${section.intercom}
         ></stratum-room-tile>
         ${rest.length > 0
           ? html`
