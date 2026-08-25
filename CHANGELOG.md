@@ -4,6 +4,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.99.0] — 2026-08-25
+
+### Added (media plus — pkt 2: grupowanie głośników)
+- **Przycisk „Grupuj" pod playerem** (tylko gdy wybrany odtwarzacz
+  wspiera multiroom — bit GROUPING): panel z listą głośników,
+  checkbox dołącza/odłącza (`media_player.join`/`unjoin`),
+  **suwak głośności per głośnik** i **master „Razem"** skalujący
+  wszystkie proporcjonalnie. Licznik członków grupy na przycisku.
+  Wyłączenie: `group_button: false` w configu sekcji media.
+
 ## [1.98.0] — 2026-08-25
 
 ### Added (media plus — pkt 1: skróty/ulubione)

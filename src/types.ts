@@ -494,6 +494,14 @@ export interface RoomSectionConfig {
    */
   hide_when_off?: boolean;
   /**
+   * Tylko `media`: przycisk „Grupuj" pod playerem — multiroom przez
+   * media_player.join/unjoin, z suwakami głośności per głośnik i
+   * masterem proporcjonalnym. Default true; przycisk i tak pokazuje
+   * się wyłącznie, gdy wybrany odtwarzacz wspiera grupowanie
+   * (supported_features GROUPING).
+   */
+  group_button?: boolean;
+  /**
    * Tylko `media`: skróty/ulubione — chipy pod playerem. Klik gra
    * `media_id` na aktualnie wybranym głośniku (zakładki) albo odpala
    * `tap_action` (skrypt itd.) — tap_action wygrywa nad media_id.

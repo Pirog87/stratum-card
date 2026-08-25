@@ -636,4 +636,107 @@ export const roomCardStyles = css`
     --mdc-icon-size: 16px;
     color: var(--stratum-card-accent, var(--primary-color, #ff9b42));
   }
+
+  /* ====== Sekcja media — grupowanie głośników ====== */
+  .media-group-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 10px;
+    border: none;
+    cursor: pointer;
+    border-radius: 12px;
+    padding: 9px 13px;
+    font: inherit;
+    font-size: 12.5px;
+    background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
+    color: var(--secondary-text-color);
+  }
+  .media-group-btn.on {
+    color: var(--primary-text-color);
+  }
+  .media-group-btn ha-icon {
+    --mdc-icon-size: 17px;
+  }
+  .media-group-btn .mg-count {
+    background: color-mix(
+      in srgb,
+      var(--stratum-card-accent, var(--primary-color, #ff9b42)) 25%,
+      transparent
+    );
+    color: var(--primary-text-color);
+    border-radius: 999px;
+    padding: 0 8px;
+    font-size: 11.5px;
+    font-weight: 650;
+  }
+  .media-group-btn .mg-chev {
+    margin-left: auto;
+  }
+  .media-group {
+    background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin-top: 6px;
+  }
+  .mg-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 13px;
+  }
+  .mg-cb {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 2px solid var(--divider-color, rgba(255, 255, 255, 0.25));
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: #191a1d;
+  }
+  .mg-cb.on {
+    background: var(--stratum-card-accent, var(--primary-color, #ff9b42));
+    border-color: var(--stratum-card-accent, var(--primary-color, #ff9b42));
+  }
+  .mg-cb[disabled] {
+    opacity: 0.65;
+    cursor: default;
+  }
+  .mg-cb ha-icon {
+    --mdc-icon-size: 15px;
+  }
+  .mg-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--primary-text-color);
+  }
+  .mg-name.dim {
+    color: var(--secondary-text-color);
+  }
+  .mg-vol {
+    width: 110px;
+    accent-color: var(--stratum-card-accent, var(--primary-color, #ff9b42));
+  }
+  .mg-pc {
+    width: 38px;
+    text-align: right;
+    font-size: 11.5px;
+    color: var(--secondary-text-color);
+    font-variant-numeric: tabular-nums;
+  }
+  .mg-master {
+    border-top: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
+    margin-top: 4px;
+    padding-top: 10px;
+  }
 `;
