@@ -502,6 +502,13 @@ export interface RoomSectionConfig {
    */
   group_button?: boolean;
   /**
+   * Tylko `media`: przycisk „Źródło" pod playerem — wybór wejścia
+   * (source_list: HDMI/aplikacje TV) i trybu dźwięku (sound_mode_list
+   * soundbara). Default true; pokazuje się tylko, gdy odtwarzacz
+   * wystawia listy (SELECT_SOURCE / SELECT_SOUND_MODE).
+   */
+  source_button?: boolean;
+  /**
    * Tylko `media`: skróty/ulubione — chipy pod playerem. Klik gra
    * `media_id` na aktualnie wybranym głośniku (zakładki) albo odpala
    * `tap_action` (skrypt itd.) — tap_action wygrywa nad media_id.

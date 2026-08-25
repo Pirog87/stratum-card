@@ -66,6 +66,9 @@ export class StratumRoomCard extends LitElement {
   @state() private _openRest = new Set<string>();
 
   /** Sekcja media: otwarte panele „Grupuj" (klucz = sekcja). */
+  /** Sekcja media: otwarte panele Zrodlo (klucz = sekcja). */
+  @state() private _mediaSrcOpen = new Set<string>();
+
   @state() private _mediaGroupOpen = new Set<string>();
 
   /** Sekcja media (tabs): wybrany odtwarzacz per sekcja — trzymany per sesja. */
@@ -1293,6 +1296,96 @@ export class StratumRoomCard extends LitElement {
    * odtwarzaczy zwinięta. Wybór głównego: `section.entity`, a bez niego
    * auto — playing > paused > włączony > pierwszy dostępny.
    */
+  /** Bity SELECT_SOURCE / SELECT_SOUND_MODE w supported_features. */
+  private static readonly _SELECT_SOURCE = 2048;
+
+  private static readonly _SELECT_SOUND_MODE = 65536;
+
+  private _toggleMediaSrc(key: string): void {
+    const next = new Set(this._mediaSrcOpen);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this._mediaSrcOpen = next;
+  }
+
+  /**
+   * Przycisk "Zrodlo" + panel: wejscia (source_list - HDMI/aplikacje TV)
+   * i tryby dzwieku (sound_mode_list soundbara). Tylko gdy odtwarzacz
+   * je wystawia.
+   */
+  private _renderMediaSource(
+    section: RoomSectionConfig,
+    selected: string,
+    key: string,
+  ): TemplateResult | typeof nothing {
+    if (section.source_button === false) return nothing;
+    const hass = this.hass!;
+    const st = hass.states?.[selected];
+    const features = (st?.attributes?.supported_features as number | undefined) ?? 0;
+    const sources =
+      (features & StratumRoomCard._SELECT_SOURCE) !== 0
+        ? ((st?.attributes?.source_list as string[] | undefined) ?? [])
+        : [];
+    const modes =
+      (features & StratumRoomCard._SELECT_SOUND_MODE) !== 0
+        ? ((st?.attributes?.sound_mode_list as string[] | undefined) ?? [])
+        : [];
+    if (sources.length === 0 && modes.length === 0) return nothing;
+    const open = this._mediaSrcOpen.has(key);
+    const curSrc = st?.attributes?.source as string | undefined;
+    const curMode = st?.attributes?.sound_mode as string | undefined;
+
+    const row = (
+      label: string,
+      current: boolean,
+      onPick: () => void,
+    ): TemplateResult => html`<button
+      class="ms-row ${current ? 'on' : ''}"
+      @click=${onPick}
+    >
+      <span>${label}</span>
+      ${current ? html`<ha-icon .icon=${'mdi:check'}></ha-icon>` : nothing}
+    </button>`;
+
+    return html`
+      <button
+        class="media-group-btn ${open ? 'on' : ''}"
+        @click=${() => this._toggleMediaSrc(key)}
+      >
+        <ha-icon .icon=${'mdi:video-input-hdmi'}></ha-icon>
+        <span>Źródło</span>
+        ${curSrc ? html`<span class="ms-cur">${curSrc}</span>` : nothing}
+        <ha-icon
+          class="mg-chev"
+          .icon=${open ? 'mdi:chevron-up' : 'mdi:chevron-down'}
+        ></ha-icon>
+      </button>
+      ${open
+        ? html`<div class="media-group">
+            ${sources.map((src) =>
+              row(src, src === curSrc, () =>
+                hass.callService('media_player', 'select_source', {
+                  entity_id: selected,
+                  source: src,
+                }),
+              ),
+            )}
+            ${modes.length > 0
+              ? html`<div class="ms-sub">TRYB DŹWIĘKU</div>
+                  ${modes.map((m) =>
+                    row(m, m === curMode, () =>
+                      hass.callService('media_player', 'select_sound_mode', {
+                        entity_id: selected,
+                        sound_mode: m,
+                      }),
+                    ),
+                  )}`
+              : nothing}
+          </div>`
+        : nothing}
+    `;
+  }
+
   /** Bit GROUPING w supported_features media_player (HA). */
   private static readonly _GROUPING = 524288;
 
@@ -1593,6 +1686,7 @@ export class StratumRoomCard extends LitElement {
           ></stratum-room-tile>
           ${this._renderMediaShortcuts(section, selected)}
           ${this._renderMediaGroup(section, items, selected, key)}
+          ${this._renderMediaSource(section, selected, key)}
         </div>
       `;
     }

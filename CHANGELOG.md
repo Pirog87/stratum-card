@@ -4,6 +4,16 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.100.0] — 2026-08-25
+
+### Added (media plus — pkt 3: źródło i tryb dźwięku)
+- **Przycisk „Źródło" pod playerem** (obok „Grupuj"): panel z listą
+  wejść/aplikacji TV (`source_list`, np. HDMI 1 / Netflix) i — jeśli
+  soundbar je wystawia — trybów dźwięku (`sound_mode_list`). Aktualne
+  źródło widoczne na przycisku. Pokazywany tylko, gdy odtwarzacz
+  wspiera SELECT_SOURCE / SELECT_SOUND_MODE.
+  Wyłączenie: `source_button: false`.
+
 ## [1.99.0] — 2026-08-25
 
 ### Added (media plus — pkt 2: grupowanie głośników)
