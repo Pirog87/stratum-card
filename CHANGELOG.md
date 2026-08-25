@@ -4,6 +4,15 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.97.1] — 2026-08-25
+
+### Fixed (krótkofalówka)
+- **Cisza na głośniku mimo wysłanego nagrania**: część odtwarzaczy
+  (Cast/TV) nie dekoduje WebM/Opus z MediaRecorder — przyjmowały plik
+  i „grały" ciszę. Nagranie jest teraz przekodowywane w przeglądarce
+  do **WAV PCM 24 kHz mono** (WebAudio + własny enkoder
+  `audio-wav.ts`), który gra na wszystkim.
+
 ## [1.97.0] — 2026-08-24
 
 ### Added (krótkofalówka 🎙)

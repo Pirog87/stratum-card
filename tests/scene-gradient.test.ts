@@ -84,3 +84,20 @@ describe('buildGradient', () => {
     expect(a1).toBe(a2);
   });
 });
+
+describe('encodeWav', () => {
+  it('poprawny nagłówek RIFF/WAVE i rozmiar danych', async () => {
+    const { encodeWav } = await import('../src/audio-wav.js');
+    const buf = encodeWav(new Float32Array([0, 0.5, -0.5, 1]), 24000);
+    const v = new DataView(buf);
+    const str = (o: number, n: number) =>
+      String.fromCharCode(...new Uint8Array(buf, o, n));
+    expect(str(0, 4)).toBe('RIFF');
+    expect(str(8, 4)).toBe('WAVE');
+    expect(v.getUint16(22, true)).toBe(1); // mono
+    expect(v.getUint32(24, true)).toBe(24000);
+    expect(v.getUint32(40, true)).toBe(8); // 4 próbki * 2 bajty
+    expect(buf.byteLength).toBe(52);
+    expect(v.getInt16(50, true)).toBe(0x7fff); // clamp 1.0
+  });
+});
