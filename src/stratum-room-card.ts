@@ -65,6 +65,9 @@ export class StratumRoomCard extends LitElement {
   /** Rozwinięte listy „Pozostałe" w sekcjach grupowanych (klucz = sekcja). */
   @state() private _openRest = new Set<string>();
 
+  /** Sekcja media: otwarte panele „Grupuj" (klucz = sekcja). */
+  @state() private _mediaGroupOpen = new Set<string>();
+
   /** Sekcja media (tabs): wybrany odtwarzacz per sekcja — trzymany per sesja. */
   @state() private _mediaTab = new Map<string, string>();
 
@@ -1290,6 +1293,165 @@ export class StratumRoomCard extends LitElement {
    * odtwarzaczy zwinięta. Wybór głównego: `section.entity`, a bez niego
    * auto — playing > paused > włączony > pierwszy dostępny.
    */
+  /** Bit GROUPING w supported_features media_player (HA). */
+  private static readonly _GROUPING = 524288;
+
+  private _toggleMediaGroup(key: string): void {
+    const next = new Set(this._mediaGroupOpen);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this._mediaGroupOpen = next;
+  }
+
+  /**
+   * Przycisk „Grupuj" + panel multiroom dla wybranego odtwarzacza.
+   * Checkbox dołącza/odłącza głośnik (media_player.join/unjoin),
+   * suwak per głośnik ustawia jego głośność, master „Razem" skaluje
+   * wszystkie proporcjonalnie (stateless: mnożnik M/średnia).
+   */
+  private _renderMediaGroup(
+    section: RoomSectionConfig,
+    items: HassEntityRegistryEntry[],
+    selected: string,
+    key: string,
+  ): TemplateResult | typeof nothing {
+    if (section.group_button === false) return nothing;
+    const hass = this.hass!;
+    const selFeat =
+      (hass.states?.[selected]?.attributes?.supported_features as
+        | number
+        | undefined) ?? 0;
+    if (!(selFeat & StratumRoomCard._GROUPING)) return nothing;
+
+    const groupable = items.filter((e) => {
+      const f =
+        (hass.states?.[e.entity_id]?.attributes?.supported_features as
+          | number
+          | undefined) ?? 0;
+      return (f & StratumRoomCard._GROUPING) !== 0;
+    });
+    if (groupable.length < 2) return nothing;
+
+    const members = new Set(
+      (hass.states?.[selected]?.attributes?.group_members as
+        | string[]
+        | undefined) ?? [selected],
+    );
+    members.add(selected);
+    const open = this._mediaGroupOpen.has(key);
+
+    const volOf = (id: string): number | undefined =>
+      hass.states?.[id]?.attributes?.volume_level as number | undefined;
+    const memberIds = groupable
+      .map((e) => e.entity_id)
+      .filter((id) => members.has(id));
+    const vols = memberIds
+      .map(volOf)
+      .filter((v): v is number => typeof v === 'number');
+    const avg = vols.length > 0 ? vols.reduce((a, b) => a + b, 0) / vols.length : 0;
+
+    const setVol = (id: string, v: number): void => {
+      void hass.callService('media_player', 'volume_set', {
+        entity_id: id,
+        volume_level: Math.max(0, Math.min(1, v)),
+      });
+    };
+    const onMaster = (m: number): void => {
+      const ratio = avg > 0.02 ? m / avg : undefined;
+      for (const id of memberIds) {
+        const v = volOf(id);
+        setVol(id, ratio !== undefined && typeof v === 'number' ? v * ratio : m);
+      }
+    };
+    const toggleMember = (id: string, isMember: boolean): void => {
+      if (isMember) {
+        void hass.callService('media_player', 'unjoin', { entity_id: id });
+      } else {
+        void hass.callService('media_player', 'join', {
+          entity_id: selected,
+          group_members: [id],
+        });
+      }
+    };
+
+    return html`
+      <button
+        class="media-group-btn ${open ? 'on' : ''}"
+        @click=${() => this._toggleMediaGroup(key)}
+      >
+        <ha-icon .icon=${'mdi:link-variant'}></ha-icon>
+        <span>Grupuj</span>
+        ${memberIds.length > 1
+          ? html`<span class="mg-count">${memberIds.length}</span>`
+          : nothing}
+        <ha-icon
+          class="mg-chev"
+          .icon=${open ? 'mdi:chevron-up' : 'mdi:chevron-down'}
+        ></ha-icon>
+      </button>
+      ${open
+        ? html`<div class="media-group">
+            ${groupable.map((e) => {
+              const id = e.entity_id;
+              const st = hass.states?.[id];
+              const nm =
+                (st?.attributes?.friendly_name as string | undefined) ?? id;
+              const isSel = id === selected;
+              const isMember = members.has(id);
+              const v = volOf(id);
+              return html`<div class="mg-row">
+                <button
+                  class="mg-cb ${isMember ? 'on' : ''}"
+                  ?disabled=${isSel}
+                  title=${isSel
+                    ? 'Wybrany odtwarzacz'
+                    : isMember
+                    ? 'Odłącz od grupy'
+                    : 'Dołącz do grupy'}
+                  @click=${() => toggleMember(id, isMember)}
+                >
+                  ${isMember ? html`<ha-icon .icon=${'mdi:check'}></ha-icon>` : nothing}
+                </button>
+                <span class="mg-name ${isMember ? '' : 'dim'}">${nm}</span>
+                ${isMember && typeof v === 'number'
+                  ? html`<input
+                        type="range"
+                        class="mg-vol"
+                        min="0"
+                        max="100"
+                        step="1"
+                        .value=${String(Math.round(v * 100))}
+                        @change=${(ev: Event) =>
+                          setVol(
+                            id,
+                            Number((ev.target as HTMLInputElement).value) / 100,
+                          )}
+                      /><span class="mg-pc">${Math.round(v * 100)}%</span>`
+                  : nothing}
+              </div>`;
+            })}
+            ${memberIds.length > 1
+              ? html`<div class="mg-row mg-master">
+                  <span class="mg-name">Razem</span>
+                  <input
+                    type="range"
+                    class="mg-vol"
+                    min="0"
+                    max="100"
+                    step="1"
+                    .value=${String(Math.round(avg * 100))}
+                    @change=${(ev: Event) =>
+                      onMaster(
+                        Number((ev.target as HTMLInputElement).value) / 100,
+                      )}
+                  /><span class="mg-pc">${Math.round(avg * 100)}%</span>
+                </div>`
+              : nothing}
+          </div>`
+        : nothing}
+    `;
+  }
+
   /** Skróty/ulubione sekcji media — chipy pod playerem. */
   private _renderMediaShortcuts(
     section: RoomSectionConfig,
@@ -1430,6 +1592,7 @@ export class StratumRoomCard extends LitElement {
           .intercom=${section.intercom}
           ></stratum-room-tile>
           ${this._renderMediaShortcuts(section, selected)}
+          ${this._renderMediaGroup(section, items, selected, key)}
         </div>
       `;
     }

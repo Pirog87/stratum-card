@@ -49,7 +49,7 @@ import './stratum-scene-bar.js';
 import { cardStyles } from './stratum-card-styles.js';
 import { fieldColorStyle } from './field-colors.js';
 
-const VERSION = '1.98.0';
+const VERSION = '1.99.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
