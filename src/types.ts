@@ -426,6 +426,20 @@ export type SummaryField =
  * W formie skróconej można przekazać sam string (`'lights'`) — automatycznie
  * znormalizujemy do `{ type: 'lights' }`.
  */
+/** Skrót/ulubione sekcji media — chip pod playerem. */
+export interface MediaShortcutConfig {
+  /** Etykieta chipa. */
+  name: string;
+  /** Ikona MDI (default mdi:playlist-play). */
+  icon?: string;
+  /** media_content_id dla play_media (URL radia, spotify URI, media-source://…). */
+  media_id?: string;
+  /** media_content_type (default `music`). */
+  media_type?: string;
+  /** Alternatywa: dowolna akcja HA (np. skrypt) — wygrywa nad media_id. */
+  tap_action?: TapActionConfig;
+}
+
 export interface RoomSectionConfig {
   /** Typ sekcji. */
   type: RoomSectionType;
@@ -479,6 +493,12 @@ export interface RoomSectionConfig {
    * wyłączone/niedostępne (mniej scrolla w sypialniach). Default false.
    */
   hide_when_off?: boolean;
+  /**
+   * Tylko `media`: skróty/ulubione — chipy pod playerem. Klik gra
+   * `media_id` na aktualnie wybranym głośniku (zakładki) albo odpala
+   * `tap_action` (skrypt itd.) — tap_action wygrywa nad media_id.
+   */
+  shortcuts?: MediaShortcutConfig[];
   /**
    * Tylko `media`: przycisk krótkofalówki 🎙 w playerze — przytrzymaj,
    * powiedz, puść: nagranie z mikrofonu leci na ten głośnik przez

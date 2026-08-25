@@ -10,6 +10,7 @@ import type {
   HassEntityRegistryEntry,
   HomeAssistant,
   RoomPopupOrderItem,
+  MediaShortcutConfig,
   RoomSectionConfig,
   RoomSectionType,
   StratumRoomCardConfig,
@@ -29,6 +30,7 @@ import {
 } from './chip-list-helpers.js';
 import { ago } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
+import { runTapAction } from './tap-action.js';
 import {
   autoRoomChips,
   autoSections,
@@ -1199,6 +1201,7 @@ export class StratumRoomCard extends LitElement {
           .nameOverride=${featured.name}
           .tapAction=${featured.tap_action}
         ></stratum-room-tile>
+        ${this._renderMediaShortcuts(section, featured.entity!)}
         ${restCount > 0
           ? html`
               <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
@@ -1287,6 +1290,40 @@ export class StratumRoomCard extends LitElement {
    * odtwarzaczy zwinięta. Wybór głównego: `section.entity`, a bez niego
    * auto — playing > paused > włączony > pierwszy dostępny.
    */
+  /** Skróty/ulubione sekcji media — chipy pod playerem. */
+  private _renderMediaShortcuts(
+    section: RoomSectionConfig,
+    targetId: string,
+  ): TemplateResult | typeof nothing {
+    const shortcuts = section.shortcuts ?? [];
+    if (shortcuts.length === 0) return nothing;
+    return html`<div class="media-shortcuts">
+      ${shortcuts.map(
+        (sc) => html`<button
+          class="media-sc"
+          title=${sc.media_id ?? sc.name}
+          @click=${() => this._onMediaShortcut(sc, targetId)}
+        >
+          <ha-icon .icon=${sc.icon ?? 'mdi:playlist-play'}></ha-icon>
+          <span>${sc.name}</span>
+        </button>`,
+      )}
+    </div>`;
+  }
+
+  private _onMediaShortcut(sc: MediaShortcutConfig, targetId: string): void {
+    if (sc.tap_action) {
+      void runTapAction(this.hass, sc.tap_action, { source: this });
+      return;
+    }
+    if (!sc.media_id) return;
+    void this.hass?.callService('media_player', 'play_media', {
+      entity_id: targetId,
+      media_content_id: sc.media_id,
+      media_content_type: sc.media_type ?? 'music',
+    });
+  }
+
   private _renderMediaSection(
     section: RoomSectionConfig,
     items: HassEntityRegistryEntry[],
@@ -1392,6 +1429,7 @@ export class StratumRoomCard extends LitElement {
           .volumeStep=${section.volume_step}
           .intercom=${section.intercom}
           ></stratum-room-tile>
+          ${this._renderMediaShortcuts(section, selected)}
         </div>
       `;
     }
@@ -1418,6 +1456,7 @@ export class StratumRoomCard extends LitElement {
           .volumeStep=${section.volume_step}
           .intercom=${section.intercom}
         ></stratum-room-tile>
+        ${this._renderMediaShortcuts(section, featured.entity_id)}
         ${rest.length > 0
           ? html`
               <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
