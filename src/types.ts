@@ -480,6 +480,14 @@ export interface RoomSectionConfig {
    */
   hide_when_off?: boolean;
   /**
+   * Tylko `media`: przycisk krótkofalówki 🎙 w playerze — przytrzymaj,
+   * powiedz, puść: nagranie z mikrofonu leci na ten głośnik przez
+   * play_media z announce (muzyka się przycisza i wraca). Default true,
+   * ale przycisk pokazuje się wyłącznie gdy: HTTPS (mikrofon), konto
+   * admina (upload do /media) i przeglądarka wspiera MediaRecorder.
+   */
+  intercom?: boolean;
+  /**
    * Tylko `lights`: grupowanie po pomocnikach „Grupa światła" przypisanych do
    * obszaru. `helpers` (default) — pokazuj kafle GRUP, chowaj ich encje-składowe,
    * światła spoza grup w zwijanym „Pozostałe". `none` — płaska lista jak dotąd.
@@ -1030,6 +1038,8 @@ export interface HomeAssistant {
   ) => Promise<void>;
   /** Synchroniczny WebSocket call (HA frontend API). Używany do fetchu entity registry. */
   callWS?: <T>(msg: Record<string, unknown>) => Promise<T>;
+  /** Zalogowany użytkownik — do bramkowania funkcji admin-only (intercom). */
+  user?: { is_admin?: boolean };
   /** Uwierzytelniony fetch do REST API HA — używany do uploadu obrazów. */
   fetchWithAuth?: (path: string, init?: RequestInit) => Promise<Response>;
   /** WebSocket connection — używamy do subskrypcji render_template. */
