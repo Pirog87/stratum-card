@@ -15,12 +15,12 @@ export const roomCardStyles = css`
       background: var(--stratum-card-background, var(--ha-card-background, var(--card-background-color, #1e1f22)));
       border-radius: var(--stratum-card-border-radius, var(--ha-card-border-radius, 12px));
       color: var(--stratum-card-color, var(--primary-text-color, #e8e8e8));
-      /* `clip`, nie `hidden`: `hidden` robi z karty kontener przewijania,
-         a wtedy `position: sticky` na nagłówkach sekcji przykleja się do
-         niej zamiast do arkusza popupu i nic nie robi. `clip` przycina
-         tak samo, ale kontenera przewijania nie tworzy.
+      /* clip, nie hidden: hidden robi z karty kontener przewijania, a wtedy
+         position: sticky na nagłówkach sekcji przykleja się do niej zamiast
+         do arkusza popupu i nic nie robi. clip przycina tak samo, ale
+         kontenera przewijania nie tworzy.
          Dwie deklaracje to fallback dla Safari < 16: starsza przeglądarka
-         bierze `hidden` (sticky nie działa, ale nic się nie psuje). */
+         bierze hidden (sticky nie działa, ale nic się nie psuje). */
       overflow: hidden;
       overflow: clip;
       padding: var(--stratum-room-padding, 16px);
@@ -264,9 +264,9 @@ export const roomCardStyles = css`
     }
 
     /* Wszystkie rzędy w sekcji równej wysokości — najwyższy kafel wyznacza
-       resztę. Bez tego `tile` (56 px) sąsiaduje z `ambient` (88) i `glight`
-       (96), i siatka się rwie. Kafle rozciągają się dzięki `height: 100%`
-       na hoście stratum-room-tile. */
+       resztę. Bez tego tile (56 px) sąsiaduje z ambient (88) i glight (96),
+       i siatka się rwie. Kafle rozciągają się dzięki height: 100% na
+       hoście stratum-room-tile. */
     .tiles {
       display: grid;
       gap: 8px;
@@ -565,7 +565,7 @@ export const roomCardStyles = css`
       color: #64a9e8;
     }
 
-    /* Ramka pełna, nie przerywana: `dashed` to w interfejsach konwencja pola
+    /* Ramka pełna, nie przerywana: dashed to w interfejsach konwencja pola
        zrzutu pliku albo miejsca na treść, której jeszcze nie ma — a to jest
        przycisk. Była jedyną przerywaną ramką w całej karcie. */
     .rest-toggle {

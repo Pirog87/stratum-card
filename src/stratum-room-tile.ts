@@ -1285,7 +1285,7 @@ export class StratumRoomTile extends LitElement {
   static styles = css`
     :host {
       display: block;
-      /* Kafel wypełnia rząd siatki, który `.tiles { grid-auto-rows: 1fr }`
+      /* Kafel wypełnia rząd siatki, który .tiles z grid-auto-rows: 1fr
          wyrównuje do najwyższego elementu w sekcji. Bez tego host się
          rozciąga, a kafel w środku zostaje na swojej min-height i pod nim
          zostaje dziura. Poza siatką (layout flex, pojedynczy kafel)
