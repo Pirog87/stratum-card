@@ -50,7 +50,7 @@ import './stratum-scene-bar.js';
 import { cardStyles } from './stratum-card-styles.js';
 import { fieldColorStyle } from './field-colors.js';
 
-const VERSION = '1.101.0';
+const VERSION = '1.103.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -669,6 +669,17 @@ export class StratumCard extends LitElement {
         @click=${(ev: MouseEvent) => this._onBackdropClick(ev)}
       >
         <div class="stratum-popup-card" @click=${(ev: Event) => ev.stopPropagation()}>
+          <div
+            class="stratum-popup-grab"
+            role="button"
+            tabindex="0"
+            aria-label="Zamknij — przeciągnij w dół"
+            @pointerdown=${this._onGrabDown}
+            @pointermove=${this._onGrabMove}
+            @pointerup=${this._onGrabUp}
+            @pointercancel=${this._onGrabUp}
+            @keydown=${this._onGrabKey}
+          ></div>
           <button
             class="stratum-popup-close"
             title="Zamknij"
@@ -1278,6 +1289,50 @@ export class StratumCard extends LitElement {
   private _onBackdropClick(ev: MouseEvent): void {
     if (ev.target === ev.currentTarget) this._closeRoomPopup();
   }
+
+  /**
+   * Przeciąganie arkusza za uchwyt (telefon). Handlery wiszą na samym
+   * uchwycie, nie na całym arkuszu — dzięki temu gest nigdy nie walczy
+   * ze scrollem treści popupu.
+   */
+  private _grab?: { startY: number; card: HTMLElement };
+
+  private _onGrabDown = (ev: PointerEvent): void => {
+    if (ev.button !== 0) return;
+    const handle = ev.currentTarget as HTMLElement;
+    const card = handle.parentElement as HTMLElement | null;
+    if (!card) return;
+    this._grab = { startY: ev.clientY, card };
+    card.style.transition = 'none';
+    handle.setPointerCapture(ev.pointerId);
+  };
+
+  private _onGrabMove = (ev: PointerEvent): void => {
+    const g = this._grab;
+    if (!g) return;
+    // Tylko w dół — ciągnięcie w górę nie odkleja arkusza od krawędzi.
+    const dy = Math.max(0, ev.clientY - g.startY);
+    g.card.style.transform = `translateY(${dy}px)`;
+  };
+
+  private _onGrabUp = (ev: PointerEvent): void => {
+    const g = this._grab;
+    this._grab = undefined;
+    if (!g) return;
+    const dy = Math.max(0, ev.clientY - g.startY);
+    // Powrót do stanu sterowanego CSS-em: transform i transition znikają,
+    // więc animacja odbicia idzie z arkusza stylów, nie z inline'u.
+    g.card.style.transition = '';
+    g.card.style.transform = '';
+    if (dy > 90) this._closeRoomPopup();
+  };
+
+  private _onGrabKey = (ev: KeyboardEvent): void => {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      this._closeRoomPopup();
+    }
+  };
 
   static styles = cardStyles;
 }

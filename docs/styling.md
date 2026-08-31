@@ -16,6 +16,51 @@ Przykłady na końcu dokumentu.
 
 ## CSS variables
 
+### Powierzchnie (od v1.102.0)
+
+Wszystkie wypełnienia w karcie liczą się z **tła karty** w stronę koloru
+tekstu, a nie z bieli. Dzięki temu ten sam zapis daje jaśniejszą warstwę na
+ciemnym motywie i ciemniejszą na jasnym — bez drugiej palety i bez
+`prefers-color-scheme`. Definicje siedzą na `:host`, więc każde nadpisanie
+z zewnątrz (theme, card-mod) dalej wygrywa.
+
+| Zmienna | Default | Opis |
+|---|---|---|
+| `--stratum-surface-base` | `--ha-card-background` → `--card-background-color` | punkt odniesienia dla wszystkich powierzchni |
+| `--stratum-surface-ink` | `--primary-text-color` | kierunek, w którym powierzchnie odchodzą od tła |
+| `--stratum-surface-1` | `96%` base | ledwie widoczne wypełnienie — wiersze, kafle |
+| `--stratum-surface-2` | `93%` base | chipy, tła drugorzędne |
+| `--stratum-surface-3` | `89%` base | hover, separatory |
+| `--stratum-surface-4` | `82%` base | tor przełącznika, elementy wymagające kontrastu |
+| `--stratum-surface-well` | `85%` base + czerń | zagłębienie (stadion ikony w wierszu) |
+
+Te tokeny zasilają domyślne wartości `--stratum-tile-background`,
+`--stratum-room-row-bg`, `--stratum-chip-background`,
+`--stratum-tile-hover-background` i pokrewnych — nadpisanie któregokolwiek
+z nich działa jak dotąd.
+
+```yaml
+# przykład: mocniej kontrastowe wypełnienia w obu motywach
+card_mod:
+  style: |
+    ha-card {
+      --stratum-surface-1: color-mix(in srgb, var(--card-background-color) 90%, var(--primary-text-color));
+    }
+```
+
+### Sekcje room-card (od v1.103.0)
+
+| Zmienna | Default | Opis |
+|---|---|---|
+| `--stratum-section-sticky` | `static` | `sticky` przykleja nagłówki sekcji do góry przy przewijaniu. Popup ustawia to sam; na dashboardzie zostaje `static`, żeby nagłówki nie łapały viewportu całej strony. |
+
+```yaml
+# przykład: przyklejone nagłówki także w karcie na dashboardzie
+card_mod:
+  style: |
+    ha-card { --stratum-section-sticky: sticky; }
+```
+
 ### Karta globalnie (`stratum-card` i `stratum-room-card`)
 
 | Zmienna | Default | Opis |

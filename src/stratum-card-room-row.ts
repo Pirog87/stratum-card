@@ -849,10 +849,7 @@ export class StratumCardRoomRow extends LitElement {
       );
       border-radius: 999px;
       overflow: hidden;
-      background: var(
-        --stratum-room-row-iconbg,
-        color-mix(in srgb, var(--card-background-color, #1c1e22) 65%, #000)
-      );
+      background: var(--stratum-room-row-iconbg, var(--stratum-surface-well));
     }
 
     .row[data-preset='fill'] .icon,
@@ -869,18 +866,21 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='pill'] .body .name,
     .row[data-preset='fill'] > .name,
     .row[data-preset='pill'] > .name {
-      font-size: 17px;
+      font-size: 18px;
       font-weight: 600;
     }
 
     .row[data-preset='fill'] .info,
     .row[data-preset='pill'] .info {
-      font-size: 13.5px;
+      font-size: 13px;
     }
 
+    /* Ikony statusów schodzą 25 → 18 px: przy nazwie 18/600 glif ikony
+       przestaje być większy niż wysokość wersalika nazwy. Wiersz nadal
+       czyta się przez ikony, ale to nazwa prowadzi wzrok. */
     .row[data-preset='fill'] .info .field ha-icon,
     .row[data-preset='pill'] .info .field ha-icon {
-      --mdc-icon-size: 25px;
+      --mdc-icon-size: 18px;
     }
 
     /* ====== Layout dwuliniowy (fill/pill) ====== */
@@ -1006,7 +1006,7 @@ export class StratumCardRoomRow extends LitElement {
       width: calc(34px * var(--stratum-room-row-iconbg-scale, 1));
       height: calc(34px * var(--stratum-room-row-iconbg-scale, 1));
       border-radius: 10px;
-      background: var(--stratum-room-row-iconbg, rgba(255, 255, 255, 0.05));
+      background: var(--stratum-room-row-iconbg, var(--stratum-surface-2));
     }
     .row[data-preset='rail'].lights-on .icon {
       color: var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107));
@@ -1045,7 +1045,7 @@ export class StratumCardRoomRow extends LitElement {
       width: calc(36px * var(--stratum-room-row-iconbg-scale, 1));
       height: calc(36px * var(--stratum-room-row-iconbg-scale, 1));
       border-radius: 11px;
-      background: var(--stratum-room-row-iconbg, rgba(255, 255, 255, 0.05));
+      background: var(--stratum-room-row-iconbg, var(--stratum-surface-2));
     }
     .row[data-preset='cards'].active .iconwrap {
       background: color-mix(
@@ -1138,9 +1138,9 @@ export class StratumCardRoomRow extends LitElement {
       align-items: center;
       gap: 5px;
       font-size: 11px;
-      font-weight: 650;
+      font-weight: 600;
       color: var(--secondary-text-color);
-      background: rgba(128, 132, 140, 0.18);
+      background: var(--stratum-surface-3);
       border-radius: 999px;
       padding: 3px 10px;
     }
@@ -1231,11 +1231,12 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .field ha-icon {
-      --mdc-icon-size: 22px;
+      --mdc-icon-size: 18px;
     }
 
     /* A1: pulsujący badge alarmu — klik otwiera listę sprawców. */
     .alarm-badge {
+      position: relative;
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -1254,6 +1255,14 @@ export class StratumCardRoomRow extends LitElement {
     }
     .alarm-badge ha-icon {
       --mdc-icon-size: 15px;
+    }
+    /* Jak wyżej — badge ma ~26 px wysokości i sąsiaduje z przełącznikiem
+       świateł; dwa małe cele obok siebie przy krawędzi ekranu. */
+    .alarm-badge::after {
+      content: '';
+      position: absolute;
+      inset: -9px -2px;
+      border-radius: 999px;
     }
     @keyframes stratum-alarm-pulse {
       0%,
@@ -1282,9 +1291,19 @@ export class StratumCardRoomRow extends LitElement {
       border: 0;
       padding: 0;
       cursor: pointer;
-      background: rgba(255, 255, 255, 0.16);
+      background: var(--stratum-surface-4);
       transition: background 0.15s ease, box-shadow 0.2s ease;
       flex-shrink: 0;
+    }
+    /* Pole trafienia 48 × 44 bez zmiany wyglądu: sam przełącznik zostaje
+       46 × 25, niewidoczny pseudo-element dobiera resztę do progu
+       WCAG 2.2 / Apple HIG. Kontrolka leży przy krawędzi ekranu, gdzie
+       kciuk jest najmniej precyzyjny, a chybienie otwiera popup. */
+    .lights-toggle::after {
+      content: '';
+      position: absolute;
+      inset: -9.5px -1px;
+      border-radius: 999px;
     }
     .lights-toggle.on {
       background: var(--stratum-chip-lights-color, #ffc107);
@@ -1329,7 +1348,7 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     .motion {
-      --mdc-icon-size: 22px;
+      --mdc-icon-size: 18px;
       color: var(--stratum-chip-motion-color, #4caf50);
     }
 
@@ -1344,7 +1363,7 @@ export class StratumCardRoomRow extends LitElement {
     .more {
       color: var(--secondary-text-color);
       font-weight: 600;
-      background: var(--stratum-room-row-iconbg, rgba(255, 255, 255, 0.06));
+      background: var(--stratum-surface-2);
       border-radius: 999px;
       padding: 1px 7px;
       font-size: 11px;

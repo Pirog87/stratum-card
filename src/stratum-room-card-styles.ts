@@ -2,8 +2,11 @@
 // zero zmian w treści CSS.
 
 import { css } from 'lit';
+import { surfaceTokens } from './surface-tokens.js';
 
 export const roomCardStyles = css`
+    ${surfaceTokens}
+
     :host {
       display: block;
     }
@@ -12,7 +15,14 @@ export const roomCardStyles = css`
       background: var(--stratum-card-background, var(--ha-card-background, var(--card-background-color, #1e1f22)));
       border-radius: var(--stratum-card-border-radius, var(--ha-card-border-radius, 12px));
       color: var(--stratum-card-color, var(--primary-text-color, #e8e8e8));
+      /* `clip`, nie `hidden`: `hidden` robi z karty kontener przewijania,
+         a wtedy `position: sticky` na nagłówkach sekcji przykleja się do
+         niej zamiast do arkusza popupu i nic nie robi. `clip` przycina
+         tak samo, ale kontenera przewijania nie tworzy.
+         Dwie deklaracje to fallback dla Safari < 16: starsza przeglądarka
+         bierze `hidden` (sticky nie działa, ale nic się nie psuje). */
       overflow: hidden;
+      overflow: clip;
       padding: var(--stratum-room-padding, 16px);
       box-shadow: var(--ha-card-box-shadow, none);
       border: var(--ha-card-border-width, 1px) solid
@@ -110,15 +120,33 @@ export const roomCardStyles = css`
       gap: 8px;
     }
 
+    /* Nagłówek sekcji robi dwie rzeczy naraz:
+       1. Przykleja się do góry przy przewijaniu (włączane z zewnątrz przez
+          --stratum-section-sticky — popup tak, karta na dashboardzie nie,
+          bo tam przyklejałby się do viewportu całej strony).
+       2. Górny padding daje rytm: nad nagłówkiem 18 (gap .body) + 8 = 26 px,
+          pod nim dalej 8. Nagłówek przestaje wisieć w połowie drogi między
+          sekcjami i zaczyna otwierać swoją. Dolny padding jest zdejmowany
+          ujemnym marginesem, żeby odstęp do treści nie urósł. */
     .section-header {
+      position: var(--stratum-section-sticky, static);
+      top: 0;
+      z-index: 2;
       display: flex;
       align-items: center;
       gap: 8px;
+      padding: 8px 0 6px;
+      margin-bottom: -6px;
+      background: var(--stratum-surface-base);
       font-size: 12px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.04em;
       color: var(--secondary-text-color);
+    }
+
+    .section:first-child .section-header {
+      padding-top: 0;
     }
 
     .section-header ha-icon {
@@ -134,6 +162,8 @@ export const roomCardStyles = css`
       border-radius: 999px;
       background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
       color: var(--secondary-text-color);
+      /* „2/5" zmienia się w miejscu — bez tabular-nums pastylka drga. */
+      font-variant-numeric: tabular-nums;
     }
 
     .summary-grid {
@@ -233,9 +263,14 @@ export const roomCardStyles = css`
       }
     }
 
+    /* Wszystkie rzędy w sekcji równej wysokości — najwyższy kafel wyznacza
+       resztę. Bez tego `tile` (56 px) sąsiaduje z `ambient` (88) i `glight`
+       (96), i siatka się rwie. Kafle rozciągają się dzięki `height: 100%`
+       na hoście stratum-room-tile. */
     .tiles {
       display: grid;
       gap: 8px;
+      grid-auto-rows: 1fr;
     }
 
     .tiles.chips-layout {
@@ -296,7 +331,6 @@ export const roomCardStyles = css`
       background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 7%, transparent);
       border-radius: 14px;
       padding: 10px 12px;
-      margin-bottom: 14px;
       display: flex;
       flex-direction: column;
       gap: 4px;
@@ -422,6 +456,13 @@ export const roomCardStyles = css`
       justify-content: center;
       color: var(--secondary-text-color);
     }
+    /* Pole trafienia do 44 px w pionie — przełącznik zostaje 56 × 30. */
+    .hdr-switch::after {
+      content: '';
+      position: absolute;
+      inset: -7px 0;
+      border-radius: 999px;
+    }
     .hdr-switch .knob ha-icon {
       --mdc-icon-size: 15px;
     }
@@ -524,16 +565,20 @@ export const roomCardStyles = css`
       color: #64a9e8;
     }
 
+    /* Ramka pełna, nie przerywana: `dashed` to w interfejsach konwencja pola
+       zrzutu pliku albo miejsca na treść, której jeszcze nie ma — a to jest
+       przycisk. Była jedyną przerywaną ramką w całej karcie. */
     .rest-toggle {
       display: flex;
       align-items: center;
       gap: 8px;
       width: 100%;
-      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.03));
-      border: 1px dashed var(--divider-color, rgba(255, 255, 255, 0.14));
+      min-height: 44px;
+      background: var(--stratum-surface-2);
+      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.14));
       border-radius: 10px;
       padding: 8px 12px;
-      color: var(--secondary-text-color);
+      color: var(--primary-text-color);
       font: inherit;
       font-size: 12.5px;
       font-weight: 600;
@@ -542,7 +587,7 @@ export const roomCardStyles = css`
     }
 
     .rest-toggle:hover {
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--stratum-surface-3);
     }
 
     .rest-toggle ha-icon {
@@ -571,6 +616,9 @@ export const roomCardStyles = css`
     border: none;
     cursor: pointer;
     border-radius: 999px;
+    /* Szeroki cel w rządku — niewidoczne pole trafienia nachodziłoby na
+       sąsiada, więc rośnie sam przycisk. */
+    min-height: 44px;
     padding: 6px 13px;
     font: inherit;
     font-size: 12.5px;
@@ -688,6 +736,7 @@ export const roomCardStyles = css`
     font-size: 13px;
   }
   .mg-cb {
+    position: relative;
     width: 20px;
     height: 20px;
     border-radius: 6px;
@@ -700,6 +749,13 @@ export const roomCardStyles = css`
     justify-content: center;
     padding: 0;
     color: #191a1d;
+  }
+  /* Najmniejszy cel w całej karcie (20 × 20) — pole trafienia do 44. */
+  .mg-cb::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
+    border-radius: 10px;
   }
   .mg-cb.on {
     background: var(--stratum-card-accent, var(--primary-color, #ff9b42));
@@ -757,6 +813,7 @@ export const roomCardStyles = css`
     border: none;
     cursor: pointer;
     border-radius: 9px;
+    min-height: 44px;
     padding: 9px 10px;
     font: inherit;
     font-size: 13px;

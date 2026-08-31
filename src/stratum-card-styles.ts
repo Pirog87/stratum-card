@@ -2,8 +2,11 @@
 // zero zmian w tresci CSS.
 
 import { css } from 'lit';
+import { surfaceTokens } from './surface-tokens.js';
 
 export const cardStyles = css`
+    ${surfaceTokens}
+
     :host {
       display: block;
     }
@@ -228,13 +231,64 @@ export const cardStyles = css`
       border-radius: var(--stratum-popup-radius, 16px);
       background: var(--ha-card-background, var(--card-background-color, #1e1f22));
       animation: stratum-popup-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Uchwyt arkusza — tylko na telefonie, gdzie popup jest pełnoekranowy.
+       Zapowiada, że to arkusz (dotąd nic nie sugerowało, jak wyjść) i daje
+       wyjście w zasięgu kciuka: przeciągnięcie w dół zamyka. × w prawym
+       górnym rogu zostaje jako trzecia droga, obok dotknięcia tła i Escape. */
+    .stratum-popup-grab {
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      .stratum-popup-grab {
+        display: flex;
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        align-items: center;
+        justify-content: center;
+        height: 24px;
+        flex-shrink: 0;
+        touch-action: none;
+        cursor: grab;
+      }
+
+      .stratum-popup-grab::before {
+        content: '';
+        width: 40px;
+        height: 4px;
+        border-radius: 999px;
+        background: color-mix(
+          in srgb,
+          var(--primary-text-color, #e8e8e8) 32%,
+          transparent
+        );
+      }
+
+      .stratum-popup-grab:active {
+        cursor: grabbing;
+      }
+
+      .stratum-popup-grab:focus-visible {
+        outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+        outline-offset: -2px;
+        border-radius: 6px;
+      }
     }
 
     /* Karta pokoju bez własnej ramki wewnątrz popupu. */
     .stratum-popup-card stratum-room-card {
       display: block;
-      /* Rezerwa w headerze na przycisk × — chipy nie wjadą pod krzyżyk. */
-      --stratum-room-header-pad-right: 46px;
+      /* Popup jest kontenerem przewijania, więc nagłówki sekcji mają się
+         przyklejać. Na dashboardzie karta tego nie włącza — tam sticky
+         łapałby viewport całej strony. */
+      --stratum-section-sticky: sticky;
+      /* Rezerwa w headerze na przycisk × — chipy nie wjadą pod krzyżyk.
+         48 px przycisku + 10 px marginesu + luz. */
+      --stratum-room-header-pad-right: 62px;
     }
 
     .stratum-popup-card stratum-room-card::part(card) {
@@ -280,10 +334,10 @@ export const cardStyles = css`
       z-index: 5;
       margin-left: auto;
       margin-right: 10px;
-      margin-bottom: -34px;
+      margin-bottom: -48px;
       transform: translateY(10px);
-      width: 34px;
-      height: 34px;
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
       border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.16));
       background: color-mix(in srgb, var(--card-background-color, #1c1e22) 72%, #000);
@@ -300,13 +354,14 @@ export const cardStyles = css`
     }
 
     .stratum-popup-close ha-icon {
-      --mdc-icon-size: 18px;
+      --mdc-icon-size: 22px;
     }
 
     @media (prefers-reduced-motion: reduce) {
       .stratum-popup-backdrop,
       .stratum-popup-card {
         animation: none;
+        transition: none;
       }
     }
   
@@ -365,7 +420,7 @@ export const cardStyles = css`
   .sk-anim {
     position: relative;
     overflow: hidden;
-    background: rgba(128, 132, 140, 0.14);
+    background: var(--stratum-surface-3);
   }
   .sk-anim::after {
     content: "";
@@ -374,7 +429,7 @@ export const cardStyles = css`
     background: linear-gradient(
       100deg,
       transparent 30%,
-      rgba(255, 255, 255, 0.09) 50%,
+      color-mix(in srgb, var(--stratum-surface-ink) 12%, transparent) 50%,
       transparent 70%
     );
     animation: stratum-shimmer 1.4s infinite;

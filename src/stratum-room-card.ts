@@ -952,7 +952,7 @@ export class StratumRoomCard extends LitElement {
         <div class="section-header" part="section-header">
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
-          <span class="count">${items.length}</span>
+          <span class="count">${this._activeCount(items)}/${items.length}</span>
         </div>
         ${type === 'covers' ? this._renderCoversMaster(section, items) : nothing}
         <div class="tiles ${layout}">
@@ -976,6 +976,35 @@ export class StratumRoomCard extends LitElement {
    * (nazwy, grafiki, ukrywanie, sceny spoza obszaru) daje panel „Sceny"
    * w edycji pokoju — wtedy explicit config zastępuje tę sekcję.
    */
+  /**
+   * Ile encji sekcji jest „w akcji" — zapalonych, otwartych, grających.
+   * Licznik przy nagłówku pokazywał samą liczbę encji w sekcji, co nic nie
+   * mówiło o stanie pomieszczenia: „3" znaczyło „są tu trzy rolety", a nie
+   * „trzy są otwarte". Mianownik nic nie kosztuje, a zamienia liczbę
+   * w informację.
+   */
+  private _activeCount(items: HassEntityRegistryEntry[]): number {
+    let n = 0;
+    for (const e of items) {
+      const st = this.hass?.states?.[e.entity_id];
+      if (!st) continue;
+      const s = st.state;
+      if (s === 'unavailable' || s === 'unknown') continue;
+      const domain = e.entity_id.split('.')[0];
+      if (domain === 'cover') {
+        // Uchylona roleta to nadal roleta wymagająca uwagi.
+        if (s !== 'closed') n += 1;
+      } else if (domain === 'climate' || domain === 'water_heater') {
+        if (s !== 'off') n += 1;
+      } else if (domain === 'media_player') {
+        if (s !== 'off' && s !== 'idle' && s !== 'standby') n += 1;
+      } else if (s === 'on' || s === 'open' || s === 'playing') {
+        n += 1;
+      }
+    }
+    return n;
+  }
+
   private _renderScenesBar(
     section: RoomSectionConfig,
     items: HassEntityRegistryEntry[],

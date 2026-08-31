@@ -765,7 +765,7 @@ export class StratumChipList extends LitElement {
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      background: rgba(255, 255, 255, 0.07);
+      background: var(--stratum-surface-2);
       color: var(--secondary-text-color);
     }
     .prow.active .bub {

@@ -1285,6 +1285,23 @@ export class StratumRoomTile extends LitElement {
   static styles = css`
     :host {
       display: block;
+      /* Kafel wypełnia rząd siatki, który `.tiles { grid-auto-rows: 1fr }`
+         wyrównuje do najwyższego elementu w sekcji. Bez tego host się
+         rozciąga, a kafel w środku zostaje na swojej min-height i pod nim
+         zostaje dziura. Poza siatką (layout flex, pojedynczy kafel)
+         wysokość rodzica jest auto, więc 100% rozwiązuje się do auto. */
+      height: 100%;
+    }
+
+    /* Warianty kafelkowe rozciągają się; pigułki (.chips-tile, .icon-tile)
+       zostają przy swoim rozmiarze, bo żyją w rządkach flex. */
+    .tile,
+    .cover-row,
+    .bubble-tile,
+    .ambient-tile,
+    .glight,
+    .player-tile {
+      height: 100%;
     }
 
     .tile {
@@ -1445,6 +1462,7 @@ export class StratumRoomTile extends LitElement {
     }
 
     .cover-btn {
+      position: relative;
       border: 0;
       background: transparent;
       padding: 6px;
@@ -1453,6 +1471,15 @@ export class StratumRoomTile extends LitElement {
       cursor: pointer;
       display: inline-flex;
       transition: opacity 0.12s ease, transform 0.08s ease;
+    }
+
+    /* ↑ ■ ↓ mają ~32 px — pole trafienia do 44 (gap 18 px daje zapas,
+       więc sąsiednie cele się nie nakładają). */
+    .cover-btn::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 999px;
     }
 
     .cover-btn:hover {
@@ -1531,6 +1558,9 @@ export class StratumRoomTile extends LitElement {
 
     .ctrl-btn {
       flex: 1;
+      /* ↑ ■ ↓ stoją w rządku po ~30 px z odstępem 6 px — rośnie sam
+         przycisk, bo niewidoczne pole trafienia zachodziłoby na sąsiada. */
+      min-height: 44px;
       padding: 6px;
       border-radius: 8px;
       border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
@@ -2009,6 +2039,12 @@ export class StratumRoomTile extends LitElement {
       background: rgba(255, 255, 255, 0.22);
     }
 
+    /* Bez okładki przycisk leży na powierzchni karty, nie na grafice —
+       biel przestaje być właściwym rozjaśnieniem. */
+    .player-tile:not(.has-art) .player-btn:hover {
+      background: var(--stratum-surface-4);
+    }
+
     .player-btn:active {
       transform: scale(0.92);
     }
@@ -2019,11 +2055,21 @@ export class StratumRoomTile extends LitElement {
     }
 
     .player-btn.vol-btn {
+      position: relative;
       width: 30px;
       height: 30px;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
+    }
+
+    /* Głośność / mute / mikrofon: 30 px wizualnie, 44 px pod palcem. */
+    .player-btn.vol-btn::after,
+    .player-power::after {
+      content: '';
+      position: absolute;
+      inset: -7px;
+      border-radius: 999px;
     }
     .player-btn.vol-btn ha-icon {
       --mdc-icon-size: 16px;
@@ -2212,7 +2258,7 @@ export class StratumRoomTile extends LitElement {
       bottom: 8px;
       height: 4px;
       border-radius: 4px;
-      background: rgba(255, 255, 255, 0.12);
+      background: var(--stratum-surface-3);
       overflow: hidden;
     }
 
@@ -2283,9 +2329,9 @@ export class StratumRoomTile extends LitElement {
       align-items: center;
       gap: 5px;
       font-size: 10.5px;
-      font-weight: 650;
+      font-weight: 600;
       color: var(--secondary-text-color);
-      background: rgba(128, 132, 140, 0.18);
+      background: var(--stratum-surface-3);
       border-radius: 999px;
       padding: 2px 9px;
       flex-shrink: 0;
