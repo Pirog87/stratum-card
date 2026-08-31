@@ -50,7 +50,7 @@ import './stratum-scene-bar.js';
 import { cardStyles } from './stratum-card-styles.js';
 import { fieldColorStyle } from './field-colors.js';
 
-const VERSION = '1.103.0';
+const VERSION = '1.104.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -786,9 +786,15 @@ export class StratumCard extends LitElement {
     return unavailableEntityIds(this.hass, entries);
   }
 
-  /** Szary chip liczby niedostepnych obok badge alarmu - klik otwiera liste. */
+  /**
+   * Szary chip liczby niedostepnych obok badge alarmu - klik otwiera liste.
+   * Domyslnie WYLACZONY: to widok diagnostyczny, a nie informacja na co
+   * dzien. Naglowek widac przez wiekszosc czasu i ma pokazywac stan domu,
+   * nie stan integracji - zwlaszcza ze licznik bywa trwale wysoki i wtedy
+   * niczego juz nie sygnalizuje. Wlacza sie go swiadomie w edytorze.
+   */
   private _renderHeaderUnavailableChip(): TemplateResult | typeof nothing {
-    if (!this.hass || this._config?.unavailable_chip === false) return nothing;
+    if (!this.hass || this._config?.unavailable_chip !== true) return nothing;
     const ids = unavailableEntityIds(this.hass, this._getEntries());
     if (ids.length === 0) return nothing;
     const areaIds = this._config?.floor_id

@@ -149,7 +149,11 @@ export interface StratumCardConfig {
 
   /**
    * Szary chip „N niedostępnych" w nagłówku (klik = lista urządzeń
-   * unavailable). Default true; chip i tak widoczny tylko gdy N > 0.
+   * unavailable). **Default false** — trzeba go włączyć świadomie.
+   * To widok diagnostyczny, nie informacja na co dzień: nagłówek ma
+   * pokazywać stan domu, nie stan integracji. Licznik pomija encje
+   * ukryte, wyłączone i diagnostyczne (patrz `unavailableEntityIds`).
+   * Nawet włączony pokazuje się wyłącznie gdy N > 0.
    */
   unavailable_chip?: boolean;
 

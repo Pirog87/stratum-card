@@ -447,7 +447,7 @@ export class StratumCardEditor extends LitElement {
   }
 
   private _onToggleChange(
-    key: 'expanded' | 'debug',
+    key: 'expanded' | 'debug' | 'unavailable_chip',
     ev: Event,
   ): void {
     const checked = (ev.target as HTMLInputElement).checked;
@@ -876,6 +876,24 @@ export class StratumCardEditor extends LitElement {
             .chips=${this._config.chips ?? []}
             @chips-changed=${this._chipsChanged}
           ></stratum-chips-editor>
+
+          <div class="stratum-toggles-row">
+            <label class="stratum-toggle">
+              <input
+                type="checkbox"
+                .checked=${this._config.unavailable_chip === true}
+                @change=${(ev: Event) =>
+                  this._onToggleChange('unavailable_chip', ev)}
+              />
+              <span>Chip „niedostępne urządzenia"</span>
+            </label>
+          </div>
+          <p class="stratum-panel-hint">
+            Szary licznik encji w stanie „unavailable", klik otwiera ich listę.
+            Pomija encje ukryte, wyłączone i diagnostyczne. Domyślnie
+            wyłączony — to widok diagnostyczny, a nagłówek ma pokazywać stan
+            domu, nie stan integracji. Włącz, gdy chcesz mieć to na oku.
+          </p>
         </div>
       </details>
 
