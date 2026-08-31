@@ -5,7 +5,7 @@
 // Layout (liczba kolumn, aspect ratio, rozmiar) pełna customization z configu.
 
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant, SceneBarConfig, SceneConfig } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
@@ -112,6 +112,33 @@ export class StratumSceneBar extends LitElement {
 
   @property({ attribute: false }) public config?: SceneBarConfig;
 
+  /**
+   * Entity ostatnio aktywowanej sceny — kafel dostaje na 900 ms obwódkę
+   * potwierdzenia. Scena NIE ma stanu „włączona" (to jednorazowe polecenie,
+   * nie przełącznik), więc nie da się jej podświetlić na stałe. Bez tego
+   * sygnału klik nie zostawia śladu przez sekundę czy dwie, zanim światła
+   * zdążą się przestawić — i użytkownik klika drugi raz.
+   */
+  @state() private _ack?: string;
+
+  private _ackTimer?: number;
+
+  public disconnectedCallback(): void {
+    if (this._ackTimer !== undefined) window.clearTimeout(this._ackTimer);
+    this._ackTimer = undefined;
+    super.disconnectedCallback();
+  }
+
+  private _flashAck(entity?: string): void {
+    if (!entity) return;
+    if (this._ackTimer !== undefined) window.clearTimeout(this._ackTimer);
+    this._ack = entity;
+    this._ackTimer = window.setTimeout(() => {
+      this._ack = undefined;
+      this._ackTimer = undefined;
+    }, 900);
+  }
+
   private _defaultActivate(scene: SceneConfig): void {
     if (!this.hass || !scene.entity) return;
     const domain = scene.entity.split('.')[0];
@@ -123,6 +150,7 @@ export class StratumSceneBar extends LitElement {
   }
 
   private _onTap(scene: SceneConfig): void {
+    this._flashAck(scene.entity);
     if (scene.tap_action) {
       void runTapAction(this.hass, scene.tap_action, { source: this });
       return;
@@ -194,7 +222,10 @@ export class StratumSceneBar extends LitElement {
     const dim = gradient && scene.entity ? this._dimShadow(scene.entity) : undefined;
     return html`
       <button
-        class="tile ${hasBackdrop ? 'has-image' : 'no-image'}"
+        class="tile ${hasBackdrop ? 'has-image' : 'no-image'} ${scene.entity &&
+        this._ack === scene.entity
+          ? 'ack'
+          : ''}"
         part="scene"
         style=${style}
         title=${name}
@@ -321,6 +352,40 @@ export class StratumSceneBar extends LitElement {
     .tile:focus-visible {
       outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
       outline-offset: 2px;
+    }
+
+    /* Potwierdzenie przyjęcia polecenia — obwódka gasnąca w 900 ms.
+       Świadomie NIE jest to stan „scena aktywna": scena takiego stanu nie
+       ma, a udawanie go kłamałoby przy następnej zmianie świateł. */
+    .tile.ack::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.92);
+      animation: stratum-scene-ack 0.9s ease-out forwards;
+    }
+
+    @keyframes stratum-scene-ack {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+      }
+    }
+
+    /* Bez ruchu obwódka po prostu stoi przez te 900 ms i znika razem
+       z klasą — sygnał zostaje, animacji nie ma. */
+    @media (prefers-reduced-motion: reduce) {
+      .tile.ack::before {
+        animation: none;
+      }
+      .tile:hover {
+        transform: none;
+      }
     }
 
     /* Scrim tylko pod pasem nazwy — wyżej gradient ma świecić pełnym

@@ -50,7 +50,7 @@ import './stratum-scene-bar.js';
 import { cardStyles } from './stratum-card-styles.js';
 import { fieldColorStyle } from './field-colors.js';
 
-const VERSION = '1.104.0';
+const VERSION = '1.105.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -499,6 +499,47 @@ export class StratumCard extends LitElement {
     if (changed.has('hass') && this.hass) {
       void ensureRegistry(this.hass);
     }
+    this._persistRowCount();
+  }
+
+  /**
+   * Pamięć liczby wierszy — żeby skeleton nie zgadywał.
+   *
+   * `_renderSkeleton` rysował `config.rooms?.length ?? 3`. Przy jawnej
+   * liście pokoi zgadza się idealnie, ale przy auto-wykrywaniu z `floor_id`
+   * (konfiguracja domyślna) `rooms` jest puste i skeleton pokazywał zawsze
+   * trzy wiersze — więc piętro z sześcioma pokojami podskakiwało przy
+   * każdym wejściu na dashboard. Klucz jest per piętro/strefa, bo Parter
+   * i Ogród mają różną liczbę pokoi; jedna wspólna wartość zamieniłaby
+   * jeden przeskok na dwa.
+   */
+  private _lastRowCount = 0;
+
+  private _rowsKey(): string | undefined {
+    const id = this._config?.floor_id ?? this._config?.area_id;
+    return id ? `stratum-card:rows:${id}` : undefined;
+  }
+
+  private _persistRowCount(): void {
+    const key = this._rowsKey();
+    if (!key || this._lastRowCount <= 0) return;
+    try {
+      window.localStorage.setItem(key, String(this._lastRowCount));
+    } catch {
+      // Prywatne okno / zablokowane dane witryny — skeleton po prostu
+      // wraca do zgadywania. Nic się nie psuje.
+    }
+  }
+
+  private _recallRowCount(): number | undefined {
+    const key = this._rowsKey();
+    if (!key) return undefined;
+    try {
+      const v = Number(window.localStorage.getItem(key));
+      return Number.isFinite(v) && v > 0 ? v : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private _debugLog(): void {
@@ -529,7 +570,13 @@ export class StratumCard extends LitElement {
   }
 
   private _renderSkeleton(): TemplateResult {
-    const rows = Math.min(this._config?.rooms?.length ?? 3, 6);
+    // Jawna lista pokoi > zapamiętana liczba z ostatniego renderu > 3.
+    // `||` a nie `??`, bo pusta tablica `rooms` ma length 0 i ma
+    // przepuścić dalej, do pamięci.
+    const rows = Math.min(
+      this._config?.rooms?.length || this._recallRowCount() || 3,
+      8,
+    );
     return html`<ha-card part="card">
       <div class="sk-header">
         <span class="sk-circle sk-anim"></span>
@@ -668,7 +715,19 @@ export class StratumCard extends LitElement {
         part="popup"
         @click=${(ev: MouseEvent) => this._onBackdropClick(ev)}
       >
-        <div class="stratum-popup-card" @click=${(ev: Event) => ev.stopPropagation()}>
+        <div
+          class="stratum-popup-card"
+          tabindex="-1"
+          role="dialog"
+          aria-modal="true"
+          @click=${(ev: Event) => ev.stopPropagation()}
+        >
+          <span
+            class="stratum-popup-sentinel"
+            tabindex="0"
+            aria-hidden="true"
+            @focus=${this._onSentinelStart}
+          ></span>
           <div
             class="stratum-popup-grab"
             role="button"
@@ -691,6 +750,12 @@ export class StratumCard extends LitElement {
             .hass=${this.hass}
             .config=${popupConfig}
           ></stratum-room-card>
+          <span
+            class="stratum-popup-sentinel"
+            tabindex="0"
+            aria-hidden="true"
+            @focus=${this._onSentinelEnd}
+          ></span>
         </div>
       </div>
     `;
@@ -901,6 +966,7 @@ export class StratumCard extends LitElement {
       const visible = this._config.rooms.filter(
         (r) => !r.hidden && !mergedInto.has(r.area_id),
       );
+      this._lastRowCount = visible.length;
       return html`${visible.map((room) => {
         const area = this.hass!.areas?.[room.area_id];
         const name = room.name ?? area?.name ?? room.area_id;
@@ -949,6 +1015,7 @@ export class StratumCard extends LitElement {
         </div>`;
       }
       const globalDisplay = this._config.rooms_display ?? 'row';
+      this._lastRowCount = areas.length;
       return html`${areas.map((area) =>
         this._renderRoomRow(
           [area.area_id],
@@ -965,6 +1032,7 @@ export class StratumCard extends LitElement {
     if (this._config.area_id) {
       const area = this.hass.areas?.[this._config.area_id];
       const name = area?.name ?? this._config.area_id;
+      this._lastRowCount = 1;
       return this._renderRoomRow(
         [this._config.area_id],
         name,
@@ -1273,12 +1341,61 @@ export class StratumCard extends LitElement {
     };
     document.addEventListener('keydown', this._onPopupKey);
     this._pushBackGuard();
+    // Popup to zwykly div nad trescia, nie natywny dialog, wiec fokus
+    // klawiatury sam do niego nie wejdzie - zostalby na wierszu pod
+    // spodem i pierwszy Tab poszedlby do NASTEPNEGO pokoju, po ekranie
+    // ktorego nie widac. Zapamietujemy skad przyszlismy i wchodzimy.
+    this._prevFocus =
+      (this.shadowRoot?.activeElement as HTMLElement | null) ??
+      (document.activeElement as HTMLElement | null);
+    void this.updateComplete.then(() => {
+      const card = this.shadowRoot?.querySelector(
+        '.stratum-popup-card',
+      ) as HTMLElement | null;
+      card?.focus();
+    });
   }
 
   private _closeRoomPopupNow(): void {
     this._popupRoom = undefined;
     document.removeEventListener('keydown', this._onPopupKey);
+    // Fokus wraca tam, skad popup zostal otwarty - inaczej po Escape
+    // kursor klawiatury przepada na poczatek dokumentu.
+    const prev = this._prevFocus;
+    this._prevFocus = undefined;
+    if (prev && typeof prev.focus === 'function') {
+      void this.updateComplete.then(() => prev.focus());
+    }
   }
+
+  /** Element, ktory mial fokus przed otwarciem popupu. */
+  private _prevFocus?: HTMLElement | null;
+
+  /**
+   * Pulapka fokusa na wartownikach: puste, focusowalne spany na poczatku
+   * i koncu arkusza. Gdy Tab wyjdzie poza tresc, ladujemy na wartowniku
+   * i odbijamy fokus z powrotem do srodka. Dziala takze przez granice
+   * shadow DOM karty pokoju, czego reczne zbieranie focusowalnych
+   * elementow by nie zalatwilo.
+   */
+  private _focusInPopup(selector: string): void {
+    const el = this.shadowRoot?.querySelector(selector) as HTMLElement | null;
+    el?.focus();
+  }
+
+  private _onSentinelStart = (): void => {
+    this._focusInPopup('.stratum-popup-close');
+  };
+
+  private _onSentinelEnd = (): void => {
+    const grab = this.shadowRoot?.querySelector(
+      '.stratum-popup-grab',
+    ) as HTMLElement | null;
+    // Uchwyt istnieje tylko na telefonie (display:none wyzej), a element
+    // ukryty nie przyjmie fokusa - wtedy pierwszym przystankiem jest x.
+    if (grab && grab.offsetParent !== null) grab.focus();
+    else this._focusInPopup('.stratum-popup-close');
+  };
 
   private _closeRoomPopup = (): void => {
     if (this._consumeBackGuard()) return;
