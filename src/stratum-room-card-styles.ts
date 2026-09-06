@@ -269,7 +269,7 @@ export const roomCardStyles = css`
        hoście stratum-room-tile. */
     .tiles {
       display: grid;
-      gap: 8px;
+      gap: 10px;
       grid-auto-rows: 1fr;
     }
 

@@ -1302,6 +1302,10 @@ export class StratumRoomTile extends LitElement {
     .glight,
     .player-tile {
       height: 100%;
+      /* border-box jest tu KRYTYCZNY: bez niego 100% + padding sprawia,
+         ze kafel jest wyzszy niz host o 2x padding i wylewa sie na
+         nastepny wiersz siatki (zmierzone: 24 px nachodzenia). */
+      box-sizing: border-box;
     }
 
     .tile {
@@ -2101,8 +2105,15 @@ export class StratumRoomTile extends LitElement {
       min-height: var(--stratum-glight-min-height, 96px);
       border-radius: var(--stratum-glight-radius, 16px);
       padding: 12px;
-      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.04));
-      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.06));
+      /* Wyrazniejsza separacja od tla i sasiadow — przy ledwo widocznych
+         ramkach sasiednie kafle zlewaly sie w jedna bryle. Powierzchnia
+         i ramka z motywu (color-mix), zgodnie z regulami CLAUDE.md. */
+      background: var(
+        --stratum-tile-background,
+        color-mix(in srgb, var(--card-background-color) 93%, var(--primary-text-color))
+      );
+      border: 1px solid
+        color-mix(in srgb, var(--primary-text-color) 14%, transparent);
       color: var(--primary-text-color);
       cursor: pointer;
       overflow: hidden;
