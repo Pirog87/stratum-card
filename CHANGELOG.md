@@ -4,6 +4,19 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.105.1] — 2026-09-06
+
+### Fixed (kafle świateł nachodziły na siebie / „ucięte na dole")
+- **`box-sizing: border-box` na rozciąganych wariantach kafla**
+  (`.tile/.glight/.player-tile/...`). W 1.103.0 kafle dostały
+  `height: 100%` (wyrównanie do rzędu siatki `grid-auto-rows: 1fr`),
+  ale przy domyślnym content-box 100% + padding 2×12 px dawało kafel
+  o 24 px wyższy niż jego host — każdy kafel wylewał się na następny
+  wiersz (zmierzone w harnessie i pomiarem pikseli zrzutów usera).
+  Zamysł równej wysokości kafli z 1.103.0 zostaje — teraz bez wycieku.
+- Wyraźniejsza separacja kafla grupy świateł: powierzchnia i ramka
+  liczone z motywu (`color-mix` na zmiennych HA), gap siatki 8 → 10 px.
+
 ## [1.101.0] — 2026-08-25
 
 ### Added (szlify UX — pkt 1 + 2 z makiety)
