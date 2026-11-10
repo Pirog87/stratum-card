@@ -108,9 +108,13 @@ export class StratumCardChip extends LitElement {
     :host([tinted]) .chip.active {
       background: color-mix(
         in srgb,
-        var(--stratum-chip-accent, var(--primary-text-color)) 14%,
+        var(--stratum-chip-accent, var(--primary-text-color)) 16%,
         transparent
       );
+    }
+
+    :host([tinted]) .count {
+      font-variant-numeric: tabular-nums;
     }
 
     .icon {

@@ -66,7 +66,7 @@ card_mod:
 | Zmienna | Default | Opis |
 |---|---|---|
 | `--stratum-card-background` | `--ha-card-background` | tło całej karty |
-| `--stratum-card-border-radius` | `--ha-card-border-radius` (12px) | zaokrąglenie rogów |
+| `--stratum-card-border-radius` | `--ha-card-border-radius` (12px); w stylu belki „Smugi" domyślnie 24px | zaokrąglenie rogów |
 | `--stratum-card-color` | `--primary-text-color` | kolor domyślnego tekstu |
 | `--stratum-card-divider-color` | `--divider-color` | pozioma linia pod headerem / nad body |
 | `--stratum-card-focus-color` | `--primary-color` (#ff9b42) | obrys fokus (klawiatura) |
@@ -88,9 +88,9 @@ card_mod:
 | Zmienna | Default | Opis |
 |---|---|---|
 | `--stratum-lights` | `--stratum-chip-lights-color` (#ffc107) | kolor „świeci się": paski bez własnego koloru, poświata i ikona belki |
-| `--stratum-header-glow-color` | średni kolor świateł piętra / `--stratum-lights` | kolor poświaty i ikony belki, gdy na piętrze świeci światło; ustawienie tej zmiennej wyłącza kolor automatyczny |
+| `--stratum-header-glow-color` | `--stratum-lights` | kolor poświaty i ikony belki, gdy na piętrze świeci światło (też z configu: `header.glow_color`) |
 | `--stratum-header-icon-radius` | `12px` | zaokrąglenie kwadratu ikony |
-| `--stratum-header-stripe-width` | `44px` (34px poniżej 340px szerokości belki) | szerokość pojedynczego paska |
+| `--stratum-header-stripe-width` | `44px` (34px, gdy karta jest węższa niż ok. 330px) | szerokość pojedynczego paska |
 | `--stratum-header-stripe-bg` | kolor światła w pokoju / `--stratum-lights` | tło paska (ustawiane inline per pasek przy `stripes_color: lights`) |
 
 ### Wiersze pomieszczeń (`stratum-card-room-row`)

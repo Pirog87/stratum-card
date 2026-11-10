@@ -359,6 +359,9 @@ export class StratumCardEditor extends LitElement {
       if (raw.stripes_color === 'static') cleaned.stripes_color = 'static';
       if (raw.stripes_tap === 'none') cleaned.stripes_tap = 'none';
       if (raw.icon_glow === false) cleaned.icon_glow = false;
+      if (raw.glow_color && raw.glow_color.trim() !== '') {
+        cleaned.glow_color = raw.glow_color;
+      }
     }
     if (Object.keys(cleaned).length === 0) delete next.header;
     else next.header = cleaned;

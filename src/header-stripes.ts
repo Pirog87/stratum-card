@@ -19,7 +19,10 @@ export interface HeaderStripe {
   kind: 'room' | 'more';
   /** Tylko dla `room` — do otwarcia popupu pokoju. */
   area_id?: string;
+  /** Napis na pasku — dla pokoju skrócony (patrz `shortStripeLabel`). */
   label: string;
+  /** Pełna nazwa pokoju — dla czytników ekranu i podpowiedzi. */
+  name?: string;
   /** Tylko dla `room` i tylko gdy pokój raportuje kolor. */
   color?: string;
 }
@@ -48,16 +51,47 @@ export function buildHeaderStripes(
 ): HeaderStripe[] {
   const limit = clampStripesMax(max);
   const lit = rooms.filter((r) => r.lightsOn > 0);
-  const toStripe = (r: StripeRoom): HeaderStripe => ({
-    kind: 'room',
-    area_id: r.area_id,
-    label: r.name,
-    color: r.color,
-  });
-  if (lit.length <= limit) return lit.map(toStripe);
-  const named = lit.slice(0, limit - 1).map(toStripe);
+  const shown = lit.length <= limit ? lit : lit.slice(0, limit - 1);
+  const labels = stripeLabels(shown.map((r) => r.name));
+  const named = shown.map(
+    (r, i): HeaderStripe => ({
+      kind: 'room',
+      area_id: r.area_id,
+      label: labels[i]!,
+      name: r.name,
+      color: r.color,
+    }),
+  );
+  if (lit.length <= limit) return named;
   const rest = lit.length - named.length;
   return [...named, { kind: 'more', label: `+${rest}` }];
+}
+
+/** Ile znaków mieści się na pasku przy jego stałej długości i kroju napisu. */
+const STRIPE_LABEL_MAX = 9;
+
+/**
+ * Napisy na paski dla podanych nazw pokoi.
+ *
+ * Pasek ma stałą długość, więc „Korytarz parter" urywałby się w pół
+ * słowa. Nazwa wielowyrazowa, która się nie mieści, skraca się do
+ * pierwszego słowa („Korytarz", „Biuro"). Jeśli po skróceniu dwa widoczne
+ * paski miałyby ten sam napis („Biuro Tomka" i „Biuro Izy"), oba biorą
+ * ostatnie słowo — inaczej nie dałoby się ich odróżnić.
+ */
+export function stripeLabels(names: string[]): string[] {
+  const words = names.map((n) => n.trim().split(/\s+/).filter(Boolean));
+  const short = names.map((n, i) => {
+    const w = words[i]!;
+    return n.trim().length > STRIPE_LABEL_MAX && w.length > 1 ? w[0]! : n.trim();
+  });
+  return short.map((label, i) => {
+    const clash = short.some(
+      (other, j) => j !== i && other.toLowerCase() === label.toLowerCase(),
+    );
+    const w = words[i]!;
+    return clash && w.length > 1 ? w[w.length - 1]! : label;
+  });
 }
 
 /**
@@ -82,32 +116,4 @@ export function stripeInk(color: string | undefined): 'dark' | 'light' {
   // Próg 0.3 — kolory o średniej jasności (nasycony fiolet, turkus) wciąż
   // lepiej niosą ciemny napis niż biały.
   return luminance > 0.3 ? 'dark' : 'light';
-}
-
-/**
- * Uśredniony kolor świateł piętra — dla poświaty ikony belki.
- *
- * Średnia arytmetyczna kanałów RGB po pokojach, w których świeci się
- * światło ORAZ znany jest jego kolor. Pokój liczy się raz, niezależnie od
- * liczby żarówek: karta zna kolor tylko pierwszego włączonego światła
- * w pokoju, więc ważenie liczbą świateł udawałoby dokładność, której nie ma.
- * `undefined`, gdy żaden świecący pokój nie raportuje koloru — wtedy
- * poświata zostaje w kolorze świateł z motywu.
- */
-export function averageLightColor(rooms: StripeRoom[]): string | undefined {
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  let n = 0;
-  for (const room of rooms) {
-    if (room.lightsOn <= 0 || !room.color) continue;
-    const m = room.color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-    if (!m) continue;
-    r += Number(m[1]);
-    g += Number(m[2]);
-    b += Number(m[3]);
-    n += 1;
-  }
-  if (n === 0) return undefined;
-  return `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`;
 }

@@ -4,6 +4,29 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.106.1] — 2026-11-10
+
+### Fixed (belka „Smugi" — poprawki po pierwszym uruchomieniu na żywo)
+- **Paski były za wąskie na telefonie.** Próg zwężania liczył się od
+  content-boxu belki (karta minus padding), więc zwykła karta 366 px
+  wpadała w tryb „wąski" (paski 34 px zamiast 44). Progi przesunięte na
+  karty ok. 330 / 270 px.
+- **Długie nazwy pokoi** skracają się do pierwszego słowa („Korytarz
+  parter" → „Korytarz", „Biuro Tomka" → „Biuro") zamiast urywać się
+  w pół wyrazu. Gdy dwa widoczne paski miałyby ten sam napis, oba biorą
+  ostatnie słowo. Pełna nazwa zostaje w `aria-label` i podpowiedzi.
+
+### Changed
+- **Poświata ikony ma jeden, stały kolor** (kolor świateł z motywu)
+  zamiast średniej barw żarówek — średnia z np. pomarańczowego
+  i niebieskiego wychodziła szarofioletowa i ikona wyglądała na
+  zgaszoną. Kolor światła niosą same paski. Nowa opcja
+  `header.glow_color` pozwala wskazać własny kolor poświaty.
+- Karta w stylu „Smugi" ma domyślnie większy promień rogów (24 px;
+  `--stratum-card-border-radius` dalej nadpisuje) — przy 12 px z motywu
+  ostatni pasek kończył się kanciasto.
+- Liczniki (chipy) w belce „Smugi" są większe: ikona 16 px, liczba 13 px.
+
 ## [1.106.0] — 2026-11-10
 
 ### Added (belka „Smugi" — nowy, opcjonalny wygląd zwiniętego piętra)

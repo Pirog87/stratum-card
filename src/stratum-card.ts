@@ -50,14 +50,13 @@ import './stratum-scene-bar.js';
 import { cardStyles } from './stratum-card-styles.js';
 import { fieldColorStyle } from './field-colors.js';
 import {
-  averageLightColor,
   buildHeaderStripes,
   stripeInk,
   type HeaderStripe,
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.106.0';
+const VERSION = '1.106.1';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -657,7 +656,11 @@ export class StratumCard extends LitElement {
 
     if (header.style === 'stripes') {
       return html`
-        <ha-card part="card" @pointerdown=${this._onInteraction}>
+        <ha-card
+          class="stripes-card"
+          part="card"
+          @pointerdown=${this._onInteraction}
+        >
           ${this._renderStripesHeader(name, icon, header, headerStyles)}
           <div
             class="body-wrap ${this._expanded ? 'open' : ''}"
@@ -831,11 +834,11 @@ export class StratumCard extends LitElement {
     const lit = rooms.some((r) => r.lightsOn > 0);
     const useLightColor = header.stripes_color !== 'static';
     const tapOpensRoom = header.stripes_tap !== 'none';
-    // Poświata ikony w uśrednionym kolorze świateł piętra — tylko gdy paski
-    // też biorą kolor z żarówek; przy `static` całość zostaje w jednym tonie.
-    const glow = useLightColor ? averageLightColor(rooms) : undefined;
-    const stripesHeaderStyles = glow
-      ? `${headerStyles} --stratum-header-glow-auto: ${glow};`
+    // Poświata ikony ma jeden, stały kolor („świeci się"), niezależny od
+    // barw żarówek — kolor światła niosą paski. Wersja z uśrednianiem barw
+    // dawała na żywo brudne odcienie i myliła z ikoną zgaszoną.
+    const stripesHeaderStyles = header.glow_color
+      ? `${headerStyles} --stratum-header-glow-color: ${header.glow_color};`
       : headerStyles;
     const classes = [
       'header',
@@ -902,7 +905,8 @@ export class StratumCard extends LitElement {
                   style=${style}
                   aria-label=${s.kind === 'more'
                     ? `${name}: ${s.label}`
-                    : s.label}
+                    : (s.name ?? s.label)}
+                  title=${s.name ?? s.label}
                   @click=${(ev: Event) => this._onStripeTap(ev, s, rooms)}
                 >
                   <span class="hs-stripe-label">${s.label}</span>
