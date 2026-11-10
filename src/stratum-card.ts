@@ -49,8 +49,15 @@ import './stratum-scene-bar.js';
 
 import { cardStyles } from './stratum-card-styles.js';
 import { fieldColorStyle } from './field-colors.js';
+import {
+  averageLightColor,
+  buildHeaderStripes,
+  stripeInk,
+  type HeaderStripe,
+  type StripeRoom,
+} from './header-stripes.js';
 
-const VERSION = '1.105.1';
+const VERSION = '1.106.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -367,6 +374,7 @@ export class StratumCard extends LitElement {
         .color=${chip.color ?? value.color ?? resolveChipColor(chip)}
         .showWhenZero=${showWhenZero}
         .clickable=${clickable}
+        .tinted=${this._config?.header?.style === 'stripes'}
         @chip-tap=${() => this._onChipTap(chip)}
       ></stratum-card-chip>`);
     }
@@ -647,6 +655,23 @@ export class StratumCard extends LitElement {
       .filter(Boolean)
       .join(' ');
 
+    if (header.style === 'stripes') {
+      return html`
+        <ha-card part="card" @pointerdown=${this._onInteraction}>
+          ${this._renderStripesHeader(name, icon, header, headerStyles)}
+          <div
+            class="body-wrap ${this._expanded ? 'open' : ''}"
+            part="body"
+            aria-hidden=${!this._expanded}
+          >
+            <div class="body">${this._renderBody()}</div>
+          </div>
+        </ha-card>
+        ${this._renderPopup()}
+        ${this._renderChipListPopup()}
+      `;
+    }
+
     return html`
       <ha-card part="card" @pointerdown=${this._onInteraction}>
         <button
@@ -683,6 +708,209 @@ export class StratumCard extends LitElement {
       </ha-card>
       ${this._renderPopup()}
       ${this._renderChipListPopup()}
+    `;
+  }
+
+  /** Nadpisania popupu z configu pokoju — jedno miejsce dla listy i pasków belki. */
+  private _popupOverridesOf(room: import('./types.js').RoomConfig) {
+    return {
+      merge_with: room.merge_with,
+      sections: room.sections,
+      scenes: room.scenes,
+      lights: room.lights,
+      light_auto_entity: room.light_auto_entity,
+      light_split_areas: room.light_split_areas,
+      light_auto_entities: room.light_auto_entities,
+      light_singles: room.light_singles,
+      covers_list: room.covers_list,
+      media_list: room.media_list,
+      popup_order: room.popup_order,
+      popup_extra: room.popup_extra,
+      chips: room.chips,
+    };
+  }
+
+  /**
+   * Pokoje piętra z liczbą włączonych świateł i kolorem świecenia — dane
+   * dla pasków belki `stripes`. Ta sama kolejność i te same reguły
+   * widoczności co lista pomieszczeń (`_renderRooms`): ukryte i scalone
+   * area nie dostają własnego paska, a `merge_with` dolicza się do pokoju
+   * głównego, o ile nie wyłączono tego przez `aggregate: 'primary_only'`.
+   */
+  private _stripeRooms(): Array<StripeRoom & { room?: import('./types.js').RoomConfig }> {
+    if (!this.hass || !this._config) return [];
+    const hass = this.hass;
+    const describe = (
+      areaIds: string[],
+      name: string,
+      room?: import('./types.js').RoomConfig,
+    ): StripeRoom & { room?: import('./types.js').RoomConfig } => {
+      const seen = new Set<string>();
+      const entries: HassEntityRegistryEntry[] = [];
+      for (const id of areaIds) {
+        for (const e of getEntitiesInArea(hass, id)) {
+          if (seen.has(e.entity_id)) continue;
+          seen.add(e.entity_id);
+          entries.push(e);
+        }
+      }
+      const data = computeTileData(hass, entries, room?.field_entities);
+      return {
+        area_id: areaIds[0]!,
+        name,
+        lightsOn: data.lightsOn,
+        color: data.lightsRgb,
+        room,
+      };
+    };
+
+    if (this._config.rooms && this._config.rooms.length > 0) {
+      const mergedInto = new Set<string>();
+      for (const r of this._config.rooms) {
+        for (const child of r.merge_with ?? []) mergedInto.add(child);
+      }
+      return this._config.rooms
+        .filter((r) => !r.hidden && !mergedInto.has(r.area_id))
+        .map((r) => {
+          const areaIds =
+            (r.aggregate ?? 'sum') === 'sum' && r.merge_with?.length
+              ? [r.area_id, ...r.merge_with]
+              : [r.area_id];
+          const name = r.name ?? hass.areas?.[r.area_id]?.name ?? r.area_id;
+          return describe(areaIds, name, r);
+        });
+    }
+    if (this._config.floor_id) {
+      return getAreasInFloor(hass, this._config.floor_id).map((a) =>
+        describe([a.area_id], a.name),
+      );
+    }
+    if (this._config.area_id) {
+      const id = this._config.area_id;
+      return [describe([id], hass.areas?.[id]?.name ?? id)];
+    }
+    return [];
+  }
+
+  private _onStripeTap(
+    ev: Event,
+    stripe: HeaderStripe,
+    rooms: Array<StripeRoom & { room?: import('./types.js').RoomConfig }>,
+  ): void {
+    // Pasek leży w belce, której klik rozwija kartę — bez tego dotknięcie
+    // paska robiłoby dwie rzeczy naraz.
+    ev.stopPropagation();
+    if (stripe.kind === 'more' || !stripe.area_id) {
+      // „+N" nie ma jednego pokoju do otwarcia — pokazujemy wszystkie,
+      // czyli rozwijamy listę.
+      if (!this._expanded) this._toggleExpand();
+      return;
+    }
+    if (this._config?.header?.stripes_tap === 'none') return;
+    const match = rooms.find((r) => r.area_id === stripe.area_id);
+    this._openRoomPopup(
+      stripe.area_id,
+      match?.room ? this._popupOverridesOf(match.room) : undefined,
+    );
+  }
+
+  /**
+   * Belka w stylu `stripes`. Nie jest jednym `<button>` jak klasyczna —
+   * mieści trzy rodzaje celów (rozwinięcie, chipy, paski pokoi), a przycisk
+   * w przycisku jest niepoprawny i gubi fokus klawiatury. Rozwijanie niesie
+   * przycisk z nazwą; klik w tło belki działa tak samo dla wygody dotyku.
+   */
+  private _renderStripesHeader(
+    name: string,
+    icon: string,
+    header: import('./types.js').HeaderConfig,
+    headerStyles: string,
+  ): TemplateResult {
+    const rooms = this._stripeRooms();
+    const stripes = buildHeaderStripes(rooms, header.stripes_max);
+    const lit = rooms.some((r) => r.lightsOn > 0);
+    const useLightColor = header.stripes_color !== 'static';
+    const tapOpensRoom = header.stripes_tap !== 'none';
+    // Poświata ikony w uśrednionym kolorze świateł piętra — tylko gdy paski
+    // też biorą kolor z żarówek; przy `static` całość zostaje w jednym tonie.
+    const glow = useLightColor ? averageLightColor(rooms) : undefined;
+    const stripesHeaderStyles = glow
+      ? `${headerStyles} --stratum-header-glow-auto: ${glow};`
+      : headerStyles;
+    const classes = [
+      'header',
+      'stripes',
+      lit ? 'lit' : '',
+      header.icon_glow === false ? 'no-glow' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return html`
+      <div
+        class=${classes}
+        part="header"
+        style=${stripesHeaderStyles}
+        @click=${this._toggleExpand}
+      >
+        <span class="hs-icon" part="area-icon-wrap" aria-hidden="true">
+          <ha-icon class="area-icon" part="area-icon" .icon=${icon}></ha-icon>
+        </span>
+        <div class="hs-text">
+          <button
+            type="button"
+            class="hs-title"
+            part="title"
+            aria-expanded=${this._expanded}
+            @click=${(ev: Event) => {
+              ev.stopPropagation();
+              this._toggleExpand();
+            }}
+          >
+            ${name}
+          </button>
+          <div
+            class="chips"
+            part="chips"
+            @click=${(ev: Event) => ev.stopPropagation()}
+          >
+            ${this._renderHeaderAlarmBadge()}
+            ${this._renderHeaderUnavailableChip()}
+            ${this._renderChips()}
+          </div>
+        </div>
+        ${stripes.length > 0
+          ? html`<div class="hs-stripes" part="stripes">
+              ${stripes.map((s) => {
+                const color = useLightColor ? s.color : undefined;
+                const interactive = s.kind === 'more' || tapOpensRoom;
+                const cls = `hs-stripe ink-${stripeInk(color)} ${s.kind}`;
+                const style = color
+                  ? `--stratum-header-stripe-bg: ${color};`
+                  : '';
+                // Pasek, który nic nie robi (stripes_tap: none), nie udaje
+                // przycisku — zwykły element bez fokusa i bez kursora.
+                if (!interactive) {
+                  return html`<span class=${cls} part="stripe" style=${style}>
+                    <span class="hs-stripe-label">${s.label}</span>
+                  </span>`;
+                }
+                return html`<button
+                  type="button"
+                  class=${cls}
+                  part="stripe"
+                  style=${style}
+                  aria-label=${s.kind === 'more'
+                    ? `${name}: ${s.label}`
+                    : s.label}
+                  @click=${(ev: Event) => this._onStripeTap(ev, s, rooms)}
+                >
+                  <span class="hs-stripe-label">${s.label}</span>
+                </button>`;
+              })}
+            </div>`
+          : nothing}
+      </div>
     `;
   }
 
@@ -982,21 +1210,7 @@ export class StratumCard extends LitElement {
           name,
           icon,
           room.tap_action,
-          {
-            merge_with: room.merge_with,
-            sections: room.sections,
-            scenes: room.scenes,
-            lights: room.lights,
-            light_auto_entity: room.light_auto_entity,
-            light_split_areas: room.light_split_areas,
-            light_auto_entities: room.light_auto_entities,
-            light_singles: room.light_singles,
-            covers_list: room.covers_list,
-            media_list: room.media_list,
-            popup_order: room.popup_order,
-            popup_extra: room.popup_extra,
-            chips: room.chips,
-          },
+          this._popupOverridesOf(room),
           display,
           room.field_entities,
           room.style_override,

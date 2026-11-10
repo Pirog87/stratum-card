@@ -62,6 +62,15 @@ export const surfaceTokens = css`
       #000
     );
 
+    /* Kolor „świeci się" — jeden na całą kartę (chip świateł, paski i
+       poświata belki). Domyślnie ten sam, którego używa chip świateł. */
+    --stratum-lights: var(--stratum-chip-lights-color, #ffc107);
+
+    /* Skrajne końce dla napisów na kolorowym tle (pasek belki bierze kolor
+       z żarówki, więc tekst liczymy z tła w stronę czerni albo bieli). */
+    --stratum-ink-shade: #000;
+    --stratum-ink-tint: #fff;
+
     /* Mapowanie na tokeny, których używa reszta kodu. Nadpisanie
        któregokolwiek z nich z zewnątrz dalej wygrywa. */
     --stratum-tile-background: var(--stratum-surface-1);

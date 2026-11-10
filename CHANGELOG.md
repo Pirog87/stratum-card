@@ -4,6 +4,31 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.106.0] — 2026-11-10
+
+### Added (belka „Smugi" — nowy, opcjonalny wygląd zwiniętego piętra)
+- **`header.style: stripes`** — ikona piętra w kwadracie, chipy pod
+  nazwą, a z prawej skośne paski z nazwami pokoi, w których świeci się
+  światło. Domyślnie nic się nie zmienia (`classic`); styl włącza się
+  per karta w edytorze: Nagłówek → Styl belki → Smugi.
+- Pasek bierze **kolor świecenia** pierwszego włączonego światła
+  w pokoju (ten sam mechanizm co kafle: `rgb_color` / temperatura
+  barwowa); `stripes_color: static` daje jeden kolor z motywu.
+  Kolor napisu (ciemny / jasny) liczony z luminancji tła paska.
+- **Dotknięcie paska otwiera popup pokoju** (z nadpisaniami z `rooms`);
+  `stripes_tap: none` to wyłącza. Chipy działają jak dotąd (lista
+  aktywnych encji), nazwa piętra rozwija kartę.
+- Gdy świeci się w większej liczbie pokoi niż `stripes_max` (1–4,
+  domyślnie 3), ostatni pasek to „+N" i rozwija listę.
+- **Poświata** wokół ikony i rozjaśnienie belki, gdy na piętrze coś
+  świeci (`icon_glow: false` wyłącza) — w uśrednionym kolorze świateł
+  piętra (średnia po pokojach ze znanym kolorem); przy
+  `stripes_color: static` w kolorze świateł z motywu.
+- Belka zwęża paski poniżej 340 px szerokości i chowa je poniżej 270 px
+  (container query na belce, nie na viewporcie).
+- Nowe zmienne i `part`-y opisane w `docs/styling.md`
+  (`--stratum-lights`, `--stratum-header-*`, `stripes`, `stripe`).
+
 ## [1.105.1] — 2026-09-06
 
 ### Fixed (kafle świateł nachodziły na siebie / „ucięte na dole")

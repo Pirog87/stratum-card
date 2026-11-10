@@ -193,6 +193,23 @@ export interface HeaderConfig {
   accent_bar?: boolean;
   /** Kolor akcentowego paska (tylko gdy `accent_bar: true`). */
   accent_bar_color?: string;
+  /**
+   * Wygląd belki: `classic` (default) albo `stripes` — ikona w kwadracie,
+   * chipy pod nazwą, a z prawej skośne paski z nazwami pokoi, w których
+   * świeci się światło. `stripes` nie rysuje chevronu ani akcentowego paska.
+   */
+  style?: 'classic' | 'stripes';
+  /** `stripes`: ile pasków mieści belka (1–4, default 3). Nadmiar → pasek „+N". */
+  stripes_max?: number;
+  /**
+   * `stripes`: skąd kolor paska. `lights` (default) — kolor świecenia
+   * pierwszego włączonego światła w pokoju; `static` — kolor świateł z motywu.
+   */
+  stripes_color?: 'lights' | 'static';
+  /** `stripes`: co robi dotknięcie paska pokoju. `popup` (default) / `none`. */
+  stripes_tap?: 'popup' | 'none';
+  /** `stripes`: poświata wokół ikony, gdy coś świeci. Default true. */
+  icon_glow?: boolean;
 }
 
 /**
