@@ -32,6 +32,16 @@ const COLOR_SWATCHES: Array<{ key: string; color: string; label: string }> = [
   { key: 'pink', color: '#ec407a', label: 'Różowy' },
 ];
 
+const HEADER_STYLES: Array<{ value: 'classic' | 'stripes'; label: string }> = [
+  { value: 'classic', label: 'Klasyczna' },
+  { value: 'stripes', label: 'Smugi' },
+];
+
+const STRIPES_COLORS: Array<{ value: 'lights' | 'static'; label: string }> = [
+  { value: 'lights', label: 'Kolor światła' },
+  { value: 'static', label: 'Stały' },
+];
+
 type ColorKey = 'title_color' | 'icon_color' | 'accent_bar_color';
 
 @customElement('stratum-header-editor')
@@ -89,6 +99,86 @@ export class StratumHeaderEditor extends LitElement {
     this._patch({ [key]: checked ? true : undefined } as Partial<HeaderConfig>);
   }
 
+  private _setStyle(style: 'classic' | 'stripes'): void {
+    this._patch({ style: style === 'classic' ? undefined : style });
+  }
+
+  private _setStripesColor(mode: 'lights' | 'static'): void {
+    this._patch({ stripes_color: mode === 'lights' ? undefined : mode });
+  }
+
+  private _onStripesMax(ev: Event): void {
+    const v = parseInt((ev.target as HTMLInputElement).value, 10);
+    this._patch({ stripes_max: v === 3 ? undefined : v });
+  }
+
+  /**
+   * Przełączniki, których stan domyślny to „włączone” — w configu zapisujemy
+   * tylko odstępstwo, żeby YAML zostawał czysty.
+   */
+  private _onDefaultOnToggle(key: 'icon_glow' | 'stripes_tap', ev: Event): void {
+    const checked = (ev.target as HTMLInputElement).checked;
+    if (key === 'icon_glow') {
+      this._patch({ icon_glow: checked ? undefined : false });
+    } else {
+      this._patch({ stripes_tap: checked ? undefined : 'none' });
+    }
+  }
+
+  private _renderStripesOptions(cfg: HeaderConfig): TemplateResult {
+    const max = cfg.stripes_max ?? 3;
+    const colorMode = cfg.stripes_color ?? 'lights';
+    return html`
+      <div class="stratum-group">
+        <label class="stratum-group-label">Kolor pasków</label>
+        <div class="stratum-chip-row">
+          ${STRIPES_COLORS.map(
+            (c) => html`<button
+              type="button"
+              class="stratum-chip ${colorMode === c.value ? 'on' : ''}"
+              @click=${() => this._setStripesColor(c.value)}
+            >
+              ${c.label}
+            </button>`,
+          )}
+        </div>
+      </div>
+
+      <div class="stratum-slider-row">
+        <label class="stratum-slider-label">Liczba pasków</label>
+        <div class="stratum-slider-value">${max}</div>
+        <input
+          type="range"
+          class="stratum-slider"
+          min="1"
+          max="4"
+          step="1"
+          .value=${String(max)}
+          @input=${this._onStripesMax}
+        />
+      </div>
+
+      <div class="stratum-toggles-row">
+        <label class="stratum-toggle">
+          <input
+            type="checkbox"
+            .checked=${cfg.icon_glow !== false}
+            @change=${(ev: Event) => this._onDefaultOnToggle('icon_glow', ev)}
+          />
+          <span>Poświata wokół ikony</span>
+        </label>
+        <label class="stratum-toggle">
+          <input
+            type="checkbox"
+            .checked=${cfg.stripes_tap !== 'none'}
+            @change=${(ev: Event) => this._onDefaultOnToggle('stripes_tap', ev)}
+          />
+          <span>Pasek otwiera pomieszczenie</span>
+        </label>
+      </div>
+    `;
+  }
+
   protected render(): TemplateResult {
     const cfg = this.config;
     const titleSize = cfg.title_size ?? 'md';
@@ -96,7 +186,27 @@ export class StratumHeaderEditor extends LitElement {
     const iconSize = cfg.icon_size ?? 22;
     const padding = cfg.padding ?? 14;
 
+    const style = cfg.style ?? 'classic';
+    const isStripes = style === 'stripes';
+
     return html`
+      <div class="stratum-group">
+        <label class="stratum-group-label">Styl belki</label>
+        <div class="stratum-chip-row">
+          ${HEADER_STYLES.map(
+            (s) => html`<button
+              type="button"
+              class="stratum-chip ${style === s.value ? 'on' : ''}"
+              @click=${() => this._setStyle(s.value)}
+            >
+              ${s.label}
+            </button>`,
+          )}
+        </div>
+      </div>
+
+      ${isStripes ? this._renderStripesOptions(cfg) : nothing}
+
       <div class="stratum-group">
         <label class="stratum-group-label">Rozmiar tytułu</label>
         <div class="stratum-chip-row">
@@ -146,46 +256,59 @@ export class StratumHeaderEditor extends LitElement {
         />
       </div>
 
-      <div class="stratum-slider-row">
-        <label class="stratum-slider-label">Padding belki</label>
-        <div class="stratum-slider-value">${padding} px</div>
-        <input
-          type="range"
-          class="stratum-slider"
-          min="4"
-          max="28"
-          step="1"
-          .value=${String(padding)}
-          @input=${(ev: Event) => this._onSlider('padding', ev)}
-        />
-      </div>
+      ${
+        // Belka „Smugi" ma stałą wysokość (paski liczą z niej skos) —
+        // padding jej nie zmienia, więc suwak byłby martwy.
+        isStripes
+          ? nothing
+          : html`<div class="stratum-slider-row">
+              <label class="stratum-slider-label">Padding belki</label>
+              <div class="stratum-slider-value">${padding} px</div>
+              <input
+                type="range"
+                class="stratum-slider"
+                min="4"
+                max="28"
+                step="1"
+                .value=${String(padding)}
+                @input=${(ev: Event) => this._onSlider('padding', ev)}
+              />
+            </div>`
+      }
 
-      <div class="stratum-toggles-row">
-        <label class="stratum-toggle">
-          <input
-            type="checkbox"
-            .checked=${cfg.hide_expander === true}
-            @change=${(ev: Event) => this._onToggle('hide_expander', ev)}
-          />
-          <span>Ukryj chevron</span>
-        </label>
-        <label class="stratum-toggle">
-          <input
-            type="checkbox"
-            .checked=${cfg.accent_bar === true}
-            @change=${(ev: Event) => this._onToggle('accent_bar', ev)}
-          />
-          <span>Akcentowy pasek z lewej</span>
-        </label>
-      </div>
+      ${
+        // Belka „Smugi" nie rysuje chevronu ani akcentowego paska — opcje,
+        // które nic nie zmieniają, chowamy zamiast zostawiać martwe.
+        isStripes
+          ? nothing
+          : html`<div class="stratum-toggles-row">
+                <label class="stratum-toggle">
+                  <input
+                    type="checkbox"
+                    .checked=${cfg.hide_expander === true}
+                    @change=${(ev: Event) =>
+                      this._onToggle('hide_expander', ev)}
+                  />
+                  <span>Ukryj chevron</span>
+                </label>
+                <label class="stratum-toggle">
+                  <input
+                    type="checkbox"
+                    .checked=${cfg.accent_bar === true}
+                    @change=${(ev: Event) => this._onToggle('accent_bar', ev)}
+                  />
+                  <span>Akcentowy pasek z lewej</span>
+                </label>
+              </div>
 
-      ${cfg.accent_bar
-        ? this._renderColorRow(
-            'Kolor akcentowego paska',
-            'accent_bar_color',
-            cfg.accent_bar_color,
-          )
-        : nothing}
+              ${cfg.accent_bar
+                ? this._renderColorRow(
+                    'Kolor akcentowego paska',
+                    'accent_bar_color',
+                    cfg.accent_bar_color,
+                  )
+                : nothing}`
+      }
     `;
   }
 

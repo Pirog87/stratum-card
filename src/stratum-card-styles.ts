@@ -142,6 +142,228 @@ export const cardStyles = css`
       transform: rotate(180deg);
     }
 
+    /* ── Belka w stylu „stripes" (header.style: 'stripes') ──────────────
+       Ikona w kwadracie, chipy pod nazwą, z prawej skośne paski z nazwami
+       pokoi, w których świeci się światło. Kontener nazwany, bo paski
+       zwężają się wg szerokości BELKI, nie viewportu. */
+    .header.stripes {
+      container-type: inline-size;
+      container-name: stratum-header;
+      box-sizing: border-box;
+      min-height: 76px;
+      padding: 0 12px 0 16px;
+      gap: 12px;
+      /* Paski wystają poza belkę (skos) — obcinamy je tutaj, nie na ha-card,
+         żeby poświata ikony nie była cięta przez własny kontener. */
+      overflow: hidden;
+      /* Kolejność: nadpisanie użytkownika → średni kolor świateł piętra
+         (ustawiany inline przez kartę) → kolor świateł z motywu. */
+      --stratum-header-glow: var(
+        --stratum-header-glow-color,
+        var(--stratum-header-glow-auto, var(--stratum-lights))
+      );
+    }
+
+    .header.stripes.lit:not(.no-glow) {
+      background: radial-gradient(
+        200px 110px at 36px 50%,
+        color-mix(in srgb, var(--stratum-header-glow) 17%, transparent),
+        transparent
+      );
+    }
+
+    .hs-icon {
+      display: grid;
+      place-items: center;
+      flex: none;
+      box-sizing: border-box;
+      width: 44px;
+      height: 44px;
+      border-radius: var(--stratum-header-icon-radius, 12px);
+      background: var(--stratum-surface-2);
+      border: 1px solid var(--stratum-surface-4);
+      transition: background 0.2s ease, border-color 0.2s ease,
+        box-shadow 0.2s ease;
+    }
+
+    .header.stripes.lit .hs-icon {
+      background: color-mix(in srgb, var(--stratum-header-glow) 18%, transparent);
+      border-color: color-mix(in srgb, var(--stratum-header-glow) 45%, transparent);
+    }
+
+    .header.stripes.lit:not(.no-glow) .hs-icon {
+      box-shadow: 0 0 20px
+        color-mix(in srgb, var(--stratum-header-glow) 32%, transparent);
+    }
+
+    .header.stripes.lit .area-icon {
+      color: var(--stratum-card-icon-color, var(--stratum-header-glow));
+    }
+
+    .hs-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      flex: 1;
+      /* min-width: 0 — inaczej długa nazwa piętra wypycha paski poza belkę. */
+      min-width: 0;
+    }
+
+    .hs-title {
+      max-width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      font-size: var(--stratum-card-title-size, 17px);
+      font-weight: var(--stratum-card-title-weight, 500);
+      letter-spacing: -0.01em;
+      color: var(--stratum-card-title-color, var(--primary-text-color));
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: transform 0.1s ease;
+    }
+
+    .hs-title:hover {
+      color: color-mix(
+        in srgb,
+        var(--stratum-card-title-color, var(--primary-text-color)) 82%,
+        var(--stratum-surface-base)
+      );
+    }
+
+    .hs-title:focus-visible {
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline-offset: 2px;
+    }
+
+    .hs-title:active {
+      transform: scale(0.98);
+    }
+
+    .header.stripes .chips {
+      padding: 0;
+      max-width: 100%;
+    }
+
+    .hs-stripes {
+      display: flex;
+      flex: none;
+      align-self: stretch;
+      /* Ujemne marginesy: paski sięgają poza belkę na górze/dole i z prawej,
+         żeby skos nie odsłaniał narożników. Nadmiar tnie overflow belki. */
+      margin: -14px -36px -14px 0;
+    }
+
+    .hs-stripe {
+      display: grid;
+      place-items: center;
+      flex: none;
+      box-sizing: border-box;
+      width: var(--stratum-header-stripe-width, 44px);
+      margin-left: 2px;
+      padding: 0;
+      border: 0;
+      font: inherit;
+      background: var(--stratum-header-stripe-bg, var(--stratum-lights));
+      transform: skewX(-22deg);
+      transition: filter 0.15s ease;
+    }
+
+    /* Co drugi pasek o ton ciemniejszy — przy jednym, domyślnym kolorze
+       sąsiednie paski inaczej zlewają się w plamę. Paski z kolorem żarówki
+       (inline --stratum-header-stripe-bg) zostają nietknięte: przyciemnienie
+       przekłamywałoby barwę światła. */
+    .hs-stripe:nth-child(even):not([style*='stripe-bg']) {
+      background: color-mix(
+        in srgb,
+        var(--stratum-header-stripe-bg, var(--stratum-lights)) 88%,
+        var(--stratum-ink-shade)
+      );
+    }
+
+    /* Ostatni pasek jest szerszy o część schowaną za krawędzią karty;
+       padding trzyma napis w widocznej połowie. */
+    .hs-stripe:last-child {
+      width: calc(var(--stratum-header-stripe-width, 44px) + 32px);
+      padding-right: 32px;
+    }
+
+    button.hs-stripe {
+      cursor: pointer;
+    }
+
+    button.hs-stripe:hover {
+      filter: brightness(1.07);
+    }
+
+    button.hs-stripe:focus-visible {
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline-offset: -4px;
+    }
+
+    button.hs-stripe:active {
+      filter: brightness(0.93);
+    }
+
+    .hs-stripe-label {
+      display: block;
+      max-width: 72px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      /* Odwrócenie skosu rodzica + obrót wzdłuż paska (90° − 22° = 68°). */
+      transform: skewX(22deg) rotate(-68deg);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .hs-stripe.ink-dark {
+      color: color-mix(
+        in srgb,
+        var(--stratum-header-stripe-bg, var(--stratum-lights)) 28%,
+        var(--stratum-ink-shade)
+      );
+    }
+
+    .hs-stripe.ink-light {
+      color: color-mix(
+        in srgb,
+        var(--stratum-header-stripe-bg, var(--stratum-lights)) 12%,
+        var(--stratum-ink-tint)
+      );
+    }
+
+    @container stratum-header (max-width: 340px) {
+      .hs-stripe {
+        --stratum-header-stripe-width: 34px;
+      }
+    }
+
+    @container stratum-header (max-width: 270px) {
+      .hs-stripes {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hs-icon,
+      .hs-title,
+      .hs-stripe {
+        transition: none;
+      }
+      .hs-title:active {
+        transform: none;
+      }
+    }
+
     .body-wrap {
       display: grid;
       grid-template-rows: 0fr;

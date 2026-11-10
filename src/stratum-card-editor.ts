@@ -349,6 +349,17 @@ export class StratumCardEditor extends LitElement {
     if (raw.accent_bar_color && raw.accent_bar_color.trim() !== '') {
       cleaned.accent_bar_color = raw.accent_bar_color;
     }
+    if (raw.style === 'stripes') {
+      cleaned.style = 'stripes';
+      // Opcje pasków zapisujemy tylko przy stylu `stripes` i tylko gdy
+      // odbiegają od domyślnych — po powrocie do belki klasycznej znikają.
+      if (typeof raw.stripes_max === 'number' && raw.stripes_max !== 3) {
+        cleaned.stripes_max = raw.stripes_max;
+      }
+      if (raw.stripes_color === 'static') cleaned.stripes_color = 'static';
+      if (raw.stripes_tap === 'none') cleaned.stripes_tap = 'none';
+      if (raw.icon_glow === false) cleaned.icon_glow = false;
+    }
     if (Object.keys(cleaned).length === 0) delete next.header;
     else next.header = cleaned;
     this._emitConfig(next);

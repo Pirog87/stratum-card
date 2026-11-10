@@ -83,6 +83,16 @@ card_mod:
 | `--stratum-card-expander-color` | `--secondary-text-color` | kolor strzałki expandera |
 | `--stratum-card-expander-duration` | `280ms` | czas animacji rozwijania |
 
+### Header w stylu „Smugi" (`header.style: stripes`)
+
+| Zmienna | Default | Opis |
+|---|---|---|
+| `--stratum-lights` | `--stratum-chip-lights-color` (#ffc107) | kolor „świeci się": paski bez własnego koloru, poświata i ikona belki |
+| `--stratum-header-glow-color` | średni kolor świateł piętra / `--stratum-lights` | kolor poświaty i ikony belki, gdy na piętrze świeci światło; ustawienie tej zmiennej wyłącza kolor automatyczny |
+| `--stratum-header-icon-radius` | `12px` | zaokrąglenie kwadratu ikony |
+| `--stratum-header-stripe-width` | `44px` (34px poniżej 340px szerokości belki) | szerokość pojedynczego paska |
+| `--stratum-header-stripe-bg` | kolor światła w pokoju / `--stratum-lights` | tło paska (ustawiane inline per pasek przy `stripes_color: lights`) |
+
 ### Wiersze pomieszczeń (`stratum-card-room-row`)
 
 | Zmienna | Default | Opis |
@@ -149,6 +159,9 @@ Używaj z zewnątrz przez `card-mod` (`style: | ... ::part(X) { ... }`) lub bezp
 | `title` | tekst nazwy |
 | `chips` | wrapper flex chipów |
 | `expander` | ikona chevron expandera |
+| `area-icon-wrap` | kwadrat ikony w belce „Smugi" (`header.style: stripes`) |
+| `stripes` | wrapper skośnych pasków w belce „Smugi" |
+| `stripe` | pojedynczy pasek (pokój albo „+N") |
 | `body` | sekcja pod expanderem (scrolluje się rozwija) |
 | `room` | pojedynczy wiersz pomieszczenia |
 | `chip` | chip w `stratum-card-chip` |

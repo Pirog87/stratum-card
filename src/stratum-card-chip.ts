@@ -26,6 +26,12 @@ export class StratumCardChip extends LitElement {
   /** Czy chip ma reagować na klik (dodaje rolę button + cursor). */
   @property({ type: Boolean, reflect: true }) public clickable = false;
 
+  /**
+   * Tło aktywnego chipa lekko zabarwione kolorem akcentu — dla belki
+   * `stripes`, gdzie chipy stoją na poświacie i szara pigułka ginie.
+   */
+  @property({ type: Boolean, reflect: true }) public tinted = false;
+
   private _onClick = (): void => {
     if (!this.clickable) return;
     this.dispatchEvent(
@@ -97,6 +103,14 @@ export class StratumCardChip extends LitElement {
 
     .chip.active {
       color: var(--stratum-chip-accent, var(--primary-text-color));
+    }
+
+    :host([tinted]) .chip.active {
+      background: color-mix(
+        in srgb,
+        var(--stratum-chip-accent, var(--primary-text-color)) 14%,
+        transparent
+      );
     }
 
     .icon {
