@@ -210,6 +210,11 @@ export interface HeaderConfig {
   stripes_tap?: 'popup' | 'none';
   /** `stripes`: poświata wokół ikony, gdy coś świeci. Default true. */
   icon_glow?: boolean;
+  /**
+   * `stripes`: kolor poświaty i ikony, gdy coś świeci (hex/var). Default:
+   * kolor świateł z motywu (`--stratum-lights`).
+   */
+  glow_color?: string;
 }
 
 /**

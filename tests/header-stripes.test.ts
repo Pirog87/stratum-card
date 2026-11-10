@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  averageLightColor,
   buildHeaderStripes,
   clampStripesMax,
+  stripeLabels,
   stripeInk,
   type StripeRoom,
 } from '../src/header-stripes.js';
@@ -74,6 +74,7 @@ describe('buildHeaderStripes', () => {
       kind: 'room',
       area_id: 'lenka',
       label: 'Lenka',
+      name: 'Lenka',
       color: 'rgb(183, 156, 255)',
     });
   });
@@ -102,39 +103,37 @@ describe('stripeInk', () => {
   });
 });
 
-describe('averageLightColor', () => {
-  it('średnia kanałów po świecących pokojach z kolorem', () => {
-    expect(
-      averageLightColor([
-        room('A', 1, 'rgb(200, 100, 0)'),
-        room('B', 3, 'rgb(100, 200, 50)'),
-      ]),
-    ).toBe('rgb(150, 150, 25)');
-  });
-
-  it('pokój liczy się raz, bez względu na liczbę świateł', () => {
-    const one = averageLightColor([
-      room('A', 1, 'rgb(255, 0, 0)'),
-      room('B', 1, 'rgb(0, 0, 255)'),
+describe('stripeLabels', () => {
+  it('krótkie nazwy zostają bez zmian', () => {
+    expect(stripeLabels(['Lenka', 'Salon', 'Biuro Izy'])).toEqual([
+      'Lenka',
+      'Salon',
+      'Biuro Izy',
     ]);
-    const many = averageLightColor([
-      room('A', 9, 'rgb(255, 0, 0)'),
-      room('B', 1, 'rgb(0, 0, 255)'),
+  });
+
+  it('długa nazwa wielowyrazowa → pierwsze słowo', () => {
+    expect(stripeLabels(['Korytarz parter', 'Schody'])).toEqual([
+      'Korytarz',
+      'Schody',
     ]);
-    expect(many).toBe(one);
+    expect(stripeLabels(['Biuro Tomka'])).toEqual(['Biuro']);
   });
 
-  it('pomija zgaszone pokoje i pokoje bez koloru', () => {
-    expect(
-      averageLightColor([
-        room('A', 0, 'rgb(0, 0, 255)'),
-        room('B', 2),
-        room('C', 1, 'rgb(255, 200, 100)'),
-      ]),
-    ).toBe('rgb(255, 200, 100)');
+  it('długie pojedyncze słowo zostaje (nie ma czego skracać)', () => {
+    expect(stripeLabels(['Pomieszczenie'])).toEqual(['Pomieszczenie']);
   });
 
-  it('żaden świecący pokój nie zna koloru → undefined', () => {
-    expect(averageLightColor([room('A', 2), room('B', 0)])).toBeUndefined();
+  it('kolizja po skróceniu → oba paski biorą ostatnie słowo', () => {
+    expect(stripeLabels(['Biuro Tomka', 'Biuro Izabeli'])).toEqual([
+      'Tomka',
+      'Izabeli',
+    ]);
+  });
+
+  it('buildHeaderStripes skraca napis, ale zachowuje pełną nazwę', () => {
+    const [stripe] = buildHeaderStripes([room('Korytarz piętro', 12)], 3);
+    expect(stripe!.label).toBe('Korytarz');
+    expect(stripe!.name).toBe('Korytarz piętro');
   });
 });

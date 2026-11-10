@@ -146,6 +146,14 @@ export const cardStyles = css`
        Ikona w kwadracie, chipy pod nazwą, z prawej skośne paski z nazwami
        pokoi, w których świeci się światło. Kontener nazwany, bo paski
        zwężają się wg szerokości BELKI, nie viewportu. */
+    /* Kompozycja z paskami liczy na wyraźnie zaokrąglony róg karty — przy
+       typowych 12 px z motywu ostatni pasek kończy się kanciasto i wygląda
+       jak doklejony. Stąd własny, większy domyślny promień; nadpisanie
+       --stratum-card-border-radius dalej wygrywa. */
+    ha-card.stripes-card {
+      border-radius: var(--stratum-card-border-radius, 24px);
+    }
+
     .header.stripes {
       container-type: inline-size;
       container-name: stratum-header;
@@ -156,12 +164,7 @@ export const cardStyles = css`
       /* Paski wystają poza belkę (skos) — obcinamy je tutaj, nie na ha-card,
          żeby poświata ikony nie była cięta przez własny kontener. */
       overflow: hidden;
-      /* Kolejność: nadpisanie użytkownika → średni kolor świateł piętra
-         (ustawiany inline przez kartę) → kolor świateł z motywu. */
-      --stratum-header-glow: var(
-        --stratum-header-glow-color,
-        var(--stratum-header-glow-auto, var(--stratum-lights))
-      );
+      --stratum-header-glow: var(--stratum-header-glow-color, var(--stratum-lights));
     }
 
     .header.stripes.lit:not(.no-glow) {
@@ -249,6 +252,11 @@ export const cardStyles = css`
     .header.stripes .chips {
       padding: 0;
       max-width: 100%;
+      /* Liczniki w tej belce są głównym nośnikiem stanu (obok pasków), więc
+         dostają większą pigułkę niż chipy belki klasycznej. */
+      --stratum-chip-padding: 5px 10px 5px 8px;
+      --stratum-chip-font-size: 13px;
+      --stratum-chip-icon-size: 16px;
     }
 
     .hs-stripes {
@@ -341,13 +349,17 @@ export const cardStyles = css`
       );
     }
 
-    @container stratum-header (max-width: 340px) {
+    /* Uwaga: container query mierzy content-box belki, czyli szerokość karty
+       pomniejszoną o padding (28 px). Progi 300/240 odpowiadają kartom
+       ok. 330 i 270 px — wcześniejsze 340/270 łapały zwykły telefon
+       (karta 366 px) i niepotrzebnie zwężały paski. */
+    @container stratum-header (max-width: 300px) {
       .hs-stripe {
         --stratum-header-stripe-width: 34px;
       }
     }
 
-    @container stratum-header (max-width: 270px) {
+    @container stratum-header (max-width: 240px) {
       .hs-stripes {
         display: none;
       }
