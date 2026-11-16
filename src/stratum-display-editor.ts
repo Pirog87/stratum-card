@@ -249,6 +249,13 @@ export class StratumDisplayEditor extends LitElement {
     this._emit(next);
   }
 
+  private _toggleSliderFromOff(): void {
+    const next = { ...this.config };
+    if (this.config.slider_from_off === 'none') delete next.slider_from_off;
+    else next.slider_from_off = 'none';
+    this._emit(next);
+  }
+
   private _toggleLightsSwitch(): void {
     const next = { ...this.config };
     if (this.config.lights_switch === true) delete next.lights_switch;
@@ -415,6 +422,20 @@ export class StratumDisplayEditor extends LitElement {
                 <span>Suwak jasności gestem (przeciągnij po wierszu)</span>
               </label>
             </div>
+            ${sliderOn
+              ? html`<div class="toggles-row" style="margin-top:4px">
+                  <label class="toggle">
+                    <input
+                      type="checkbox"
+                      .checked=${cfg.slider_from_off !== 'none'}
+                      @change=${this._toggleSliderFromOff}
+                    />
+                    <span>Przeciągnięcie po ciemnym pokoju zapala światła
+                      (wyłączone: suwak tylko ściemnia i rozjaśnia to, co
+                      świeci)</span>
+                  </label>
+                </div>`
+              : nothing}
             <div class="toggles-row" style="margin-top:4px">
               <label class="toggle">
                 <input

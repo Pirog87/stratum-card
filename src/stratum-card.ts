@@ -53,6 +53,8 @@ import {
   watchedStateChanged,
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
+import { LightSwipe, rememberBeforeOff } from './light-swipe.js';
+import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
@@ -70,7 +72,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.106.2';
+const VERSION = '1.107.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -587,6 +589,9 @@ export class StratumCard extends LitElement {
     this._historyDepth = 0;
     this._unsubRegistry?.();
     this._unsubRegistry = undefined;
+    // Żadnych spóźnionych komend jasności po zniknięciu karty z widoku.
+    for (const swipe of this._swipes.values()) swipe.dispose();
+    this._swipes.clear();
   }
 
   protected updated(changed: PropertyValues): void {
@@ -1557,9 +1562,10 @@ export class StratumCard extends LitElement {
       .styleOverride=${rowStyleOverride}
       .clickable=${clickable}
       .iconTappable=${iconTappable}
-      @row-lights-toggle=${() => this._toggleRoomLights(entries, fieldEntities)}
-      @row-brightness=${(ev: CustomEvent<{ pct: number; live: boolean }>) =>
-        this._onRowBrightness(entries, fieldEntities, ev.detail.pct, ev.detail.live)}
+      @row-lights-toggle=${() =>
+        this._toggleRoomLights(entries, fieldEntities, primary)}
+      @row-brightness=${(ev: CustomEvent<RowBrightnessDetail>) =>
+        this._onRowBrightness(ev.detail, primary!, entries, fieldEntities)}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
         this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
       @icon-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
@@ -1568,28 +1574,63 @@ export class StratumCard extends LitElement {
   }
 
   /**
-   * Gest przeciągnięcia po wierszu = ustaw jasność wszystkich świateł pokoju.
-   * `live: true` to update w trakcie gestu (throttlowany w komponencie),
-   * `live: false` — finalna wartość po puszczeniu palca.
-   * Pct ≤ 2 traktujemy jak intencję wyłączenia.
+   * Kontrolery gestu jasności, po jednym na wiersz (klucz = strefa główna).
+   * Muszą przeżyć rendery karty: handlery w szablonie powstają od nowa przy
+   * każdym renderze, a gest trwa przez wiele z nich (echo stanów z HA).
+   */
+  private _swipes = new Map<string, LightSwipe>();
+
+  private _swipeFor(key: string): LightSwipe {
+    let swipe = this._swipes.get(key);
+    if (!swipe) {
+      swipe = new LightSwipe(key, { hass: () => this.hass });
+      this._swipes.set(key, swipe);
+    }
+    return swipe;
+  }
+
+  /**
+   * Gest przeciągnięcia po wierszu: ściemnia i rozjaśnia TYLKO światła,
+   * które świecą, każde proporcjonalnie do własnej jasności. Zgaszonych nie
+   * dotyka (dawniej jedna komenda z jedną wartością zapalała cały pokój i
+   * wyrównywała wszystkie poziomy). Logika i uzasadnienia: `light-swipe.ts`.
+   *
+   * Wiersz zgłasza fazy gestu; odpowiedź (poziom startowy, wynik) wpisujemy
+   * z powrotem do `detail` — dispatch zdarzenia jest synchroniczny.
    */
   private _onRowBrightness(
-    entries: HassEntityRegistryEntry[],
+    detail: RowBrightnessDetail,
+    key: string,
+    entries: readonly HassEntityRegistryEntry[],
     fieldEntities: import('./types.js').TileFieldEntities | undefined,
-    pct: number,
-    live: boolean,
   ): void {
-    if (!this.hass) return;
-    const lightsIds = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
-    if (lightsIds.length === 0) return;
-    if (pct <= 2 && !live) {
-      void this.hass.callService('light', 'turn_off', { entity_id: lightsIds });
+    if (!this.hass) {
+      detail.active = false;
       return;
     }
-    void this.hass.callService('light', 'turn_on', {
-      entity_id: lightsIds,
-      brightness_pct: Math.max(1, Math.min(100, pct)),
-    });
+    const swipe = this._swipeFor(key);
+    switch (detail.phase) {
+      case 'start': {
+        const ids = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
+        const fromOff = this._resolveRowConfig()?.slider_from_off ?? 'all';
+        const started = swipe.start(ids, fromOff);
+        detail.level = started.level;
+        detail.active = started.active;
+        return;
+      }
+      case 'move':
+        swipe.move(detail.pct);
+        return;
+      case 'end': {
+        const result = swipe.end(detail.pct);
+        detail.outcome = result.outcome;
+        detail.level = result.level;
+        return;
+      }
+      case 'cancel':
+        swipe.cancel();
+        return;
+    }
   }
 
   private _onRoomTap(
@@ -1630,7 +1671,7 @@ export class StratumCard extends LitElement {
     }
 
     if (effective?.action === 'toggle-lights') {
-      this._toggleRoomLights(entries ?? [], fieldEntities);
+      this._toggleRoomLights(entries ?? [], fieldEntities, ev.detail.area_id);
       return;
     }
 
@@ -1652,13 +1693,17 @@ export class StratumCard extends LitElement {
    * per encja dawałby szachownicę przy mieszanych stanach.)
    */
   private _toggleRoomLights(
-    entries: HassEntityRegistryEntry[],
+    entries: readonly HassEntityRegistryEntry[],
     fieldEntities?: import('./types.js').TileFieldEntities,
+    swipeKey?: string,
   ): void {
     if (!this.hass) return;
     const ids = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
     if (ids.length === 0) return;
     const anyOn = ids.some((id) => this.hass!.states[id]?.state === 'on');
+    // Gasimy włącznikiem → zapamiętaj, co świeciło i jak jasno. Przeciągnięcie
+    // po ciemnym wierszu przywróci wtedy ten zestaw, a nie cały pokój.
+    if (anyOn && swipeKey) rememberBeforeOff(swipeKey, this.hass, ids);
     void this.hass.callService('light', anyOn ? 'turn_off' : 'turn_on', {
       entity_id: ids,
     });

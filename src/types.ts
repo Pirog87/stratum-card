@@ -1004,11 +1004,20 @@ export interface TileDisplayConfig {
   preset?: RowPreset;
 
   /**
-   * Suwak jasności gestem — przeciągnięcie poziome po wierszu ustawia
-   * jasność wszystkich świateł pokoju (relative slide, jak bubble-card).
-   * Default `true`. Tap dalej działa normalnie (próg 8 px odróżnia gest).
+   * Suwak jasności gestem — przeciągnięcie poziome po wierszu ściemnia
+   * i rozjaśnia światła, które akurat świecą, każde proporcjonalnie do
+   * własnej jasności (zgaszonych nie rusza). Default `true`. Tap dalej
+   * działa normalnie (próg 12 px odróżnia gest).
    */
   slider?: boolean;
+
+  /**
+   * Co robi suwak gestem na CAŁKIEM zgaszonym pokoju, gdy nie ma czego
+   * przywrócić (zestaw zgaszony suwakiem/włącznikiem wraca zawsze):
+   * - `all` (default) — zapala wszystkie światła pokoju na poziomie palca,
+   * - `none` — nic; suwak tylko ściemnia i rozjaśnia to, co już świeci.
+   */
+  slider_from_off?: 'all' | 'none';
 
   /**
    * Układ statusów w wierszu fill/pill:
@@ -1107,8 +1116,10 @@ export interface HomeAssistant {
   callService: (
     domain: string,
     service: string,
-    data?: Record<string, unknown>
-  ) => Promise<void>;
+    data?: Record<string, unknown>,
+    /** Cel wywołania (zalecany przez HA zamiast `entity_id` w danych). */
+    target?: { entity_id?: string | string[] },
+  ) => Promise<unknown>;
   /** Synchroniczny WebSocket call (HA frontend API). Używany do fetchu entity registry. */
   callWS?: <T>(msg: Record<string, unknown>) => Promise<T>;
   /** Zalogowany użytkownik — do bramkowania funkcji admin-only (intercom). */

@@ -4,7 +4,53 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
-## [1.106.2] — 2026-11-16
+## [1.107.0] — 2026-11-16
+
+### Changed (suwak jasności — tylko włączone światła, proporcjonalnie)
+Przeciągnięcie po wierszu pokoju wysyłało jedną komendę „wszystkie światła
+pokoju na X%": zapalało też zgaszone i wyrównywało wszystkie poziomy.
+
+- **Ruszają się tylko światła, które świecą.** Zgaszone nie pojawiają się
+  w żadnej komendzie — ani w trakcie, ani po puszczeniu palca.
+- **Każda żarówka proporcjonalnie.** Lampa na 100% i lampa na 20% po
+  przeciągnięciu w dół do połowy świecą 55% i 11% (proporcja 5:1 zostaje).
+  W górę: najjaśniejsze dochodzą do 100% i tam zostają, reszta rośnie
+  dalej — pełne w prawo = wszystko, co świeci, na 100%. Ruch tam
+  i z powrotem w jednym geście wraca dokładnie do punktu wyjścia.
+- **Wypełnienie wiersza = średnia jasność świecących żarówek**, tych
+  samych, które suwak skaluje (grupy liczone po członkach; przekaźniki
+  on/off nie zawyżają średniej). Po puszczeniu pasek zostaje tam, gdzie
+  palec — koniec z odskakiwaniem.
+- **Zjechanie do zera gasi tylko to, co świeciło**, a kolejne przeciągnięcie
+  po ciemnym wierszu (do 15 min) przywraca dokładnie ten zestaw w tych
+  samych proporcjach. Tak samo po zgaszeniu mini-włącznikiem wiersza.
+- **Całkiem ciemny pokój**: jak dotąd przeciągnięcie zapala wszystkie
+  światła — ale dopiero po puszczeniu i dopiero po przejechaniu
+  przynajmniej 8% (przypadkowe drgnięcie palca niczego już nie zapala).
+  Nowa opcja `row_config.slider_from_off: none` (w edytorze: „Przeciągnięcie
+  po ciemnym pokoju zapala światła") wyłącza to całkiem.
+- **Kafel grupy świateł w popupie** (`rail` / `tint`) działa tak samo:
+  ściemnia świecących członków grupy proporcjonalnie, komendy idą do
+  członków, nie do grupy (wywołanie na grupie zapalało wszystkich).
+
+### Changed (płynność gestu)
+- Pasek idzie za palcem 1:1 — bez renderu Lita na każdy ruch i bez
+  tranzycji 0,3 s, która ciągnęła wypełnienie za palcem „na gumce".
+- Komendy: jedna fala w locie, wygrywa najnowsza pozycja palca, jedno
+  wywołanie na każdą różną jasność, z przejściem równym odstępowi fal
+  (żarówka sama wygładza ruch). Pokoje do 8 świateł reagują na żywo; w
+  większych żarówki dostają jedną falę po puszczeniu palca (kuchnia: 3
+  wywołania zamiast kilkudziesięciu komend co 300 ms) — sieć Zigbee nie
+  zatyka się i światła nie „dochodzą" sekundami po geście.
+- Po puszczeniu pasek trzyma wartość, aż Home Assistant ją potwierdzi
+  (zamiast sztywnych 1,5 s), maks. 6 s.
+- Gest przerwany przez system (przeglądarka przejęła dotyk) nie jest już
+  traktowany jak puszczenie palca — mógł np. zgasić cały pokój.
+- Po przeciągnięciu kolejne dotknięcie wiersza/kafla nie jest już
+  połykane (otwiera popup za pierwszym razem).
+- Drugi palec nie przestawia suwaka; suwak działa z dotykiem we
+  wszystkich presetach wiersza; przeciąganie myszą nie zaznacza tekstu.
+- Pasek kafla grupy widać także przy przeciąganiu w górę ze zgaszonej grupy.
 
 ### Changed (płynność — karty nie przeliczają się na cudze zmiany stanów)
 Home Assistant podmienia obiekt `hass` przy każdej zmianie stanu

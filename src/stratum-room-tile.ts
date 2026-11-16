@@ -24,6 +24,8 @@ import type { HassEntity, HomeAssistant, TapActionConfig } from './types.js';
 import { runTapAction } from './tap-action.js';
 import { buildDefaultCustomConfig } from './custom-cards.js';
 import { lightColorOf } from './tile-data.js';
+import { roomLevelFromHass } from './light-dimming.js';
+import { LightSwipe } from './light-swipe.js';
 import { appBrandGradient } from './media-brands.js';
 import { encodeWav } from './audio-wav.js';
 
@@ -247,8 +249,53 @@ export class StratumRoomTile extends LitElement {
     return this.nameOverride ?? friendlyName(state, this.entity);
   }
 
-  /** Jasność (%) trzymana lokalnie podczas swipe — nadpisuje stan z hass. */
+  /**
+   * Jasność (%) nadpisująca stan z hass: pozycja palca w trakcie swipe, a
+   * po puszczeniu — wartość docelowa trzymana, aż HA ją potwierdzi.
+   * Ustawiana raz na klatkę (`_scheduleDragRender`), nie na każdy
+   * pointermove — ekrany 120 Hz dają ponad sto zdarzeń na sekundę.
+   */
   @state() private _dragPct?: number;
+
+  /** Czy palec właśnie ciągnie (wyłącza tranzycję paska — idzie 1:1). */
+  @state() private _dragging = false;
+
+  private _dragRaf?: number;
+
+  /** Wartość trzymana po puszczeniu palca + bezpiecznik czasowy. */
+  private _hold?: { pct: number; timer: number };
+
+  /** Kontroler gestu jasności — wspólny z wierszem pokoju (`light-swipe.ts`). */
+  private _swipe?: LightSwipe;
+
+  private _swipeCtl(): LightSwipe {
+    this._swipe ??= new LightSwipe(`tile:${this.entity}`, {
+      hass: () => this.hass,
+    });
+    return this._swipe;
+  }
+
+  private _clearHold(): void {
+    if (!this._hold) return;
+    window.clearTimeout(this._hold.timer);
+    this._hold = undefined;
+  }
+
+  /** Poziom (0..100) ze stanów HA — dla grupy: średnia świecących członków. */
+  private _lightRestPct(): number {
+    return roomLevelFromHass(this.hass, [this.entity]) ?? 0;
+  }
+
+  protected willUpdate(changed: PropertyValues): void {
+    // Po puszczeniu palca trzymamy wartość docelową, dopóki stany z HA do
+    // niej nie dojdą (członkowie grupy raportują po kolei).
+    if (this._hold && !this._dragging && changed.has('hass')) {
+      if (Math.abs(this._lightRestPct() - this._hold.pct) <= 2) {
+        this._clearHold();
+        this._dragPct = undefined;
+      }
+    }
+  }
 
   /**
    * Głośność (player): wartość optymistyczna podczas regulacji ±.
@@ -330,6 +377,16 @@ export class StratumRoomTile extends LitElement {
       window.clearInterval(this._progressTimer);
       this._progressTimer = undefined;
     }
+    if (this._dragRaf !== undefined) {
+      cancelAnimationFrame(this._dragRaf);
+      this._dragRaf = undefined;
+    }
+    this._clearHold();
+    this._swipe?.dispose();
+    this._swipe = undefined;
+    this._drag = undefined;
+    this._dragging = false;
+    this._dragPct = undefined;
     this._volStopHold();
     if (this._volClearTimer !== undefined) {
       window.clearTimeout(this._volClearTimer);
@@ -410,16 +467,26 @@ export class StratumRoomTile extends LitElement {
 
   /** Stan aktywnego gestu swipe (rail/tint). */
   private _drag?: {
+    pointerId: number;
     startX: number;
     startY: number;
-    startPct: number;
+    lastX: number;
     width: number;
     sliding: boolean;
-    lastLive: number;
+    /** Pozycja suwaka 0..100, przyrostowo. */
+    t: number;
   };
 
-  /** Tłumi click bezpośrednio po zakończonym swipe. */
-  private _suppressClick = false;
+  /**
+   * Chwila zakończenia swipe — tłumi click, który mysz generuje tuż po
+   * puszczeniu. Flaga zdejmowana dopiero następnym clickiem połykała na
+   * dotyku kolejne, prawdziwe dotknięcie (po swipe click nie powstaje).
+   */
+  private _dragEndedAt = -1e9;
+
+  private _clickSuppressed(): boolean {
+    return performance.now() - this._dragEndedAt < 350;
+  }
 
   private _state(): HassEntity | undefined {
     return this.hass?.states?.[this.entity];
@@ -692,10 +759,13 @@ export class StratumRoomTile extends LitElement {
    */
   private _renderGroupLight(state: HassEntity, variant: 'rail' | 'tint'): TemplateResult {
     const on = state.state === 'on';
-    const dragging = typeof this._dragPct === 'number';
-    const bright = (state.attributes?.brightness as number | undefined) ?? 0;
-    const statePct = on ? Math.round((bright / 255) * 100) : 0;
-    const pct = dragging ? Math.round(this._dragPct!) : statePct;
+    // `_dragPct` to także wartość trzymana po puszczeniu palca.
+    const overridden = typeof this._dragPct === 'number';
+    // Poziom = średnia świecących członków (dla zwykłej żarówki — jej
+    // własna jasność). Ten sam zbiór, który skaluje swipe, więc pasek nie
+    // odskakuje po puszczeniu.
+    const statePct = on ? Math.round(this._lightRestPct()) : 0;
+    const pct = overridden ? Math.round(this._dragPct!) : statePct;
     const color = on ? lightColorOf(state) : undefined;
     const isGroup = Array.isArray(state.attributes?.entity_id);
     const icon =
@@ -716,7 +786,9 @@ export class StratumRoomTile extends LitElement {
 
     return html`
       <div
-        class="glight ${variant} ${on ? 'on' : 'off'}"
+        class="glight ${variant} ${on ? 'on' : 'off'} ${this._dragging
+          ? 'dragging'
+          : ''}"
         part="tile"
         style=${style}
         role="button"
@@ -728,7 +800,7 @@ export class StratumRoomTile extends LitElement {
         @pointerdown=${this._onGroupPointerDown}
         @pointermove=${this._onGroupPointerMove}
         @pointerup=${this._onGroupPointerUp}
-        @pointercancel=${this._onGroupPointerUp}
+        @pointercancel=${this._onGroupPointerCancel}
       >
         ${variant === 'rail'
           ? html`<span class="glight-fill" aria-hidden="true"></span>`
@@ -736,7 +808,7 @@ export class StratumRoomTile extends LitElement {
         <span class="glight-head">
           <span class="glight-name">${this._displayName(state)}</span>
           <span class="glight-state"
-            >${on || dragging ? `${pct}%` : 'wyłączono'}</span
+            >${on || overridden ? `${pct}%` : 'wyłączono'}</span
           >
         </span>
         <span class="glight-row">
@@ -755,10 +827,7 @@ export class StratumRoomTile extends LitElement {
   }
 
   private _onGroupClick = (ev: Event): void => {
-    if (this._suppressClick) {
-      this._suppressClick = false;
-      return;
-    }
+    if (this._clickSuppressed()) return;
     if (this._customTap(ev)) return;
     this._callService(ev, 'light', 'toggle');
   };
@@ -766,10 +835,7 @@ export class StratumRoomTile extends LitElement {
   /** Klik w ikonę kafla = domyślna akcja encji HA (dialog more-info). */
   private _onIconMoreInfo = (ev: Event): void => {
     ev.stopPropagation();
-    if (this._suppressClick) {
-      this._suppressClick = false;
-      return;
-    }
+    if (this._clickSuppressed()) return;
     this._openMoreInfo(ev);
   };
 
@@ -781,27 +847,41 @@ export class StratumRoomTile extends LitElement {
   };
 
   private _onGroupPointerDown = (ev: PointerEvent): void => {
-    if (ev.button !== 0) return;
-    const el = ev.currentTarget as HTMLElement;
-    const state = this._state();
-    const on = state?.state === 'on';
-    const bright = (state?.attributes?.brightness as number | undefined) ?? 0;
+    if (ev.button !== 0 || ev.isPrimary === false) return;
+    this._dragEndedAt = -1e9;
     this._drag = {
+      pointerId: ev.pointerId,
       startX: ev.clientX,
       startY: ev.clientY,
-      startPct: on ? Math.round((bright / 255) * 100) : 0,
-      width: Math.max(1, el.getBoundingClientRect().width),
+      lastX: ev.clientX,
+      width: 1,
       sliding: false,
-      lastLive: 0,
+      t: 0,
     };
   };
 
+  /** Jedno przepisanie wartości do stanu Lita na klatkę, nie na zdarzenie. */
+  private _scheduleDragRender(): void {
+    if (this._dragRaf !== undefined) return;
+    this._dragRaf = requestAnimationFrame(() => {
+      this._dragRaf = undefined;
+      const d = this._drag;
+      if (!d?.sliding) return;
+      this._dragPct = d.t;
+      this._swipeCtl().move(d.t);
+    });
+  }
+
   private _onGroupPointerMove = (ev: PointerEvent): void => {
     const d = this._drag;
-    if (!d) return;
-    const dx = ev.clientX - d.startX;
-    const dy = ev.clientY - d.startY;
+    if (!d || ev.pointerId !== d.pointerId) return;
+    if (ev.pointerType === 'mouse' && ev.buttons === 0) {
+      this._drag = undefined;
+      return;
+    }
     if (!d.sliding) {
+      const dx = ev.clientX - d.startX;
+      const dy = ev.clientY - d.startY;
       // Pionowy ruch = scroll listy — oddajemy przeglądarce i ubijamy
       // gest, żeby ukośne przewijanie NIE zmieniało jasności świateł.
       if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
@@ -810,42 +890,72 @@ export class StratumRoomTile extends LitElement {
       }
       // Swipe jasności startuje dopiero przy zdecydowanie poziomym ruchu.
       if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      const el = ev.currentTarget as HTMLElement;
+      // Kontroler zamraża zestaw ŚWIECĄCYCH członków grupy i podaje poziom,
+      // od którego liczy proporcje. Komendy idą do członków, nigdy do samej
+      // grupy — `turn_on` na grupie zapalało wszystkich na jednym poziomie.
+      // Kafel dotknięty przy zgaszonej grupie zapala jej światła (to jawna
+      // intencja), ale dopiero po puszczeniu i po przekroczeniu progu.
+      const start = this._swipeCtl().start([this.entity], 'all');
+      if (!start.active) {
+        this._drag = undefined;
+        this._dragEndedAt = performance.now();
+        return;
+      }
       d.sliding = true;
-      (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+      d.width = Math.max(1, el.getBoundingClientRect().width);
+      d.t = start.level;
+      d.lastX = ev.clientX;
+      el.setPointerCapture(ev.pointerId);
+      this._clearHold();
+      this._dragging = true;
+      this._dragPct = d.t;
     }
-    const pct = Math.max(0, Math.min(100, d.startPct + (dx / d.width) * 100));
-    this._dragPct = pct;
-    const now = Date.now();
-    if (now - d.lastLive > 300) {
-      d.lastLive = now;
-      this._setBrightness(pct, true);
-    }
+    // Przyrostowo, z przycięciem na każdym kroku: po wyjechaniu poza koniec
+    // zakresu powrót reaguje od pierwszego piksela.
+    d.t = Math.max(0, Math.min(100, d.t + ((ev.clientX - d.lastX) / d.width) * 100));
+    d.lastX = ev.clientX;
+    this._scheduleDragRender();
   };
 
   private _onGroupPointerUp = (ev: PointerEvent): void => {
     const d = this._drag;
+    if (!d || ev.pointerId !== d.pointerId) return;
     this._drag = undefined;
-    if (!d?.sliding) return;
+    if (!d.sliding) return;
     ev.stopPropagation();
-    this._suppressClick = true;
-    const pct = this._dragPct ?? d.startPct;
-    this._setBrightness(pct, false);
-    // Po 1.5 s wracamy do realnego stanu z hass (unik skoku paska).
-    window.setTimeout(() => {
+    this._dragEndedAt = performance.now();
+    this._dragging = false;
+    const result = this._swipeCtl().end(d.t);
+    this._clearHold();
+    if (result.outcome === 'noop') {
+      // Nic nie poszło do HA — pasek wraca do stanu faktycznego.
       this._dragPct = undefined;
-    }, 1500);
-  };
-
-  private _setBrightness(pct: number, live: boolean): void {
-    if (pct <= 2 && !live) {
-      void this.hass?.callService('light', 'turn_off', { entity_id: this.entity });
       return;
     }
-    void this.hass?.callService('light', 'turn_on', {
-      entity_id: this.entity,
-      brightness_pct: Math.max(1, Math.min(100, Math.round(pct))),
-    });
-  }
+    // Trzymamy wartość docelową, aż HA ją potwierdzi (`willUpdate`), z
+    // bezpiecznikiem 6 s. Sztywne 1,5 s było za krótkie dla grup Zigbee.
+    this._dragPct = result.level;
+    this._hold = {
+      pct: result.level,
+      timer: window.setTimeout(() => {
+        this._hold = undefined;
+        this._dragPct = undefined;
+      }, 6000),
+    };
+  };
+
+  /** Gest przerwany przez system — to nie zatwierdzenie (patrz wiersz pokoju). */
+  private _onGroupPointerCancel = (ev: PointerEvent): void => {
+    const d = this._drag;
+    if (!d || ev.pointerId !== d.pointerId) return;
+    this._drag = undefined;
+    if (!d.sliding) return;
+    this._dragging = false;
+    this._swipeCtl().cancel();
+    this._clearHold();
+    this._dragPct = undefined;
+  };
 
   private _renderLightSlider(state: HassEntity): TemplateResult {
     const on = state.state === 'on';
@@ -2226,8 +2336,18 @@ export class StratumRoomTile extends LitElement {
       z-index: 0;
     }
 
-    .glight.off .glight-fill {
+    /* Zgaszony kafel nie ma paska — poza chwilą, gdy palec właśnie ciągnie
+       suwak w górę z zera (dawniej ruch nie dawał wtedy żadnej informacji
+       zwrotnej aż do puszczenia). */
+    .glight.off:not(.dragging) .glight-fill {
       display: none;
+    }
+
+    /* W trakcie swipe pasek idzie 1:1 za palcem — tranzycja startowała od
+       nowa co klatkę i wypełnienie ciągnęło się za palcem. */
+    .glight.dragging .glight-fill,
+    .glight.dragging .glight-bar::after {
+      transition: none;
     }
 
     .glight-head {
@@ -2358,8 +2478,12 @@ export class StratumRoomTile extends LitElement {
 
     @media (prefers-reduced-motion: reduce) {
       .glight,
+      .glight-fill,
       .glight-bar::after {
         transition: none;
+      }
+      .glight:active {
+        transform: none;
       }
     }
 
