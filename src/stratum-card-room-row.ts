@@ -470,6 +470,20 @@ export class StratumCardRoomRow extends LitElement {
     this._abandonDrag(d);
   };
 
+  /**
+   * Utrata przechwycenia wskaźnika — siatka bezpieczeństwa, gdy pointerup
+   * nie dotarł. Liczy się WYŁĄCZNIE utrata przez sam wiersz: na dotyku
+   * przeglądarka niejawnie przechwytuje palec elementem pod nim (np. nazwą
+   * pokoju), a nasze `setPointerCapture` na wierszu odbiera mu je. Zdarzenie
+   * `lostpointercapture` dziecka bąbelkuje tutaj — brane za przerwanie
+   * kończyło każdy gest w chwili startu (v1.107.0: suwak na telefonie nie
+   * reagował, a przytrzymany palec kończył się systemowym long-pressem).
+   */
+  private _onLostCapture = (ev: PointerEvent): void => {
+    if (ev.target !== ev.currentTarget) return;
+    this._onPointerCancel(ev);
+  };
+
   /** Porzucenie gestu bez zatwierdzenia (cancel, utracony capture, mysz). */
   private _abandonDrag(d: NonNullable<StratumCardRoomRow['_drag']>): void {
     this._drag = undefined;
@@ -769,7 +783,7 @@ export class StratumCardRoomRow extends LitElement {
         @pointermove=${this._onPointerMove}
         @pointerup=${this._onPointerUp}
         @pointercancel=${this._onPointerCancel}
-        @lostpointercapture=${this._onPointerCancel}
+        @lostpointercapture=${this._onLostCapture}
       >
         ${preset === 'fill'
           ? html`<span class="fill" aria-hidden="true"></span>`
@@ -1187,6 +1201,8 @@ export class StratumCardRoomRow extends LitElement {
       touch-action: pan-y;
       -webkit-user-select: none;
       user-select: none;
+      /* Bez systemowego menu przytrzymania (iOS) w trakcie przeciągania. */
+      -webkit-touch-callout: none;
     }
 
     /* pill: ring aktywności zamiast wypełnienia */

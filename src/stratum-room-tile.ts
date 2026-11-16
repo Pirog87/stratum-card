@@ -802,7 +802,7 @@ export class StratumRoomTile extends LitElement {
         @pointermove=${this._onGroupPointerMove}
         @pointerup=${this._onGroupPointerUp}
         @pointercancel=${this._onGroupPointerCancel}
-        @lostpointercapture=${this._onGroupPointerCancel}
+        @lostpointercapture=${this._onGroupLostCapture}
       >
         ${variant === 'rail'
           ? html`<span class="glight-fill" aria-hidden="true"></span>`
@@ -953,6 +953,16 @@ export class StratumRoomTile extends LitElement {
     const d = this._drag;
     if (!d || ev.pointerId !== d.pointerId) return;
     this._abandonGroupDrag(d);
+  };
+
+  /**
+   * Tylko utrata przechwycenia przez SAM kafel. Utrata przez dziecko (palec
+   * niejawnie przechwycony przez nazwę albo ikonę, potem przepięty na kafel)
+   * bąbelkuje tutaj i nie może przerywać gestu — patrz wiersz pokoju.
+   */
+  private _onGroupLostCapture = (ev: PointerEvent): void => {
+    if (ev.target !== ev.currentTarget) return;
+    this._onGroupPointerCancel(ev);
   };
 
   private _abandonGroupDrag(d: NonNullable<StratumRoomTile['_drag']>): void {
