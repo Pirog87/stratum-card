@@ -129,6 +129,23 @@ export function rememberBeforeOff(
   memory.set(key, { scaled: lit.scaled, switchOnly: lit.switchOnly, at: now });
 }
 
+/**
+ * Oznacza światła jako zgaszone przez nas (włącznik wiersza, akcja
+ * `toggle-lights`). Zigbee odsyła stany po kolei przez 1–3 s; bez tego
+ * przeciągnięcie w tym oknie widziało część pokoju jako „świecącą",
+ * skalowało tylko ją i kasowało pamięć zestawu do przywrócenia.
+ * Wołać PO `rememberBeforeOff` — inaczej nie byłoby czego zapamiętać.
+ */
+export function markOff(
+  hass: HomeAssistant | undefined,
+  ids: readonly string[],
+  now: number = Date.now(),
+): void {
+  for (const id of expandLightIds(hass, ids)) {
+    overlay.set(id, { brightness: 0, at: now, seen: hass?.states?.[id] });
+  }
+}
+
 interface Gesture {
   mode: 'scale' | 'all' | 'restore';
   /** Skalowane żarówki z jasnością startową (albo zapamiętaną przy restore). */
@@ -188,6 +205,12 @@ export class LightSwipe {
     fromOff: FromOffMode = 'all',
   ): { level: number; active: boolean } {
     this._abortTimers();
+    // Poprzedni gest mógł zostawić komendę końcową czekającą na falę w
+    // locie (do 600 ms). Gdyby poleciała już W TRAKCIE nowego gestu,
+    // nadpisałaby go — np. spóźnione zgaszenie kasowało nowo ustawioną
+    // jasność. Wysyłamy ją teraz, zanim zamrozimy nowy zestaw: puszczenie
+    // palca było decyzją użytkownika, a nowy gest startuje od jej wyniku.
+    this._flushPending();
     const hass = this._env.hass();
     const now = this._now();
     const view = (id: string): LightView => viewWithOverlay(hass, id, now);
@@ -223,11 +246,17 @@ export class LightSwipe {
     // Pokój ciemny. Najpierw: czy jest co przywrócić?
     const mem = memory.get(this._key);
     if (mem && now - mem.at <= MEMORY_TTL_MS) {
-      const stillOff = [...mem.scaled.map((l) => l.id), ...mem.switchOnly].every(
+      // Tylko światła TEGO wiersza — dwa wiersze potrafią dzielić strefę
+      // (np. osobne listy `field_entities.lights`), a przywrócenie nie może
+      // zapalić niczego spoza zestawu, który użytkownik właśnie ciągnie.
+      const own = new Set(leaves);
+      const memScaled = mem.scaled.filter((l) => own.has(l.id));
+      const memSwitch = mem.switchOnly.filter((id) => own.has(id));
+      const stillOff = [...memScaled.map((l) => l.id), ...memSwitch].every(
         (id) => !view(id).on,
       );
-      const scaled = mem.scaled.filter((l) => view(l.id).available);
-      const switchOnly = mem.switchOnly.filter((id) => view(id).available);
+      const scaled = memScaled.filter((l) => view(l.id).available);
+      const switchOnly = memSwitch.filter((id) => view(id).available);
       if (stillOff && scaled.length + switchOnly.length > 0) {
         this._g = fresh('restore', scaled, switchOnly, 0);
         return { level: 0, active: true };
@@ -353,22 +382,45 @@ export class LightSwipe {
     this._g = undefined;
     this._clearGestureTimer(g);
     if (g.mode !== 'scale' || !g.sentAny) return;
-    const byValue = new Map<number, string[]>();
-    for (const l of g.scaled) {
-      const sent = g.lastSent.get(l.id);
-      if (sent === undefined || sent === l.base) continue;
-      const list = byValue.get(l.base);
-      if (list) list.push(l.id);
-      else byValue.set(l.base, [l.id]);
-    }
-    const calls = [...byValue.entries()].map(([brightness, ids]) => ({ brightness, ids }));
-    if (calls.length > 0) this._afterInflight(g, () => this._send(g, calls, FINAL_TRANSITION_S));
+    this._afterInflight(g, () => {
+      // Stan sprawdzamy w chwili wysyłki: żarówki zgaszonej w międzyczasie
+      // (ściana, automatyzacja) cofnięcie nie może zapalić.
+      const hass = this._env.hass();
+      const now = this._now();
+      const byValue = new Map<number, string[]>();
+      for (const l of g.scaled) {
+        const sent = g.lastSent.get(l.id);
+        if (sent === undefined || sent === l.base) continue;
+        if (!viewWithOverlay(hass, l.id, now).on) continue;
+        const list = byValue.get(l.base);
+        if (list) list.push(l.id);
+        else byValue.set(l.base, [l.id]);
+      }
+      const calls = [...byValue.entries()].map(([brightness, ids]) => ({ brightness, ids }));
+      if (calls.length > 0) void this._send(g, calls, FINAL_TRANSITION_S);
+    });
   }
 
-  /** Karta/kafel znika z DOM — żadnych dalszych komend. */
+  /**
+   * Karta/kafel znika z DOM. Gest w toku przepada (palec nie został
+   * puszczony — nic nie zatwierdzono), ale komenda już ZATWIERDZONA
+   * puszczeniem palca, która czekała na falę w locie, idzie od razu.
+   */
   public dispose(): void {
     this._abortTimers();
     this._g = undefined;
+    this._flushPending();
+  }
+
+  /** Komenda końcowa czekająca na falę w locie (patrz `_afterInflight`). */
+  private _pending?: { run: () => void; timer: unknown };
+
+  private _flushPending(): void {
+    const p = this._pending;
+    if (!p) return;
+    this._pending = undefined;
+    this._clearTimer(p.timer);
+    p.run();
   }
 
   private _abortTimers(): void {
@@ -425,16 +477,26 @@ export class LightSwipe {
       fn();
       return;
     }
+    // Zaległa komenda z jeszcze wcześniejszego gestu idzie pierwsza.
+    this._flushPending();
     let ran = false;
-    const run = (): void => {
-      if (ran) return;
-      ran = true;
-      fn();
+    const entry: { run: () => void; timer: unknown } = {
+      run: () => {
+        if (ran) return;
+        ran = true;
+        if (this._pending === entry) {
+          this._pending = undefined;
+          this._clearTimer(entry.timer);
+        }
+        fn();
+      },
+      timer: undefined,
     };
     // Komenda końcowa nie może zostać wyprzedzona przez spóźnioną falę
     // pośrednią — inaczej żarówka kończy na starej wartości.
-    void pending.then(run);
-    this._setTimer(run, FINAL_WAIT_MS);
+    entry.timer = this._setTimer(entry.run, FINAL_WAIT_MS);
+    this._pending = entry;
+    void pending.then(entry.run);
   }
 
   private _send(g: Gesture, calls: WaveCall[], transition: number): Promise<unknown> {

@@ -11,6 +11,7 @@ import type {
 import {
   filterByDomain,
   filterBinarySensorDeviceClass,
+  isLightGroupEntity,
 } from './area-entities.js';
 
 /** Czy chip otwiera listę encji po kliku (bez jawnego tap_action). */
@@ -37,10 +38,7 @@ export function chipEntityIds(
   if (chip.type === 'lights') {
     // Bez grup-pomocników — lista pokazuje tylko encje bezpośrednie.
     return filterByDomain(entries, 'light')
-      .filter(
-        (e) =>
-          !Array.isArray(hass.states?.[e.entity_id]?.attributes?.entity_id),
-      )
+      .filter((e) => !isLightGroupEntity(hass, e.entity_id))
       .map((e) => e.entity_id)
       .filter(matches(['on']));
   }

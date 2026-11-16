@@ -24,6 +24,7 @@ import type { HassEntity, HomeAssistant, TapActionConfig } from './types.js';
 import { runTapAction } from './tap-action.js';
 import { buildDefaultCustomConfig } from './custom-cards.js';
 import { lightColorOf } from './tile-data.js';
+import { groupMemberIds } from './area-entities.js';
 import { roomLevelFromHass } from './light-dimming.js';
 import { LightSwipe } from './light-swipe.js';
 import { appBrandGradient } from './media-brands.js';
@@ -338,9 +339,9 @@ export class StratumRoomTile extends LitElement {
     if (prev.user !== next.user) return true;
     // Grupa świateł: pasek jasności liczy się ze stanów członków, a te
     // potrafią się zmienić bez zmiany stanu samej grupy.
-    const members = b?.attributes?.entity_id;
-    if (Array.isArray(members)) {
-      for (const m of members as string[]) {
+    const members = groupMemberIds(b);
+    if (members) {
+      for (const m of members) {
         if (prev.states?.[m] !== next.states?.[m]) return true;
       }
     }
@@ -767,7 +768,7 @@ export class StratumRoomTile extends LitElement {
     const statePct = on ? Math.round(this._lightRestPct()) : 0;
     const pct = overridden ? Math.round(this._dragPct!) : statePct;
     const color = on ? lightColorOf(state) : undefined;
-    const isGroup = Array.isArray(state.attributes?.entity_id);
+    const isGroup = groupMemberIds(state) !== undefined;
     const icon =
       this.iconOverride ??
       (state.attributes?.icon as string | undefined) ??
@@ -788,7 +789,7 @@ export class StratumRoomTile extends LitElement {
       <div
         class="glight ${variant} ${on ? 'on' : 'off'} ${this._dragging
           ? 'dragging'
-          : ''}"
+          : ''} ${overridden ? 'held' : ''}"
         part="tile"
         style=${style}
         role="button"
@@ -801,6 +802,7 @@ export class StratumRoomTile extends LitElement {
         @pointermove=${this._onGroupPointerMove}
         @pointerup=${this._onGroupPointerUp}
         @pointercancel=${this._onGroupPointerCancel}
+        @lostpointercapture=${this._onGroupPointerCancel}
       >
         ${variant === 'rail'
           ? html`<span class="glight-fill" aria-hidden="true"></span>`
@@ -876,7 +878,8 @@ export class StratumRoomTile extends LitElement {
     const d = this._drag;
     if (!d || ev.pointerId !== d.pointerId) return;
     if (ev.pointerType === 'mouse' && ev.buttons === 0) {
-      this._drag = undefined;
+      // Przycisk puszczony poza zasięgiem pointerup — anuluj, nie zatwierdzaj.
+      this._abandonGroupDrag(d);
       return;
     }
     if (!d.sliding) {
@@ -949,13 +952,22 @@ export class StratumRoomTile extends LitElement {
   private _onGroupPointerCancel = (ev: PointerEvent): void => {
     const d = this._drag;
     if (!d || ev.pointerId !== d.pointerId) return;
+    this._abandonGroupDrag(d);
+  };
+
+  private _abandonGroupDrag(d: NonNullable<StratumRoomTile['_drag']>): void {
     this._drag = undefined;
     if (!d.sliding) return;
+    this._dragEndedAt = performance.now();
+    if (this._dragRaf !== undefined) {
+      cancelAnimationFrame(this._dragRaf);
+      this._dragRaf = undefined;
+    }
     this._dragging = false;
     this._swipeCtl().cancel();
     this._clearHold();
     this._dragPct = undefined;
-  };
+  }
 
   private _renderLightSlider(state: HassEntity): TemplateResult {
     const on = state.state === 'on';
@@ -2337,9 +2349,9 @@ export class StratumRoomTile extends LitElement {
     }
 
     /* Zgaszony kafel nie ma paska — poza chwilą, gdy palec właśnie ciągnie
-       suwak w górę z zera (dawniej ruch nie dawał wtedy żadnej informacji
-       zwrotnej aż do puszczenia). */
-    .glight.off:not(.dragging) .glight-fill {
+       suwak w górę z zera, i czasem po puszczeniu, zanim HA potwierdzi
+       zapalenie (klasa held) — inaczej pasek znikał i wracał mignięciem. */
+    .glight.off:not(.dragging):not(.held) .glight-fill {
       display: none;
     }
 

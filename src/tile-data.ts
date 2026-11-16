@@ -12,7 +12,7 @@ import type {
   TileField,
   TileFieldEntities,
 } from './types.js';
-import { filterBinarySensorDeviceClass, filterByDomain } from './area-entities.js';
+import { filterBinarySensorDeviceClass, filterByDomain, isLightGroupEntity } from './area-entities.js';
 import { roomLevelFromHass } from './light-dimming.js';
 
 // Domyślny zestaw pól row/tile — wszystkie „informatywne" metryki.
@@ -159,7 +159,7 @@ export function resolveFieldEntityIds(
       // Bez grup-pomocników: liczymy/sterujemy encjami bezpośrednimi,
       // inaczej jedna żarówka liczy się podwójnie (sama + grupa).
       return filterByDomain(entries, 'light')
-        .filter((e) => !Array.isArray(hass.states?.[e.entity_id]?.attributes?.entity_id))
+        .filter((e) => !isLightGroupEntity(hass, e.entity_id))
         .map((e) => e.entity_id);
     }
     case 'motion': {

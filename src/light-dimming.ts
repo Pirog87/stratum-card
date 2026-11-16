@@ -22,6 +22,7 @@
 // `brightness_pct` — unikamy drugiego zaokrąglenia), pozycja suwaka 0..100.
 
 import type { HassEntity, HomeAssistant } from './types.js';
+import { groupMemberIds } from './area-entities.js';
 
 /** Puszczenie suwaka na tym poziomie lub niżej = zgaś (jak dotąd). */
 export const OFF_THRESHOLD = 2;
@@ -127,9 +128,9 @@ export function expandLightIds(
     if (!id.startsWith('light.')) return;
     const state = hass?.states?.[id];
     if (!state) return;
-    const members = state.attributes?.entity_id;
-    if (Array.isArray(members)) {
-      for (const m of members) if (typeof m === 'string') walk(m, depth + 1);
+    const members = groupMemberIds(state);
+    if (members) {
+      for (const m of members) walk(m, depth + 1);
       return;
     }
     out.push(id);

@@ -13,6 +13,7 @@
 // referencjach, nie głębokie porównywanie.
 
 import type { HomeAssistant } from './types.js';
+import { groupMemberIds } from './area-entities.js';
 
 /**
  * Klucze `hass`, których zmiana tożsamości zawsze wymusza render: rejestry
@@ -123,8 +124,8 @@ export function addGroupMembers(
   let guard = 0;
   while (queue.length > 0 && guard++ < 5000) {
     const id = queue.pop()!;
-    const members = hass.states?.[id]?.attributes?.entity_id;
-    if (!Array.isArray(members)) continue;
+    const members = groupMemberIds(hass.states?.[id]);
+    if (!members) continue;
     for (const m of members) {
       if (typeof m !== 'string' || ids.has(m)) continue;
       ids.add(m);

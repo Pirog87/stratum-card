@@ -247,6 +247,13 @@ export class StratumCardRoomRow extends LitElement {
     sliding: boolean;
     /** Pozycja suwaka 0..100 — przyrostowo, patrz `_onPointerMove`. */
     t: number;
+    /**
+     * Gest rozpoznany, ale karta odpowiedziała „nic do zrobienia" (ciemny
+     * pokój, `slider_from_off: none`). Trzymamy go do puszczenia palca —
+     * inaczej mysz po przeciągnięciu generowała click i otwierała popup
+     * albo (akcja `toggle-lights`) zapalała cały pokój.
+     */
+    inert?: boolean;
   };
 
   /**
@@ -371,9 +378,13 @@ export class StratumCardRoomRow extends LitElement {
     // Mysz puszczona poza wierszem: bez tego późniejszy sam ruch kursora
     // nad wierszem potrafił zacząć „przeciąganie" bez wciśniętego przycisku.
     if (ev.pointerType === 'mouse' && ev.buttons === 0) {
-      this._drag = undefined;
+      // Przycisk puszczony tam, gdzie nie dostaliśmy pointerup (menu
+      // kontekstowe, poza oknem). To nie zatwierdzenie — anulujemy, inaczej
+      // wypełnienie zostawało zamrożone, a karta z otwartym gestem.
+      this._abandonDrag(d);
       return;
     }
+    if (d.inert) return;
     if (!d.sliding) {
       const dx = ev.clientX - d.startX;
       const dy = ev.clientY - d.startY;
@@ -392,8 +403,8 @@ export class StratumCardRoomRow extends LitElement {
       const start = this._emitBrightness('start', this._fillPct());
       if (start.active === false) {
         // Ciemny pokój i nic do przywrócenia (`slider_from_off: none`).
-        this._drag = undefined;
-        this._dragEndedAt = performance.now();
+        d.inert = true;
+        row.setPointerCapture(ev.pointerId);
         return;
       }
       d.sliding = true;
@@ -419,6 +430,12 @@ export class StratumCardRoomRow extends LitElement {
     const d = this._drag;
     if (!d || ev.pointerId !== d.pointerId) return;
     this._drag = undefined;
+    if (d.inert) {
+      // Przeciągnięcie bez skutku to nadal przeciągnięcie, nie dotknięcie.
+      ev.stopPropagation();
+      this._dragEndedAt = performance.now();
+      return;
+    }
     if (!d.sliding) return;
     ev.stopPropagation();
     this._dragEndedAt = performance.now();
@@ -450,12 +467,22 @@ export class StratumCardRoomRow extends LitElement {
   private _onPointerCancel = (ev: PointerEvent): void => {
     const d = this._drag;
     if (!d || ev.pointerId !== d.pointerId) return;
+    this._abandonDrag(d);
+  };
+
+  /** Porzucenie gestu bez zatwierdzenia (cancel, utracony capture, mysz). */
+  private _abandonDrag(d: NonNullable<StratumCardRoomRow['_drag']>): void {
     this._drag = undefined;
+    if (d.inert) {
+      this._dragEndedAt = performance.now();
+      return;
+    }
     if (!d.sliding) return;
+    this._dragEndedAt = performance.now();
     this.toggleAttribute('dragging', false);
     this._emitBrightness('cancel', d.t);
     this._releaseFill();
-  };
+  }
 
   /**
    * Zdarzenie do karty. `detail` jest też kanałem zwrotnym: karta wpisuje
@@ -742,6 +769,7 @@ export class StratumCardRoomRow extends LitElement {
         @pointermove=${this._onPointerMove}
         @pointerup=${this._onPointerUp}
         @pointercancel=${this._onPointerCancel}
+        @lostpointercapture=${this._onPointerCancel}
       >
         ${preset === 'fill'
           ? html`<span class="fill" aria-hidden="true"></span>`

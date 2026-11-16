@@ -23,7 +23,12 @@ import type {
   SummaryField,
 } from './types.js';
 import { DEFAULT_POPUP_ORDER } from './types.js';
-import { getEntitiesInArea, filterByDomain, filterBinarySensorDeviceClass } from './area-entities.js';
+import {
+  getEntitiesInArea,
+  filterByDomain,
+  filterBinarySensorDeviceClass,
+  groupMemberIds,
+} from './area-entities.js';
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import {
   ALARM_CLASS_ICONS,
@@ -632,7 +637,7 @@ export class StratumRoomCard extends LitElement {
   }
 
   private _isLightGroup(id: string): boolean {
-    return Array.isArray(this.hass?.states?.[id]?.attributes?.entity_id);
+    return groupMemberIds(this.hass?.states?.[id]) !== undefined;
   }
 
   /**
@@ -1375,7 +1380,7 @@ export class StratumRoomCard extends LitElement {
   ): TemplateResult | null {
     const hass = this.hass!;
     const isGroup = (id: string): boolean =>
-      Array.isArray(hass.states?.[id]?.attributes?.entity_id);
+      groupMemberIds(hass.states?.[id]) !== undefined;
     const groups = items.filter((e) => isGroup(e.entity_id));
     if (groups.length === 0) return null;
 

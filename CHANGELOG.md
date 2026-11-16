@@ -12,8 +12,9 @@ pokoju na X%": zapalało też zgaszone i wyrównywało wszystkie poziomy.
 
 - **Ruszają się tylko światła, które świecą.** Zgaszone nie pojawiają się
   w żadnej komendzie — ani w trakcie, ani po puszczeniu palca.
-- **Każda żarówka proporcjonalnie.** Lampa na 100% i lampa na 20% po
-  przeciągnięciu w dół do połowy świecą 55% i 11% (proporcja 5:1 zostaje).
+- **Każda żarówka proporcjonalnie.** Lampa na 100% i lampa na 20% (pasek
+  pokazuje średnią 60%) po przeciągnięciu do 30% świecą 50% i 10% —
+  proporcja 5:1 zostaje.
   W górę: najjaśniejsze dochodzą do 100% i tam zostają, reszta rośnie
   dalej — pełne w prawo = wszystko, co świeci, na 100%. Ruch tam
   i z powrotem w jednym geście wraca dokładnie do punktu wyjścia.
@@ -29,6 +30,9 @@ pokoju na X%": zapalało też zgaszone i wyrównywało wszystkie poziomy.
   przynajmniej 8% (przypadkowe drgnięcie palca niczego już nie zapala).
   Nowa opcja `row_config.slider_from_off: none` (w edytorze: „Przeciągnięcie
   po ciemnym pokoju zapala światła") wyłącza to całkiem.
+- **Sterownik WLED** (atrybut `group_entities`) traktowany jak grupa:
+  komendy idą do segmentów — skalowanie sterownika i segmentów naraz
+  ściemniałoby podwójnie (WLED mnoży jedno przez drugie).
 - **Kafel grupy świateł w popupie** (`rail` / `tint`) działa tak samo:
   ściemnia świecących członków grupy proporcjonalnie, komendy idą do
   członków, nie do grupy (wywołanie na grupie zapalało wszystkich).
@@ -38,9 +42,10 @@ pokoju na X%": zapalało też zgaszone i wyrównywało wszystkie poziomy.
   tranzycji 0,3 s, która ciągnęła wypełnienie za palcem „na gumce".
 - Komendy: jedna fala w locie, wygrywa najnowsza pozycja palca, jedno
   wywołanie na każdą różną jasność, z przejściem równym odstępowi fal
-  (żarówka sama wygładza ruch). Pokoje do 8 świateł reagują na żywo; w
-  większych żarówki dostają jedną falę po puszczeniu palca (kuchnia: 3
-  wywołania zamiast kilkudziesięciu komend co 300 ms) — sieć Zigbee nie
+  (żarówka sama wygładza ruch). Gdy świeci do 8 ściemnialnych żarówek,
+  reagują na żywo; przy większej liczbie (i przy zapalaniu ciemnego pokoju)
+  dostają jedną falę po puszczeniu palca — jedno wywołanie na każdą różną
+  jasność zamiast komendy do wszystkich świateł co 300 ms. Sieć Zigbee nie
   zatyka się i światła nie „dochodzą" sekundami po geście.
 - Po puszczeniu pasek trzyma wartość, aż Home Assistant ją potwierdzi
   (zamiast sztywnych 1,5 s), maks. 6 s.

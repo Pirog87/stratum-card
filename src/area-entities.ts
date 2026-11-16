@@ -186,9 +186,32 @@ export function filterDisplayable(
   });
 }
 
-/** Czy encja `light.*` jest grupą (pomocnik „Grupa światła"). */
+/**
+ * Członkowie encji-grupy albo `undefined`, gdy to pojedyncze urządzenie.
+ *
+ * Dwa źródła: pomocnik „Grupa świateł" HA wystawia `entity_id`, a nowsze
+ * integracje (np. sterownik główny WLED) — `group_entities`. Ten drugi
+ * przypadek jest ważny dla suwaka jasności: WLED mnoży jasność sterownika
+ * przez jasność segmentu, więc skalowanie obu naraz ściemniałoby podwójnie.
+ * Traktowany jak grupa, sterownik oddaje komendy swoim segmentom.
+ */
+export function groupMemberIds(
+  state: { attributes?: Record<string, unknown> } | undefined,
+): string[] | undefined {
+  const attrs = state?.attributes;
+  if (!attrs) return undefined;
+  for (const key of ['entity_id', 'group_entities'] as const) {
+    const v = attrs[key];
+    if (Array.isArray(v) && v.length > 0) {
+      return v.filter((m): m is string => typeof m === 'string');
+    }
+  }
+  return undefined;
+}
+
+/** Czy encja `light.*` jest grupą (pomocnik „Grupa światła", sterownik WLED). */
 export function isLightGroupEntity(hass: HomeAssistant, entityId: string): boolean {
-  return Array.isArray(hass.states?.[entityId]?.attributes?.entity_id);
+  return groupMemberIds(hass.states?.[entityId]) !== undefined;
 }
 
 /**

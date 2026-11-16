@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LightSwipe,
+  markOff,
   rememberBeforeOff,
   resetLightSwipeState,
 } from '../src/light-swipe.js';
@@ -452,5 +453,104 @@ describe('LightSwipe — przerwanie i szybkie powtórki', () => {
     expect(ha.calls.length).toBe(live + 2);
     const a = ha.calls.filter((c) => c.ids.includes('light.a')).pop()!;
     expect(a.data.brightness).toBe(85);
+  });
+});
+
+describe('LightSwipe — poprawki z przeglądu', () => {
+  it('zaległe zgaszenie z poprzedniego gestu nie nadpisuje następnego', async () => {
+    const ha = fakeHa([dim('light.a', 255), dim('light.b', 51), dark('light.c')]);
+    const ids = ['light.a', 'light.b', 'light.c'];
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    sw.start(ids);
+    ha.stall();
+    sw.move(40);
+    await vi.advanceTimersByTimeAsync(300);
+    // Puszczenie na zerze, fala jeszcze w locie → zgaszenie czeka.
+    expect(sw.end(0).outcome).toBe('off');
+    expect(ha.calls.some((c) => c.service === 'turn_off')).toBe(false);
+    // Natychmiastowy ponowny chwyt: zaległe zgaszenie idzie TERAZ, a nowy
+    // gest widzi ciemny pokój i przywraca zapamiętany zestaw.
+    const again = sw.start(ids);
+    expect(ha.calls.filter((c) => c.service === 'turn_off')).toEqual([
+      { service: 'turn_off', data: {}, ids: ['light.a', 'light.b'] },
+    ]);
+    expect(again).toEqual({ level: 0, active: true });
+    sw.move(60);
+    const before = ha.calls.length;
+    expect(sw.end(60).outcome).toBe('set');
+    // Po 600 ms nic „spóźnionego" już nie leci.
+    await vi.advanceTimersByTimeAsync(1000);
+    const after = ha.calls.slice(before);
+    expect(after.every((c) => c.service === 'turn_on')).toBe(true);
+    expect(after.flatMap((c) => c.ids).sort()).toEqual(['light.a', 'light.b']);
+  });
+
+  it('przerwanie nie zapala żarówki zgaszonej w trakcie gestu', async () => {
+    const ha = room();
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    sw.start(ROOM);
+    sw.move(30);
+    await vi.advanceTimersByTimeAsync(300);
+    ha.calls.length = 0;
+    ha.set('light.a', { state: 'off' });
+    sw.cancel();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(allIds(ha.calls)).toEqual(['light.b']);
+  });
+
+  it('pamięć przywraca tylko światła tego wiersza', () => {
+    const ha = fakeHa([dim('light.a', 200), dim('light.b', 100), dark('light.c'), dark('light.d')]);
+    const sufit = new LightSwipe('salon', { hass: () => ha.hass });
+    sufit.start(['light.a', 'light.b']);
+    sufit.end(0);
+    ha.echo();
+    ha.calls.length = 0;
+    // Inny wiersz z tym samym kluczem, ale innymi światłami — nie przywraca a/b.
+    const kinkiety = new LightSwipe('salon', { hass: () => ha.hass });
+    kinkiety.start(['light.c', 'light.d'], 'none');
+    kinkiety.end(60);
+    expect(allIds(ha.calls)).not.toContain('light.a');
+    expect(allIds(ha.calls)).not.toContain('light.b');
+  });
+
+  it('po zgaszeniu włącznikiem (markOff) gest w oknie echa przywraca cały zestaw', () => {
+    const ha = fakeHa([dim('light.a', 200), dim('light.b', 100), dark('light.c')]);
+    const ids = ['light.a', 'light.b', 'light.c'];
+    rememberBeforeOff('k', ha.hass, ids);
+    markOff(ha.hass, ids);
+    // Echo dotarło tylko dla a; b w HA dalej „świeci".
+    ha.set('light.a', { state: 'off' });
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    expect(sw.start(ids)).toEqual({ level: 0, active: true });
+    sw.move(50);
+    sw.end(50);
+    expect(allIds(ha.calls).sort()).toEqual(['light.a', 'light.b']);
+  });
+
+  it('sterownik WLED (group_entities) skalujemy przez segmenty, nie podwójnie', () => {
+    const ha = fakeHa([
+      entity('light.wled_main', 'on', { brightness: 255, supported_color_modes: ['brightness'], group_entities: ['light.seg1', 'light.seg2'] }),
+      dim('light.seg1', 200),
+      dim('light.seg2', 100),
+    ]);
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    sw.start(['light.wled_main', 'light.seg1', 'light.seg2']);
+    sw.end(30);
+    expect(allIds(ha.calls).sort()).toEqual(['light.seg1', 'light.seg2']);
+  });
+
+  it('dispose wysyła zatwierdzoną komendę czekającą na falę w locie', async () => {
+    const ha = room();
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    sw.start(ROOM);
+    ha.stall();
+    sw.move(40);
+    await vi.advanceTimersByTimeAsync(300);
+    sw.end(20);
+    const n = ha.calls.length;
+    sw.dispose();
+    expect(ha.calls.length).toBe(n + 2);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(ha.calls.length).toBe(n + 2);
   });
 });

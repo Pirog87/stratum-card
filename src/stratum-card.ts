@@ -53,7 +53,7 @@ import {
   watchedStateChanged,
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
-import { LightSwipe, rememberBeforeOff } from './light-swipe.js';
+import { LightSwipe, markOff, rememberBeforeOff } from './light-swipe.js';
 import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
@@ -1436,6 +1436,14 @@ export class StratumCard extends LitElement {
     perRoomIconTapAction?: import('./types.js').TapActionConfig,
   ): TemplateResult {
     const primary = areaIds[0];
+    // Klucz gestu jasności i pamięci „co było zgaszone" — strefy wiersza plus
+    // jawna lista świateł. Dwa wiersze tej samej strefy z różnymi listami
+    // (albo „Kuchnia" i „Kuchnia+Spiżarnia" na dwóch kartach) nie mogą
+    // dzielić pamięci, bo przeciągnięcie jednego przywracałoby światła drugiego.
+    const swipeKey = [
+      areaIds.join('+'),
+      ...(fieldEntities?.lights?.length ? [[...fieldEntities.lights].sort().join(',')] : []),
+    ].join('|');
     // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
     const seen = new Set<string>();
     const entries: HassEntityRegistryEntry[] = [];
@@ -1527,7 +1535,7 @@ export class StratumCard extends LitElement {
         .clickable=${clickable}
         .offline=${roomOffline}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-          this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
+          this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities, swipeKey)}
       ></stratum-card-room-tile>`;
     }
     return html`<stratum-card-room-row
@@ -1563,13 +1571,13 @@ export class StratumCard extends LitElement {
       .clickable=${clickable}
       .iconTappable=${iconTappable}
       @row-lights-toggle=${() =>
-        this._toggleRoomLights(entries, fieldEntities, primary)}
+        this._toggleRoomLights(entries, fieldEntities, swipeKey)}
       @row-brightness=${(ev: CustomEvent<RowBrightnessDetail>) =>
-        this._onRowBrightness(ev.detail, primary!, entries, fieldEntities)}
+        this._onRowBrightness(ev.detail, swipeKey, entries, fieldEntities)}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-        this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
+        this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities, swipeKey)}
       @icon-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-        this._onRoomTap(ev, effectiveIconTap, popupOverrides, entries, fieldEntities)}
+        this._onRoomTap(ev, effectiveIconTap, popupOverrides, entries, fieldEntities, swipeKey)}
     ></stratum-card-room-row>`;
   }
 
@@ -1651,8 +1659,9 @@ export class StratumCard extends LitElement {
       popup_extra?: import('./types.js').RoomPopupExtraConfig;
       chips?: import('./types.js').ChipConfig[];
     },
-    entries?: HassEntityRegistryEntry[],
+    entries?: readonly HassEntityRegistryEntry[],
     fieldEntities?: import('./types.js').TileFieldEntities,
+    swipeKey?: string,
   ): void {
     // Rozwiązywanie akcji: per-room > global > domyślny popup.
     // `action: 'default'` z ha-form = „nie ustawione" — przechodzimy głębiej.
@@ -1671,7 +1680,7 @@ export class StratumCard extends LitElement {
     }
 
     if (effective?.action === 'toggle-lights') {
-      this._toggleRoomLights(entries ?? [], fieldEntities, ev.detail.area_id);
+      this._toggleRoomLights(entries ?? [], fieldEntities, swipeKey);
       return;
     }
 
@@ -1704,6 +1713,7 @@ export class StratumCard extends LitElement {
     // Gasimy włącznikiem → zapamiętaj, co świeciło i jak jasno. Przeciągnięcie
     // po ciemnym wierszu przywróci wtedy ten zestaw, a nie cały pokój.
     if (anyOn && swipeKey) rememberBeforeOff(swipeKey, this.hass, ids);
+    if (anyOn) markOff(this.hass, ids);
     void this.hass.callService('light', anyOn ? 'turn_off' : 'turn_on', {
       entity_id: ids,
     });
