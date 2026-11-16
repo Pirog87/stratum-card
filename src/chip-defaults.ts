@@ -14,6 +14,7 @@ import type {
 import { filterByDomain, filterBinarySensorDeviceClass, excludeLightGroups } from './area-entities.js';
 import { resolveColor } from './colors.js';
 import type { TemplateRenderer } from './template-renderer.js';
+import { noteAge } from './ago-ticker.js';
 
 /**
  * Domyślny zestaw chipów pokazywanych gdy user nic nie skonfigurował.
@@ -128,6 +129,9 @@ export interface ChipValue {
 /** Czas od `iso` w stylu mushroom: 16s / 5min / 2h / 1d. */
 export function ago(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  // Zgłoś wiek zegarowi — komponent, który to wyrenderował, sam zaplanuje
+  // odświeżenie na moment zmiany tekstu (patrz ago-ticker.ts).
+  noteAge(seconds);
   if (seconds < 60) return `${Math.floor(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
@@ -137,7 +141,7 @@ export function ago(iso: string): string {
 /** Wariant licznika: czas od ostatniej zmiany najświeższego czujnika. */
 function lastChangedValue(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
 ): ChipValue {
   let newest: string | undefined;
   let anyOn = false;
@@ -154,7 +158,7 @@ function lastChangedValue(
 /** Chip temperatury/wilgotności: wartość + dynamiczna ikona i kolor (skala). */
 function climateChipValue(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   chip: { entity?: string },
   kind: 'temperature' | 'humidity',
 ): ChipValue {
@@ -201,7 +205,7 @@ function climateChipValue(
 /** Liczy/resolve wartość chipu zależnie od typu. */
 export function evaluateChip(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   chip: ChipConfig,
   templates: TemplateRenderer,
 ): ChipValue {
@@ -277,7 +281,7 @@ export function evaluateChip(
 
 function countedValue(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   chip?: { show_last_changed?: boolean },
 ): ChipValue {
   if (chip?.show_last_changed) return lastChangedValue(hass, entries);
@@ -290,7 +294,7 @@ function countedValue(
 
 function filterValue(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   domain: string | undefined,
   deviceClass: string | undefined,
   activeState: string,

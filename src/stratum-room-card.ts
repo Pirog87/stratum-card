@@ -3,7 +3,13 @@
 // v1.0 1/3 — szkielet: rejestracja card type, setConfig, header z ikoną/nazwą/chipami.
 // Placeholder sekcji zostanie zastąpiony listą aktywnych sekcji w 2/3.
 
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
   ChipConfig,
@@ -30,6 +36,14 @@ import {
 } from './chip-list-helpers.js';
 import { ago } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
+import { subscribeRegistry } from './entity-registry-cache.js';
+import {
+  addGroupMembers,
+  collectEntityIds,
+  structureChanged,
+  watchedStateChanged,
+} from './hass-watch.js';
+import { AgoTicker } from './ago-ticker.js';
 import { runTapAction } from './tap-action.js';
 import {
   autoRoomChips,
@@ -84,7 +98,10 @@ export class StratumRoomCard extends LitElement {
 
   /** Ustawia config poprzez Lit property (dla osadzania w popup). */
   public set config(value: StratumRoomCardConfig) {
-    if (value) this.setConfig(value);
+    // Lit przypisuje wartości nieprymitywne przy każdym renderze rodzica,
+    // nawet gdy to ten sam obiekt — bez tego porównania każdy render karty
+    // piętra „zmieniał config" popupu i unieważniał jego bramkę renderu.
+    if (value && value !== this._config) this.setConfig(value);
   }
 
   public getCardSize(): number {
@@ -102,9 +119,99 @@ export class StratumRoomCard extends LitElement {
     return { area_id: firstArea ?? '' };
   }
 
+  /** Odświeża etykiety „5min temu" (chip ruchu, wiersze alarmów). */
+  protected readonly _agoTicker = new AgoTicker(this);
+
+  private _unsubRegistry?: () => void;
+
+  public connectedCallback(): void {
+    super.connectedCallback();
+    // Nadpisania device_class przychodzą z osobnego cache'u rejestru. Dotąd
+    // popup dowiadywał się o nich przy okazji — bo karta piętra i tak
+    // renderowała go bez przerwy. Z bramką musi nasłuchiwać sam.
+    this._unsubRegistry = subscribeRegistry(() => this.requestUpdate());
+  }
+
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     this._templates.destroy();
+    this._unsubRegistry?.();
+    this._unsubRegistry = undefined;
+  }
+
+  /** Encje, które popup pokazuje — przeliczane tylko po zmianie rejestru/configu. */
+  private _watch?: {
+    config: StratumRoomCardConfig;
+    entities: HomeAssistant['entities'];
+    devices: HomeAssistant['devices'];
+    ids: Set<string>;
+  };
+
+  private _watchedIds(hass: HomeAssistant): Set<string> {
+    const config = this._config!;
+    const w = this._watch;
+    if (
+      w &&
+      w.config === config &&
+      w.entities === hass.entities &&
+      w.devices === hass.devices
+    ) {
+      return w.ids;
+    }
+    const ids = collectEntityIds(config);
+    for (const e of this._getEntries()) ids.add(e.entity_id);
+    // Członkowie grup świateł potrafią leżeć w innej strefie niż grupa, a
+    // kafel grupy liczy pasek jasności właśnie z nich.
+    addGroupMembers(hass, ids);
+    this._watch = { config, entities: hass.entities, devices: hass.devices, ids };
+    return ids;
+  }
+
+  /** Czy w popupie siedzą kafle z osadzoną kartą (`mode: custom:*`). */
+  private _hasCustomTiles = false;
+
+  protected updated(changed: PropertyValues): void {
+    super.updated(changed);
+    let custom = false;
+    for (const tile of this.renderRoot.querySelectorAll('stratum-room-tile')) {
+      if (tile.mode.startsWith('custom:')) {
+        custom = true;
+        break;
+      }
+    }
+    this._hasCustomTiles = custom;
+  }
+
+  /**
+   * Gdy render jest pominięty, osadzone karty HA i tak muszą dostać nowy
+   * `hass` — same decydują, czy coś je obchodzi (potrafią czytać encje,
+   * o których nie wiemy, np. z szablonu).
+   */
+  private _forwardHass(hass: HomeAssistant): void {
+    for (const el of this._customCards.values()) {
+      (el as unknown as { hass?: HomeAssistant }).hass = hass;
+    }
+    if (!this._hasCustomTiles) return;
+    for (const tile of this.renderRoot.querySelectorAll('stratum-room-tile')) {
+      if (tile.mode.startsWith('custom:')) tile.hass = hass;
+    }
+  }
+
+  /**
+   * Bramka renderu — ta sama zasada co w karcie piętra: popup przelicza
+   * sekcje tylko wtedy, gdy zmieniła się encja z jego pokoju albo rejestr.
+   */
+  protected shouldUpdate(changed: PropertyValues): boolean {
+    if (changed.size !== 1 || !changed.has('hass')) return true;
+    const prev = changed.get('hass') as HomeAssistant | undefined;
+    const next = this.hass;
+    if (!prev || !next || !this._config) return true;
+    // Otwarta lista chipa czyta stany na żywo przez nas.
+    if (this._popupChip) return true;
+    if (structureChanged(prev, next)) return true;
+    if (watchedStateChanged(prev, next, this._watchedIds(next))) return true;
+    this._forwardHass(next);
+    return false;
   }
 
   private _getEntries(): HassEntityRegistryEntry[] {

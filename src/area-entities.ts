@@ -12,28 +12,67 @@ import type {
 } from './types.js';
 import { registryDeviceClass } from './entity-registry-cache.js';
 
+/** Lista wpisów rejestru, której NIE wolno mutować (współdzielona z cache). */
+export type EntityEntries = readonly HassEntityRegistryEntry[];
+
+const NO_ENTRIES: EntityEntries = Object.freeze([]);
+
+/**
+ * Indeks area → wpisy rejestru, budowany RAZ na tożsamość rejestru.
+ *
+ * Dlaczego: HA podmienia `hass` przy każdej zmianie stanu dowolnej encji,
+ * a karta pyta o encje area kilkadziesiąt razy na render. Skan całego
+ * `hass.entities` (u usera 5187 wpisów) przy każdym pytaniu zjadał ~92%
+ * czasu renderu — ~105 ms na jedną zmianę stanu przy trzech kartach.
+ * `hass.entities` i `hass.devices` zmieniają tożsamość wyłącznie przy
+ * zmianie rejestru, więc indeks żyje dokładnie tak długo, jak jest
+ * aktualny, a WeakMap sprząta go razem ze starym rejestrem.
+ */
+interface AreaIndex {
+  devices: HomeAssistant['devices'];
+  byArea: Map<string, HassEntityRegistryEntry[]>;
+  /** Cache encji piętra — ważny dla tej samej tożsamości `hass.areas`. */
+  byFloor: Map<string, { areas: HomeAssistant['areas']; entries: EntityEntries }>;
+}
+
+const areaIndexCache = new WeakMap<object, AreaIndex>();
+
+function areaIndex(hass: HomeAssistant): AreaIndex | undefined {
+  const entities = hass?.entities;
+  if (!entities) return undefined;
+  const cached = areaIndexCache.get(entities);
+  if (cached && cached.devices === hass.devices) return cached;
+
+  const byArea = new Map<string, HassEntityRegistryEntry[]>();
+  for (const id in entities) {
+    const entry = entities[id]!;
+    if (entry.hidden_by || entry.disabled_by) continue;
+    // Własne area encji wygrywa; dopiero jego brak (null/undefined)
+    // oznacza dziedziczenie po urządzeniu.
+    const areaId =
+      entry.area_id ??
+      (entry.device_id ? hass.devices?.[entry.device_id]?.area_id : undefined);
+    if (!areaId) continue;
+    const list = byArea.get(areaId);
+    if (list) list.push(entry);
+    else byArea.set(areaId, [entry]);
+  }
+  const index: AreaIndex = { devices: hass.devices, byArea, byFloor: new Map() };
+  areaIndexCache.set(entities, index);
+  return index;
+}
+
 /**
  * Zwraca wszystkie wpisy registry encji przypisane do podanego area —
  * bezpośrednio lub przez urządzenie. Encje ukryte / wyłączone są pomijane.
+ * Wynik pochodzi z indeksu (ta sama tablica dla tego samego rejestru) —
+ * nie mutuj go; do sortowania/filtrowania zrób kopię.
  */
 export function getEntitiesInArea(
   hass: HomeAssistant,
   areaId: string,
-): HassEntityRegistryEntry[] {
-  if (!hass?.entities) return [];
-
-  return Object.values(hass.entities).filter((entry) => {
-    if (entry.hidden_by || entry.disabled_by) return false;
-
-    if (entry.area_id === areaId) return true;
-
-    if (entry.area_id == null && entry.device_id) {
-      const device = hass.devices?.[entry.device_id];
-      return device?.area_id === areaId;
-    }
-
-    return false;
-  });
+): EntityEntries {
+  return areaIndex(hass)?.byArea.get(areaId) ?? NO_ENTRIES;
 }
 
 /** Lista area należących do podanego floor-a. */
@@ -49,27 +88,33 @@ export function getAreasInFloor(
  * Zwraca wszystkie encje ze wszystkich area należących do floor-a.
  * Deduplikuje (encja z urządzeniem przypisanym może wylądować w wielu area
  * jeśli inconsistent — ale w praktyce area_id jest flat per device).
+ * Wynik jest cache'owany na tożsamość rejestru i `hass.areas`.
  */
 export function getEntitiesInFloor(
   hass: HomeAssistant,
   floorId: string,
-): HassEntityRegistryEntry[] {
-  const areas = getAreasInFloor(hass, floorId);
+): EntityEntries {
+  const index = areaIndex(hass);
+  if (!index) return NO_ENTRIES;
+  const cached = index.byFloor.get(floorId);
+  if (cached && cached.areas === hass.areas) return cached.entries;
+
   const seen = new Set<string>();
   const result: HassEntityRegistryEntry[] = [];
-  for (const area of areas) {
-    for (const entry of getEntitiesInArea(hass, area.area_id)) {
+  for (const area of getAreasInFloor(hass, floorId)) {
+    for (const entry of index.byArea.get(area.area_id) ?? NO_ENTRIES) {
       if (seen.has(entry.entity_id)) continue;
       seen.add(entry.entity_id);
       result.push(entry);
     }
   }
+  index.byFloor.set(floorId, { areas: hass.areas, entries: result });
   return result;
 }
 
 /** Filtruje wpisy registry po domenie (prefiks `entity_id` przed kropką). */
 export function filterByDomain(
-  entries: HassEntityRegistryEntry[],
+  entries: EntityEntries,
   domain: string,
 ): HassEntityRegistryEntry[] {
   const prefix = `${domain}.`;
@@ -87,7 +132,7 @@ export function filterByDomain(
  */
 export function filterBinarySensorDeviceClass(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: EntityEntries,
   deviceClass: string,
 ): HassEntityRegistryEntry[] {
   return entries.filter((entry) => {
@@ -122,7 +167,7 @@ export function getState(
  */
 export function filterDisplayable(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: EntityEntries,
 ): HassEntityRegistryEntry[] {
   return entries.filter((e) => {
     const frontend = hass.entities?.[e.entity_id] as
@@ -153,7 +198,7 @@ export function isLightGroupEntity(hass: HomeAssistant, entityId: string): boole
  */
 export function excludeLightGroups(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: EntityEntries,
 ): HassEntityRegistryEntry[] {
   return entries.filter((e) => !isLightGroupEntity(hass, e.entity_id));
 }
@@ -166,7 +211,7 @@ export function excludeLightGroups(
  */
 export function unavailableEntityIds(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: EntityEntries,
 ): string[] {
   return entries
     .filter((e) => {

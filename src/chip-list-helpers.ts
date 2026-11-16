@@ -25,7 +25,7 @@ export function chipSupportsList(chip: ChipConfig): boolean {
 /** Aktywne encje pasujące do chipa (scope = przekazane entries). */
 export function chipEntityIds(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   chip: ChipConfig,
 ): string[] {
   const matches = (states: string[]): ((id: string) => boolean) => {
@@ -124,7 +124,7 @@ export function chipEntityIds(
   if (chip.type === 'filter') {
     const c = chip as import('./types.js').FilterChipConfig;
     const activeState = c.state ?? 'on';
-    let pool: HassEntityRegistryEntry[] = entries;
+    let pool: readonly HassEntityRegistryEntry[] = entries;
     if (c.domain) {
       pool = filterByDomain(pool, c.domain);
     }
@@ -177,7 +177,7 @@ export const ALARM_CLASS_ICONS: Record<string, string> = {
 /** Aktywne encje alarmowe (stan `on`) w podanym zbiorze — zdeduplikowane. */
 export function alarmEntityIds(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
 ): string[] {
   const ids = new Set<string>();
   for (const cls of ALARM_CLASSES) {

@@ -441,7 +441,7 @@ export const cardStyles = css`
       inset: 0;
       z-index: 9999;
       background: rgba(0, 0, 0, 0.65);
-      backdrop-filter: blur(6px);
+      backdrop-filter: var(--stratum-popup-backdrop-filter, blur(6px));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -462,6 +462,10 @@ export const cardStyles = css`
       max-height: calc(100vh - 2 * var(--stratum-popup-margin, 8px));
       max-height: calc(100dvh - 2 * var(--stratum-popup-margin, 8px));
       overflow-y: auto;
+      /* Przewinięcie do końca arkusza nie ma ciągnąć za sobą dashboardu pod
+         spodem (po zamknięciu widok był przesunięty, a przeglądarka
+         przerysowywała całą stronę pod tłem przy każdej klatce). */
+      overscroll-behavior: contain;
       border-radius: var(--stratum-popup-radius, 16px);
       background: var(--ha-card-background, var(--card-background-color, #1e1f22));
       animation: stratum-popup-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -556,6 +560,11 @@ export const cardStyles = css`
     @media (max-width: 600px) {
       .stratum-popup-backdrop {
         align-items: stretch;
+        /* Na telefonie arkusz zakrywa cały ekran poza 8 px ramką, więc
+           rozmycia i tak nie widać — a pełnoekranowy backdrop-filter kazał
+           GPU rozmywać cały dashboard przy każdej klatce przewijania i
+           każdym ruchu suwaka w popupie. Token pozwala je przywrócić. */
+        backdrop-filter: var(--stratum-popup-backdrop-filter, none);
       }
 
       .stratum-popup-card {

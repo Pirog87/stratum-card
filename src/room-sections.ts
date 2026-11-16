@@ -22,7 +22,7 @@ import {
  */
 export function autoRoomChips(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
 ): ChipConfig[] {
   const chips: ChipConfig[] = [
     { type: 'lights' },
@@ -67,7 +67,7 @@ export function normalizeSections(
 /** Filtry per sekcja — jakie encje do niej należą. */
 export function entitiesForSection(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   section: RoomSectionType,
 ): HassEntityRegistryEntry[] {
   return filterDisplayable(hass, rawEntitiesForSection(hass, entries, section));
@@ -75,7 +75,7 @@ export function entitiesForSection(
 
 export function rawEntitiesForSection(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   section: RoomSectionType,
 ): HassEntityRegistryEntry[] {
   switch (section) {
@@ -106,7 +106,7 @@ export function rawEntitiesForSection(
 /** Auto-discover: sekcje dla których są encje. Kolejność — utrwalona. */
 export function autoSections(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
 ): RoomSectionType[] {
   // Bez `doors`, `windows` i `switches` — decyzja usera: statusy drzwi
   // i okien żyją w klikalnych chipach nagłówka (popup listy aktywnych),

@@ -11,7 +11,14 @@
 // Wszystkie akcje przez `hass.callService`. Click w całe tile poza dedykowanymi
 // kontrolkami otwiera `more-info`.
 
-import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  type PropertyValues,
+  type TemplateResult,
+  nothing,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { HassEntity, HomeAssistant, TapActionConfig } from './types.js';
 import { runTapAction } from './tap-action.js';
@@ -256,7 +263,73 @@ export class StratumRoomTile extends LitElement {
 
   private _volTicks = 0;
 
+  /**
+   * Bramka renderu. Popup pokoju ma 20–50 kafli i każdy dostaje nowy `hass`
+   * przy każdej zmianie stanu w domu — a kafel czyta wyłącznie własną encję
+   * (plus członków, gdy jest grupą świateł). Bez bramki 100% kafli
+   * renderowało się na zmiany, które nie dotyczyły żadnego z nich, i to
+   * seriami dokładnie wtedy, gdy palec ciągnie suwak jasności.
+   */
+  protected shouldUpdate(changed: PropertyValues): boolean {
+    // Pusta mapa = gołe requestUpdate() (zegar postępu); każdy inny klucz
+    // to realna zmiana właściwości kafla.
+    if (changed.size !== 1 || !changed.has('hass')) return true;
+    const prev = changed.get('hass') as HomeAssistant | undefined;
+    const next = this.hass;
+    if (!prev || !next) return true;
+    const a = prev.states?.[this.entity];
+    const b = next.states?.[this.entity];
+    if (this.mode.startsWith('custom:')) {
+      // Osadzona karta (Mushroom, Bubble…) sama filtruje, co ją obchodzi —
+      // dostaje każdy `hass` bezpośrednio, bez naszego renderu po drodze.
+      if (!this._customEl || Boolean(a) !== Boolean(b)) return true;
+      (this._customEl as unknown as { hass?: HomeAssistant }).hass = next;
+      return false;
+    }
+    if (a !== b) return true;
+    // Krótkofalówka zależy od uprawnień użytkownika.
+    if (prev.user !== next.user) return true;
+    // Grupa świateł: pasek jasności liczy się ze stanów członków, a te
+    // potrafią się zmienić bez zmiany stanu samej grupy.
+    const members = b?.attributes?.entity_id;
+    if (Array.isArray(members)) {
+      for (const m of members as string[]) {
+        if (prev.states?.[m] !== next.states?.[m]) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Zegar paska postępu odtwarzacza. Pozycja liczy się z `Date.now()` w
+   * renderze i dotąd przesuwała się tylko dlatego, że obce zmiany stanu
+   * budziły kafel — z bramką pasek by stanął. Tyka wyłącznie w trybie
+   * `player` i tylko podczas odtwarzania.
+   */
+  private _progressTimer?: number;
+
+  protected updated(changed: PropertyValues): void {
+    super.updated(changed);
+    const st = this._state();
+    const need =
+      this.mode === 'player' &&
+      st?.state === 'playing' &&
+      typeof st.attributes?.media_duration === 'number';
+    if (need && this._progressTimer === undefined) {
+      this._progressTimer = window.setInterval(() => {
+        if (!document.hidden) this.requestUpdate();
+      }, 1000);
+    } else if (!need && this._progressTimer !== undefined) {
+      window.clearInterval(this._progressTimer);
+      this._progressTimer = undefined;
+    }
+  }
+
   public disconnectedCallback(): void {
+    if (this._progressTimer !== undefined) {
+      window.clearInterval(this._progressTimer);
+      this._progressTimer = undefined;
+    }
     this._volStopHold();
     if (this._volClearTimer !== undefined) {
       window.clearTimeout(this._volClearTimer);

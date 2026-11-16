@@ -3,7 +3,13 @@
 // Customowa karta Home Assistant: podsumowanie warstwy (floor lub area)
 // z rozwijanym body. Zobacz docs/roadmap.md dla kolejnych milestone'ów.
 
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
   HassEntityRegistryEntry,
@@ -39,6 +45,14 @@ import {
   chipSupportsList,
 } from './chip-list-helpers.js';
 import { TemplateRenderer } from './template-renderer.js';
+import {
+  addGroupMembers,
+  collectEntityIds,
+  statesEmpty,
+  structureChanged,
+  watchedStateChanged,
+} from './hass-watch.js';
+import { AgoTicker } from './ago-ticker.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
@@ -56,7 +70,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.106.1';
+const VERSION = '1.106.2';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -99,6 +113,82 @@ export class StratumCard extends LitElement {
 
   /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
   private _templates = new TemplateRenderer(() => this.requestUpdate());
+
+  /** Odświeża etykiety „5min temu" na chipach, gdy nic innego nie budzi karty. */
+  protected readonly _agoTicker = new AgoTicker(this);
+
+  /**
+   * Encje, których stan karta faktycznie pokazuje — pamiętane razem z
+   * tożsamościami, z których zbiór powstał. Przeliczamy go tylko po zmianie
+   * rejestru albo configu, nie przy każdym `hass`.
+   */
+  private _watch?: {
+    config: StratumCardConfig;
+    entities: HomeAssistant['entities'];
+    devices: HomeAssistant['devices'];
+    areas: HomeAssistant['areas'];
+    ids: Set<string>;
+  };
+
+  private _watchedIds(hass: HomeAssistant): Set<string> {
+    const config = this._config!;
+    const w = this._watch;
+    if (
+      w &&
+      w.config === config &&
+      w.entities === hass.entities &&
+      w.devices === hass.devices &&
+      w.areas === hass.areas
+    ) {
+      return w.ids;
+    }
+    // Zakres karty (piętro albo strefa) + strefy wierszy z configu — te
+    // drugie potrafią leżeć poza piętrem (`rooms[].area_id`, `merge_with`).
+    const ids = collectEntityIds(config);
+    for (const e of this._getEntries()) ids.add(e.entity_id);
+    for (const room of config.rooms ?? []) {
+      for (const areaId of [room.area_id, ...(room.merge_with ?? [])]) {
+        for (const e of getEntitiesInArea(hass, areaId)) ids.add(e.entity_id);
+      }
+    }
+    addGroupMembers(hass, ids);
+    this._watch = {
+      config,
+      entities: hass.entities,
+      devices: hass.devices,
+      areas: hass.areas,
+      ids,
+    };
+    return ids;
+  }
+
+  /**
+   * Bramka renderu. HA podmienia `hass` przy każdej zmianie stanu dowolnej
+   * encji w całym domu; karta piętra ma renderować tylko wtedy, gdy zmieniła
+   * się encja z JEJ pokoi (albo rejestr, motyw, config). Bez tego trzy
+   * karty przeliczały wszystkie wiersze kilka–kilkanaście razy na sekundę,
+   * także w trakcie gestu, i stąd brały się przycięcia.
+   *
+   * Poprzedni `hass` bierzemy z mapy zmian: Lit czyści ją także po
+   * odrzuconym cyklu, więc zawsze porównujemy dwa kolejne obiekty — a skoro
+   * tożsamość stanu jest przechodnia, żadna zmiana obserwowanej encji nie
+   * przemknie między odrzuconymi cyklami.
+   */
+  protected shouldUpdate(changed: PropertyValues): boolean {
+    // Pusta mapa = gołe requestUpdate() (szablony, rejestr, zegar etykiet,
+    // podgląd edytora); każdy inny klucz to realna zmiana stanu karty.
+    if (changed.size !== 1 || !changed.has('hass')) return true;
+    const prev = changed.get('hass') as HomeAssistant | undefined;
+    const next = this.hass;
+    if (!prev || !next || !this._config) return true;
+    // Otwarty popup czyta stany na żywo przez tę kartę — nie przycinamy mu
+    // dopływu. Debug loguje każdy render z założenia.
+    if (this._popupRoom || this._popupChip || this._config.debug) return true;
+    // Dopóki widać skeleton (HA nie dosłał stanów), czekamy na pierwszy stan.
+    if (statesEmpty(prev.states)) return true;
+    if (structureChanged(prev, next)) return true;
+    return watchedStateChanged(prev, next, this._watchedIds(next));
+  }
 
   /** Timer auto-collapse — wołany gdy karta rozwinięta i nic nie klikniemy. */
   private _autoCollapseTimer?: number;
@@ -499,7 +589,7 @@ export class StratumCard extends LitElement {
     this._unsubRegistry = undefined;
   }
 
-  protected updated(changed: Map<PropertyKey, unknown>): void {
+  protected updated(changed: PropertyValues): void {
     super.updated(changed);
     // Trigger fetch przy pierwszym hass update (gdy ensureRegistry
     // z connectedCallback nie miał jeszcze hass).
@@ -527,9 +617,18 @@ export class StratumCard extends LitElement {
     return id ? `stratum-card:rows:${id}` : undefined;
   }
 
+  /** Ostatnio zapisana para klucz→liczba — żeby nie pisać w kółko tego samego. */
+  private _persistedRows?: string;
+
   private _persistRowCount(): void {
     const key = this._rowsKey();
     if (!key || this._lastRowCount <= 0) return;
+    // `updated()` woła nas po każdym renderze; synchroniczny zapis do
+    // localStorage kilka razy na sekundę to czysta strata — liczba wierszy
+    // zmienia się tylko przy edycji listy pokoi.
+    const stamp = `${key}=${this._lastRowCount}`;
+    if (stamp === this._persistedRows) return;
+    this._persistedRows = stamp;
     try {
       window.localStorage.setItem(key, String(this._lastRowCount));
     } catch {
@@ -615,9 +714,7 @@ export class StratumCard extends LitElement {
     // WebSocket) - migoczace placeholdery zamiast pustki i przeskokow.
     if (
       this._config.skeleton !== false &&
-      (!this.hass ||
-        !this.hass.states ||
-        Object.keys(this.hass.states).length === 0)
+      (!this.hass || statesEmpty(this.hass.states))
     ) {
       return this._renderSkeleton();
     }
@@ -918,9 +1015,32 @@ export class StratumCard extends LitElement {
     `;
   }
 
-  private _renderPopup(): TemplateResult {
-    if (!this._popupRoom) return html``;
-    const popupConfig: import('./types.js').StratumRoomCardConfig = {
+  /**
+   * Config popupu budowany raz na otwarcie (i na zmianę configu karty), nie
+   * przy każdym renderze. Nowy literał obiektu co render oznaczał dla
+   * `stratum-room-card` „zmienił się config" przy każdej zmianie stanu —
+   * popup przeliczał wtedy wszystko od zera i żadna jego bramka nie działała.
+   */
+  private _popupCfgMemo?: {
+    room: NonNullable<StratumCard['_popupRoom']>;
+    config: StratumCardConfig | undefined;
+    value: import('./types.js').StratumRoomCardConfig;
+  };
+
+  private _popupConfig(): import('./types.js').StratumRoomCardConfig {
+    const room = this._popupRoom!;
+    const memo = this._popupCfgMemo;
+    if (memo && memo.room === room && memo.config === this._config) {
+      return memo.value;
+    }
+    const value = this._buildPopupConfig();
+    this._popupCfgMemo = { room, config: this._config, value };
+    return value;
+  }
+
+  private _buildPopupConfig(): import('./types.js').StratumRoomCardConfig {
+    if (!this._popupRoom) return { type: 'custom:stratum-room-card', area_id: '' };
+    return {
       type: 'custom:stratum-room-card',
       area_id: this._popupRoom.area_id,
       merge_with: this._popupRoom.merge_with,
@@ -941,6 +1061,11 @@ export class StratumCard extends LitElement {
       scene_gradient_default: this._config?.rooms_scene_gradient,
       popup_header: this._config?.popup_header,
     };
+  }
+
+  private _renderPopup(): TemplateResult {
+    if (!this._popupRoom) return html``;
+    const popupConfig = this._popupConfig();
     return html`
       <div
         class="stratum-popup-backdrop"
@@ -1142,6 +1267,25 @@ export class StratumCard extends LitElement {
     ></stratum-chip-list>`;
   }
 
+  /** Stabilny obiekt configu belki scen — ten sam, dopóki config karty ten sam. */
+  private _sceneCfgMemo?: {
+    config: StratumCardConfig | undefined;
+    value: import('./types.js').SceneBarConfig;
+  };
+
+  private _sceneBarConfig(
+    scenes: import('./types.js').SceneBarConfig,
+  ): import('./types.js').SceneBarConfig {
+    const memo = this._sceneCfgMemo;
+    if (memo && memo.config === this._config) return memo.value;
+    const value = {
+      gradient: this._config?.rooms_scene_gradient,
+      ...scenes,
+    } as import('./types.js').SceneBarConfig;
+    this._sceneCfgMemo = { config: this._config, value };
+    return value;
+  }
+
   private _renderBody(): TemplateResult[] {
     const parts: TemplateResult[] = [];
     const scenes = this._config?.scenes;
@@ -1150,10 +1294,7 @@ export class StratumCard extends LitElement {
       scenes && scenes.items && scenes.items.length > 0
         ? html`<stratum-scene-bar
             .hass=${this.hass}
-            .config=${{
-              gradient: this._config?.rooms_scene_gradient,
-              ...scenes,
-            }}
+            .config=${this._sceneBarConfig(scenes)}
           ></stratum-scene-bar>`
         : null;
     const roomsTemplate = this._renderRooms();

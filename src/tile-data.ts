@@ -109,7 +109,7 @@ function anyOn(
 /** Pierwszy sensor z zadanym `device_class` spośród `entries`; sformatowana wartość + liczbowa. */
 function firstAttrSensor(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   deviceClass: string,
   fallbackUnit: string,
 ): { formatted: string; value: number } | undefined {
@@ -148,7 +148,7 @@ function formatSensorState(
  */
 export function resolveFieldEntityIds(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   field: TileField,
   fieldEntities?: TileFieldEntities,
 ): string[] {
@@ -217,7 +217,7 @@ export function resolveFieldEntityIds(
  */
 export function computeTileData(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   fieldEntities?: TileFieldEntities,
 ): TileData {
   const temp = fieldEntities?.temperature
