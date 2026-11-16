@@ -12,7 +12,8 @@ import type {
   TileField,
   TileFieldEntities,
 } from './types.js';
-import { filterBinarySensorDeviceClass, filterByDomain } from './area-entities.js';
+import { filterBinarySensorDeviceClass, filterByDomain, isLightGroupEntity } from './area-entities.js';
+import { roomLevelFromHass } from './light-dimming.js';
 
 // Domyślny zestaw pól row/tile — wszystkie „informatywne" metryki.
 // Każde pole renderuje się tylko gdy ma sensowną wartość (> 0 / truthy),
@@ -109,7 +110,7 @@ function anyOn(
 /** Pierwszy sensor z zadanym `device_class` spośród `entries`; sformatowana wartość + liczbowa. */
 function firstAttrSensor(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   deviceClass: string,
   fallbackUnit: string,
 ): { formatted: string; value: number } | undefined {
@@ -148,7 +149,7 @@ function formatSensorState(
  */
 export function resolveFieldEntityIds(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   field: TileField,
   fieldEntities?: TileFieldEntities,
 ): string[] {
@@ -158,7 +159,7 @@ export function resolveFieldEntityIds(
       // Bez grup-pomocników: liczymy/sterujemy encjami bezpośrednimi,
       // inaczej jedna żarówka liczy się podwójnie (sama + grupa).
       return filterByDomain(entries, 'light')
-        .filter((e) => !Array.isArray(hass.states?.[e.entity_id]?.attributes?.entity_id))
+        .filter((e) => !isLightGroupEntity(hass, e.entity_id))
         .map((e) => e.entity_id);
     }
     case 'motion': {
@@ -217,7 +218,7 @@ export function resolveFieldEntityIds(
  */
 export function computeTileData(
   hass: HomeAssistant,
-  entries: HassEntityRegistryEntry[],
+  entries: readonly HassEntityRegistryEntry[],
   fieldEntities?: TileFieldEntities,
 ): TileData {
   const temp = fieldEntities?.temperature
@@ -263,24 +264,21 @@ export function computeTileData(
 }
 
 /**
- * Średnia jasność włączonych świateł (0–1). On/off bez `brightness` → 1.0.
- * `undefined` gdy żadne światło nie jest włączone.
+ * Średnia jasność włączonych świateł (0–1) — wypełnienie wiersza i punkt
+ * startu suwaka. `undefined` gdy żadne światło nie jest włączone.
+ *
+ * Liczona po tym samym zbiorze, który suwak faktycznie skaluje (patrz
+ * `light-dimming.ts`): pojedyncze żarówki zamiast grup, a przekaźniki
+ * on/off nie wchodzą do średniej, gdy świeci cokolwiek ściemnialnego.
+ * Dawniej przekaźnik liczył się jako 100% — pokój z trzema lampami na 10%
+ * i dwoma przekaźnikami pokazywał 46% i pasek odskakiwał po każdym geście.
  */
 function avgBrightness(
   hass: HomeAssistant,
   entityIds: string[],
 ): number | undefined {
-  let sum = 0;
-  let n = 0;
-  for (const id of entityIds) {
-    const state = hass.states?.[id];
-    if (!state || state.state !== 'on') continue;
-    const raw = state.attributes?.brightness as number | undefined;
-    sum += typeof raw === 'number' ? Math.max(0, Math.min(1, raw / 255)) : 1;
-    n += 1;
-  }
-  if (n === 0) return undefined;
-  return sum / n;
+  const level = roomLevelFromHass(hass, entityIds);
+  return level === undefined ? undefined : level / 100;
 }
 
 /**

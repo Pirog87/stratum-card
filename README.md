@@ -27,6 +27,13 @@ Widok detalu pomieszczenia. Header z chipami specyficznymi dla pokoju, sekcje au
 - **Klik pokoju otwiera popup** z widokiem tego pomieszczenia (bez potrzeby osobnego dashboardu)
 - **Pasek scen** opcjonalny — nad / pod listą pomieszczeń
 - Pełna kontrola kolejności + per-room overrides (nazwa, ikona, tap_action, widoki popup)
+- **Suwak jasności gestem** — przeciągnięcie po wierszu ściemnia/rozjaśnia
+  tylko światła, które świecą, każde proporcjonalnie do własnej jasności
+  (zgaszonych nie zapala). Zjechanie do zera gasi; kolejne przeciągnięcie po
+  ciemnym wierszu przywraca dokładnie ten zestaw. `row_config.slider_from_off:
+  none` — po ciemnym pokoju suwak nic nie robi (domyślnie `all`: zapala
+  wszystkie). W dużych pokojach (> 8 świateł) żarówki dostają jedną komendę
+  po puszczeniu palca, pasek idzie za palcem na bieżąco.
 
 ### Room card (popup)
 - **9 typów sekcji**: `summary` / `lights` / `covers` / `windows` / `doors` / `climate` / `media` / `fans` / `switches` / `scenes` / `custom`

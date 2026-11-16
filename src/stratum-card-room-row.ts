@@ -10,7 +10,14 @@
 // drzwi → alarmy), limit 4 widocznych + „+n". Alarmy mają najwyższy
 // priorytet i nie są ucinane przed zwykłymi polami.
 
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { RowDisplayConfig, RowPreset, TileField } from './types.js';
 import { resolveColor } from './colors.js';
@@ -32,6 +39,27 @@ const FIELD_PRIORITY: Record<TileField, number> = {
 
 // Kolejność wyświetlania pól = kolejność listy `fields` w configu
 // (od v1.85 zmienialna strzałkami w edytorze).
+
+/** Faza gestu jasności zgłaszana karcie. */
+export type RowBrightnessPhase = 'start' | 'move' | 'end' | 'cancel';
+
+/**
+ * `detail` zdarzenia `row-brightness`. Pola poniżej `pct` wypełnia KARTA w
+ * trakcie obsługi zdarzenia (dispatch jest synchroniczny) — tak wiersz
+ * dostaje poziom startowy i wynik gestu bez osobnego kanału.
+ */
+export interface RowBrightnessDetail {
+  area_id: string;
+  phase: RowBrightnessPhase;
+  /** Pozycja suwaka 0..100 (ułamkowa). */
+  pct: number;
+  /** start: poziom, od którego liczy karta; end: poziom docelowy. */
+  level?: number;
+  /** start: `false` = gest nic nie zrobi (ciemny pokój, tryb `none`). */
+  active?: boolean;
+  /** end: co karta zrobiła. */
+  outcome?: 'set' | 'off' | 'noop';
+}
 
 /** Maksymalna liczba widocznych statusów zanim pojawi się „+n". */
 const MAX_VISIBLE_FIELDS = 4;
@@ -132,8 +160,25 @@ export class StratumCardRoomRow extends LitElement {
   /** Całe pomieszczenie niedostępne (wszystkie encje unavailable). */
   @property({ type: Boolean }) public offline = false;
 
-  /** Jasność (%) trzymana lokalnie podczas przeciągania — nadpisuje fill. */
-  @state() private _dragPct?: number;
+  /**
+   * Poziom (%) nadpisujący wypełnienie: pozycja palca w trakcie gestu, a po
+   * puszczeniu — wartość docelowa trzymana do czasu, aż HA ją potwierdzi.
+   *
+   * Celowo NIE jest `@state`: ruch palca to 60+ zdarzeń na sekundę, a pełny
+   * render Lita na każde z nich (kilkadziesiąt bindingów wiersza) był
+   * jednym ze źródeł przycięć. Wypełnienie piszemy prosto do zmiennej CSS,
+   * raz na klatkę (`_paintFill`).
+   */
+  private _fillOverride?: number;
+
+  /** Wartość trzymana po puszczeniu palca + bezpiecznik czasowy. */
+  private _hold?: { pct: number; timer: number };
+
+  private _raf?: number;
+
+  /** Ostatnio wpisana wartość zmiennej wypełnienia i element, do którego trafiła. */
+  private _paintedFill?: string;
+  private _paintedEl?: Element;
 
   /**
    * Poziom ciasnoty wiersza (0 = normalnie, 1 = ≤360 px, 2 = ≤310 px) —
@@ -156,27 +201,75 @@ export class StratumCardRoomRow extends LitElement {
   public disconnectedCallback(): void {
     this._narrowRo?.disconnect();
     this._narrowRo = undefined;
+    if (this._raf !== undefined) {
+      cancelAnimationFrame(this._raf);
+      this._raf = undefined;
+    }
+    this._clearHold();
+    this._fillOverride = undefined;
+    this._drag = undefined;
+    this.toggleAttribute('dragging', false);
     super.disconnectedCallback();
+  }
+
+  protected willUpdate(changed: PropertyValues): void {
+    // Atrybut dla CSS: `touch-action` i brak zaznaczania tekstu wszędzie
+    // tam, gdzie suwak działa (wszystkie presety, nie tylko fill/pill).
+    if (changed.has('displayConfig') || changed.has('hasLights')) {
+      this.toggleAttribute('slider', this._sliderEnabled);
+    }
+    // Po puszczeniu palca trzymamy wartość docelową, dopóki stany z HA do
+    // niej nie dojdą (żarówki Zigbee raportują po kolei przez 1–3 s).
+    if (
+      this._hold &&
+      !this._drag?.sliding &&
+      (changed.has('lightsAvgBrightness') || changed.has('lightsOn'))
+    ) {
+      if (Math.abs(this._restPct() - this._hold.pct) <= 2) {
+        this._clearHold();
+        this._fillOverride = undefined;
+      }
+    }
+  }
+
+  protected updated(changed: PropertyValues): void {
+    super.updated(changed);
+    this._paintFill();
   }
 
   /** Stan aktywnego gestu przeciągania. */
   private _drag?: {
+    pointerId: number;
     startX: number;
     startY: number;
-    startPct: number;
+    lastX: number;
     width: number;
     sliding: boolean;
-    lastLive: number;
+    /** Pozycja suwaka 0..100 — przyrostowo, patrz `_onPointerMove`. */
+    t: number;
+    /**
+     * Gest rozpoznany, ale karta odpowiedziała „nic do zrobienia" (ciemny
+     * pokój, `slider_from_off: none`). Trzymamy go do puszczenia palca —
+     * inaczej mysz po przeciągnięciu generowała click i otwierała popup
+     * albo (akcja `toggle-lights`) zapalała cały pokój.
+     */
+    inert?: boolean;
   };
 
-  /** Flaga tłumiąca click bezpośrednio po zakończonym przeciągnięciu. */
-  private _suppressClick = false;
+  /**
+   * Chwila zakończenia przeciągnięcia — tłumi click, który mysz generuje
+   * tuż po puszczeniu. Dawniej była tu flaga zdejmowana dopiero przez
+   * następny click; na dotyku po przeciągnięciu click nie powstaje, więc
+   * flaga zostawała i połykała NASTĘPNE, prawdziwe dotknięcie wiersza.
+   */
+  private _dragEndedAt = -1e9;
+
+  private _clickSuppressed(): boolean {
+    return performance.now() - this._dragEndedAt < 350;
+  }
 
   private _onClick = (): void => {
-    if (this._suppressClick) {
-      this._suppressClick = false;
-      return;
-    }
+    if (this._clickSuppressed()) return;
     if (!this.clickable) return;
     this.dispatchEvent(
       new CustomEvent('row-tap', {
@@ -190,10 +283,7 @@ export class StratumCardRoomRow extends LitElement {
   private _onIconClick = (ev: Event): void => {
     if (!this.iconTappable) return; // klik bąbelkuje do akcji wiersza
     ev.stopPropagation();
-    if (this._suppressClick) {
-      this._suppressClick = false;
-      return;
-    }
+    if (this._clickSuppressed()) return;
     this.dispatchEvent(
       new CustomEvent('icon-tap', {
         detail: { area_id: this.areaId, area_name: this.name },
@@ -210,35 +300,94 @@ export class StratumCardRoomRow extends LitElement {
     return this.hasLights;
   }
 
-  private _currentPct(): number {
-    if (typeof this._dragPct === 'number') return this._dragPct;
-    if (typeof this.lightsAvgBrightness === 'number') {
-      return Math.round(this.lightsAvgBrightness * 100);
+  /** Poziom ze stanów HA (0..100), bez nadpisań gestu. */
+  private _restPct(): number {
+    return typeof this.lightsAvgBrightness === 'number'
+      ? this.lightsAvgBrightness * 100
+      : 0;
+  }
+
+  /** Poziom, który ma pokazać wypełnienie w tej chwili. */
+  private _fillPct(): number {
+    return this._fillOverride ?? this._restPct();
+  }
+
+  /**
+   * Wpisuje wypełnienie prosto do zmiennej CSS na elemencie `.fill`.
+   * Zmienna żyje poza szablonem Lita — inaczej render w trakcie gestu
+   * (np. echo stanu z HA) i zapis z klatki animacji nadpisywałyby się
+   * nawzajem. Wołane po każdym renderze i z rAF w trakcie ruchu.
+   */
+  private _paintFill(): void {
+    const el = this.renderRoot.querySelector('.fill') as HTMLElement | null;
+    if (!el) {
+      this._paintedEl = undefined;
+      return;
     }
-    return 0;
+    const value = `${Math.max(0, Math.min(100, this._fillPct())).toFixed(2)}%`;
+    if (el === this._paintedEl && value === this._paintedFill) return;
+    el.style.setProperty('--stratum-room-row-fill', value);
+    this._paintedEl = el;
+    this._paintedFill = value;
+  }
+
+  private _schedulePaint(): void {
+    if (this._raf !== undefined) return;
+    this._raf = requestAnimationFrame(() => {
+      this._raf = undefined;
+      this._paintFill();
+      const d = this._drag;
+      // Jedno zdarzenie do karty na klatkę, nie na każdy pointermove.
+      if (d?.sliding) this._emitBrightness('move', d.t);
+    });
+  }
+
+  private _clearHold(): void {
+    if (!this._hold) return;
+    window.clearTimeout(this._hold.timer);
+    this._hold = undefined;
+  }
+
+  /** Oddaje wypełnienie realnym stanom z HA (z istniejącą tranzycją 0.3 s). */
+  private _releaseFill(): void {
+    this._clearHold();
+    this._fillOverride = undefined;
+    this._paintFill();
   }
 
   private _onPointerDown = (ev: PointerEvent): void => {
     if (!this._sliderEnabled) return;
-    // Tylko primary pointer (lewy przycisk / pierwszy palec).
-    if (ev.button !== 0) return;
-    const row = ev.currentTarget as HTMLElement;
+    // Tylko primary pointer (lewy przycisk / pierwszy palec) — drugi palec
+    // nadpisywał punkt startu i wypełnienie skakało.
+    if (ev.button !== 0 || ev.isPrimary === false) return;
+    this._dragEndedAt = -1e9;
     this._drag = {
+      pointerId: ev.pointerId,
       startX: ev.clientX,
       startY: ev.clientY,
-      startPct: this._currentPct(),
-      width: Math.max(1, row.getBoundingClientRect().width),
+      lastX: ev.clientX,
+      width: 1,
       sliding: false,
-      lastLive: 0,
+      t: 0,
     };
   };
 
   private _onPointerMove = (ev: PointerEvent): void => {
     const d = this._drag;
-    if (!d) return;
-    const dx = ev.clientX - d.startX;
-    const dy = ev.clientY - d.startY;
+    if (!d || ev.pointerId !== d.pointerId) return;
+    // Mysz puszczona poza wierszem: bez tego późniejszy sam ruch kursora
+    // nad wierszem potrafił zacząć „przeciąganie" bez wciśniętego przycisku.
+    if (ev.pointerType === 'mouse' && ev.buttons === 0) {
+      // Przycisk puszczony tam, gdzie nie dostaliśmy pointerup (menu
+      // kontekstowe, poza oknem). To nie zatwierdzenie — anulujemy, inaczej
+      // wypełnienie zostawało zamrożone, a karta z otwartym gestem.
+      this._abandonDrag(d);
+      return;
+    }
+    if (d.inert) return;
     if (!d.sliding) {
+      const dx = ev.clientX - d.startX;
+      const dy = ev.clientY - d.startY;
       // Pionowy ruch = scroll listy — oddajemy przeglądarce i ubijamy
       // gest, żeby ukośne przewijanie NIE zmieniało jasności świateł.
       if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
@@ -247,42 +396,111 @@ export class StratumCardRoomRow extends LitElement {
       }
       // Swipe jasności startuje dopiero przy zdecydowanie poziomym ruchu.
       if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      const row = ev.currentTarget as HTMLElement;
+      // Karta zamraża zestaw świecących świateł i odsyła poziom startowy
+      // (synchronicznie, przez `detail`) — ten sam, od którego policzy
+      // proporcje, więc palec, wypełnienie i żarówki mają jedną bazę.
+      const start = this._emitBrightness('start', this._fillPct());
+      if (start.active === false) {
+        // Ciemny pokój i nic do przywrócenia (`slider_from_off: none`).
+        d.inert = true;
+        row.setPointerCapture(ev.pointerId);
+        return;
+      }
       d.sliding = true;
-      (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+      d.width = Math.max(1, row.getBoundingClientRect().width);
+      d.t = typeof start.level === 'number' ? start.level : this._fillPct();
+      // Kotwica w punkcie rozpoznania gestu: bez skoku o te 12 px progu.
+      d.lastX = ev.clientX;
+      row.setPointerCapture(ev.pointerId);
+      this._clearHold();
+      this._fillOverride = d.t;
+      this.toggleAttribute('dragging', true);
     }
-    const pct = Math.max(0, Math.min(100, d.startPct + (dx / d.width) * 100));
-    this._dragPct = pct;
-    // Live update — max co 300 ms, żeby nie zalać HA requestami.
-    const now = Date.now();
-    if (now - d.lastLive > 300) {
-      d.lastLive = now;
-      this._emitBrightness(pct, true);
-    }
+    // Przyrostowo i z przycięciem na każdym kroku — po wyjechaniu palcem
+    // poza koniec zakresu powrót reaguje od pierwszego piksela (dawniej
+    // trzeba było najpierw „odrobić" cały nadmiarowy dystans).
+    d.t = Math.max(0, Math.min(100, d.t + ((ev.clientX - d.lastX) / d.width) * 100));
+    d.lastX = ev.clientX;
+    this._fillOverride = d.t;
+    this._schedulePaint();
   };
 
   private _onPointerUp = (ev: PointerEvent): void => {
     const d = this._drag;
+    if (!d || ev.pointerId !== d.pointerId) return;
     this._drag = undefined;
-    if (!d?.sliding) return;
+    if (d.inert) {
+      // Przeciągnięcie bez skutku to nadal przeciągnięcie, nie dotknięcie.
+      ev.stopPropagation();
+      this._dragEndedAt = performance.now();
+      return;
+    }
+    if (!d.sliding) return;
     ev.stopPropagation();
-    this._suppressClick = true;
-    const pct = this._dragPct ?? d.startPct;
-    this._emitBrightness(pct, false);
-    // Po 1.5 s oddajemy kontrolę realnym stanom z hass (uniknięcie skoku
-    // fill zanim HA odeśle nowy brightness).
-    window.setTimeout(() => {
-      this._dragPct = undefined;
-    }, 1500);
+    this._dragEndedAt = performance.now();
+    this.toggleAttribute('dragging', false);
+    const end = this._emitBrightness('end', d.t);
+    // Trzymamy wartość docelową, aż HA ją potwierdzi (patrz `willUpdate`).
+    // Sztywne 1,5 s było za krótkie dla kilkunastu żarówek Zigbee: pasek
+    // odskakiwał do starej średniej i dopiero potem pełzł na miejsce.
+    const target = typeof end.level === 'number' ? end.level : d.t;
+    if (end.outcome === 'noop') {
+      // Nic nie poszło do HA — pasek uczciwie wraca do stanu faktycznego.
+      this._releaseFill();
+      return;
+    }
+    this._clearHold();
+    this._fillOverride = target;
+    this._hold = {
+      pct: target,
+      timer: window.setTimeout(() => this._releaseFill(), 6000),
+    };
+    this._paintFill();
   };
 
-  private _emitBrightness(pct: number, live: boolean): void {
+  /**
+   * System przerwał gest (przeglądarka przejęła dotyk, gest krawędziowy).
+   * To nie jest zatwierdzenie — dawniej `pointercancel` szedł tą samą drogą
+   * co puszczenie palca i potrafił np. zgasić cały pokój.
+   */
+  private _onPointerCancel = (ev: PointerEvent): void => {
+    const d = this._drag;
+    if (!d || ev.pointerId !== d.pointerId) return;
+    this._abandonDrag(d);
+  };
+
+  /** Porzucenie gestu bez zatwierdzenia (cancel, utracony capture, mysz). */
+  private _abandonDrag(d: NonNullable<StratumCardRoomRow['_drag']>): void {
+    this._drag = undefined;
+    if (d.inert) {
+      this._dragEndedAt = performance.now();
+      return;
+    }
+    if (!d.sliding) return;
+    this._dragEndedAt = performance.now();
+    this.toggleAttribute('dragging', false);
+    this._emitBrightness('cancel', d.t);
+    this._releaseFill();
+  }
+
+  /**
+   * Zdarzenie do karty. `detail` jest też kanałem zwrotnym: karta wpisuje
+   * do niego synchronicznie poziom startowy / wynik gestu.
+   */
+  private _emitBrightness(
+    phase: RowBrightnessPhase,
+    pct: number,
+  ): RowBrightnessDetail {
+    const detail: RowBrightnessDetail = { area_id: this.areaId, phase, pct };
     this.dispatchEvent(
       new CustomEvent('row-brightness', {
-        detail: { area_id: this.areaId, pct: Math.round(pct), live },
+        detail,
         bubbles: true,
         composed: true,
       }),
     );
+    return detail;
   }
 
   private _onAlarmBadge = (ev: Event): void => {
@@ -444,17 +662,6 @@ export class StratumCardRoomRow extends LitElement {
     const hoverEffect = cfg.hover_effect ?? 'subtle';
     const pressScale = typeof cfg.press_scale === 'number' ? cfg.press_scale : 0.98;
 
-    // Wypełnienie (preset fill): % = średnia jasność włączonych świateł,
-    // podczas przeciągania nadpisywane lokalną wartością gestu.
-    const dragging = typeof this._dragPct === 'number';
-    const fillPct =
-      preset === 'fill'
-        ? dragging
-          ? Math.round(this._dragPct!)
-          : typeof this.lightsAvgBrightness === 'number'
-          ? Math.round(this.lightsAvgBrightness * 100)
-          : 0
-        : 0;
 
     // Reakcja na wąskie ekrany wg narrow_mode (default: zwijanie pól).
     const narrowMode = cfg.narrow_mode ?? 'fields';
@@ -496,7 +703,6 @@ export class StratumCardRoomRow extends LitElement {
         ? `--stratum-room-row-iconbg-scale: ${cfg.icon_bg_scale / 100};`
         : '',
       `--stratum-room-row-press-scale: ${pressScale};`,
-      `--stratum-room-row-fill: ${fillPct}%;`,
       borderColorOvr
         ? `border: ${borderWidthOvr ?? '1px'} solid ${borderColorOvr};`
         : borderWidthOvr
@@ -562,9 +768,10 @@ export class StratumCardRoomRow extends LitElement {
         @pointerdown=${this._onPointerDown}
         @pointermove=${this._onPointerMove}
         @pointerup=${this._onPointerUp}
-        @pointercancel=${this._onPointerUp}
+        @pointercancel=${this._onPointerCancel}
+        @lostpointercapture=${this._onPointerCancel}
       >
-        ${preset === 'fill' && (fillPct > 0 || dragging)
+        ${preset === 'fill'
           ? html`<span class="fill" aria-hidden="true"></span>`
           : nothing}
         ${preset === 'rail' ? html`<span class="bar" aria-hidden="true"></span>` : nothing}
@@ -963,6 +1170,23 @@ export class StratumCardRoomRow extends LitElement {
         );
       transition: width 0.3s ease-out;
       pointer-events: none;
+    }
+
+    /* W trakcie przeciągania pasek idzie 1:1 za palcem. Z tranzycją 0.3 s
+       każda klatka startowała animację od nowa i wypełnienie ciągnęło się
+       za palcem jak na gumce. Po puszczeniu tranzycja wraca i wygładza
+       ewentualną korektę do stanu z HA. */
+    :host([dragging]) .fill {
+      transition: none;
+    }
+
+    /* Suwak działa we wszystkich presetach — przeglądarka ma zostawić nam
+       gest poziomy (pan-y), inaczej przejmuje dotyk i przerywa przeciąganie.
+       Bez zaznaczania tekstu, bo przeciąganie myszą zaznaczało nazwę pokoju. */
+    :host([slider]) .row {
+      touch-action: pan-y;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
     /* pill: ring aktywności zamiast wypełnienia */

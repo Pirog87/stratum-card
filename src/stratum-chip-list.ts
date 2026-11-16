@@ -14,6 +14,7 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { ChipConfig, HomeAssistant } from './types.js';
 import { ago } from './chip-defaults.js';
+import { AgoTicker } from './ago-ticker.js';
 import { ALARM_CLASS_LABELS } from './chip-list-helpers.js';
 import { lightColorOf } from './tile-data.js';
 
@@ -26,6 +27,9 @@ interface AreaGroup {
 
 @customElement('stratum-chip-list')
 export class StratumChipList extends LitElement {
+  /** Odświeża kolumnę „5min temu", gdy lista stoi otwarta bez zmian stanów. */
+  protected readonly _agoTicker = new AgoTicker(this);
+
   @property({ attribute: false }) public hass?: HomeAssistant;
 
   @property({ attribute: false }) public chip?: ChipConfig;
@@ -430,7 +434,7 @@ export class StratumChipList extends LitElement {
       inset: 0;
       z-index: 9999;
       background: rgba(0, 0, 0, 0.65);
-      backdrop-filter: blur(6px);
+      backdrop-filter: var(--stratum-popup-backdrop-filter, blur(6px));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -582,6 +586,8 @@ export class StratumChipList extends LitElement {
 
     .list {
       overflow-y: auto;
+      /* Koniec listy nie przewija dashboardu pod tłem. */
+      overscroll-behavior: contain;
       padding: 12px 16px 14px;
       display: flex;
       flex-direction: column;

@@ -4,6 +4,97 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.107.0] — 2026-11-16
+
+### Changed (suwak jasności — tylko włączone światła, proporcjonalnie)
+Przeciągnięcie po wierszu pokoju wysyłało jedną komendę „wszystkie światła
+pokoju na X%": zapalało też zgaszone i wyrównywało wszystkie poziomy.
+
+- **Ruszają się tylko światła, które świecą.** Zgaszone nie pojawiają się
+  w żadnej komendzie — ani w trakcie, ani po puszczeniu palca.
+- **Każda żarówka proporcjonalnie.** Lampa na 100% i lampa na 20% (pasek
+  pokazuje średnią 60%) po przeciągnięciu do 30% świecą 50% i 10% —
+  proporcja 5:1 zostaje.
+  W górę: najjaśniejsze dochodzą do 100% i tam zostają, reszta rośnie
+  dalej — pełne w prawo = wszystko, co świeci, na 100%. Ruch tam
+  i z powrotem w jednym geście wraca dokładnie do punktu wyjścia.
+- **Wypełnienie wiersza = średnia jasność świecących żarówek**, tych
+  samych, które suwak skaluje (grupy liczone po członkach; przekaźniki
+  on/off nie zawyżają średniej). Po puszczeniu pasek zostaje tam, gdzie
+  palec — koniec z odskakiwaniem.
+- **Zjechanie do zera gasi tylko to, co świeciło**, a kolejne przeciągnięcie
+  po ciemnym wierszu (do 15 min) przywraca dokładnie ten zestaw w tych
+  samych proporcjach. Tak samo po zgaszeniu mini-włącznikiem wiersza.
+- **Całkiem ciemny pokój**: jak dotąd przeciągnięcie zapala wszystkie
+  światła — ale dopiero po puszczeniu i dopiero po przejechaniu
+  przynajmniej 8% (przypadkowe drgnięcie palca niczego już nie zapala).
+  Nowa opcja `row_config.slider_from_off: none` (w edytorze: „Przeciągnięcie
+  po ciemnym pokoju zapala światła") wyłącza to całkiem.
+- **Sterownik WLED** (atrybut `group_entities`) traktowany jak grupa:
+  komendy idą do segmentów — skalowanie sterownika i segmentów naraz
+  ściemniałoby podwójnie (WLED mnoży jedno przez drugie).
+- **Kafel grupy świateł w popupie** (`rail` / `tint`) działa tak samo:
+  ściemnia świecących członków grupy proporcjonalnie, komendy idą do
+  członków, nie do grupy (wywołanie na grupie zapalało wszystkich).
+
+### Changed (płynność gestu)
+- Pasek idzie za palcem 1:1 — bez renderu Lita na każdy ruch i bez
+  tranzycji 0,3 s, która ciągnęła wypełnienie za palcem „na gumce".
+- Komendy: jedna fala w locie, wygrywa najnowsza pozycja palca, jedno
+  wywołanie na każdą różną jasność, z przejściem równym odstępowi fal
+  (żarówka sama wygładza ruch). Gdy świeci do 8 ściemnialnych żarówek,
+  reagują na żywo; przy większej liczbie (i przy zapalaniu ciemnego pokoju)
+  dostają jedną falę po puszczeniu palca — jedno wywołanie na każdą różną
+  jasność zamiast komendy do wszystkich świateł co 300 ms. Sieć Zigbee nie
+  zatyka się i światła nie „dochodzą" sekundami po geście.
+- Po puszczeniu pasek trzyma wartość, aż Home Assistant ją potwierdzi
+  (zamiast sztywnych 1,5 s), maks. 6 s.
+- Gest przerwany przez system (przeglądarka przejęła dotyk) nie jest już
+  traktowany jak puszczenie palca — mógł np. zgasić cały pokój.
+- Po przeciągnięciu kolejne dotknięcie wiersza/kafla nie jest już
+  połykane (otwiera popup za pierwszym razem).
+- Drugi palec nie przestawia suwaka; suwak działa z dotykiem we
+  wszystkich presetach wiersza; przeciąganie myszą nie zaznacza tekstu.
+- Pasek kafla grupy widać także przy przeciąganiu w górę ze zgaszonej grupy.
+
+### Changed (płynność — karty nie przeliczają się na cudze zmiany stanów)
+Home Assistant podmienia obiekt `hass` przy każdej zmianie stanu
+którejkolwiek encji w domu. Dotąd każda karta Stratum przeliczała wtedy
+wszystkie swoje wiersze od zera — na dużej instalacji (ok. 5 tys. encji)
+trzy karty pięter zajmowały główny wątek na ok. 100 ms przy KAŻDEJ zmianie
+stanu, także w trakcie przeciągania suwaka. Stąd przycięcia.
+
+- **Indeks „strefa → encje".** Lista encji pokoju była wyłuskiwana pełnym
+  przejściem po rejestrze przy każdym użyciu (30–40 razy na render jednej
+  karty). Teraz rejestr jest indeksowany raz i odświeżany tylko po jego
+  zmianie. Sam ten krok: ok. 105 ms → ok. 4 ms na zmianę stanu.
+- **Bramka renderu w karcie piętra.** Karta renderuje się tylko wtedy, gdy
+  zmieniła się encja z jej pokoi (albo rejestr, motyw, config). Zmiana
+  obcej encji: 3 pełne rendery → 0.
+- **Bramka w popupie pokoju i w kaflach.** Popup przelicza sekcje tylko po
+  zmianie encji swojego pokoju, a kafel — tylko po zmianie własnej encji
+  (dla grupy świateł także jej członków). Dotąd każda zmiana w domu
+  renderowała wszystkie kafle otwartego popupu.
+- **Popup nie „zmienia configu" co render.** Karta budowała nowy obiekt
+  configu popupu przy każdym renderze, przez co popup liczył wszystko od
+  nowa; teraz obiekt jest stały do zamknięcia popupu.
+- **Rozmycie tła pod popupem wyłączone na telefonie** (≤ 600 px), gdzie
+  arkusz zakrywa cały ekran i rozmycia i tak nie widać — a kosztowało
+  płynność przewijania. Nowy token `--stratum-popup-backdrop-filter`
+  pozwala je przywrócić albo wyłączyć także na desktopie.
+- Przewinięcie popupu do końca nie przewija już dashboardu pod spodem.
+- Skeleton: sprawdzenie „czy HA dosłał stany" nie buduje już tablicy
+  wszystkich kluczy przy każdym renderze; liczba wierszy trafia do
+  localStorage tylko gdy się zmieni.
+
+### Fixed
+- **Etykiety „16s / 5min temu" mają własny zegar.** Odświeżały się tylko
+  przy okazji cudzych zmian stanów; w cichym domu stały w miejscu. Teraz
+  karta, popup i lista chipa budzą się dokładnie wtedy, gdy etykieta ma
+  zmienić tekst. To samo dotyczy paska postępu odtwarzacza.
+- Chipy szablonowe: ponawianie subskrypcji po nieudanej próbie i brak
+  zdublowanych subskrypcji, gdy render powtórzył się przed odpowiedzią HA.
+
 ## [1.106.1] — 2026-11-10
 
 ### Fixed (belka „Smugi" — poprawki po pierwszym uruchomieniu na żywo)

@@ -3,7 +3,13 @@
 // Customowa karta Home Assistant: podsumowanie warstwy (floor lub area)
 // z rozwijanym body. Zobacz docs/roadmap.md dla kolejnych milestone'ów.
 
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
   HassEntityRegistryEntry,
@@ -39,6 +45,16 @@ import {
   chipSupportsList,
 } from './chip-list-helpers.js';
 import { TemplateRenderer } from './template-renderer.js';
+import {
+  addGroupMembers,
+  collectEntityIds,
+  statesEmpty,
+  structureChanged,
+  watchedStateChanged,
+} from './hass-watch.js';
+import { AgoTicker } from './ago-ticker.js';
+import { LightSwipe, markOff, rememberBeforeOff } from './light-swipe.js';
+import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
@@ -56,7 +72,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.106.1';
+const VERSION = '1.107.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -99,6 +115,82 @@ export class StratumCard extends LitElement {
 
   /** Template renderer — subskrybuje Jinja2 przez WebSocket i wywołuje rerender. */
   private _templates = new TemplateRenderer(() => this.requestUpdate());
+
+  /** Odświeża etykiety „5min temu" na chipach, gdy nic innego nie budzi karty. */
+  protected readonly _agoTicker = new AgoTicker(this);
+
+  /**
+   * Encje, których stan karta faktycznie pokazuje — pamiętane razem z
+   * tożsamościami, z których zbiór powstał. Przeliczamy go tylko po zmianie
+   * rejestru albo configu, nie przy każdym `hass`.
+   */
+  private _watch?: {
+    config: StratumCardConfig;
+    entities: HomeAssistant['entities'];
+    devices: HomeAssistant['devices'];
+    areas: HomeAssistant['areas'];
+    ids: Set<string>;
+  };
+
+  private _watchedIds(hass: HomeAssistant): Set<string> {
+    const config = this._config!;
+    const w = this._watch;
+    if (
+      w &&
+      w.config === config &&
+      w.entities === hass.entities &&
+      w.devices === hass.devices &&
+      w.areas === hass.areas
+    ) {
+      return w.ids;
+    }
+    // Zakres karty (piętro albo strefa) + strefy wierszy z configu — te
+    // drugie potrafią leżeć poza piętrem (`rooms[].area_id`, `merge_with`).
+    const ids = collectEntityIds(config);
+    for (const e of this._getEntries()) ids.add(e.entity_id);
+    for (const room of config.rooms ?? []) {
+      for (const areaId of [room.area_id, ...(room.merge_with ?? [])]) {
+        for (const e of getEntitiesInArea(hass, areaId)) ids.add(e.entity_id);
+      }
+    }
+    addGroupMembers(hass, ids);
+    this._watch = {
+      config,
+      entities: hass.entities,
+      devices: hass.devices,
+      areas: hass.areas,
+      ids,
+    };
+    return ids;
+  }
+
+  /**
+   * Bramka renderu. HA podmienia `hass` przy każdej zmianie stanu dowolnej
+   * encji w całym domu; karta piętra ma renderować tylko wtedy, gdy zmieniła
+   * się encja z JEJ pokoi (albo rejestr, motyw, config). Bez tego trzy
+   * karty przeliczały wszystkie wiersze kilka–kilkanaście razy na sekundę,
+   * także w trakcie gestu, i stąd brały się przycięcia.
+   *
+   * Poprzedni `hass` bierzemy z mapy zmian: Lit czyści ją także po
+   * odrzuconym cyklu, więc zawsze porównujemy dwa kolejne obiekty — a skoro
+   * tożsamość stanu jest przechodnia, żadna zmiana obserwowanej encji nie
+   * przemknie między odrzuconymi cyklami.
+   */
+  protected shouldUpdate(changed: PropertyValues): boolean {
+    // Pusta mapa = gołe requestUpdate() (szablony, rejestr, zegar etykiet,
+    // podgląd edytora); każdy inny klucz to realna zmiana stanu karty.
+    if (changed.size !== 1 || !changed.has('hass')) return true;
+    const prev = changed.get('hass') as HomeAssistant | undefined;
+    const next = this.hass;
+    if (!prev || !next || !this._config) return true;
+    // Otwarty popup czyta stany na żywo przez tę kartę — nie przycinamy mu
+    // dopływu. Debug loguje każdy render z założenia.
+    if (this._popupRoom || this._popupChip || this._config.debug) return true;
+    // Dopóki widać skeleton (HA nie dosłał stanów), czekamy na pierwszy stan.
+    if (statesEmpty(prev.states)) return true;
+    if (structureChanged(prev, next)) return true;
+    return watchedStateChanged(prev, next, this._watchedIds(next));
+  }
 
   /** Timer auto-collapse — wołany gdy karta rozwinięta i nic nie klikniemy. */
   private _autoCollapseTimer?: number;
@@ -497,9 +589,12 @@ export class StratumCard extends LitElement {
     this._historyDepth = 0;
     this._unsubRegistry?.();
     this._unsubRegistry = undefined;
+    // Żadnych spóźnionych komend jasności po zniknięciu karty z widoku.
+    for (const swipe of this._swipes.values()) swipe.dispose();
+    this._swipes.clear();
   }
 
-  protected updated(changed: Map<PropertyKey, unknown>): void {
+  protected updated(changed: PropertyValues): void {
     super.updated(changed);
     // Trigger fetch przy pierwszym hass update (gdy ensureRegistry
     // z connectedCallback nie miał jeszcze hass).
@@ -527,9 +622,18 @@ export class StratumCard extends LitElement {
     return id ? `stratum-card:rows:${id}` : undefined;
   }
 
+  /** Ostatnio zapisana para klucz→liczba — żeby nie pisać w kółko tego samego. */
+  private _persistedRows?: string;
+
   private _persistRowCount(): void {
     const key = this._rowsKey();
     if (!key || this._lastRowCount <= 0) return;
+    // `updated()` woła nas po każdym renderze; synchroniczny zapis do
+    // localStorage kilka razy na sekundę to czysta strata — liczba wierszy
+    // zmienia się tylko przy edycji listy pokoi.
+    const stamp = `${key}=${this._lastRowCount}`;
+    if (stamp === this._persistedRows) return;
+    this._persistedRows = stamp;
     try {
       window.localStorage.setItem(key, String(this._lastRowCount));
     } catch {
@@ -615,9 +719,7 @@ export class StratumCard extends LitElement {
     // WebSocket) - migoczace placeholdery zamiast pustki i przeskokow.
     if (
       this._config.skeleton !== false &&
-      (!this.hass ||
-        !this.hass.states ||
-        Object.keys(this.hass.states).length === 0)
+      (!this.hass || statesEmpty(this.hass.states))
     ) {
       return this._renderSkeleton();
     }
@@ -918,9 +1020,32 @@ export class StratumCard extends LitElement {
     `;
   }
 
-  private _renderPopup(): TemplateResult {
-    if (!this._popupRoom) return html``;
-    const popupConfig: import('./types.js').StratumRoomCardConfig = {
+  /**
+   * Config popupu budowany raz na otwarcie (i na zmianę configu karty), nie
+   * przy każdym renderze. Nowy literał obiektu co render oznaczał dla
+   * `stratum-room-card` „zmienił się config" przy każdej zmianie stanu —
+   * popup przeliczał wtedy wszystko od zera i żadna jego bramka nie działała.
+   */
+  private _popupCfgMemo?: {
+    room: NonNullable<StratumCard['_popupRoom']>;
+    config: StratumCardConfig | undefined;
+    value: import('./types.js').StratumRoomCardConfig;
+  };
+
+  private _popupConfig(): import('./types.js').StratumRoomCardConfig {
+    const room = this._popupRoom!;
+    const memo = this._popupCfgMemo;
+    if (memo && memo.room === room && memo.config === this._config) {
+      return memo.value;
+    }
+    const value = this._buildPopupConfig();
+    this._popupCfgMemo = { room, config: this._config, value };
+    return value;
+  }
+
+  private _buildPopupConfig(): import('./types.js').StratumRoomCardConfig {
+    if (!this._popupRoom) return { type: 'custom:stratum-room-card', area_id: '' };
+    return {
       type: 'custom:stratum-room-card',
       area_id: this._popupRoom.area_id,
       merge_with: this._popupRoom.merge_with,
@@ -941,6 +1066,11 @@ export class StratumCard extends LitElement {
       scene_gradient_default: this._config?.rooms_scene_gradient,
       popup_header: this._config?.popup_header,
     };
+  }
+
+  private _renderPopup(): TemplateResult {
+    if (!this._popupRoom) return html``;
+    const popupConfig = this._popupConfig();
     return html`
       <div
         class="stratum-popup-backdrop"
@@ -1142,6 +1272,25 @@ export class StratumCard extends LitElement {
     ></stratum-chip-list>`;
   }
 
+  /** Stabilny obiekt configu belki scen — ten sam, dopóki config karty ten sam. */
+  private _sceneCfgMemo?: {
+    config: StratumCardConfig | undefined;
+    value: import('./types.js').SceneBarConfig;
+  };
+
+  private _sceneBarConfig(
+    scenes: import('./types.js').SceneBarConfig,
+  ): import('./types.js').SceneBarConfig {
+    const memo = this._sceneCfgMemo;
+    if (memo && memo.config === this._config) return memo.value;
+    const value = {
+      gradient: this._config?.rooms_scene_gradient,
+      ...scenes,
+    } as import('./types.js').SceneBarConfig;
+    this._sceneCfgMemo = { config: this._config, value };
+    return value;
+  }
+
   private _renderBody(): TemplateResult[] {
     const parts: TemplateResult[] = [];
     const scenes = this._config?.scenes;
@@ -1150,10 +1299,7 @@ export class StratumCard extends LitElement {
       scenes && scenes.items && scenes.items.length > 0
         ? html`<stratum-scene-bar
             .hass=${this.hass}
-            .config=${{
-              gradient: this._config?.rooms_scene_gradient,
-              ...scenes,
-            }}
+            .config=${this._sceneBarConfig(scenes)}
           ></stratum-scene-bar>`
         : null;
     const roomsTemplate = this._renderRooms();
@@ -1290,6 +1436,14 @@ export class StratumCard extends LitElement {
     perRoomIconTapAction?: import('./types.js').TapActionConfig,
   ): TemplateResult {
     const primary = areaIds[0];
+    // Klucz gestu jasności i pamięci „co było zgaszone" — strefy wiersza plus
+    // jawna lista świateł. Dwa wiersze tej samej strefy z różnymi listami
+    // (albo „Kuchnia" i „Kuchnia+Spiżarnia" na dwóch kartach) nie mogą
+    // dzielić pamięci, bo przeciągnięcie jednego przywracałoby światła drugiego.
+    const swipeKey = [
+      areaIds.join('+'),
+      ...(fieldEntities?.lights?.length ? [[...fieldEntities.lights].sort().join(',')] : []),
+    ].join('|');
     // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
     const seen = new Set<string>();
     const entries: HassEntityRegistryEntry[] = [];
@@ -1381,7 +1535,7 @@ export class StratumCard extends LitElement {
         .clickable=${clickable}
         .offline=${roomOffline}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-          this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
+          this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities, swipeKey)}
       ></stratum-card-room-tile>`;
     }
     return html`<stratum-card-room-row
@@ -1416,39 +1570,75 @@ export class StratumCard extends LitElement {
       .styleOverride=${rowStyleOverride}
       .clickable=${clickable}
       .iconTappable=${iconTappable}
-      @row-lights-toggle=${() => this._toggleRoomLights(entries, fieldEntities)}
-      @row-brightness=${(ev: CustomEvent<{ pct: number; live: boolean }>) =>
-        this._onRowBrightness(entries, fieldEntities, ev.detail.pct, ev.detail.live)}
+      @row-lights-toggle=${() =>
+        this._toggleRoomLights(entries, fieldEntities, swipeKey)}
+      @row-brightness=${(ev: CustomEvent<RowBrightnessDetail>) =>
+        this._onRowBrightness(ev.detail, swipeKey, entries, fieldEntities)}
       @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-        this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities)}
+        this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities, swipeKey)}
       @icon-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
-        this._onRoomTap(ev, effectiveIconTap, popupOverrides, entries, fieldEntities)}
+        this._onRoomTap(ev, effectiveIconTap, popupOverrides, entries, fieldEntities, swipeKey)}
     ></stratum-card-room-row>`;
   }
 
   /**
-   * Gest przeciągnięcia po wierszu = ustaw jasność wszystkich świateł pokoju.
-   * `live: true` to update w trakcie gestu (throttlowany w komponencie),
-   * `live: false` — finalna wartość po puszczeniu palca.
-   * Pct ≤ 2 traktujemy jak intencję wyłączenia.
+   * Kontrolery gestu jasności, po jednym na wiersz (klucz = strefa główna).
+   * Muszą przeżyć rendery karty: handlery w szablonie powstają od nowa przy
+   * każdym renderze, a gest trwa przez wiele z nich (echo stanów z HA).
+   */
+  private _swipes = new Map<string, LightSwipe>();
+
+  private _swipeFor(key: string): LightSwipe {
+    let swipe = this._swipes.get(key);
+    if (!swipe) {
+      swipe = new LightSwipe(key, { hass: () => this.hass });
+      this._swipes.set(key, swipe);
+    }
+    return swipe;
+  }
+
+  /**
+   * Gest przeciągnięcia po wierszu: ściemnia i rozjaśnia TYLKO światła,
+   * które świecą, każde proporcjonalnie do własnej jasności. Zgaszonych nie
+   * dotyka (dawniej jedna komenda z jedną wartością zapalała cały pokój i
+   * wyrównywała wszystkie poziomy). Logika i uzasadnienia: `light-swipe.ts`.
+   *
+   * Wiersz zgłasza fazy gestu; odpowiedź (poziom startowy, wynik) wpisujemy
+   * z powrotem do `detail` — dispatch zdarzenia jest synchroniczny.
    */
   private _onRowBrightness(
-    entries: HassEntityRegistryEntry[],
+    detail: RowBrightnessDetail,
+    key: string,
+    entries: readonly HassEntityRegistryEntry[],
     fieldEntities: import('./types.js').TileFieldEntities | undefined,
-    pct: number,
-    live: boolean,
   ): void {
-    if (!this.hass) return;
-    const lightsIds = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
-    if (lightsIds.length === 0) return;
-    if (pct <= 2 && !live) {
-      void this.hass.callService('light', 'turn_off', { entity_id: lightsIds });
+    if (!this.hass) {
+      detail.active = false;
       return;
     }
-    void this.hass.callService('light', 'turn_on', {
-      entity_id: lightsIds,
-      brightness_pct: Math.max(1, Math.min(100, pct)),
-    });
+    const swipe = this._swipeFor(key);
+    switch (detail.phase) {
+      case 'start': {
+        const ids = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
+        const fromOff = this._resolveRowConfig()?.slider_from_off ?? 'all';
+        const started = swipe.start(ids, fromOff);
+        detail.level = started.level;
+        detail.active = started.active;
+        return;
+      }
+      case 'move':
+        swipe.move(detail.pct);
+        return;
+      case 'end': {
+        const result = swipe.end(detail.pct);
+        detail.outcome = result.outcome;
+        detail.level = result.level;
+        return;
+      }
+      case 'cancel':
+        swipe.cancel();
+        return;
+    }
   }
 
   private _onRoomTap(
@@ -1469,8 +1659,9 @@ export class StratumCard extends LitElement {
       popup_extra?: import('./types.js').RoomPopupExtraConfig;
       chips?: import('./types.js').ChipConfig[];
     },
-    entries?: HassEntityRegistryEntry[],
+    entries?: readonly HassEntityRegistryEntry[],
     fieldEntities?: import('./types.js').TileFieldEntities,
+    swipeKey?: string,
   ): void {
     // Rozwiązywanie akcji: per-room > global > domyślny popup.
     // `action: 'default'` z ha-form = „nie ustawione" — przechodzimy głębiej.
@@ -1489,7 +1680,7 @@ export class StratumCard extends LitElement {
     }
 
     if (effective?.action === 'toggle-lights') {
-      this._toggleRoomLights(entries ?? [], fieldEntities);
+      this._toggleRoomLights(entries ?? [], fieldEntities, swipeKey);
       return;
     }
 
@@ -1511,13 +1702,18 @@ export class StratumCard extends LitElement {
    * per encja dawałby szachownicę przy mieszanych stanach.)
    */
   private _toggleRoomLights(
-    entries: HassEntityRegistryEntry[],
+    entries: readonly HassEntityRegistryEntry[],
     fieldEntities?: import('./types.js').TileFieldEntities,
+    swipeKey?: string,
   ): void {
     if (!this.hass) return;
     const ids = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
     if (ids.length === 0) return;
     const anyOn = ids.some((id) => this.hass!.states[id]?.state === 'on');
+    // Gasimy włącznikiem → zapamiętaj, co świeciło i jak jasno. Przeciągnięcie
+    // po ciemnym wierszu przywróci wtedy ten zestaw, a nie cały pokój.
+    if (anyOn && swipeKey) rememberBeforeOff(swipeKey, this.hass, ids);
+    if (anyOn) markOff(this.hass, ids);
     void this.hass.callService('light', anyOn ? 'turn_off' : 'turn_on', {
       entity_id: ids,
     });

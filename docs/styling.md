@@ -70,6 +70,7 @@ card_mod:
 | `--stratum-card-color` | `--primary-text-color` | kolor domyślnego tekstu |
 | `--stratum-card-divider-color` | `--divider-color` | pozioma linia pod headerem / nad body |
 | `--stratum-card-focus-color` | `--primary-color` (#ff9b42) | obrys fokus (klawiatura) |
+| `--stratum-popup-backdrop-filter` | `blur(6px)`; na telefonie (≤ 600 px) `none` | rozmycie dashboardu pod popupem pokoju i listą chipa. Na telefonie arkusz pokoju zakrywa cały ekran, więc rozmycie jest wyłączone (kosztowało płynność przewijania); `blur(6px)` przywraca je wszędzie, `none` wyłącza także na desktopie |
 
 ### Header główny (floor card)
 
