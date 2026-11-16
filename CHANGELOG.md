@@ -4,6 +4,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.107.1] — 2026-11-17
+
+### Fixed
+- **Suwak jasności na telefonie nie reagował** (wiersz pokoju i kafel grupy
+  świateł w popupie). Na dotyku przeglądarka przechwytuje palec elementem
+  pod nim (np. nazwą pokoju); przepięcie przechwycenia na cały wiersz
+  wysyłało zdarzenie „utracono przechwycenie", które v1.107.0 brała za
+  przerwanie gestu — gest kończył się w chwili startu, a przytrzymany palec
+  kończył się systemowym long-pressem (wibracja). Teraz gest przerywa tylko
+  utrata przechwycenia przez sam wiersz/kafel. Myszą błąd nie występował.
+
 ## [1.107.0] — 2026-11-16
 
 ### Changed (suwak jasności — tylko włączone światła, proporcjonalnie)
