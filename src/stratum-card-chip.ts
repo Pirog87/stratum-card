@@ -91,18 +91,42 @@ export class StratumCardChip extends LitElement {
       );
       font-size: var(--stratum-chip-font-size, 12px);
       font-weight: 600;
-      transition: opacity 0.2s ease, color 0.2s ease;
+      transition: opacity 0.2s ease, color 0.2s ease, transform 0.1s ease;
     }
 
     :host([clickable]) .chip {
       cursor: pointer;
     }
 
-    :host([clickable]) .chip:hover {
-      background: var(
-        --stratum-chip-hover-background,
-        color-mix(in srgb, var(--card-background-color) 89%, var(--primary-text-color))
-      );
+    /* Hover tylko przy prawdziwym kursorze — na dotyku chip po tapnięciu
+       zostawał podświetlony, aż palec trafił w coś innego. (hover: hover)
+       pyta o urządzenie, nie o rozmiar, więc media query jest właściwe. */
+    @media (hover: hover) {
+      :host([clickable]) .chip:hover {
+        /* Wewnątrz kart --stratum-chip-hover-background = --stratum-surface-3
+           (surface-tokens.ts). Fallback z tła karty, nie z samego surface-3:
+           chip poza kartą Stratum nie ma tokenów powierzchni i var() bez
+           fallbacku dałby przezroczyste tło. */
+        background: var(
+          --stratum-chip-hover-background,
+          color-mix(in srgb, var(--card-background-color) 89%, var(--primary-text-color))
+        );
+      }
+    }
+
+    /* Chip klikalny otwiera listę — bez :active tapnięcie nie dawało
+       żadnego natychmiastowego śladu, zanim lista się pojawiła. */
+    :host([clickable]) .chip:active {
+      transform: scale(0.96);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .chip {
+        transition: none;
+      }
+      :host([clickable]) .chip:active {
+        transform: none;
+      }
     }
 
     :host([clickable]) .chip:focus-visible {
