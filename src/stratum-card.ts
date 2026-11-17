@@ -3,6 +3,12 @@
 // Customowa karta Home Assistant: podsumowanie warstwy (floor lub area)
 // z rozwijanym body. Zobacz docs/roadmap.md dla kolejnych milestone'ów.
 
+// MUSI zostać pierwszym importem: ochrona przed podwójnym załadowaniem
+// bundla działa tylko, jeśli ruszy przed dekoratorami @customElement
+// w pozostałych modułach (patrz load-guard.ts).
+import { loadGuard } from './boot-guard.js';
+import { consoleBanner, duplicateLoadNotice } from './load-guard.js';
+import { VERSION } from './version.js';
 import {
   LitElement,
   html,
@@ -24,11 +30,8 @@ import {
   filterBinarySensorDeviceClass,
   unavailableEntityIds,
 } from './area-entities.js';
-import {
-  computeTileData,
-  evaluateConditions,
-  resolveFieldEntityIds,
-} from './tile-data.js';
+import { evaluateConditions, resolveFieldEntityIds } from './tile-data.js';
+import { TileDataPass } from './tile-data-pass.js';
 import {
   DEFAULT_CHIPS,
   evaluateChip,
@@ -38,25 +41,37 @@ import {
 import { resolveTapAction, runTapAction } from './tap-action.js';
 import {
   CHIP_LIST_COLORS,
-  CHIP_LIST_LABELS,
   alarmEntityIds,
+  chipListTitle,
   chipEntityIds,
   chipMoreInfoEntity,
   chipSupportsList,
 } from './chip-list-helpers.js';
 import { TemplateRenderer } from './template-renderer.js';
+import { docLanguage, langOf, localize } from './localize/localize.js';
 import {
   addGroupMembers,
   collectEntityIds,
   statesReadyLatch,
   structureChanged,
+  touchesWatched,
   watchedStateChanged,
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
 import { LightSwipe } from './light-swipe.js';
+import { firstTabbable, lastTabbable, type FocusProbe } from './focus-order.js';
 import { subscribePower, swipePowerHook, toggleRoomLights } from './power-pending.js';
 import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
+// Edytory importowane statycznie — to NIE jest rozwiązanie PKG-3, tylko stan
+// do decyzji użytkownika. Edytory to ~184 kB / ~43 kB gzip (~36% bundla
+// v1.109.3), które telefon pobiera przy zimnym starcie, choć prawie nigdy nie
+// otwiera edytora. Te bajty da się zdjąć tylko osobnym chunkiem ładowanym
+// przez `import()` w getConfigElement — a to łamie dystrybucję jednym plikiem
+// (ADR-005, krok „Verify single-file output” w validate.yml), więc bez zgody
+// użytkownika zostaje tak. Półśrodki w jednym pliku nie pomagają: przy
+// output.inlineDynamicImports wklejony moduł ewaluuje się od razu, a ręczne
+// zszycie leniwej funkcji oszczędzało 5–8 ms ewaluacji przy 4x CPU (szum).
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 import './stratum-card-room-tile.js';
@@ -66,7 +81,11 @@ import './stratum-scene-bar.js';
 
 import { cardStyles } from './stratum-card-styles.js';
 import {
+  currentHistoryIndex,
   decidePopState,
+  GUARD_STATE,
+  planConsume,
+  registerGuardSource,
   stateHasDialog,
   type GuardEntry,
   type GuardKind,
@@ -79,8 +98,6 @@ import {
   type HeaderStripe,
   type StripeRoom,
 } from './header-stripes.js';
-
-const VERSION = '1.109.2';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -370,7 +387,13 @@ export class StratumCard extends LitElement {
   private _resetExpanded(): void {
     if (this._isEditorPreview()) return;
     this._clearAutoCollapse();
-    this._expanded = Boolean(this._config?.expanded);
+    const next = Boolean(this._config?.expanded);
+    // Ta sama ścieżka zwinięcia co przycisk i auto-collapse, więc ten sam
+    // ratunek fokusa: zejście do tła (inna karta, wygaszony ekran) z fokusem
+    // w wierszu zwijało body z `inert`, przeglądarka zdejmowała fokus na
+    // <body>, a po powrocie Tab przeskakiwał całą kartę.
+    if (this._expanded && !next) this._rescueFocusFromBody();
+    this._expanded = next;
   }
 
   private _onVisibilityChange = (): void => {
@@ -386,6 +409,7 @@ export class StratumCard extends LitElement {
     this._autoCollapseTimer = window.setTimeout(() => {
       this._autoCollapseTimer = undefined;
       if (this._expanded) {
+        this._rescueFocusFromBody();
         this._expanded = false;
         this.dispatchEvent(
           new CustomEvent('stratum-card-toggle', {
@@ -405,17 +429,38 @@ export class StratumCard extends LitElement {
     }
   }
 
+  /**
+   * Każda interakcja z kartą odsuwa auto-zwinięcie — także klawiatura
+   * (focusin/keydown na ha-card). Dawniej timer odnawiał tylko pointerdown,
+   * więc ktoś chodzący Tabem po wierszach tracił listę w połowie drogi.
+   */
   private _onInteraction = (): void => {
     if (this._expanded) this._scheduleAutoCollapse();
   };
 
+  /**
+   * Zwijana treść dostaje `inert` — jeśli fokus siedzi w niej w chwili
+   * zwinięcia, przeglądarka go zdejmuje i kursor klawiatury ląduje na
+   * początku dokumentu. Przenosimy go więc wcześniej na przycisk belki,
+   * który zwinięcie przeżywa (ten sam element w obu stanach karty).
+   */
+  private _rescueFocusFromBody(): void {
+    const root = this.shadowRoot;
+    const active = root?.activeElement;
+    const body = root?.querySelector('.body-wrap');
+    if (!root || !active || !body || !body.contains(active)) return;
+    root
+      .querySelector<HTMLElement>('.header-toggle, .hs-title')
+      ?.focus({ preventScroll: true });
+  }
+
   /** HA wymaga żeby karta miała metodę `setConfig` — rzuci tu przy błędnej konfiguracji. */
   public setConfig(config: StratumCardConfig): void {
     if (!config) {
-      throw new Error('Konfiguracja jest wymagana.');
+      throw new Error(localize(this.hass ?? docLanguage(), 'common.config_required'));
     }
     if (!config.floor_id && !config.area_id && !config.name) {
-      throw new Error('Podaj `floor_id`, `area_id` lub `name`.');
+      throw new Error(localize(this.hass ?? docLanguage(), 'card.need_target'));
     }
     // W edytorze każda zmiana formularza woła setConfig ponownie — gdybyśmy
     // za każdym razem resetowali `_expanded` do `config.expanded`, podgląd
@@ -437,6 +482,7 @@ export class StratumCard extends LitElement {
     }
 
     if (isFirst || expandedFlagChanged) {
+      if (this._expanded && !config.expanded) this._rescueFocusFromBody();
       this._expanded = Boolean(config.expanded);
       if (this._expanded) this._scheduleAutoCollapse();
     }
@@ -495,6 +541,7 @@ export class StratumCard extends LitElement {
   }
 
   private _toggleExpand = (): void => {
+    if (this._expanded) this._rescueFocusFromBody();
     this._expanded = !this._expanded;
     this.dispatchEvent(
       new CustomEvent('stratum-card-toggle', {
@@ -635,7 +682,7 @@ export class StratumCard extends LitElement {
     this._showChipList({
       chip,
       entityIds,
-      label: CHIP_LIST_LABELS[chip.type] ?? 'Lista',
+      label: chipListTitle(this.hass, chip.type),
       icon: resolveChipIcon(chip) ?? 'mdi:label-outline',
       color:
         resolveChipColor(chip) ??
@@ -666,32 +713,53 @@ export class StratumCard extends LitElement {
   /** Dialogi HA otwarte nad popupem — tylko dla trybu bez Navigation API. */
   private _dialogsAbove = 0;
 
-  /** Popstate wywołany naszym history.back() (×, Escape, tło, uchwyt). */
-  private _selfBack = false;
+  /**
+   * Popstate wywołany naszym cofnięciem (×, Escape, tło, uchwyt): ile
+   * strażników zdejmuje. 0 = pop obcy (Android „wstecz", dialog HA).
+   */
+  private _selfBack = 0;
 
-  /** Indeks bieżącego wpisu historii albo null bez Navigation API. */
-  private _historyIndex(): number | null {
-    const nav = (
-      window as unknown as {
-        navigation?: { currentEntry?: { index: number } | null };
-      }
-    ).navigation;
-    const idx = nav?.currentEntry?.index;
-    return typeof idx === 'number' && idx >= 0 ? idx : null;
-  }
+  /** Wyrejestrowanie strażników z rejestru modułu (back-guard.ts). */
+  private _unregisterGuards?: () => void;
 
-  private _pushBackGuard(kind: GuardKind): void {
-    window.history.pushState({ stratum: true }, '');
+  private _pushBackGuard(kind: GuardKind, close?: () => void): void {
+    window.history.pushState({ ...GUARD_STATE }, '');
     if (this._guards.length === 0) {
       window.addEventListener('popstate', this._onPopState);
+      // Akcja navigate z wnętrza popupu pyta rejestr, czy szczyt historii
+      // to nasz strażnik — history.state tego nie powie (more-info HA go
+      // nadpisuje). Źródło czyta bieżące _guards, bez kopii.
+      this._unregisterGuards ??= registerGuardSource(() => this._guards);
       // Zdarzenia z wnętrza popupów (wiersz listy, ikona kafla) przechodzą
       // przez host karty — tak wiemy, że HA otworzy dialog nad nami.
       this.addEventListener('hass-more-info', this._onDialogAbove);
       this.addEventListener('show-dialog', this._onDialogAbove);
     }
     // Indeks czytamy PO pushState — to pozycja naszego wpisu.
-    this._guards.push({ kind, index: this._historyIndex() });
+    this._guards.push({ kind, index: currentHistoryIndex(), close });
   }
+
+  /**
+   * Lista chipa karty pokoju w popupie prosi o strażnika (back-guard.ts,
+   * 'room-chip') — „wstecz" ma zamknąć tylko ją, nie cały popup. Samodzielna
+   * karta pokoju nie ma tego słuchacza i działa po staremu, bez historii.
+   */
+  private _onNestedLayerOpen = (ev: CustomEvent<{ close: () => void }>): void => {
+    ev.stopPropagation();
+    if (this._guards.some((g) => g.kind === 'room-chip')) return;
+    this._pushBackGuard('room-chip', ev.detail.close);
+  };
+
+  /**
+   * × / Escape / tło listy karty pokoju. preventDefault = „zamknę ja, przez
+   * history.back()" — karta pokoju nie chowa wtedy listy sama, robi to
+   * popstate przez `close` strażnika. Bez tego wpis listy zostawał
+   * w historii i następne „wstecz" nic nie robiło.
+   */
+  private _onNestedLayerClose = (ev: Event): void => {
+    ev.stopPropagation();
+    if (this._consumeBackGuard('room-chip')) ev.preventDefault();
+  };
 
   private _onDialogAbove = (ev: Event): void => {
     // hass-more-info bez encji zamyka more-info, a nie otwiera nowego.
@@ -704,27 +772,33 @@ export class StratumCard extends LitElement {
 
   private _dropGuardListeners(): void {
     window.removeEventListener('popstate', this._onPopState);
+    this._unregisterGuards?.();
+    this._unregisterGuards = undefined;
     this.removeEventListener('hass-more-info', this._onDialogAbove);
     this.removeEventListener('show-dialog', this._onDialogAbove);
     this._dialogsAbove = 0;
-    this._selfBack = false;
+    this._selfBack = 0;
   }
 
   private _onPopState = (ev: PopStateEvent): void => {
     const decision = decidePopState(
       this._guards,
-      this._historyIndex(),
+      currentHistoryIndex(),
       this._dialogsAbove,
       stateHasDialog(ev.state),
       this._selfBack,
     );
-    this._selfBack = false;
+    this._selfBack = 0;
     this._dialogsAbove = decision.dialogsAbove;
     // Historia jest już cofnięta przez system — zamykamy bez history.back().
     for (let i = 0; i < decision.pop; i++) {
       const guard = this._guards.pop();
       if (guard?.kind === 'chip') this._closeChipListNow();
       else if (guard?.kind === 'room') this._closeRoomPopupNow();
+      else if (guard?.kind === 'room-chip') {
+        this._closing.delete('room-chip');
+        guard.close?.();
+      }
     }
     if (this._guards.length === 0) this._dropGuardListeners();
   };
@@ -746,21 +820,24 @@ export class StratumCard extends LitElement {
 
   private _consumeBackGuard(kind: GuardKind): boolean {
     if (this._closing.has(kind)) return true;
-    const top = this._guards[this._guards.length - 1];
-    if (top?.kind === kind) {
+    // Szczyt albo popup z otwartą nad nim listą karty pokoju — wtedy
+    // cofamy o oba wpisy naraz (planConsume w back-guard.ts).
+    const plan = planConsume(this._guards, kind);
+    if (plan.kind === 'back') {
+      const guard = this._guards[this._guards.length - plan.steps];
       this._closing.add(kind);
-      this._selfBack = true;
-      window.history.back(); // popstate zamknie popup
+      this._selfBack = plan.steps;
+      window.history.go(-plan.steps); // popstate zamknie popup
       window.setTimeout(() => {
         if (!this._closing.delete(kind)) return;
         if (kind === 'room' && this._popupRoom) this._closeRoomPopupNow();
         if (kind === 'chip' && this._popupChip) this._closeChipListNow();
+        if (kind === 'room-chip') guard.close?.();
       }, 500);
       return true;
     }
-    const i = this._guards.map((g) => g.kind).lastIndexOf(kind);
-    if (i >= 0) {
-      this._guards.splice(i, 1);
+    if (plan.kind === 'drop') {
+      this._guards.splice(plan.at, 1);
       if (this._guards.length === 0) this._dropGuardListeners();
     }
     return false;
@@ -788,8 +865,16 @@ export class StratumCard extends LitElement {
       this._expanded = true;
       this._clearAutoCollapse();
     }
-    // Tapnięty włącznik ma się przestawić od razu, a nie po raporcie z HA.
-    this._unsubPower = subscribePower(() => this.requestUpdate());
+    // Tapnięty włącznik ma się przestawić od razu, a nie po raporcie z HA —
+    // ale tylko w karcie, której pokoi to dotyczy. Przełącznik tarasu
+    // przerysowywał dotąd także Parter i Piętro (i drugi raz po 5 s, gdy
+    // stan „w toku" wygasa). Zbiór obserwowanych zawiera członków grup
+    // i sterowniki WLED, więc tapnięcie grupy też tu trafia. Otwarte popupy
+    // i listy chipów subskrybują osobno.
+    this._unsubPower = subscribePower((ids) => {
+      const watched = this.hass && this._config ? this._watchedIds(this.hass) : undefined;
+      if (touchesWatched(watched, ids)) this.requestUpdate();
+    });
     document.addEventListener('visibilitychange', this._onVisibilityChange);
     // Powrót z pamięci widoków HA (przełączenie widoku i z powrotem): przy
     // odpięciu skasowaliśmy subskrypcje szablonów i zegar etykiet „5min",
@@ -811,6 +896,8 @@ export class StratumCard extends LitElement {
     // strażnika historii i bez Escape.
     this._dropGuardListeners();
     this._guards = [];
+    // Zatrzask × też — bezpiecznik 500 ms nie ma już czego domykać.
+    this._closing.clear();
     this._releaseRoomEscape?.();
     this._releaseRoomEscape = undefined;
     this._popupRoom = undefined;
@@ -936,7 +1023,15 @@ export class StratumCard extends LitElement {
     </ha-card>`;
   }
 
+  /**
+   * Dane wierszy liczone raz na render — belka `stripes` i lista pomieszczeń
+   * czytają ten sam wynik zamiast agregować każdy pokój dwa razy
+   * (tile-data-pass.ts).
+   */
+  private readonly _tileData = new TileDataPass();
+
   protected render(): TemplateResult | typeof nothing {
+    this._tileData.begin(this.hass);
     if (!this._config) return nothing;
 
     // Skeleton: HA jeszcze nie doslal stanow (start aplikacji / wolny
@@ -986,12 +1081,16 @@ export class StratumCard extends LitElement {
           class="stripes-card"
           part="card"
           @pointerdown=${this._onInteraction}
+          @focusin=${this._onInteraction}
+          @keydown=${this._onInteraction}
         >
           ${this._renderStripesHeader(name, icon, header, headerStyles)}
           <div
+            id="stratum-body"
             class="body-wrap ${this._expanded ? 'open' : ''}"
             part="body"
             aria-hidden=${!this._expanded}
+            ?inert=${!this._expanded}
           >
             <div class="body">${this._renderBody()}</div>
           </div>
@@ -1001,18 +1100,46 @@ export class StratumCard extends LitElement {
       `;
     }
 
+    // Belka klasyczna to kontener, nie jeden <button>: chipy i odznaki są
+    // osobnymi kontrolkami, a dzieci przycisku są dla czytnika ekranu
+    // prezentacyjne — TalkBack czytał tylko „Rozwiń Parter", bez liczników,
+    // i nie dawał wejść w odznakę ⚠ (do tego przycisk w przycisku to
+    // niepoprawny HTML). Rozwijanie niesie przycisk z ikoną i nazwą; klik
+    // w resztę belki (tło, strzałka, chip bez akcji) dalej rozwija kartę,
+    // tak jak w belce „stripes". `part="header"` zostaje na kontenerze —
+    // padding i tło belki, które stylują użytkownicy card-moda, są tutaj.
     return html`
-      <ha-card part="card" @pointerdown=${this._onInteraction}>
-        <button
+      <ha-card
+        part="card"
+        @pointerdown=${this._onInteraction}
+        @focusin=${this._onInteraction}
+        @keydown=${this._onInteraction}
+      >
+        <div
           class="header ${header.accent_bar ? 'has-accent-bar' : ''}"
           part="header"
           style=${headerStyles}
           @click=${this._toggleExpand}
-          aria-expanded=${this._expanded}
-          aria-label="Rozwiń ${name}"
         >
-          <ha-icon class="area-icon" part="area-icon" .icon=${icon}></ha-icon>
-          <span class="title" part="title">${name}</span>
+          <button
+            type="button"
+            class="header-toggle"
+            part="header-toggle"
+            aria-expanded=${this._expanded}
+            aria-controls="stratum-body"
+            @click=${(ev: Event) => {
+              ev.stopPropagation();
+              this._toggleExpand();
+            }}
+          >
+            <ha-icon
+              class="area-icon"
+              part="area-icon"
+              aria-hidden="true"
+              .icon=${icon}
+            ></ha-icon>
+            <span class="title" part="title">${name}</span>
+          </button>
           <div class="chips" part="chips">
             ${this._renderHeaderAlarmBadge()}
             ${this._renderHeaderUnavailableChip()}
@@ -1023,14 +1150,17 @@ export class StratumCard extends LitElement {
             : html`<ha-icon
                 class="expander ${this._expanded ? 'open' : ''}"
                 part="expander"
+                aria-hidden="true"
                 .icon=${'mdi:chevron-down'}
               ></ha-icon>`}
-        </button>
+        </div>
 
         <div
+          id="stratum-body"
           class="body-wrap ${this._expanded ? 'open' : ''}"
           part="body"
           aria-hidden=${!this._expanded}
+          ?inert=${!this._expanded}
         >
           <div class="body">${this._renderBody()}</div>
         </div>
@@ -1079,7 +1209,8 @@ export class StratumCard extends LitElement {
       room?: import('./types.js').RoomConfig,
     ): StripeRoom & { room?: import('./types.js').RoomConfig } => {
       const entries = this._roomEntries(areaIds);
-      const data = computeTileData(hass, entries, room?.field_entities);
+      // Ten sam wynik, którego za chwilę użyje wiersz pokoju (_renderRoomRow).
+      const data = this._tileData.get(hass, entries, room?.field_entities);
       return {
         area_id: areaIds[0]!,
         name,
@@ -1188,6 +1319,7 @@ export class StratumCard extends LitElement {
             class="hs-title"
             part="title"
             aria-expanded=${this._expanded}
+            aria-controls="stratum-body"
             @click=${(ev: Event) => {
               ev.stopPropagation();
               this._toggleExpand();
@@ -1305,7 +1437,9 @@ export class StratumCard extends LitElement {
           tabindex="-1"
           role="dialog"
           aria-modal="true"
+          aria-label=${this._popupRoomName()}
           @click=${(ev: Event) => ev.stopPropagation()}
+          @keydown=${this._onPopupKeydown}
         >
           <span
             class="stratum-popup-sentinel"
@@ -1317,7 +1451,7 @@ export class StratumCard extends LitElement {
             class="stratum-popup-grab"
             role="button"
             tabindex="0"
-            aria-label="Zamknij — przeciągnij w dół"
+            aria-label=${localize(this.hass, 'card.close_drag')}
             @pointerdown=${this._onGrabDown}
             @pointermove=${this._onGrabMove}
             @pointerup=${this._onGrabUp}
@@ -1326,7 +1460,7 @@ export class StratumCard extends LitElement {
           ></div>
           <button
             class="stratum-popup-close"
-            title="Zamknij"
+            title=${localize(this.hass, 'common.close')}
             @click=${this._closeRoomPopup}
           >
             <ha-icon .icon=${'mdi:close'}></ha-icon>
@@ -1334,6 +1468,8 @@ export class StratumCard extends LitElement {
           <stratum-room-card
             .hass=${this.hass}
             .config=${popupConfig}
+            @stratum-layer-open=${this._onNestedLayerOpen}
+            @stratum-layer-close=${this._onNestedLayerClose}
           ></stratum-room-card>
           <span
             class="stratum-popup-sentinel"
@@ -1351,9 +1487,9 @@ export class StratumCard extends LitElement {
     this._showChipList({
       chip: { type: 'problem' } as import('./types.js').ChipConfig,
       entityIds: [],
-      label: 'Aktywne alarmy',
+      label: localize(this.hass, 'common.active_alarms'),
       icon: 'mdi:alert',
-      color: 'var(--stratum-chip-leak-color, #f44336)',
+      color: 'var(--stratum-alarm, var(--error-color))',
       alarmAreaIds: areaIds,
     });
   }
@@ -1377,7 +1513,8 @@ export class StratumCard extends LitElement {
       class="header-alarm-badge"
       role="button"
       tabindex="0"
-      title="Pokaż aktywne alarmy"
+      title=${localize(this.hass, 'common.show_alarms')}
+      aria-label=${localize(this.hass, 'common.alarms_aria', { count: ids.length })}
       @click=${(ev: Event) => {
         ev.stopPropagation();
         this._openAlarmList(areaIds);
@@ -1390,7 +1527,7 @@ export class StratumCard extends LitElement {
         }
       }}
     >
-      <ha-icon .icon=${'mdi:alert'}></ha-icon>
+      <ha-icon .icon=${'mdi:alert'} aria-hidden="true"></ha-icon>
       ${ids.length}
     </span>`;
   }
@@ -1413,7 +1550,7 @@ export class StratumCard extends LitElement {
     this._showChipList({
       chip: { type: 'filter' } as import('./types.js').ChipConfig,
       entityIds: [],
-      label: 'Urządzenia niedostępne',
+      label: localize(this.hass, 'card.unavailable_devices'),
       icon: 'mdi:lan-disconnect',
       color: 'var(--stratum-chip-unavailable-color, #9e9e9e)',
       unavailableAreaIds: areaIds,
@@ -1454,7 +1591,8 @@ export class StratumCard extends LitElement {
       class="header-unav-badge"
       role="button"
       tabindex="0"
-      title="Pokaż niedostępne urządzenia"
+      title=${localize(this.hass, 'card.show_unavailable')}
+      aria-label=${localize(this.hass, 'card.unavailable_aria', { count: ids.length })}
       @click=${(ev: Event) => {
         ev.stopPropagation();
         this._openUnavailableList(areaIds);
@@ -1467,7 +1605,7 @@ export class StratumCard extends LitElement {
         }
       }}
     >
-      <ha-icon .icon=${'mdi:lan-disconnect'}></ha-icon>
+      <ha-icon .icon=${'mdi:lan-disconnect'} aria-hidden="true"></ha-icon>
       ${ids.length}
     </span>`;
   }
@@ -1595,8 +1733,8 @@ export class StratumCard extends LitElement {
       const areas = getAreasInFloor(this.hass, this._config.floor_id);
       if (areas.length === 0) {
         return html`<div class="placeholder">
-          Brak stref przypisanych do tego piętra.<br />
-          Przypisz area do floor w Settings → Areas & Zones.
+          ${localize(this.hass, 'card.no_areas')}<br />
+          ${localize(this.hass, 'card.no_areas_hint')}
         </div>`;
       }
       const globalDisplay = this._config.rooms_display ?? 'row';
@@ -1717,7 +1855,7 @@ export class StratumCard extends LitElement {
         return !st || st === 'unavailable';
       });
 
-    const data = computeTileData(this.hass!, entries, fieldEntities);
+    const data = this._tileData.get(this.hass!, entries, fieldEntities);
     const rowConfig = this._resolveRowConfig();
     const tileConfig = this._resolveTileConfig();
     const conditions = this._resolveConditions();
@@ -1786,6 +1924,7 @@ export class StratumCard extends LitElement {
         .styleOverride=${tileStyleOverride}
         .clickable=${clickable}
         .offline=${roomOffline}
+        .uiLang=${langOf(this.hass)}
         .alarmsCount=${alarmEntityIds(this.hass!, entries).length}
         @row-alarms=${() => this._openAlarmList(areaIds)}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
@@ -1817,6 +1956,7 @@ export class StratumCard extends LitElement {
       .lightsSwitch=${rowConfig?.lights_switch === true}
       .alarmsCount=${alarmEntityIds(this.hass!, entries).length}
       .offline=${roomOffline}
+      .uiLang=${langOf(this.hass)}
       @row-alarms=${() => this._openAlarmList(areaIds)}
       .lightsGlowOn=${rowConfig?.lights_switch_glow_on ?? 100}
       .lightsGlowOff=${rowConfig?.lights_switch_glow_off ?? 30}
@@ -1824,6 +1964,7 @@ export class StratumCard extends LitElement {
       .styleOverride=${rowStyleOverride}
       .clickable=${clickable}
       .iconTappable=${iconTappable}
+      .iconAction=${effectiveIconTap?.action}
       @row-lights-toggle=${() =>
         this._toggleRoomLights(entries, fieldEntities, swipeKey)}
       @row-brightness=${(ev: CustomEvent<RowBrightnessDetail>) =>
@@ -2016,7 +2157,7 @@ export class StratumCard extends LitElement {
       icon: overrides?.icon,
     };
     if (wasOpen) return;
-    this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup());
+    this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup(), this);
     this._pushBackGuard('room');
     // Popup to zwykly div nad trescia, nie natywny dialog, wiec fokus
     // klawiatury sam do niego nie wejdzie - zostalby na wierszu pod
@@ -2035,6 +2176,8 @@ export class StratumCard extends LitElement {
 
   private _closeRoomPopupNow(): void {
     this._closing.delete('room');
+    // Lista karty pokoju znika razem z popupem.
+    this._closing.delete('room-chip');
     this._popupRoom = undefined;
     this._releaseRoomEscape?.();
     this._releaseRoomEscape = undefined;
@@ -2061,28 +2204,89 @@ export class StratumCard extends LitElement {
   /**
    * Pulapka fokusa na wartownikach: puste, focusowalne spany na poczatku
    * i koncu arkusza. Gdy Tab wyjdzie poza tresc, ladujemy na wartowniku
-   * i odbijamy fokus z powrotem do srodka. Dziala takze przez granice
-   * shadow DOM karty pokoju, czego reczne zbieranie focusowalnych
-   * elementow by nie zalatwilo.
+   * i odbijamy fokus z powrotem do srodka — Tab z ostatniej kontrolki na
+   * pierwsza, Shift+Tab z pierwszej na OSTATNIA. Dawniej wartownik
+   * poczatkowy zawsze oddawal fokus na x, wiec Shift+Tab krecil sie
+   * w miejscu. Ostatnia kontrolka siedzi gleboko w shadow DOM karty
+   * pokoju, stad przejscie po drzewie przez shadow rooty (focus-order.ts),
+   * a nie querySelector, ktory do nich nie wchodzi.
    */
-  private _focusInPopup(selector: string): void {
-    const el = this.shadowRoot?.querySelector(selector) as HTMLElement | null;
+  private readonly _popupFocusProbe: FocusProbe<Element> = {
+    children: (el) => {
+      if (el instanceof HTMLSlotElement) {
+        const assigned = el.assignedElements({ flatten: true });
+        return assigned.length > 0 ? assigned : Array.from(el.children);
+      }
+      return Array.from((el.shadowRoot ?? el).children);
+    },
+    tabbable: (el) => {
+      const h = el as HTMLElement;
+      if (typeof h.tabIndex !== 'number' || h.tabIndex < 0) return false;
+      if ((h as HTMLButtonElement).disabled === true) return false;
+      // Bez prostokata (display: none siebie albo przodka, takze uchwyt
+      // arkusza schowany na szerokim ekranie) focus() bylby no-opem.
+      return h.getClientRects().length > 0 && getComputedStyle(h).visibility !== 'hidden';
+    },
+    skip: (el) =>
+      el.classList.contains('stratum-popup-sentinel') || (el as HTMLElement).inert === true,
+  };
+
+  private _focusPopupEdge(edge: 'first' | 'last'): void {
+    const card = this.shadowRoot?.querySelector('.stratum-popup-card');
+    if (!card) return;
+    const target =
+      edge === 'first'
+        ? firstTabbable(card, this._popupFocusProbe)
+        : lastTabbable(card, this._popupFocusProbe);
+    // Fallback: x jest zawsze widoczny — gdyby przejscie nic nie znalazlo
+    // (karta pokoju jeszcze sie nie wyrenderowala), fokus nie ucieka z arkusza.
+    const el = (target ??
+      this.shadowRoot?.querySelector('.stratum-popup-close')) as HTMLElement | null;
     el?.focus();
   }
 
-  private _onSentinelStart = (): void => {
-    this._focusInPopup('.stratum-popup-close');
+  /**
+   * Wartownik poczatkowy lapie dwa rozne ruchy i rozroznia je po tym, skad
+   * przyszedl fokus. Po otwarciu fokus stoi na samym kontenerze
+   * (tabindex=-1), a wartownik jest jego pierwszym dzieckiem — wiec
+   * PIERWSZY zwykly Tab tez tu laduje. Bez tego rozroznienia pierwszy Tab
+   * byl brany za Shift+Tab z gory i wyrzucal na ostatnia kontrolke, na dol
+   * arkusza (zmierzone: glosnosc playera, popup przewiniety do konca).
+   * Kontener i wartownik sa w tym samym shadow root, wiec relatedTarget nie
+   * jest retargetowany; kontrolka z karty pokoju przychodzi jako jej host
+   * — tez „w srodku".
+   */
+  private _onSentinelStart = (ev: FocusEvent): void => {
+    const card = this.shadowRoot?.querySelector('.stratum-popup-card');
+    const from = ev.relatedTarget as Node | null;
+    const fromInside = !!card && !!from && from !== card && card.contains(from);
+    this._focusPopupEdge(fromInside ? 'last' : 'first');
+  };
+
+  /**
+   * Shift+Tab prosto po otwarciu: fokus stoi na kontenerze, a przed nim
+   * w drzewie nie ma wartownika — przegladarka wyprowadzala fokus z dialogu
+   * na wiersz pod spodem, choc popup deklaruje aria-modal. Lapiemy tylko
+   * klawisz wcisniety na SAMYM kontenerze; z kontrolek w srodku Shift+Tab
+   * idzie normalnie (i na gorze odbija sie od wartownika).
+   */
+  private _onPopupKeydown = (ev: KeyboardEvent): void => {
+    if (ev.key !== 'Tab' || !ev.shiftKey) return;
+    if (ev.composedPath()[0] !== ev.currentTarget) return;
+    ev.preventDefault();
+    this._focusPopupEdge('last');
   };
 
   private _onSentinelEnd = (): void => {
-    const grab = this.shadowRoot?.querySelector(
-      '.stratum-popup-grab',
-    ) as HTMLElement | null;
-    // Uchwyt istnieje tylko na telefonie (display:none wyzej), a element
-    // ukryty nie przyjmie fokusa - wtedy pierwszym przystankiem jest x.
-    if (grab && grab.offsetParent !== null) grab.focus();
-    else this._focusInPopup('.stratum-popup-close');
+    this._focusPopupEdge('first');
   };
+
+  /** Nazwa otwartego pokoju dla czytnika ekranu — ta sama, co w wierszu. */
+  private _popupRoomName(): string {
+    const room = this._popupRoom;
+    if (!room) return '';
+    return room.name ?? this.hass?.areas?.[room.area_id]?.name ?? room.area_id;
+  }
 
   private _closeRoomPopup = (): void => {
     if (this._consumeBackGuard('room')) return;
@@ -2156,16 +2360,24 @@ if (!w.customCards.some((c) => c.type === 'stratum-card')) {
   w.customCards.push({
     type: 'stratum-card',
     name: 'Stratum',
-    description:
-      'Podsumowanie strefy z rozwijaną listą pomieszczeń (świata, obecność, okna).',
+    // Katalog kart rejestruje się przy ładowaniu bundla, przed `hass` —
+    // język bierzemy z `<html lang>`, który HA ustawia z profilu.
+    description: localize(docLanguage(), 'card.catalog_description'),
     preview: false,
   });
 }
 
-// Sygnatura w konsoli — pomocna w debugowaniu wersji u użytkownika.
-// eslint-disable-next-line no-console
-console.info(
-  `%c STRATUM %c v${VERSION} `,
-  'color: #fff; background: #ff9b42; padding: 2px 6px; border-radius: 3px 0 0 3px; font-weight: 500;',
-  'color: #ff9b42; background: #1e1f22; padding: 2px 6px; border-radius: 0 3px 3px 0;',
-);
+// Koniec ewaluacji bundla: wszystkie @customElement już się wykonały
+// (stratum-card.ts biegnie po swoich importach), więc zdejmujemy filtr
+// z customElements.define — dalej rejestr działa bez naszego udziału.
+loadGuard.release();
+
+// Sygnatura w konsoli — jedna dla obu kart, z wersją z package.json.
+// Kopia-duplikat zamiast banera mówi wprost, która wersja naprawdę działa.
+if (loadGuard.duplicate) {
+  // eslint-disable-next-line no-console
+  console.warn(duplicateLoadNotice(loadGuard.activeVersion, VERSION, docLanguage()));
+} else {
+  // eslint-disable-next-line no-console
+  console.info(...consoleBanner(VERSION));
+}

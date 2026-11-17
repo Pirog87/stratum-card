@@ -28,6 +28,8 @@ import './stratum-chips-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ROW_UI_ACTIONS } from './tap-action.js';
 import { cleanDisplayStyle } from './display-config-clean.js';
+import { langOf, lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 
 interface FormSchemaItem {
   name: string;
@@ -69,30 +71,11 @@ const ICON_TAP_SCHEMA: readonly FormSchemaItem[] = [
 /** Szybkie presety akcji kliknięcia (wiersz / ikona). */
 type TapChoice = 'default' | 'popup' | 'toggle-lights' | 'none' | 'custom';
 
-const LABELS: Record<string, string> = {
-  floor_id: 'Piętro (floor)',
-  area_id: 'Pojedyncza strefa (area) — alternatywa',
-  name: 'Nazwa (override)',
-  icon: 'Ikona (override)',
-  room_tap_action: 'Akcja po kliknięciu w wiersz pomieszczenia',
-  room_icon_tap_action: 'Akcja po kliknięciu w ikonę pomieszczenia',
-};
+// Etykiety i podpowiedzi pól ha-form: `editor.card.labels` / `helpers` w słowniku.
 
-const HELPERS: Record<string, string> = {
-  floor_id:
-    'Główny tryb — karta agreguje wszystkie strefy tego piętra. Wymaga HA 2024.3+.',
-  area_id:
-    'Użyj zamiast floor_id gdy chcesz kartę na jeden pokój. Wybierz JEDNO z pól.',
-  name: 'Pozostaw puste, żeby użyć nazwy piętra/strefy z HA.',
-  icon: 'Pozostaw puste, żeby użyć ikony piętra/strefy z HA (fallback: mdi:home).',
-  room_tap_action:
-    'Dowolna akcja HA: Przejdź, Więcej info, Wywołaj usługę itd. Dotyczy wierszy i kafli; nadpisanie per pokój w sekcji „Pomieszczenia".',
-  room_icon_tap_action:
-    'Dowolna akcja HA dla samej ikony. Gdy ustawiona, klik w ikonę nie odpala akcji wiersza.',
-};
-
-const COLUMN_CHIPS: Array<{ value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6; label: string }> = [
-  { value: 'auto', label: 'Auto' },
+// `label: null` = „Auto" ze słownika; cyfry są takie same w każdym języku.
+const COLUMN_CHIPS: Array<{ value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6; label: string | null }> = [
+  { value: 'auto', label: null },
   { value: 1, label: '1' },
   { value: 2, label: '2' },
   { value: 3, label: '3' },
@@ -104,6 +87,10 @@ const COLUMN_CHIPS: Array<{ value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6; label: string
 @customElement('stratum-card-editor')
 export class StratumCardEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
+
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
+  }
 
   @state() private _config?: StratumCardConfig;
 
@@ -140,10 +127,10 @@ export class StratumCardEditor extends LitElement {
   }
 
   private _computeLabel = (schema: FormSchemaItem): string =>
-    LABELS[schema.name] ?? schema.name;
+    lookup(editorMessages(this.hass).card.labels, schema.name) ?? schema.name;
 
   private _computeHelper = (schema: FormSchemaItem): string =>
-    HELPERS[schema.name] ?? '';
+    lookup(editorMessages(this.hass).card.helpers, schema.name) ?? '';
 
   private _valueChanged(ev: CustomEvent<{ value: StratumCardConfig }>): void {
     ev.stopPropagation();
@@ -434,9 +421,9 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:cog-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Ustawienia ogólne</h3>
+            <h3>${this._t('editor.card.base')}</h3>
             <p class="stratum-panel-hint">
-              Piętro lub strefa, nagłówek karty, layout, auto-zwijanie.
+              ${this._t('editor.card.base_hint')}
             </p>
           </div>
         </summary>
@@ -460,7 +447,7 @@ export class StratumCardEditor extends LitElement {
           ></ha-form>
 
           <div class="stratum-group">
-            <label class="stratum-group-label">Domyślna forma pozycji</label>
+            <label class="stratum-group-label">${this._t('editor.card.display')}</label>
             <div class="stratum-chip-row">
               <button
                 type="button"
@@ -468,7 +455,7 @@ export class StratumCardEditor extends LitElement {
                 @click=${() => this._onRoomsDisplay('row')}
               >
                 <ha-icon .icon=${'mdi:format-list-bulleted'}></ha-icon>
-                <span>Wiersz</span>
+                <span>${this._t('editor.card.display_row')}</span>
               </button>
               <button
                 type="button"
@@ -476,16 +463,16 @@ export class StratumCardEditor extends LitElement {
                 @click=${() => this._onRoomsDisplay('tile')}
               >
                 <ha-icon .icon=${'mdi:view-grid-outline'}></ha-icon>
-                <span>Kafel</span>
+                <span>${this._t('editor.card.display_tile')}</span>
               </button>
             </div>
             <p class="stratum-group-hint">
-              Możesz nadpisać per pomieszczenie w sekcji „Pomieszczenia".
+              ${this._t('editor.card.display_hint')}
             </p>
           </div>
 
           <div class="stratum-group">
-            <label class="stratum-group-label">Kafle — liczba kolumn</label>
+            <label class="stratum-group-label">${this._t('editor.card.tile_columns')}</label>
             <div class="stratum-chip-row">
               ${COLUMN_CHIPS.map(
                 (c) => html`<button
@@ -496,24 +483,23 @@ export class StratumCardEditor extends LitElement {
                   ${c.value === 'auto'
                     ? html`<ha-icon .icon=${'mdi:view-dashboard-variant-outline'}></ha-icon>`
                     : nothing}
-                  <span>${c.label}</span>
+                  <span>${c.label ?? this._t('editor.card.auto')}</span>
                 </button>`,
               )}
             </div>
             <p class="stratum-group-hint">
-              Auto = auto-fill (dostosowuje liczbę kolumn do szerokości).
-              Cyfra = sztywno N kolumn, szerokość kafli dzieli się równo.
+              ${this._t('editor.card.tile_columns_hint')}
             </p>
           </div>
 
           <div class="stratum-group">
-            <label class="stratum-group-label">Kafle scen — rozmiar (globalnie)</label>
+            <label class="stratum-group-label">${this._t('editor.card.scene_size')}</label>
             <div class="stratum-chip-row">
               ${(
                 [
-                  { value: 'sm', label: 'Mały' },
-                  { value: 'md', label: 'Średni' },
-                  { value: 'lg', label: 'Duży' },
+                  { value: 'sm', label: this._t('editor.header.size_sm') },
+                  { value: 'md', label: this._t('editor.header.size_md') },
+                  { value: 'lg', label: this._t('editor.header.size_lg') },
                 ] as const
               ).map(
                 (c) => html`<button
@@ -526,17 +512,16 @@ export class StratumCardEditor extends LitElement {
               )}
             </div>
             <p class="stratum-group-hint">
-              Rozmiar kafli scen w popupach wszystkich pomieszczeń. Nadpisujesz
-              per pomieszczenie w edycji pokoju → Sceny → „Rozmiar tile".
+              ${this._t('editor.card.scene_size_hint')}
             </p>
           </div>
 
           <div class="stratum-group">
-            <label class="stratum-group-label">Kafle scen — kolumny (globalnie)</label>
+            <label class="stratum-group-label">${this._t('editor.card.scene_columns')}</label>
             <div class="stratum-chip-row">
               ${(
                 [
-                  { value: 'auto', label: 'Auto' },
+                  { value: 'auto', label: this._t('editor.card.auto') },
                   { value: 1, label: '1' },
                   { value: 2, label: '2' },
                   { value: 3, label: '3' },
@@ -555,21 +540,19 @@ export class StratumCardEditor extends LitElement {
               )}
             </div>
             <p class="stratum-group-hint">
-              Liczba kafli scen w rzędzie w popupach pomieszczeń. Auto =
-              responsywnie do szerokości. Nadpisujesz per pomieszczenie w
-              edycji pokoju → Sceny → „Kolumny".
+              ${this._t('editor.card.scene_columns_hint')}
             </p>
           </div>
 
           <div class="stratum-group">
-            <label class="stratum-group-label">Kafle scen — gradient (bez grafiki)</label>
+            <label class="stratum-group-label">${this._t('editor.card.scene_gradient')}</label>
             <div class="stratum-chip-row">
               ${(
                 [
-                  { value: 'mesh', label: 'Mgławica' },
-                  { value: 'linear', label: 'Ukos' },
-                  { value: 'glow', label: 'Poświata' },
-                  { value: 'horizon', label: 'Horyzont' },
+                  { value: 'mesh', label: this._t('editor.card.grad_mesh') },
+                  { value: 'linear', label: this._t('editor.scene.grad_linear') },
+                  { value: 'glow', label: this._t('editor.scene.grad_glow') },
+                  { value: 'horizon', label: this._t('editor.scene.grad_horizon') },
                 ] as const
               ).map(
                 (c) => html`<button
@@ -582,16 +565,14 @@ export class StratumCardEditor extends LitElement {
               )}
             </div>
             <p class="stratum-group-hint">
-              Styl mieszania kolorów sceny na kaflach bez własnej grafiki.
-              Mgławica = rozmyte plamy jak w aplikacji Hue. Nadpisujesz per
-              pomieszczenie w edycji pokoju → Sceny.
+              ${this._t('editor.card.scene_gradient_hint')}
             </p>
           </div>
 
           <div class="stratum-slider-row">
-            <label class="stratum-slider-label">Auto-zwijanie po</label>
+            <label class="stratum-slider-label">${this._t('editor.card.auto_collapse')}</label>
             <div class="stratum-slider-value">
-              ${autoCollapse === 0 ? 'wyłączone' : `${autoCollapse} s`}
+              ${autoCollapse === 0 ? this._t('editor.card.auto_collapse_off') : `${autoCollapse} s`}
             </div>
             <input
               type="range"
@@ -604,9 +585,7 @@ export class StratumCardEditor extends LitElement {
             />
           </div>
           <p class="stratum-group-hint">
-            Karta zwija się sama przy wyjściu z widoku i wygaszeniu ekranu
-            (mechanizm sesyjny) — timer jest opcjonalnym dodatkiem, np. dla
-            tabletu ściennego. „Wyłączone" = tylko mechanizm sesyjny.
+            ${this._t('editor.card.auto_collapse_hint')}
           </p>
 
           <div class="stratum-toggles-row">
@@ -616,7 +595,7 @@ export class StratumCardEditor extends LitElement {
                 .checked=${cfg.expanded === true}
                 @change=${(ev: Event) => this._onToggleChange('expanded', ev)}
               />
-              <span>Rozwinięta domyślnie</span>
+              <span>${this._t('editor.card.expanded')}</span>
             </label>
             <label class="stratum-toggle">
               <input
@@ -624,7 +603,7 @@ export class StratumCardEditor extends LitElement {
                 .checked=${cfg.debug === true}
                 @change=${(ev: Event) => this._onToggleChange('debug', ev)}
               />
-              <span>Debug log w konsoli</span>
+              <span>${this._t('editor.card.debug')}</span>
             </label>
           </div>
         </div>
@@ -670,11 +649,21 @@ export class StratumCardEditor extends LitElement {
     const chips: Array<{ v: TapChoice; l: string; icon?: string }> = [
       { v: 'default', l: defaultLabel },
       ...(key === 'room_icon_tap_action'
-        ? [{ v: 'popup' as TapChoice, l: 'Popup pokoju', icon: 'mdi:dock-window' }]
+        ? [
+            {
+              v: 'popup' as TapChoice,
+              l: this._t('editor.card.tap_popup'),
+              icon: 'mdi:dock-window',
+            },
+          ]
         : []),
-      { v: 'toggle-lights', l: 'Przełącz światła', icon: 'mdi:lightbulb-multiple-outline' },
-      { v: 'none', l: 'Nic', icon: 'mdi:cancel' },
-      { v: 'custom', l: 'Niestandardowa…', icon: 'mdi:tune' },
+      {
+        v: 'toggle-lights',
+        l: this._t('editor.card.tap_toggle_lights'),
+        icon: 'mdi:lightbulb-multiple-outline',
+      },
+      { v: 'none', l: this._t('editor.card.tap_none'), icon: 'mdi:cancel' },
+      { v: 'custom', l: this._t('editor.card.tap_custom'), icon: 'mdi:tune' },
     ];
     return html`
       <div class="stratum-group">
@@ -730,15 +719,15 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:page-layout-header'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Belka nagłówka</h3>
+            <h3>${this._t('editor.card.header')}</h3>
             <p class="stratum-panel-hint">
-              Wygląd górnej belki: rozmiar/kolor tytułu, ikona area, padding,
-              chevron, akcentowy pasek z lewej.
+              ${this._t('editor.card.header_hint')}
             </p>
           </div>
         </summary>
         <div class="stratum-panel-body">
           <stratum-header-editor
+            .uiLang=${langOf(this.hass)}
             .config=${this._config.header ?? {}}
             @header-config-changed=${this._headerChanged}
           ></stratum-header-editor>
@@ -755,10 +744,9 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:dock-top'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Belka popupu pomieszczenia</h3>
+            <h3>${this._t('editor.card.popup_header')}</h3>
             <p class="stratum-panel-hint">
-              Nagłówek popupu: styl, tytuł, ikona, pozycja chipów, podtytuł,
-              separator, akcent. Obowiązuje we wszystkich pokojach.
+              ${this._t('editor.card.popup_header_hint')}
             </p>
           </div>
         </summary>
@@ -782,10 +770,9 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:label-multiple-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Chipy w nagłówku</h3>
+            <h3>${this._t('editor.card.chips')}</h3>
             <p class="stratum-panel-hint">
-              Skróty po prawej stronie tytułu. Wbudowane: lights / motion /
-              okna / drzwi. Możesz dodać encję, filtr, albo template.
+              ${this._t('editor.card.chips_hint')}
             </p>
           </div>
         </summary>
@@ -804,14 +791,11 @@ export class StratumCardEditor extends LitElement {
                 @change=${(ev: Event) =>
                   this._onToggleChange('unavailable_chip', ev)}
               />
-              <span>Chip „niedostępne urządzenia"</span>
+              <span>${this._t('editor.card.unavailable_chip')}</span>
             </label>
           </div>
           <p class="stratum-panel-hint">
-            Szary licznik encji w stanie „unavailable", klik otwiera ich listę.
-            Pomija encje ukryte, wyłączone i diagnostyczne. Domyślnie
-            wyłączony — to widok diagnostyczny, a nagłówek ma pokazywać stan
-            domu, nie stan integracji. Włącz, gdy chcesz mieć to na oku.
+            ${this._t('editor.card.unavailable_chip_hint')}
           </p>
         </div>
       </details>
@@ -823,28 +807,28 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:format-list-bulleted'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Wygląd — Wiersz (row)</h3>
+            <h3>${this._t('editor.card.row')}</h3>
             <p class="stratum-panel-hint">
-              Konfiguracja formy kompaktowej — pola, kolory, zaokrąglenia,
-              reakcje na dotyk.
+              ${this._t('editor.card.row_hint')}
             </p>
           </div>
         </summary>
         <div class="stratum-panel-body">
           ${this._renderTapGroup(
             'room_tap_action',
-            'Klik na wiersz',
-            'Popup pokoju (domyślnie)',
-            'Reakcja na kliknięcie całego wiersza. Dotyczy też kafli. Per pokój nadpiszesz w sekcji „Pomieszczenia".',
+            this._t('editor.card.row_tap'),
+            this._t('editor.card.row_tap_default'),
+            this._t('editor.card.row_tap_hint'),
           )}
           ${this._renderTapGroup(
             'room_icon_tap_action',
-            'Klik na ikonę',
-            'Tak jak wiersz (domyślnie)',
-            'Osobna reakcja dla stadionu ikony — np. ikona otwiera popup, a wiersz przełącza światła.',
+            this._t('editor.card.icon_tap'),
+            this._t('editor.card.icon_tap_default'),
+            this._t('editor.card.icon_tap_hint'),
           )}
           <stratum-display-editor
             mode="row"
+            .uiLang=${langOf(this.hass)}
             .config=${this._effectiveRowConfig()}
             @display-config-changed=${this._rowConfigChanged}
           ></stratum-display-editor>
@@ -858,15 +842,16 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:view-grid-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Wygląd — Kafel (tile)</h3>
+            <h3>${this._t('editor.card.tile')}</h3>
             <p class="stratum-panel-hint">
-              Dodatkowo proporcje kafla, obrazek tła i pozycja ikony.
+              ${this._t('editor.card.tile_hint')}
             </p>
           </div>
         </summary>
         <div class="stratum-panel-body">
           <stratum-display-editor
             mode="tile"
+            .uiLang=${langOf(this.hass)}
             .config=${this._effectiveTileConfig()}
             @display-config-changed=${this._tileConfigChanged}
           ></stratum-display-editor>
@@ -883,10 +868,9 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:function-variant'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Warunki — styl zależny od encji</h3>
+            <h3>${this._t('editor.card.conditions')}</h3>
             <p class="stratum-panel-hint">
-              Wspólne reguły dla wiersza i kafla. Pierwsza spełniona reguła
-              wygrywa.
+              ${this._t('editor.card.conditions_hint')}
             </p>
           </div>
         </summary>
@@ -909,10 +893,9 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:view-list-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Pomieszczenia</h3>
+            <h3>${this._t('editor.card.rooms')}</h3>
             <p class="stratum-panel-hint">
-              Zaznacz, posortuj, dostosuj widok popup per pomieszczenie.
-              Brak zaznaczeń = auto-discover.
+              ${this._t('editor.card.rooms_hint')}
             </p>
           </div>
         </summary>
@@ -937,20 +920,15 @@ export class StratumCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Sceny</h3>
+            <h3>${this._t('editor.card.scenes')}</h3>
             <p class="stratum-panel-hint">
-              Pasek scen w karcie. Każda scena ma obrazek (lub preset),
-              własną ikonę i akcję.
+              ${this._t('editor.card.scenes_hint')}
             </p>
           </div>
         </summary>
         <div class="stratum-panel-body">
           <p class="stratum-group-hint">
-            Pasek pokazuje się między nagłówkiem a listą pomieszczeń
-            (pozycja „Na górze"). Lista niżej to sceny wykryte ze WSZYSTKICH
-            pomieszczeń piętra — ukryj okiem to, czego nie chcesz, dodaj
-            separatory z nazwami pokoi albo sceny spoza piętra. Pierwsza
-            zmiana utrwala listę i włącza pasek na karcie.
+            ${this._t('editor.card.scenes_body_hint')}
           </p>
           <stratum-scene-editor
             .hass=${this.hass}

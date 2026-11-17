@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Typecheck and build
+    name: Typecheck, test and build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,11 +30,25 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Te same testy co w release.yml — bez nich czerwony test wychodził
+      # dopiero po merge'u, jako release, który po cichu się nie pojawiał.
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
 
-      - name: Verify output exists
-        run: test -f dist/stratum-card.js
+      # HACS pobiera z releasu jeden plik JS — drugi chunk (np. po dodaniu
+      # dynamicznego import() bez inlineDynamicImports) nie może przejść
+      # niezauważony, bo w releasie by go zabrakło.
+      - name: Verify single-file output
+        run: |
+          test -f dist/stratum-card.js
+          extra=$(find dist -type f ! -name stratum-card.js)
+          if [ -n "$extra" ]; then
+            echo "Nieoczekiwane pliki w dist/: $extra"
+            exit 1
+          fi
 
   hacs:
     name: HACS metadata validation

@@ -21,52 +21,38 @@ import {
 } from './chip-editor-ops.js';
 import { removeAt, restoreRemoved } from './editor-list-ops.js';
 import { EditorUndoController, renderUndoBar } from './editor-undo.js';
+import { lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 
 interface ChipQuickPick {
   type: ChipConfig['type'];
-  label: string;
+  /** Klucz słownika (src/localize/). */
+  label: UiKey;
   icon: string;
   /** Subtype tylko dla built-in. */
   builtin?: BuiltInChipType;
 }
 
 const QUICK_PICKS: ChipQuickPick[] = [
-  { type: 'lights', label: 'Światła', icon: 'mdi:lightbulb-on', builtin: 'lights' },
-  { type: 'motion', label: 'Obecność', icon: 'mdi:motion-sensor', builtin: 'motion' },
-  { type: 'occupancy', label: 'Zajętość', icon: 'mdi:account-check', builtin: 'occupancy' },
-  { type: 'windows', label: 'Okna', icon: 'mdi:window-open-variant', builtin: 'windows' },
-  { type: 'doors', label: 'Drzwi', icon: 'mdi:door-open', builtin: 'doors' },
-  { type: 'leak', label: 'Wycieki', icon: 'mdi:water-alert', builtin: 'leak' },
-  { type: 'smoke', label: 'Dym', icon: 'mdi:smoke-detector-variant', builtin: 'smoke' },
-  { type: 'gas', label: 'Gaz / CO', icon: 'mdi:gas-cylinder', builtin: 'gas' },
-  { type: 'co', label: 'Tlenek węgla', icon: 'mdi:molecule-co', builtin: 'co' },
-  { type: 'problem', label: 'Problemy', icon: 'mdi:alert-circle-outline', builtin: 'problem' },
-  { type: 'battery_low', label: 'Słabe baterie', icon: 'mdi:battery-alert-variant-outline', builtin: 'battery_low' },
-  { type: 'temperature', label: 'Temperatura', icon: 'mdi:thermometer', builtin: 'temperature' },
-  { type: 'humidity', label: 'Wilgotność', icon: 'mdi:water-percent', builtin: 'humidity' },
-  { type: 'entity', label: 'Encja', icon: 'mdi:pencil-outline' },
-  { type: 'filter', label: 'Filtr', icon: 'mdi:filter-variant' },
-  { type: 'template', label: 'Template', icon: 'mdi:code-braces' },
+  { type: 'lights', label: 'editor.chips.picks.lights', icon: 'mdi:lightbulb-on', builtin: 'lights' },
+  { type: 'motion', label: 'editor.chips.picks.motion', icon: 'mdi:motion-sensor', builtin: 'motion' },
+  { type: 'occupancy', label: 'editor.chips.picks.occupancy', icon: 'mdi:account-check', builtin: 'occupancy' },
+  { type: 'windows', label: 'editor.chips.picks.windows', icon: 'mdi:window-open-variant', builtin: 'windows' },
+  { type: 'doors', label: 'editor.chips.picks.doors', icon: 'mdi:door-open', builtin: 'doors' },
+  { type: 'leak', label: 'editor.chips.picks.leak', icon: 'mdi:water-alert', builtin: 'leak' },
+  { type: 'smoke', label: 'editor.chips.picks.smoke', icon: 'mdi:smoke-detector-variant', builtin: 'smoke' },
+  { type: 'gas', label: 'editor.chips.picks.gas', icon: 'mdi:gas-cylinder', builtin: 'gas' },
+  { type: 'co', label: 'editor.chips.picks.co', icon: 'mdi:molecule-co', builtin: 'co' },
+  { type: 'problem', label: 'editor.chips.picks.problem', icon: 'mdi:alert-circle-outline', builtin: 'problem' },
+  { type: 'battery_low', label: 'editor.chips.picks.battery_low', icon: 'mdi:battery-alert-variant-outline', builtin: 'battery_low' },
+  { type: 'temperature', label: 'editor.chips.picks.temperature', icon: 'mdi:thermometer', builtin: 'temperature' },
+  { type: 'humidity', label: 'editor.chips.picks.humidity', icon: 'mdi:water-percent', builtin: 'humidity' },
+  { type: 'entity', label: 'editor.chips.picks.entity', icon: 'mdi:pencil-outline' },
+  { type: 'filter', label: 'editor.chips.picks.filter', icon: 'mdi:filter-variant' },
+  { type: 'template', label: 'editor.chips.picks.template', icon: 'mdi:code-braces' },
 ];
 
-const CHIP_LABELS: Record<string, string> = {
-  lights: 'Światła',
-  motion: 'Obecność (motion)',
-  occupancy: 'Zajętość (occupancy)',
-  windows: 'Okna',
-  doors: 'Drzwi',
-  leak: 'Wycieki (moisture)',
-  smoke: 'Dym (smoke)',
-  gas: 'Gaz / CO (gas + carbon_monoxide)',
-  co: 'Tlenek węgla (CO)',
-  problem: 'Problemy (problem + safety + tamper)',
-  battery_low: 'Słabe baterie',
-  temperature: 'Temperatura',
-  humidity: 'Wilgotność',
-  entity: 'Encja',
-  filter: 'Filtr',
-  template: 'Template',
-};
+// Tytuły wierszy chipów: grupa `editor.chips.types` słownika.
 
 const CHIP_ICONS: Record<string, string> = {
   lights: 'mdi:lightbulb-on',
@@ -176,7 +162,7 @@ export class StratumChipsEditor extends LitElement {
     else if (this._openRow > index) this._openRow -= 1;
     // Usunięcie dalej jest natychmiastowe, ale odwracalne — dlaczego nie
     // dialog potwierdzenia: patrz editor-undo.ts.
-    this._undo.offer(CHIP_LABELS[removed.type] ?? removed.type, () => {
+    this._undo.offer(this._chipLabel(removed.type), () => {
       // Usunięcie ostatniego chipa daje [], a rodzic kasuje wtedy klucz —
       // _effective() pokazuje domyślny zestaw. To nadal „nic się nie
       // zmieniło", więc wracamy dokładnie do `before`, a nie wklejamy
@@ -325,31 +311,22 @@ export class StratumChipsEditor extends LitElement {
     return common;
   }
 
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
+  }
+
+  private _chipLabel(type: string): string {
+    return lookup(editorMessages(this.hass).chips.types, type) ?? type;
+  }
+
   private _labelFor = (
     schema: { name: string },
     data?: { type?: ChipConfig['type'] },
   ): string => {
-    const map: Record<string, string> = {
-      icon: 'Ikona (override)',
-      color: 'Kolor',
-      show_when_zero: 'Pokazuj też gdy wartość 0',
-      show_last_changed: 'Czas od ostatniego wykrycia („5 min temu") zamiast licznika',
-      show_list: 'Popup z listą po kliknięciu (default ON)',
-      tap_action: 'Akcja po kliknięciu (nadpisuje listę)',
-      entity:
-        data?.type && SENSOR_CHIP_TYPES.has(data.type)
-          ? 'Sensor (puste = automatycznie z pomieszczenia)'
-          : 'Encja',
-      format: 'Format',
-      attribute: 'Atrybut',
-      suffix: 'Sufiks (np. °C)',
-      domain: 'Domena (np. light)',
-      device_class: 'Device class (np. motion)',
-      state: 'Stan aktywny (default "on")',
-      value: 'Jinja2 template',
-      active_template: 'Template aktywności (zwraca bool)',
-    };
-    return map[schema.name] ?? schema.name;
+    if (schema.name === 'entity' && data?.type && SENSOR_CHIP_TYPES.has(data.type)) {
+      return this._t('editor.chips.sensor_entity');
+    }
+    return lookup(editorMessages(this.hass).chips.labels, schema.name) ?? schema.name;
   };
 
   protected render(): TemplateResult {
@@ -360,16 +337,16 @@ export class StratumChipsEditor extends LitElement {
         ? html`<div class="defaults-hint">
             <ha-icon .icon=${'mdi:information-outline'} aria-hidden="true"></ha-icon>
             <span>
-              Pokazujemy domyślny zestaw. Rozwiń chip, usuń go albo
-              <strong>Dodaj chip</strong> żeby dostosować — po pierwszej
-              zmianie konfiguracja się „materializuje" i zapisze do YAML-a.
+              ${this._t('editor.chips.defaults_hint_1')}
+              <strong>${this._t('editor.chips.defaults_hint_add')}</strong>
+              ${this._t('editor.chips.defaults_hint_2')}
             </span>
           </div>`
         : nothing}
 
       <div class="stratum-list">${effective.map((c, i) => this._renderChipRow(c, i, effective.length))}</div>
 
-      ${renderUndoBar(this._undo)}
+      ${renderUndoBar(this._undo, this.hass)}
 
       ${this._showAddMenu
         ? html`<div class="add-menu">
@@ -380,7 +357,7 @@ export class StratumChipsEditor extends LitElement {
                 @click=${() => this._add(p)}
               >
                 <ha-icon .icon=${p.icon} aria-hidden="true"></ha-icon>
-                <span>${p.label}</span>
+                <span>${this._t(p.label)}</span>
               </button>`,
             )}
             <button
@@ -389,7 +366,7 @@ export class StratumChipsEditor extends LitElement {
               @click=${() => (this._showAddMenu = false)}
             >
               <ha-icon .icon=${'mdi:close'} aria-hidden="true"></ha-icon>
-              Anuluj
+              ${this._t('editor.chips.cancel')}
             </button>
           </div>`
         : html`<button
@@ -398,7 +375,7 @@ export class StratumChipsEditor extends LitElement {
             @click=${() => (this._showAddMenu = true)}
           >
             <ha-icon .icon=${'mdi:plus-circle-outline'} aria-hidden="true"></ha-icon>
-            Dodaj chip
+            ${this._t('editor.chips.add')}
           </button>`}
 
       ${!showingDefaults
@@ -406,10 +383,10 @@ export class StratumChipsEditor extends LitElement {
             type="button"
             class="reset-btn"
             @click=${() => this._emit([])}
-            title="Przywróć domyślny zestaw"
+            title=${this._t('editor.chips.reset_title')}
           >
             <ha-icon .icon=${'mdi:restore'} aria-hidden="true"></ha-icon>
-            Przywróć domyślne
+            ${this._t('editor.chips.reset')}
           </button>`
         : nothing}
     `;
@@ -417,7 +394,7 @@ export class StratumChipsEditor extends LitElement {
 
   private _renderChipRow(chip: ChipConfig, idx: number, total: number): TemplateResult {
     const isOpen = this._openRow === idx;
-    const label = CHIP_LABELS[chip.type] ?? chip.type;
+    const label = this._chipLabel(chip.type);
     const icon = chip.icon ?? CHIP_ICONS[chip.type] ?? 'mdi:label-outline';
     const summary =
       chip.type === 'entity'
@@ -430,7 +407,7 @@ export class StratumChipsEditor extends LitElement {
           }`
         : chip.type === 'template'
         ? 'Jinja2'
-        : 'built-in';
+        : this._t('editor.chips.builtin');
     const subId = `chip-sub-${idx}`;
     // Nagłówek wiersza to prawdziwy <button> (klawiatura, czytnik ekranu,
     // aria-expanded) zamiast klikalnego diva — i dlatego osobny ołówek
@@ -462,8 +439,8 @@ export class StratumChipsEditor extends LitElement {
             <button
               type="button"
               class="stratum-icon-btn"
-              title="W górę"
-              aria-label=${`${label}: w górę`}
+              title=${this._t('editor.chips.up')}
+              aria-label=${this._t('editor.chips.up_named', { label })}
               ?disabled=${idx === 0}
               @click=${() => this._move(idx, -1)}
             >
@@ -472,8 +449,8 @@ export class StratumChipsEditor extends LitElement {
             <button
               type="button"
               class="stratum-icon-btn"
-              title="W dół"
-              aria-label=${`${label}: w dół`}
+              title=${this._t('editor.chips.down')}
+              aria-label=${this._t('editor.chips.down_named', { label })}
               ?disabled=${idx >= total - 1}
               @click=${() => this._move(idx, 1)}
             >
@@ -482,8 +459,8 @@ export class StratumChipsEditor extends LitElement {
             <button
               type="button"
               class="stratum-icon-btn danger"
-              title="Usuń"
-              aria-label=${`Usuń chip ${label}`}
+              title=${this._t('editor.common.remove')}
+              aria-label=${this._t('editor.chips.remove_named', { label })}
               @click=${() => this._remove(idx)}
             >
               <ha-icon .icon=${'mdi:delete-outline'} aria-hidden="true"></ha-icon>

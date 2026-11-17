@@ -22,6 +22,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 import type { RowDisplayConfig, RowPreset, TileField } from './types.js';
 import { resolveColor } from './colors.js';
+import { lightsSwitchGlowStyle } from './lights-switch-glow.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
 import {
   ALARM_ICONS,
@@ -32,6 +33,8 @@ import {
   topAlarmField,
   withoutBadgeFields,
 } from './row-fields.js';
+import { iconActionLabel } from './icon-action-label.js';
+import { localize } from './localize/localize.js';
 
 // Kolejność wyświetlania pól = kolejność listy `fields` w configu
 // (od v1.85 zmienialna strzałkami w edytorze).
@@ -153,8 +156,20 @@ export class StratumCardRoomRow extends LitElement {
   @property({ type: Boolean, attribute: 'icon-tappable', reflect: true })
   public iconTappable = false;
 
+  /**
+   * Typ akcji ikony (`action` z room_icon_tap_action) — tylko do nazwy
+   * dostępnej stadionu, żeby czytnik mówił, co zrobi Enter.
+   */
+  @property({ attribute: false }) public iconAction?: string;
+
   /** Całe pomieszczenie niedostępne (wszystkie encje unavailable). */
   @property({ type: Boolean }) public offline = false;
+
+  /**
+   * Język UI (`langOf(hass)` z karty) — wiersz nie dostaje całego `hass`,
+   * a teksty (plakietka, podpisy, aria) muszą iść za profilem użytkownika.
+   */
+  @property({ attribute: false }) public uiLang?: string;
 
   /**
    * Poziom (%) nadpisujący wypełnienie: pozycja palca w trakcie gestu, a po
@@ -288,6 +303,26 @@ export class StratumCardRoomRow extends LitElement {
     if (!this.iconTappable) return; // klik bąbelkuje do akcji wiersza
     ev.stopPropagation();
     if (this._clickSuppressed()) return;
+    this._emitIconTap();
+  };
+
+  /**
+   * Osobna akcja ikony (room_icon_tap_action — np. ikona → popup, wiersz →
+   * światła) była dostępna tylko palcem: stadion ikony nie miał fokusa ani
+   * obsługi klawiszy. Enter/Spacja na nim robią to samo, co tapnięcie.
+   * Wiersz nie przechwyci tych klawiszy — jego `_onKey` reaguje tylko na
+   * zdarzenia z samego wiersza; preventDefault blokuje przewinięcie strony
+   * Spacją.
+   */
+  private _onIconKey = (ev: KeyboardEvent): void => {
+    if (!this.iconTappable) return;
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    this._emitIconTap();
+  };
+
+  private _emitIconTap(): void {
     this.dispatchEvent(
       new CustomEvent('icon-tap', {
         detail: { area_id: this.areaId, area_name: this.name },
@@ -295,7 +330,7 @@ export class StratumCardRoomRow extends LitElement {
         composed: true,
       }),
     );
-  };
+  }
 
   /** Czy suwak gestem jest włączony dla tej konfiguracji. */
   private get _sliderEnabled(): boolean {
@@ -777,6 +812,7 @@ export class StratumCardRoomRow extends LitElement {
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
+        aria-labelledby=${this.iconTappable ? 'row-main row-info' : nothing}
         data-preset=${preset}
         data-hover=${hoverEffect}
         style=${styles}
@@ -792,16 +828,31 @@ export class StratumCardRoomRow extends LitElement {
           ? html`<span class="fill" aria-hidden="true"></span>`
           : nothing}
         ${preset === 'rail' ? html`<span class="bar" aria-hidden="true"></span>` : nothing}
+        <!-- Klikalna ikona ma własną nazwę („Kuchnia: przełącz światła").
+             Wiersz z role=button liczył nazwę z treści, więc ta etykieta
+             wchodziła na początek nazwy WIERSZA, a Enter na wierszu robi co
+             innego (otwiera popup). Stąd aria-labelledby na wierszu: nazwa
+             i pola, bez ikony — tak samo jak bez klikalnej ikony. -->
         ${showIcon
-          ? html`<span class="iconwrap" @click=${this._onIconClick}>
+          ? html`<span
+              class="iconwrap"
+              role=${this.iconTappable ? 'button' : nothing}
+              tabindex=${this.iconTappable ? '0' : nothing}
+              aria-label=${this.iconTappable
+                ? iconActionLabel(this.name, this.iconAction, this.uiLang)
+                : nothing}
+              @click=${this._onIconClick}
+              @keydown=${this._onIconKey}
+            >
               <ha-icon
                 class="icon ${iconAnim ? `icon-anim-${iconAnim}` : ''}"
+                aria-hidden="true"
                 .icon=${effectiveIcon}
               ></ha-icon>
             </span>`
           : nothing}
         ${twoLine
-          ? html`<span class="body">
+          ? html`<span class="body" id="row-main">
               ${showName
                 ? html`<span class="name">${this.name}</span>`
                 : nothing}
@@ -822,18 +873,22 @@ export class StratumCardRoomRow extends LitElement {
                 : nothing}
             </span>`
           : showName
-          ? html`<span class="name">${this.name}</span>`
-          : html`<span class="name-spacer"></span>`}
-        <div class="info">
+          ? html`<span class="name" id="row-main">${this.name}</span>`
+          : html`<span class="name-spacer" id="row-main"></span>`}
+        <div class="info" id="row-info">
           ${this.offline
-            ? html`<span class="off-pill">offline</span>`
+            ? html`<span class="off-pill" title=${localize(this.uiLang, 'common.offline')}
+                ><span class="off-text">${localize(this.uiLang, 'common.offline')}</span></span
+              >`
             : nothing}
           ${badge ? this._renderAlarmBadge() : nothing}
           ${(twoLine ? split!.right : single!.shown).map((f) => this._renderField(f))}
           ${!hideMore && (twoLine ? split!.hiddenCount : single!.hiddenCount) > 0
             ? html`<span
                 class="field more"
-                title="${twoLine ? split!.hiddenCount : single!.hiddenCount} więcej"
+                title=${localize(this.uiLang, 'row.more_hidden', {
+                  count: twoLine ? split!.hiddenCount : single!.hiddenCount,
+                })}
                 >+${twoLine ? split!.hiddenCount : single!.hiddenCount}</span
               >`
             : nothing}
@@ -858,8 +913,8 @@ export class StratumCardRoomRow extends LitElement {
     return html`<button
       class="alarm-badge"
       part="alarm-badge"
-      title="Pokaż aktywne alarmy"
-      aria-label="Aktywne alarmy: ${this.alarmsCount}. Pokaż listę"
+      title=${localize(this.uiLang, 'common.show_alarms')}
+      aria-label=${localize(this.uiLang, 'common.alarms_aria', { count: this.alarmsCount })}
       @click=${this._onAlarmBadge}
       @pointerdown=${(pev: Event) => pev.stopPropagation()}
     >
@@ -898,7 +953,7 @@ export class StratumCardRoomRow extends LitElement {
         return html`<ha-icon
           class="field motion"
           .icon=${'mdi:motion-sensor'}
-          title="Ktoś jest w pomieszczeniu"
+          title=${localize(this.uiLang, 'row.motion')}
         ></ha-icon>`;
       case 'lights': {
         if (!this.lightsSwitch) {
@@ -908,26 +963,17 @@ export class StratumCardRoomRow extends LitElement {
           </span>`;
         }
         // H4: mini-switch z czystą gałką; licznik na torze, poświata
-        // w obu stanach — intensywność z configu (inline, bo alpha cieni
-        // nie da się prosto sterować var-ami).
+        // w obu stanach — intensywność z configu. Inline idą tylko krycia
+        // warstw (--lt-g1…3), kolor poświaty jest w CSS z tokenu świateł
+        // (lights-switch-glow.ts).
         const on = this.lightsOn > 0;
-        const f =
-          Math.max(0, Math.min(100, on ? this.lightsGlowOn : this.lightsGlowOff)) /
-          100;
-        const glow =
-          f <= 0
-            ? ''
-            : on
-            ? `box-shadow: 0 0 5px 1px rgba(255,224,130,${(0.95 * f).toFixed(2)}), 0 0 16px 5px rgba(255,193,7,${(0.6 * f).toFixed(2)}), 0 0 30px 10px rgba(255,193,7,${(0.25 * f).toFixed(2)});`
-            : `box-shadow: 0 0 5px 1px rgba(255,213,79,${(0.65 * f).toFixed(2)}), 0 0 14px 5px rgba(255,193,7,${(0.35 * f).toFixed(2)});`;
+        const glow = lightsSwitchGlowStyle(on, this.lightsGlowOn, this.lightsGlowOff);
         return html`<button
-          class="field lights-toggle ${on ? 'on' : ''}"
+          class="field lights-toggle ${on ? 'on' : ''} ${glow ? 'glow' : ''}"
           style=${glow}
           role="switch"
           aria-checked=${on}
-          title=${on
-            ? 'Wyłącz wszystkie światła w pomieszczeniu'
-            : 'Włącz wszystkie światła w pomieszczeniu'}
+          title=${localize(this.uiLang, on ? 'common.lights_all_off' : 'common.lights_all_on')}
           @click=${this._onLightsSwitch}
           @pointerdown=${(pev: Event) => pev.stopPropagation()}
         >
@@ -978,6 +1024,26 @@ export class StratumCardRoomRow extends LitElement {
          --stratum-chip-leak-color; ten alias tylko zbiera łańcuch fallbacku,
          żeby reguły alarmu nie powtarzały go (i hexa) w każdym miejscu. */
       --stratum-alarm: var(--stratum-chip-leak-color, var(--error-color, #f44336));
+      /* Kolor przełącznika świateł (tor, poświata, licznik) — alias o tym
+         samym celu co --stratum-alarm. Definiowany tu, na wierszu, a nie
+         brany z --stratum-lights karty: nadpisanie
+         --stratum-chip-lights-color w card-mod na ha-card musi dojść także
+         do poświaty, a token karty rozwiązuje się wyżej, na :host karty. */
+      --stratum-row-lights: var(--stratum-chip-lights-color, #ffc107);
+      /* Rdzeń poświaty: kolor świateł rozjaśniony w stronę bieli (dawne
+         rgba(255,224,130) przy domyślnym bursztynie). */
+      --stratum-row-lights-core: color-mix(
+        in srgb,
+        var(--stratum-row-lights) 55%,
+        var(--stratum-ink-tint, #fff)
+      );
+      /* Licznik na zapalonym torze: ten sam odcień przyciemniony w stronę
+         czerni (dawne #2a1c05). Przy domyślnym bursztynie ~8:1. */
+      --stratum-row-lights-ink: color-mix(
+        in srgb,
+        var(--stratum-row-lights) 25%,
+        var(--stratum-ink-shade, #000)
+      );
     }
 
     /* ====== BAZA wspólna dla presetów ====== */
@@ -1001,20 +1067,36 @@ export class StratumCardRoomRow extends LitElement {
       cursor: pointer;
     }
 
-    :host([clickable]) .row:active {
-      transform: scale(var(--stratum-room-row-press-scale, 0.98));
-    }
+    /* :active wiersza stoi niżej, za regułami hover — patrz „press". */
 
     :host([icon-tappable]) .iconwrap {
       cursor: pointer;
+      /* scale, nie transform: transform stadionu niesie już przesunięcie
+         z configu (iconbg-offset), a osobna właściwość składa się z nim
+         zamiast je nadpisywać. */
+      transition: background 0.15s ease, color 0.15s ease, scale 0.1s ease;
     }
 
-    :host([icon-tappable]) .iconwrap:hover .icon {
-      filter: brightness(1.25);
+    @media (hover: hover) {
+      :host([icon-tappable]) .iconwrap:hover .icon {
+        filter: brightness(1.25);
+      }
+    }
+
+    /* Obrys do środka: wiersz ma overflow: hidden, a stadion ikony stoi
+       przy jego krawędzi — obrys na zewnątrz byłby ucięty. */
+    :host([icon-tappable]) .iconwrap:focus-visible {
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
+      outline-offset: -2px;
+    }
+
+    /* §3: 0.96–0.98 — tak jak pozostałe kontrolki tego wydania. */
+    :host([icon-tappable]) .iconwrap:active {
+      scale: 0.96;
     }
 
     :host([clickable]) .row:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: -2px;
     }
 
@@ -1413,16 +1495,70 @@ export class StratumCardRoomRow extends LitElement {
       background: rgba(128, 132, 140, 0.9);
     }
 
-    /* ====== hover ====== */
-    :host([clickable]) .row[data-hover='subtle']:hover {
-      background-color: var(--stratum-card-room-hover, rgba(255, 255, 255, 0.07));
+    /* „niedostępne" jest o ~35 px szersze od dawnego „offline", a .info się
+       nie kurczy — każdy piksel pigułki szedł z nazwy pokoju, jedynego
+       tekstu, po którym rozpoznać wyłączony wiersz (300 px: nazwa 58 px).
+       W wąskim wierszu pigułka zostaje samą kropką, a słowo wychodzi tylko
+       z widoku: czytnik ekranu dalej je czyta, kursor dostaje title. Stan
+       i tak niesie przygaszony wiersz i przekreślona ikona. Kontener na
+       .row, nie na :host — rozmiar hosta wyznacza karta. */
+    .row {
+      container: stratum-row / inline-size;
     }
-    :host([clickable]) .row[data-hover='lift']:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
+    @container stratum-row (max-width: 360px) {
+      .off-pill {
+        padding: 3px 7px;
+      }
+      .off-text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
     }
-    :host([clickable]) .row[data-hover='glow']:hover {
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #ff9b42) 50%, transparent);
+
+    /* ====== hover ======
+       Tylko przy prawdziwym kursorze. Na dotyku :hover zostaje na ostatnio
+       tkniętym wierszu, aż palec dotknie czegoś innego — po zamknięciu
+       popupu wiersz wisiał podświetlony (a przy „lift" uniesiony z cieniem).
+       (hover: hover) pyta o urządzenie, nie o rozmiar — dlatego media
+       query, jak prefers-reduced-motion. */
+    @media (hover: hover) {
+      :host([clickable]) .row[data-hover='subtle']:hover {
+        background-color: var(--stratum-card-room-hover, var(--stratum-surface-2));
+      }
+      :host([clickable]) .row[data-hover='lift']:hover {
+        transform: translateY(-1px);
+        /* Cień z tokenu „w stronę czerni" (jak stadion i chipy listy),
+           nie z literału — motyw może go przemalować. Wiersz żyje zawsze
+           w stratum-card albo stratum-room-card, które token definiują. */
+        box-shadow: 0 3px 10px color-mix(in srgb, var(--stratum-ink-shade) 14%, transparent);
+      }
+      :host([clickable]) .row[data-hover='glow']:hover {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 50%, transparent);
+      }
+    }
+
+    /* ====== press ======
+       Za hoverem i z tą samą specyficznością ([data-hover]): wcześniej
+       :active stało wyżej i było słabsze niż „lift" — wciśnięty wiersz
+       dostawał uniesienie zamiast pomniejszenia, a feedback dotyku znikał. */
+    :host([clickable]) .row:active,
+    :host([clickable]) .row[data-hover]:active {
+      transform: scale(var(--stratum-room-row-press-scale, 0.98));
+    }
+    /* Wciśnięcie przełącznika, odznaki albo ikony z własną akcją to
+       feedback TEJ kontrolki — cały wiersz nie może się wtedy kurczyć, bo
+       wygląda, jakby palec trafił w popup. Osobna reguła: przeglądarka bez
+       :has() odrzuci tylko ją, a zwykły feedback wiersza zostanie. */
+    :host([clickable]) .row[data-hover]:active:has(
+        .lights-toggle:active,
+        .alarm-badge:active,
+        .iconwrap[role='button']:active
+      ) {
+      transform: none;
     }
 
     /* ====== Animacje (z reguł warunkowych) ====== */
@@ -1480,8 +1616,14 @@ export class StratumCardRoomRow extends LitElement {
       .row.anim-pulse, .row.anim-blink, .row.anim-shake, .row.anim-glow, .row.anim-bounce,
       .icon.icon-anim-spin, .icon.icon-anim-pulse, .icon.icon-anim-blink,
       .icon.icon-anim-shake, .icon.icon-anim-bounce { animation: none; }
+      /* [data-hover] — ta sama specyficzność co reguły hover/press wyżej;
+         samo .row:hover przegrywało z „lift" i wiersz dalej skakał. */
       :host([clickable]) .row:hover,
-      :host([clickable]) .row:active { transform: none; }
+      :host([clickable]) .row:active,
+      :host([clickable]) .row[data-hover]:hover,
+      :host([clickable]) .row[data-hover]:active { transform: none; }
+      :host([icon-tappable]) .iconwrap { transition: none; }
+      :host([icon-tappable]) .iconwrap:active { scale: none; }
     }
 
     /* ====== Pola statusów ====== */
@@ -1515,11 +1657,14 @@ export class StratumCardRoomRow extends LitElement {
       flex-shrink: 0;
       transition: background 0.12s ease, transform 0.1s ease;
     }
-    .alarm-badge:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--stratum-alarm) 28%, transparent);
+    /* Bez lepkiego hovera na dotyku — jak hover wiersza. */
+    @media (hover: hover) {
+      .alarm-badge:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--stratum-alarm) 28%, transparent);
+      }
     }
     .alarm-badge:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: 2px;
     }
     .alarm-badge:active {
@@ -1582,8 +1727,31 @@ export class StratumCardRoomRow extends LitElement {
       padding: 0;
       cursor: pointer;
       background: var(--stratum-surface-4);
-      transition: background 0.15s ease, box-shadow 0.2s ease;
+      transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.1s ease;
       flex-shrink: 0;
+    }
+    /* Komplet stanów przełącznika: bez obrysu fokusa klawiatura nie
+       widziała, że stoi na przełączniku, a nie na wierszu — a to dwie
+       różne akcje (światła vs popup). */
+    @media (hover: hover) {
+      .lights-toggle:hover {
+        filter: brightness(1.08);
+      }
+    }
+    .lights-toggle:focus-visible {
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
+      outline-offset: 2px;
+    }
+    .lights-toggle:active {
+      transform: scale(0.96);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .lights-toggle {
+        transition: none;
+      }
+      .lights-toggle:active {
+        transform: none;
+      }
     }
     /* Pole trafienia 48 × 44 bez zmiany wyglądu: sam przełącznik zostaje
        46 × 25, niewidoczny pseudo-element dobiera resztę do progu
@@ -1596,7 +1764,20 @@ export class StratumCardRoomRow extends LitElement {
       border-radius: 999px;
     }
     .lights-toggle.on {
-      background: var(--stratum-chip-lights-color, #ffc107);
+      background: var(--stratum-row-lights);
+    }
+    /* Poświata: krycia warstw z inline --lt-g1…3 (intensywność z configu),
+       kolor z tokenów wiersza — przemalowane światła świecą swoim kolorem. */
+    .lights-toggle.glow {
+      box-shadow:
+        0 0 5px 1px color-mix(in srgb, var(--stratum-row-lights-core) var(--lt-g1), transparent),
+        0 0 14px 5px color-mix(in srgb, var(--stratum-row-lights) var(--lt-g2), transparent);
+    }
+    .lights-toggle.on.glow {
+      box-shadow:
+        0 0 5px 1px color-mix(in srgb, var(--stratum-row-lights-core) var(--lt-g1), transparent),
+        0 0 16px 5px color-mix(in srgb, var(--stratum-row-lights) var(--lt-g2), transparent),
+        0 0 30px 10px color-mix(in srgb, var(--stratum-row-lights) var(--lt-g3), transparent);
     }
     .lights-toggle .lt-knob {
       position: absolute;
@@ -1619,7 +1800,7 @@ export class StratumCardRoomRow extends LitElement {
       transform: translateY(-50%);
       font-size: 12px;
       font-weight: 800;
-      color: #2a1c05;
+      color: var(--stratum-row-lights-ink);
       font-variant-numeric: tabular-nums;
       line-height: 1;
     }

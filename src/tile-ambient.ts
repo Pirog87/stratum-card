@@ -10,9 +10,10 @@
 
 /**
  * Kolor zapasowy: żarówka bez koloru i barwy (goła ściemnialna) świeci
- * kolorem „świateł" karty — tym samym tokenem co chip i paski.
+ * kolorem „świateł" kafla (--stratum-tile-lights: zmienna bazowa chipa
+ * świateł, potem token karty --stratum-lights).
  */
-export const AMBIENT_FALLBACK_COLOR = 'var(--stratum-lights)';
+export const AMBIENT_FALLBACK_COLOR = 'var(--stratum-tile-lights)';
 
 /** Kolor ikony / suwaka i tła — kolor żarówki albo token świateł. */
 export function ambientColor(lightColor: string | undefined): string {
@@ -32,7 +33,7 @@ export function ambientPct(on: boolean, brightnessPct: number): number {
 /**
  * Zmienne do `style=` kafla. Zmienne są wewnętrzne (bez wpisu w
  * docs/styling.md): kolor i tak pochodzi z żarówki, a z zewnątrz da się
- * nadpisać `--stratum-lights`.
+ * nadpisać `--stratum-chip-lights-color` albo `--stratum-lights`.
  */
 export function ambientStyle(
   on: boolean,

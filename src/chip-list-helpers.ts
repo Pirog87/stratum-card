@@ -16,6 +16,7 @@ import {
 } from './area-entities.js';
 import { lightOnInHass } from './light-dimming.js';
 import { climateChipEntity } from './chip-defaults.js';
+import { lookup, messages, type LangSource } from './localize/localize.js';
 
 /** Czy chip otwiera listę encji po kliku (bez jawnego tap_action). */
 export function chipSupportsList(chip: ChipConfig): boolean {
@@ -211,16 +212,6 @@ export const ALARM_CLASSES = [
   'tamper',
 ] as const;
 
-export const ALARM_CLASS_LABELS: Record<string, string> = {
-  smoke: 'Dym',
-  gas: 'Gaz',
-  carbon_monoxide: 'CO',
-  moisture: 'Wyciek',
-  problem: 'Problem',
-  safety: 'Bezpieczeństwo',
-  tamper: 'Sabotaż',
-};
-
 export const ALARM_CLASS_ICONS: Record<string, string> = {
   smoke: 'mdi:smoke-detector-variant-alert',
   gas: 'mdi:gas-cylinder',
@@ -245,21 +236,20 @@ export function alarmEntityIds(
   return [...ids];
 }
 
-/** Tytuł popupu listy dla typu chipa. */
-export const CHIP_LIST_LABELS: Record<string, string> = {
-  lights: 'Włączone światła',
-  motion: 'Wykryto obecność',
-  occupancy: 'Zajęte strefy',
-  windows: 'Otwarte okna',
-  doors: 'Otwarte drzwi',
-  leak: 'Wykryto wyciek',
-  smoke: 'Alarm dymu',
-  gas: 'Alarm gazu / CO',
-  co: 'Alarm CO',
-  problem: 'Wykryto problemy',
-  battery_low: 'Niska bateria',
-  filter: 'Pasujące encje',
-};
+// Tytuły popupu listy (dawniej CHIP_LIST_LABELS) i plakietki klas alarmu
+// (dawniej ALARM_CLASS_LABELS) są w słownikach: `chip_list.titles` i
+// `alarm_classes` w src/localize/ — patrz `chipListTitle`.
+
+/** Tytuł popupu listy dla typu chipa w języku `lang`; nieznany typ → „Lista". */
+export function chipListTitle(lang: LangSource, type: string): string {
+  const m = messages(lang);
+  return lookup(m.chip_list.titles, type) ?? m.common.list;
+}
+
+/** Plakietka rodzaju alarmu (device_class); nieznana klasa → sama klasa. */
+export function alarmClassLabel(lang: LangSource, cls: string): string {
+  return lookup(messages(lang).alarm_classes, cls) ?? cls;
+}
 
 /** Kolor akcentu popupu listy dla typu chipa. */
 export const CHIP_LIST_COLORS: Record<string, string> = {
@@ -268,7 +258,7 @@ export const CHIP_LIST_COLORS: Record<string, string> = {
   occupancy: 'var(--stratum-chip-motion-color, #4caf50)',
   windows: 'var(--stratum-chip-windows-color, #2196f3)',
   doors: 'var(--stratum-chip-doors-color, #9c27b0)',
-  leak: 'var(--stratum-chip-leak-color, #f44336)',
+  leak: 'var(--stratum-alarm, var(--error-color))',
   smoke: 'var(--stratum-chip-smoke-color, #e53935)',
   gas: 'var(--stratum-chip-gas-color, #ff5722)',
   co: 'var(--stratum-chip-co-color, #d84315)',

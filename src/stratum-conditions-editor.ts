@@ -14,42 +14,40 @@ import type {
   TileField,
 } from './types.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 
-const FIELD_META: Array<{ value: TileField; label: string; icon: string }> = [
-  { value: 'temperature', label: 'Temperatura', icon: 'mdi:thermometer' },
-  { value: 'humidity', label: 'Wilgotność', icon: 'mdi:water-percent' },
-  { value: 'lights', label: 'Światła', icon: 'mdi:lightbulb-on' },
-  { value: 'motion', label: 'Obecność', icon: 'mdi:motion-sensor' },
-  { value: 'windows', label: 'Okna', icon: 'mdi:window-open-variant' },
-  { value: 'doors', label: 'Drzwi', icon: 'mdi:door-open' },
-  { value: 'leak', label: 'Wyciek', icon: 'mdi:water-alert' },
-  { value: 'smoke', label: 'Dym', icon: 'mdi:smoke-detector-variant' },
-  { value: 'gas', label: 'Gaz / CO', icon: 'mdi:gas-cylinder' },
-  { value: 'problem', label: 'Problem', icon: 'mdi:alert-circle-outline' },
+// `label` to klucz słownika (src/localize/) — tekst wybiera język z `hass`.
+const FIELD_META: Array<{ value: TileField; label: UiKey; icon: string }> = [
+  { value: 'temperature', label: 'editor.fields.temperature', icon: 'mdi:thermometer' },
+  { value: 'humidity', label: 'editor.fields.humidity', icon: 'mdi:water-percent' },
+  { value: 'lights', label: 'editor.fields.lights', icon: 'mdi:lightbulb-on' },
+  { value: 'motion', label: 'editor.fields.motion', icon: 'mdi:motion-sensor' },
+  { value: 'windows', label: 'editor.fields.windows', icon: 'mdi:window-open-variant' },
+  { value: 'doors', label: 'editor.fields.doors', icon: 'mdi:door-open' },
+  { value: 'leak', label: 'editor.fields.leak', icon: 'mdi:water-alert' },
+  { value: 'smoke', label: 'editor.fields.smoke', icon: 'mdi:smoke-detector-variant' },
+  { value: 'gas', label: 'editor.fields.gas', icon: 'mdi:gas-cylinder' },
+  { value: 'problem', label: 'editor.fields.problem', icon: 'mdi:alert-circle-outline' },
 ];
 
-const OP_LABELS: Record<DisplayConditionOp, string> = {
-  any_on: 'Dowolna aktywna',
-  none_on: 'Żadna aktywna',
-  count_gt: 'Ilość >',
-  gt: 'Wartość >',
-  lt: 'Wartość <',
-  eq: 'Wartość =',
-};
+// Etykiety operatorów: `editor.conditions.ops` w słowniku.
 
-const COLOR_SWATCHES: Array<{ key: string; color: string; label: string }> = [
-  { key: 'amber', color: '#ffc107', label: 'Amber' },
-  { key: 'green', color: '#4caf50', label: 'Zielony' },
-  { key: 'blue', color: '#2196f3', label: 'Niebieski' },
-  { key: 'red', color: '#e53935', label: 'Czerwony' },
-  { key: 'purple', color: '#9c27b0', label: 'Fioletowy' },
-  { key: 'orange', color: '#ff9800', label: 'Pomarańcz' },
-  { key: 'teal', color: '#009688', label: 'Morski' },
-  { key: 'pink', color: '#ec407a', label: 'Różowy' },
+const COLOR_SWATCHES: Array<{ key: string; color: string; label: UiKey }> = [
+  { key: 'amber', color: '#ffc107', label: 'editor.colors.amber' },
+  { key: 'green', color: '#4caf50', label: 'editor.colors.green' },
+  { key: 'blue', color: '#2196f3', label: 'editor.colors.blue' },
+  { key: 'red', color: '#e53935', label: 'editor.colors.red' },
+  { key: 'purple', color: '#9c27b0', label: 'editor.colors.purple' },
+  { key: 'orange', color: '#ff9800', label: 'editor.colors.orange' },
+  { key: 'teal', color: '#009688', label: 'editor.colors.teal' },
+  { key: 'pink', color: '#ec407a', label: 'editor.colors.pink' },
 ];
 
-const TILE_ANIMATIONS: Array<{ value: AnimationType; label: string; icon: string }> = [
-  { value: 'none', label: 'Brak', icon: 'mdi:close' },
+// Nazwy animacji (Pulse, Blink…) to terminy CSS — te same w obu językach;
+// tłumaczymy tylko „Brak" (`label` = null → editor.common.none).
+const TILE_ANIMATIONS: Array<{ value: AnimationType; label: string | null; icon: string }> = [
+  { value: 'none', label: null, icon: 'mdi:close' },
   { value: 'pulse', label: 'Pulse', icon: 'mdi:pulse' },
   { value: 'blink', label: 'Blink', icon: 'mdi:eye-off-outline' },
   { value: 'shake', label: 'Shake', icon: 'mdi:vibrate' },
@@ -57,8 +55,8 @@ const TILE_ANIMATIONS: Array<{ value: AnimationType; label: string; icon: string
   { value: 'bounce', label: 'Bounce', icon: 'mdi:arrow-expand-vertical' },
 ];
 
-const ICON_ANIMATIONS: Array<{ value: AnimationType; label: string; icon: string }> = [
-  { value: 'none', label: 'Brak', icon: 'mdi:close' },
+const ICON_ANIMATIONS: Array<{ value: AnimationType; label: string | null; icon: string }> = [
+  { value: 'none', label: null, icon: 'mdi:close' },
   { value: 'pulse', label: 'Pulse', icon: 'mdi:pulse' },
   { value: 'blink', label: 'Blink', icon: 'mdi:eye-off-outline' },
   { value: 'shake', label: 'Shake', icon: 'mdi:vibrate' },
@@ -89,15 +87,15 @@ type ColorKey =
 /** Presety typowych scenariuszy — klik dodaje nową regułę z pre-fillem. */
 const PRESETS: Array<{
   id: string;
-  label: string;
-  hint: string;
+  label: UiKey;
+  hint: UiKey;
   icon: string;
   config: DisplayConditionConfig;
 }> = [
   {
     id: 'alert_window',
-    label: 'Alarm — okno otwarte',
-    hint: 'windows any_on → czerwony border + pulse',
+    label: 'editor.conditions.presets.alert_window',
+    hint: 'editor.conditions.presets.alert_window_hint',
     icon: 'mdi:window-open-variant',
     config: {
       field: 'windows',
@@ -111,8 +109,8 @@ const PRESETS: Array<{
   },
   {
     id: 'alert_door',
-    label: 'Alarm — drzwi otwarte',
-    hint: 'doors any_on → pomarańczowy + shake',
+    label: 'editor.conditions.presets.alert_door',
+    hint: 'editor.conditions.presets.alert_door_hint',
     icon: 'mdi:door-open',
     config: {
       field: 'doors',
@@ -125,8 +123,8 @@ const PRESETS: Array<{
   },
   {
     id: 'lights_active',
-    label: 'Światła aktywne',
-    hint: 'lights any_on → amber glow',
+    label: 'editor.conditions.presets.lights_active',
+    hint: 'editor.conditions.presets.lights_active_hint',
     icon: 'mdi:lightbulb-on',
     config: {
       field: 'lights',
@@ -138,8 +136,8 @@ const PRESETS: Array<{
   },
   {
     id: 'motion_live',
-    label: 'Obecność — live',
-    hint: 'motion any_on → zielony akcent + pulsująca ikona',
+    label: 'editor.conditions.presets.motion_live',
+    hint: 'editor.conditions.presets.motion_live_hint',
     icon: 'mdi:motion-sensor',
     config: {
       field: 'motion',
@@ -151,8 +149,8 @@ const PRESETS: Array<{
   },
   {
     id: 'hot',
-    label: 'Gorąco (> 25 °C)',
-    hint: 'temperature > 25 → czerwony akcent',
+    label: 'editor.conditions.presets.hot',
+    hint: 'editor.conditions.presets.hot_hint',
     icon: 'mdi:thermometer-high',
     config: {
       field: 'temperature',
@@ -165,8 +163,8 @@ const PRESETS: Array<{
   },
   {
     id: 'cold',
-    label: 'Zimno (< 18 °C)',
-    hint: 'temperature < 18 → niebieski akcent',
+    label: 'editor.conditions.presets.cold',
+    hint: 'editor.conditions.presets.cold_hint',
     icon: 'mdi:snowflake',
     config: {
       field: 'temperature',
@@ -179,8 +177,8 @@ const PRESETS: Array<{
   },
   {
     id: 'humid',
-    label: 'Wilgotno (> 65%)',
-    hint: 'humidity > 65 → morski akcent',
+    label: 'editor.conditions.presets.humid',
+    hint: 'editor.conditions.presets.humid_hint',
     icon: 'mdi:water',
     config: {
       field: 'humidity',
@@ -193,8 +191,8 @@ const PRESETS: Array<{
   },
   {
     id: 'inactive',
-    label: 'Wyciszenie gdy puste',
-    hint: 'lights none_on → opacity 0.5',
+    label: 'editor.conditions.presets.inactive',
+    hint: 'editor.conditions.presets.inactive_hint',
     icon: 'mdi:eye-off-outline',
     config: {
       field: 'lights',
@@ -207,6 +205,10 @@ const PRESETS: Array<{
 @customElement('stratum-conditions-editor')
 export class StratumConditionsEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
+
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
+  }
 
   @property({ attribute: false }) public conditions: DisplayConditionConfig[] = [];
 
@@ -333,7 +335,7 @@ export class StratumConditionsEditor extends LitElement {
     return html`
       ${this.conditions.length === 0
         ? html`<div class="stratum-empty">
-            Brak reguł. Zacznij od presetu albo dodaj regułę od zera.
+            ${this._t('editor.conditions.empty')}
           </div>`
         : nothing}
 
@@ -344,7 +346,7 @@ export class StratumConditionsEditor extends LitElement {
       <div class="action-row">
         <button type="button" class="stratum-add-btn" @click=${this._add}>
           <ha-icon .icon=${'mdi:plus-circle-outline'}></ha-icon>
-          Dodaj regułę
+          ${this._t('editor.conditions.add')}
         </button>
         <button
           type="button"
@@ -352,7 +354,7 @@ export class StratumConditionsEditor extends LitElement {
           @click=${() => (this._showPresets = !this._showPresets)}
         >
           <ha-icon .icon=${'mdi:playlist-star'}></ha-icon>
-          Presety
+          ${this._t('editor.conditions.presets_btn')}
         </button>
       </div>
 
@@ -373,8 +375,8 @@ export class StratumConditionsEditor extends LitElement {
               <ha-icon .icon=${p.icon}></ha-icon>
             </span>
             <span class="preset-body">
-              <span class="preset-title">${p.label}</span>
-              <span class="preset-hint">${p.hint}</span>
+              <span class="preset-title">${this._t(p.label)}</span>
+              <span class="preset-hint">${this._t(p.hint)}</span>
             </span>
           </button>`,
         )}
@@ -405,7 +407,7 @@ export class StratumConditionsEditor extends LitElement {
             <button
               type="button"
               class="stratum-icon-btn"
-              title="W górę"
+              title=${this._t('editor.chips.up')}
               ?disabled=${!canMoveUp}
               @click=${() => this._move(idx, -1)}
             >
@@ -414,7 +416,7 @@ export class StratumConditionsEditor extends LitElement {
             <button
               type="button"
               class="stratum-icon-btn"
-              title="W dół"
+              title=${this._t('editor.chips.down')}
               ?disabled=${!canMoveDown}
               @click=${() => this._move(idx, 1)}
             >
@@ -423,7 +425,7 @@ export class StratumConditionsEditor extends LitElement {
             <button
               type="button"
               class="stratum-icon-btn ${isOpen ? 'accent' : ''}"
-              title=${isOpen ? 'Zwiń' : 'Edytuj'}
+              title=${this._t(isOpen ? 'editor.common.collapse' : 'editor.common.edit')}
               @click=${() => this._toggleOpen(idx)}
             >
               <ha-icon .icon=${isOpen ? 'mdi:chevron-up' : 'mdi:pencil'}></ha-icon>
@@ -431,7 +433,7 @@ export class StratumConditionsEditor extends LitElement {
             <button
               type="button"
               class="stratum-icon-btn danger"
-              title="Usuń"
+              title=${this._t('editor.common.remove')}
               @click=${() => this._remove(idx)}
             >
               <ha-icon .icon=${'mdi:delete-outline'}></ha-icon>
@@ -448,7 +450,7 @@ export class StratumConditionsEditor extends LitElement {
     const showValue = needsValue(cond.when);
     return html`
       <div class="stratum-group">
-        <label class="stratum-group-label">Pole</label>
+        <label class="stratum-group-label">${this._t('editor.conditions.field')}</label>
         <div class="stratum-chip-row">
           ${FIELD_META.map(
             (f) => html`<button
@@ -457,14 +459,14 @@ export class StratumConditionsEditor extends LitElement {
               @click=${() => this._onFieldChip(idx, f.value)}
             >
               <ha-icon .icon=${f.icon}></ha-icon>
-              <span>${f.label}</span>
+              <span>${this._t(f.label)}</span>
             </button>`,
           )}
         </div>
       </div>
 
       <div class="stratum-group">
-        <label class="stratum-group-label">Warunek</label>
+        <label class="stratum-group-label">${this._t('editor.conditions.condition')}</label>
         <div class="stratum-chip-row">
           ${allowedOps.map(
             (op) => html`<button
@@ -472,7 +474,7 @@ export class StratumConditionsEditor extends LitElement {
               class="stratum-chip ${cond.when === op ? 'on' : ''}"
               @click=${() => this._onOpChip(idx, op)}
             >
-              ${OP_LABELS[op]}
+              ${this._t(`editor.conditions.ops.${op}`)}
             </button>`,
           )}
         </div>
@@ -480,7 +482,7 @@ export class StratumConditionsEditor extends LitElement {
 
       ${showValue
         ? html`<div class="stratum-group">
-            <label class="stratum-group-label">Wartość</label>
+            <label class="stratum-group-label">${this._t('editor.conditions.value')}</label>
             <input
               type="number"
               class="num-input"
@@ -493,13 +495,23 @@ export class StratumConditionsEditor extends LitElement {
 
       <div class="section-header">
         <ha-icon .icon=${'mdi:square-outline'}></ha-icon>
-        <span>Styl pozycji (wiersz / kafel)</span>
+        <span>${this._t('editor.conditions.item_style')}</span>
       </div>
 
-      ${this._renderColorRow('Kolor akcentu', 'accent_color', cond.accent_color, idx)}
-      ${this._renderColorRow('Kolor borderu', 'border_color', cond.border_color, idx)}
+      ${this._renderColorRow(
+        this._t('editor.conditions.accent_color'),
+        'accent_color',
+        cond.accent_color,
+        idx,
+      )}
+      ${this._renderColorRow(
+        this._t('editor.conditions.border_color'),
+        'border_color',
+        cond.border_color,
+        idx,
+      )}
       ${this._renderSlider(
-        'Grubość borderu',
+        this._t('editor.conditions.border_width'),
         'border_width',
         cond.border_width,
         0,
@@ -508,9 +520,14 @@ export class StratumConditionsEditor extends LitElement {
         'px',
         idx,
       )}
-      ${this._renderColorRow('Kolor tła', 'background_color', cond.background_color, idx)}
+      ${this._renderColorRow(
+        this._t('editor.conditions.background_color'),
+        'background_color',
+        cond.background_color,
+        idx,
+      )}
       ${this._renderSlider(
-        'Przezroczystość',
+        this._t('editor.conditions.opacity'),
         'opacity',
         cond.opacity,
         0.2,
@@ -520,7 +537,7 @@ export class StratumConditionsEditor extends LitElement {
         idx,
       )}
       ${this._renderAnimationRow(
-        'Animacja pozycji',
+        this._t('editor.conditions.item_animation'),
         'animation',
         cond.animation,
         TILE_ANIMATIONS,
@@ -529,11 +546,11 @@ export class StratumConditionsEditor extends LitElement {
 
       <div class="section-header">
         <ha-icon .icon=${'mdi:image-outline'}></ha-icon>
-        <span>Styl ikony</span>
+        <span>${this._t('editor.conditions.icon_style')}</span>
       </div>
 
       <div class="stratum-group">
-        <label class="stratum-group-label">Ikona (override)</label>
+        <label class="stratum-group-label">${this._t('editor.common.icon_override')}</label>
         <ha-form
           .hass=${this.hass}
           .data=${{ icon: cond.icon ?? '' }}
@@ -546,9 +563,14 @@ export class StratumConditionsEditor extends LitElement {
         ></ha-form>
       </div>
 
-      ${this._renderColorRow('Kolor ikony', 'icon_color', cond.icon_color, idx)}
+      ${this._renderColorRow(
+        this._t('editor.conditions.icon_color'),
+        'icon_color',
+        cond.icon_color,
+        idx,
+      )}
       ${this._renderSlider(
-        'Skala ikony',
+        this._t('editor.conditions.icon_scale'),
         'icon_size_scale',
         cond.icon_size_scale,
         0.5,
@@ -558,7 +580,7 @@ export class StratumConditionsEditor extends LitElement {
         idx,
       )}
       ${this._renderAnimationRow(
-        'Animacja ikony',
+        this._t('editor.conditions.icon_animation'),
         'icon_animation',
         cond.icon_animation,
         ICON_ANIMATIONS,
@@ -567,10 +589,15 @@ export class StratumConditionsEditor extends LitElement {
 
       <div class="section-header">
         <ha-icon .icon=${'mdi:format-color-text'}></ha-icon>
-        <span>Styl tekstu</span>
+        <span>${this._t('editor.conditions.text_style')}</span>
       </div>
 
-      ${this._renderColorRow('Kolor tekstu', 'text_color', cond.text_color, idx)}
+      ${this._renderColorRow(
+        this._t('editor.conditions.text_color'),
+        'text_color',
+        cond.text_color,
+        idx,
+      )}
     `;
   }
 
@@ -591,14 +618,14 @@ export class StratumConditionsEditor extends LitElement {
               type="button"
               class="swatch ${value === s.key ? 'on' : ''}"
               style="--swatch:${s.color};"
-              title=${s.label}
+              title=${this._t(s.label)}
               @click=${() => this._onColorSwatch(idx, key, s.key)}
             ></button>`,
           )}
           <input
             type="text"
             class="custom-input"
-            placeholder="#hex lub var(--color)"
+            placeholder=${this._t('editor.common.color_placeholder')}
             .value=${custom}
             @change=${(ev: Event) => this._onColorCustom(idx, key, ev)}
           />
@@ -606,7 +633,7 @@ export class StratumConditionsEditor extends LitElement {
             ? html`<button
                 type="button"
                 class="stratum-chip subtle"
-                title="Wyłącz"
+                title=${this._t('editor.common.clear_color')}
                 @click=${() => this._onColorClear(idx, key)}
               >
                 <ha-icon .icon=${'mdi:close'}></ha-icon>
@@ -629,7 +656,7 @@ export class StratumConditionsEditor extends LitElement {
   ): TemplateResult {
     const displayed =
       value === undefined
-        ? 'bez zmiany'
+        ? this._t('editor.common.no_change')
         : unit === '×'
         ? value.toFixed(2)
         : `${value} ${unit}`;
@@ -643,7 +670,7 @@ export class StratumConditionsEditor extends LitElement {
             ? html`<button
                 type="button"
                 class="clear-mini"
-                title="Wyłącz"
+                title=${this._t('editor.common.clear_color')}
                 @click=${() => this._onSliderClear(idx, key)}
               >
                 <ha-icon .icon=${'mdi:close'}></ha-icon>
@@ -667,7 +694,7 @@ export class StratumConditionsEditor extends LitElement {
     label: string,
     key: 'animation' | 'icon_animation',
     value: AnimationType | undefined,
-    options: Array<{ value: AnimationType; label: string; icon: string }>,
+    options: Array<{ value: AnimationType; label: string | null; icon: string }>,
     idx: number,
   ): TemplateResult {
     const current = value ?? 'none';
@@ -684,7 +711,7 @@ export class StratumConditionsEditor extends LitElement {
               @click=${() => this._onAnimationChip(idx, key, o.value)}
             >
               <ha-icon .icon=${o.icon}></ha-icon>
-              <span>${o.label}</span>
+              <span>${o.label ?? this._t('editor.common.none')}</span>
             </button>`,
           )}
         </div>
@@ -693,20 +720,29 @@ export class StratumConditionsEditor extends LitElement {
   }
 
   private _summarize(cond: DisplayConditionConfig): { title: string; hint: string } {
-    const fieldLabel = FIELD_META.find((f) => f.value === cond.field)?.label ?? cond.field;
-    const opLabel = OP_LABELS[cond.when];
+    const fieldKey = FIELD_META.find((f) => f.value === cond.field)?.label;
+    const fieldLabel = fieldKey ? this._t(fieldKey) : cond.field;
+    const opLabel = lookup(editorMessages(this.hass).conditions.ops, cond.when) ?? cond.when;
     const valuePart =
       needsValue(cond.when) && typeof cond.value === 'number' ? ` ${cond.value}` : '';
     const stylePieces: string[] = [];
-    if (cond.accent_color) stylePieces.push(`akcent: ${cond.accent_color}`);
-    if (cond.border_color) stylePieces.push(`border: ${cond.border_color}`);
-    if (cond.background_color) stylePieces.push(`tło: ${cond.background_color}`);
-    if (cond.icon) stylePieces.push(`ikona`);
-    if (cond.icon_color) stylePieces.push(`kolor ikony`);
-    if (cond.text_color) stylePieces.push(`tekst: ${cond.text_color}`);
-    if (cond.animation) stylePieces.push(`anim: ${cond.animation}`);
-    if (cond.icon_animation) stylePieces.push(`anim ikony: ${cond.icon_animation}`);
-    if (typeof cond.opacity === 'number') stylePieces.push(`op: ${cond.opacity}`);
+    const t = (key: UiKey, v?: string | number): string =>
+      this._t(key, v === undefined ? undefined : { v });
+    if (cond.accent_color) stylePieces.push(t('editor.conditions.sum_accent', cond.accent_color));
+    if (cond.border_color) stylePieces.push(t('editor.conditions.sum_border', cond.border_color));
+    if (cond.background_color) {
+      stylePieces.push(t('editor.conditions.sum_background', cond.background_color));
+    }
+    if (cond.icon) stylePieces.push(t('editor.conditions.sum_icon'));
+    if (cond.icon_color) stylePieces.push(t('editor.conditions.sum_icon_color'));
+    if (cond.text_color) stylePieces.push(t('editor.conditions.sum_text', cond.text_color));
+    if (cond.animation) stylePieces.push(t('editor.conditions.sum_anim', cond.animation));
+    if (cond.icon_animation) {
+      stylePieces.push(t('editor.conditions.sum_icon_anim', cond.icon_animation));
+    }
+    if (typeof cond.opacity === 'number') {
+      stylePieces.push(t('editor.conditions.sum_opacity', cond.opacity));
+    }
     if (cond.pulse) stylePieces.push('pulse');
     return {
       title: `${fieldLabel} — ${opLabel}${valuePart}`,

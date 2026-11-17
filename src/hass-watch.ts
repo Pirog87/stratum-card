@@ -12,7 +12,7 @@
 // floors` — dopóki nie zmieni się rejestr. Porównania to więc `!==` na
 // referencjach, nie głębokie porównywanie.
 
-import type { HomeAssistant } from './types.js';
+import type { HomeAssistant, StratumRoomCardConfig } from './types.js';
 import { groupMemberIds } from './area-entities.js';
 import { lightControllerOf } from './light-dimming.js';
 
@@ -45,6 +45,32 @@ export function structureChanged(
     if (a[key] !== b[key]) return true;
   }
   return false;
+}
+
+/**
+ * Czy zmienił się język interfejsu. HA przełącza język profilu na żywo, bez
+ * przeładowania: nowy `hass` ma nowe `language`/`locale`, a `states` tę samą
+ * tożsamość. Komponent, który wpuszcza render tylko po zmianie własnej encji
+ * (kafel popupu), bez tej bramki zostawał przy starym języku aż do
+ * najbliższej zmiany stanu — obok sekcji już przetłumaczonych.
+ */
+export function languageChanged(
+  prev: HomeAssistant,
+  next: HomeAssistant,
+): boolean {
+  return prev.language !== next.language || prev.locale !== next.locale;
+}
+
+/**
+ * Czy zmienił się motyw (także przełączenie jasny/ciemny — HA podmienia
+ * wtedy obiekt `themes`). Kafel „rail" mierzy atrament napisu z kolorów
+ * motywu; bez tej bramki po przełączeniu trybu zostawał atrament dobrany
+ * do poprzedniej powierzchni.
+ */
+export function themeChanged(prev: HomeAssistant, next: HomeAssistant): boolean {
+  const a = prev as unknown as Record<string, unknown>;
+  const b = next as unknown as Record<string, unknown>;
+  return a.themes !== b.themes || a.selectedTheme !== b.selectedTheme;
 }
 
 /**
@@ -134,6 +160,104 @@ export function collectEntityIds(
 }
 
 /**
+ * Czy powiadomienie o stanie „w toku" (power-pending) dotyczy któregoś
+ * z obserwowanych id. Karta piętra i popup pokoju dostają powiadomienie
+ * o KAŻDYM tapnięciu w całym domu; bez tego filtra przełącznik tarasu
+ * przerysowywał też Parter i Piętro — dwa pełne rendery kart, których to
+ * nie dotyczy, akurat w chwili, gdy użytkownik czeka na reakcję pod palcem.
+ *
+ * Brak zbioru (karta jeszcze nie policzyła, co obserwuje) = przerysuj — tak
+ * jak dotąd; lepiej jeden render za dużo niż przełącznik, który nie drgnie.
+ */
+export function touchesWatched(
+  watched: ReadonlySet<string> | undefined,
+  changed: ReadonlySet<string>,
+): boolean {
+  if (!watched) return true;
+  // Iterujemy po mniejszym zbiorze — zmienionych bywa kilka, obserwowanych
+  // setki; przy gaszeniu całego piętra bywa odwrotnie.
+  const [small, big] = changed.size <= watched.size ? [changed, watched] : [watched, changed];
+  for (const id of small) if (big.has(id)) return true;
+  return false;
+}
+
+/**
+ * Domeny, które popup pokoju pokazuje albo liczy: sekcje (światła, rolety,
+ * klimat, media, wentylatory, przełączniki, sceny, okna i drzwi), chipy
+ * nagłówka i blok alarmów (czujniki binarne). Nowa sekcja albo chip na
+ * innej domenie MUSI ją tu dopisać — test `popupRelevantFilter` sprawdza
+ * to dla każdego typu sekcji.
+ */
+const POPUP_DOMAINS: ReadonlySet<string> = new Set([
+  'light',
+  'binary_sensor',
+  'cover',
+  'climate',
+  'media_player',
+  'fan',
+  'switch',
+  'scene',
+]);
+
+/**
+ * Które encje strefy w ogóle mogą zmienić to, co pokazuje popup pokoju.
+ *
+ * Dawniej popup obserwował KAŻDĄ encję strefy. Kuchnia ze spiżarnią to ok.
+ * 530 encji, z czego większość to czujniki mocy, energii, napięcia
+ * i linkquality z Z2M, raportujące co kilka sekund — każdy raport
+ * przebudowywał wszystkie sekcje otwartego popupu (i pasek scen), choć
+ * niczego z nich nie widać. Teraz obserwujemy tylko domeny z
+ * `POPUP_DOMAINS`, domeny chipów filtrujących z configu oraz te czujniki,
+ * które coś czyta: temperaturę i wilgotność (chipy, podsumowanie) i baterię
+ * — tylko gdy sekcja podsumowania pokazuje pole `battery_low`.
+ *
+ * Encje wskazane w configu wchodzą osobno (collectEntityIds), a członkowie
+ * grup i scen — przez addGroupMembers. Czujnik bez stanu w chwili budowania
+ * zbioru wchodzi zawsze — nie znamy jego klasy (jak w karcie piętra).
+ *
+ * Pozostałych encji NIE obserwujemy nawet pod kątem dostępności (inaczej
+ * niż karta piętra): popup nie ma znacznika „pokój offline", a kafle
+ * pokazują wyłącznie encje z domen powyżej.
+ */
+export function popupRelevantFilter(
+  hass: HomeAssistant,
+  config: Pick<StratumRoomCardConfig, 'chips' | 'sections'>,
+): (id: string) => boolean {
+  const extraDomains = new Set<string>();
+  for (const chip of config.chips ?? []) {
+    if (chip.type !== 'filter') continue;
+    // Chip filtrujący bez domeny liczy po całej strefie — wtedy wszystko
+    // jest istotne i bramka wraca do dawnego zachowania.
+    if (!chip.domain) return () => true;
+    extraDomains.add(chip.domain);
+  }
+  const sensorClasses = new Set(['temperature', 'humidity']);
+  if (summaryReadsBattery(config.sections)) sensorClasses.add('battery');
+  return (id: string): boolean => {
+    const domain = id.slice(0, id.indexOf('.'));
+    if (POPUP_DOMAINS.has(domain) || extraDomains.has(domain)) return true;
+    if (domain !== 'sensor') return false;
+    const st = hass.states?.[id];
+    if (!st) return true;
+    const dc = st.attributes?.device_class;
+    return typeof dc === 'string' && sensorClasses.has(dc);
+  };
+}
+
+/** Czy któraś sekcja podsumowania pokazuje pole „niska bateria". */
+function summaryReadsBattery(sections: StratumRoomCardConfig['sections']): boolean {
+  if (!Array.isArray(sections)) return false;
+  return sections.some(
+    (s) =>
+      typeof s === 'object' &&
+      s !== null &&
+      s.type === 'summary' &&
+      Array.isArray(s.fields) &&
+      s.fields.includes('battery_low'),
+  );
+}
+
+/**
  * Dokłada do zbioru członków grup świateł (atrybut `entity_id`) — także
  * zagnieżdżonych. Grupa pokazuje stan zbiorczy, ale suwak jasności i paski
  * belki czytają stany członków, a ci potrafią leżeć w innej strefie niż
@@ -160,4 +284,38 @@ export function addGroupMembers(
     }
   }
   return ids;
+}
+
+/**
+ * Bramka paska scen: czy nowy `hass` zmienia coś, co pasek pokazuje.
+ *
+ * Popup i belka podają pasekowi świeży `hass` przy każdej zmianie
+ * dowolnej encji. Bez bramki pasek przerysowywał wszystkie kafle przy
+ * każdym raporcie temperatury, okna czy światła w pokoju (60 renderów na
+ * 60 zmian), choć jego kafle czytają tylko: stan samej sceny (nazwa,
+ * `id` do REST, lista członków), stany świateł-członków (gradient
+ * z kolorów „na żywo") i użytkownika (bramka admina dla configu z REST).
+ *
+ * Członków bierzemy z OBU obiektów — scena, której skład się zmienił,
+ * i tak ma nowy stan, ale lampa usunięta ze sceny też zmienia gradient.
+ * Brak któregoś `hass` (pierwsze podanie) = render: dopiero z `hass`
+ * kafle dostają nazwy i kolory.
+ */
+export function sceneBarHassChanged(
+  prev: HomeAssistant | undefined,
+  next: HomeAssistant | undefined,
+  items: ReadonlyArray<{ entity?: string; separator?: boolean }> | undefined,
+): boolean {
+  if (!prev || !next) return prev !== next;
+  if (prev.user !== next.user) return true;
+  if (prev.states === next.states) return false;
+  const ids = new Set<string>();
+  for (const item of items ?? []) {
+    if (item.separator || !item.entity) continue;
+    ids.add(item.entity);
+    for (const h of [prev, next]) {
+      for (const m of groupMemberIds(h.states?.[item.entity]) ?? []) ids.add(m);
+    }
+  }
+  return watchedStateChanged(prev, next, ids);
 }

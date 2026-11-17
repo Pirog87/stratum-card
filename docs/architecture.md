@@ -93,6 +93,11 @@ od najprostszego do najbardziej zaawansowanego:
 - Power user (sam autor repo) będzie chciał warstwy 2–3
 - Trzy warstwy pozwalają na proporcjonalną inwestycję złożoności
 
+> Status: zmienne mają prefix `--stratum-` (nazwy `--area-*` nie istnieją).
+> Party zagnieżdżonych elementów (`chip`, `room`, `tile`, `scene`) nie są
+> eksportowane przez `exportparts` — co jest osiągalne skąd, opisuje
+> `docs/styling.md`.
+
 ---
 
 ## ADR-005: Bundling — single file, ES module
@@ -107,6 +112,9 @@ wszystkie zależności bundlowane.
 
 **Alternatywa odrzucona:** Multi-chunk z lazy loadingiem — overkill dla
 komponentu tej wielkości. Dodatkowe HTTP requesty spowolnią ładowanie.
+
+> Status: JS dalej jest jednym plikiem; release ma jednak więcej assetów
+> (zdjęcia scen, `.gz`) — patrz ADR-010.
 
 ---
 
@@ -125,17 +133,47 @@ musimy się dostosować. Ale stabilne od lat.
 
 ---
 
-## ADR-007: Localization — JSON + runtime lookup
+## ADR-007: Localization — słowniki TS + runtime lookup
 
-**Decyzja:** Stringi UI w `src/localize/{pl,en}.json`. Runtime wybiera na
-podstawie `hass.language`.
+**Status:** wdrożone w v1.109.3 (wcześniej JSON-y istniały, ale nic ich nie
+czytało — cały UI był po polsku na sztywno).
 
-**Dlaczego:**
+**Decyzja:** Stringi UI w `src/localize/pl.ts` (baza) i `src/localize/en.ts`.
+Runtime wybiera słownik z `hass.locale.language`, potem `hass.language`:
+`pl*` → polski, każdy inny język → angielski, brak języka → polski.
+Komponenty wołają `localize(hass, 'grupa.klucz', { param })`
+(`src/localize/localize.ts`, czyste funkcje, testy w `tests/localize.test.ts`).
+Podkomponenty bez `hass` dostają `.uiLang=${langOf(hass)}`. Napisy sprzed
+`hass` (katalog kart, błąd `setConfig`, ostrzeżenia w konsoli) biorą język
+z `<html lang>` (`docLanguage()`).
+
+**Dlaczego TS, a nie JSON:**
+- Rollup nie ma pluginu JSON, a dokładanie zależności łamie zasadę „Lit
+  i nic więcej"
+- `en.ts` jest typowany kształtem `pl.ts` — brak klucza po angielsku to błąd
+  kompilacji, nie pusty napis; klucze w `localize()` też są typowane
 - Prostsze niż `i18next` / `lit-translate` dla projektu tej wielkości
-- JSON jest łatwo edytowalny
-- Community może dodawać języki przez PR bez kodu
 
-**Konwencja:** klucze nested (`chips.lights_on`), placeholdery `{count}`.
+**Konwencja:** klucze nested (`chip_list.items`), placeholdery `{count}`,
+`{name}`. Liczba mnoga to obiekt form: PL `{ one, few, many }` (2–4 bez
+12–14 = few), EN `{ one, other }`; wybór przez `Intl.PluralRules`
+z deterministyczną regułą awaryjną. Fragmenty kodu w podpowiedziach edytora
+zapisujemy jako `<…>` — komponent renderuje je jako `<code>` bez innerHTML.
+Nowy język = nowy plik typu `Messages` + wpis w `DICTS` i `langOf`.
+
+**Słowniki edytorów osobno.** Napisy edytorów (`editor.*`) to ~83%
+słowników, a dashboard ich nie pokazuje. Leżą w `src/localize/editor-pl.ts`
+i `editor-en.ts` (typ `EditorMessages` z `editor-pl.ts`), a czytają je tylko
+edytory przez `localizeUi()` / `editorMessages()` z
+`src/localize/editor-localize.ts` — ta sama ścieżka awaryjna, klucze z pełnym
+prefiksem `editor.…`. Runtime karty importuje wyłącznie `pl.ts`/`en.ts`.
+Dopóki bundle jest jednym plikiem (ADR-005), bajty są te same; podział jest
+pod PKG-3 (v1.110.0) — edytory ładowane na żądanie zabiorą swoje słowniki
+ze sobą. Budżet: 1.109.2 → 1.109.3 bundle 482 306 → 573 151 B
+(gzip −9: 121 722 → 142 073 B), z czego słowniki ~65 KB po minifikacji.
+
+> Status: obowiązuje — mechanizm. Decyzję, który język widzi użytkownik,
+> opisuje ADR-009.
 
 ---
 
@@ -154,6 +192,64 @@ podstawie `hass.language`.
 - Rezolucję nazwy area / ikony z HA
 - Logikę agregacji chipów (policz lights on w area)
 - **NIE** testujemy renderingu wizualnego — to robi manual / screenshot testing
+
+> Status: zastąpione przez ADR-011.
+
+---
+
+## ADR-009: Język interfejsu — za językiem użytkownika HA
+
+**Decyzja:** Interfejs karty idzie za językiem użytkownika Home Assistanta:
+polski, dla pozostałych języków angielski. Uzupełnia ADR-007, który
+opisuje mechanizm (słowniki `pl.ts`/`en.ts`, `localize()`, `.uiLang`).
+
+**Dlaczego:**
+- Główny użytkownik ma HA po polsku, a karta trafia też do HACS — angielski
+  jest rozsądnym wspólnym mianownikiem dla reszty świata
+- Dwa języki to mało tekstów do utrzymania; kolejny język to tłumaczenie,
+  nie zmiana logiki
+
+**Konsekwencja:** teksty user-facing nie są wpisywane w komponenty
+(CLAUDE.md, „Zasady kodu").
+
+---
+
+## ADR-010: Release — bundle JS + zdjęcia scen jako osobne assety
+
+**Decyzja:** Kod dalej jest jednym plikiem `stratum-card.js` (ADR-005),
+ale release niesie też `stratum-card.js.gz` i zdjęcia wbudowanych scen
+`sceny-<id>.webp`. HACS pobiera wszystkie assety płasko do jednego
+katalogu, a karta szuka zdjęć obok bundla (adres liczony z
+`import.meta.url`), potem pod `/hacsfiles/stratum-card/`, na końcu rysuje
+wersję SVG, jeśli scena ją ma.
+
+**Dlaczego:**
+- Zdjęcia w bundlu (base64) rozdęłyby JS, który telefon pobiera i parsuje
+  przy każdym starcie — a zdjęcie potrzebne jest tylko scenie, która je
+  pokazuje
+- `.gz` nadpisuje pozostałość po starszej instalacji (HA potrafi serwować
+  `.gz` zamiast `.js`)
+
+**Konsekwencja:** instalacja ręczna i dev-loop bez HACS muszą skopiować
+zdjęcia obok bundla z prefiksem `sceny-` (`docs/development.md`).
+Workflow `validate.yml` pilnuje, że `dist/` to wciąż jeden plik JS.
+
+---
+
+## ADR-011: Testowanie — czyste funkcje w Vitest
+
+**Decyzja:** Vitest w środowisku `node`, bez DOM-u i bez Lita. Testujemy
+czyste funkcje w `tests/`; logikę, która wymaga testów, wydzielamy
+z komponentów do osobnych modułów. Zastępuje ADR-008.
+
+**Dlaczego:**
+- Logika, która się psuje (agregacja świateł i alarmów, historia „wstecz",
+  kolejka Escape, gest jasności, kolory scen, ładowanie bundla), da się
+  wyrazić jako funkcje na danych `hass` — test jest szybki i deterministyczny
+- Rendering i stany interaktywne sprawdzamy ręcznie na żywej instancji HA
+
+**CI:** `validate.yml` odpala typecheck, testy i build na każdym PR i pushu
+do `main`; `release.yml` powtarza je przed utworzeniem releasu.
 
 ---
 

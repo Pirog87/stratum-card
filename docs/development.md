@@ -39,10 +39,10 @@ cp dist/stratum-card.js /path/to/ha/config/www/stratum-card.js
 ```
 
 W HA raz: *Settings → Dashboards → Resources → Add resource*
-- URL: `/local/stratum-card.js?v=0.1`
+- URL: `/local/stratum-card.js?v=1`
 - Type: `JavaScript Module`
 
-Przy każdej zmianie: zmień `?v=0.2`, `?v=0.3` żeby wymusić cache bust.
+Przy każdej zmianie: zmień `?v=2`, `?v=3` żeby wymusić cache bust.
 Albo Ctrl+Shift+R.
 
 ### Opcja B — symlink (szybszy dev loop)
@@ -55,6 +55,26 @@ ln -s /path/to/stratum-card/dist/stratum-card.js /path/to/ha/config/www/stratum-
 
 Teraz `npm run watch` automatycznie aktualizuje plik w HA. Tylko F5 w
 przeglądarce i widzisz zmiany.
+
+### Zdjęcia scen (instalacja bez HACS)
+
+Wbudowane sceny ze zdjęciem (`image: stratum:<id>`, np. `jasne`, `noc`,
+`kinkiet-cieply`) nie są w bundlu — to osobne pliki. Karta szuka
+`sceny-<id>.webp` **w katalogu, z którego załadował się
+`stratum-card.js`**, potem pod `/hacsfiles/stratum-card/`, a na końcu —
+jeśli scena ma jeszcze wersję SVG — rysuje wektor. Bez HACS skopiuj więc
+zdjęcia obok bundla, z prefiksem `sceny-` (w repo leżą bez niego,
+w `assets/sceny/<id>.webp`):
+
+```bash
+for f in assets/sceny/*.webp; do
+  cp "$f" "/path/to/ha/config/www/sceny-$(basename "$f")"
+done
+```
+
+Bez prefiksu albo w innym katalogu sceny tylko-ze-zdjęciem (np.
+`kinkiet-*`) zostają pustymi kaflami z nazwą. Jeśli masz też instalację
+z HACS, zdjęcia przyjdą stamtąd i ten krok możesz pominąć.
 
 ### Opcja C — remote HA przez SSH/Samba
 
@@ -74,8 +94,11 @@ done
 
 ### Logi w konsoli
 
-Karta loguje swoją wersję przy starcie (`console.info`). Szukaj
-`STRATUM v0.1.0` w DevTools Console.
+Karta loguje swoją wersję przy starcie (`console.info`) — jeden baner dla
+obu kart: `STRATUM v<wersja> · stratum-card + stratum-room-card`. Wersja
+pochodzi z `package.json` (build wstrzykuje ją do `src/version.ts`).
+Drugi załadowany egzemplarz bundla nie rzuca błędem, tylko ostrzega
+w konsoli, która wersja jest aktywna.
 
 ### Inspekcja `hass` object
 
@@ -110,6 +133,7 @@ $0._expanded         // stan expandera
 
 ```bash
 npm run typecheck
+npm test           # Vitest — czyste funkcje z tests/
 ```
 
 Nie ma eslintów (na razie). TypeScript strict łapie większość błędów.
@@ -130,12 +154,14 @@ Patrz `examples/` w repo.
 
 ## Wersjonowanie i release
 
-1. Update `package.json` — bump `version`
-2. Update `src/stratum-card.ts` — stała `VERSION`
-3. Update `docs/roadmap.md` — zaznacz milestone jako ✅
-4. Commit: `chore: release v0.2.0`
-5. Tag: `git tag v0.2.0 && git push --tags`
-6. GitHub Action zbuildu i wrzuci `dist/stratum-card.js` jako asset release
+1. Bump `version` w `package.json` w tym samym commicie co zmiana —
+   to jedyne miejsce z wersją (plugin rollupa `stratum-version` wstrzykuje
+   ją do bundla, baner w konsoli pokazuje ją sam).
+2. Wpis w `CHANGELOG.md`.
+3. Merge do `main`. Workflow `release.yml` czyta wersję z `package.json`;
+   jeśli tagu `v<wersja>` jeszcze nie ma, odpala typecheck, testy i build,
+   tworzy tag i release z assetami: `stratum-card.js`, `stratum-card.js.gz`
+   i zdjęciami scen `sceny-*.webp`.
 
 ## Częste problemy
 

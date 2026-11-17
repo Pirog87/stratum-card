@@ -1,5 +1,5 @@
-// Style stratum-room-card — wydzielone z komponentu (dług techniczny),
-// zero zmian w treści CSS.
+// Style stratum-room-card — wydzielone z komponentu (dług techniczny).
+// Stany interaktywne i furtka ruchu zebrane na końcu pliku.
 
 import { css } from 'lit';
 import { surfaceTokens } from './surface-tokens.js';
@@ -345,11 +345,12 @@ export const roomCardStyles = css`
       color: var(--secondary-text-color);
     }
 
-    /* A3: blok „Aktywne alarmy" na górze popupu. */
+    /* A3: blok „Aktywne alarmy" na górze popupu. Cały blok przez alias
+       --stratum-alarm — jedno źródło alarmu z wierszem i kafelkami. */
     .alarms-block {
       border: 1.5px solid
-        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 50%, transparent);
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 7%, transparent);
+        color-mix(in srgb, var(--stratum-alarm) 50%, transparent);
+      background: color-mix(in srgb, var(--stratum-alarm) 7%, transparent);
       border-radius: 14px;
       padding: 10px 12px;
       display: flex;
@@ -364,7 +365,7 @@ export const roomCardStyles = css`
       font-weight: 800;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--stratum-chip-leak-color, #f44336);
+      color: var(--stratum-alarm);
       margin-bottom: 4px;
     }
     .alarms-head ha-icon {
@@ -375,7 +376,7 @@ export const roomCardStyles = css`
       font-size: 10px;
       padding: 1px 7px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
+      background: color-mix(in srgb, var(--stratum-alarm) 18%, transparent);
     }
     .alarm-row {
       display: flex;
@@ -390,15 +391,21 @@ export const roomCardStyles = css`
       cursor: pointer;
       border-radius: 10px;
     }
-    .alarm-row:hover {
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 8%, transparent);
+    /* (hover: hover) przy każdym :hover w tym pliku: na dotyku hover
+       przykleja się po tapnięciu i wiersz alarmu / przycisk wyglądał na
+       zaznaczony do następnego dotknięcia. To zapytanie o wskaźnik, nie
+       o rozmiar — zostaje media query. */
+    @media (hover: hover) {
+      .alarm-row:hover {
+        background: color-mix(in srgb, var(--stratum-alarm) 8%, transparent);
+      }
     }
     .ab-bub {
       width: 38px;
       height: 38px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 16%, transparent);
-      color: var(--stratum-chip-leak-color, #f44336);
+      background: color-mix(in srgb, var(--stratum-alarm) 16%, transparent);
+      color: var(--stratum-alarm);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -430,14 +437,14 @@ export const roomCardStyles = css`
       text-transform: uppercase;
       padding: 3px 8px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 15%, transparent);
-      color: var(--stratum-chip-leak-color, #f44336);
+      background: color-mix(in srgb, var(--stratum-alarm) 15%, transparent);
+      color: var(--stratum-alarm);
       flex-shrink: 0;
     }
     .ab-tm {
       font-size: 12px;
       font-weight: 700;
-      color: var(--stratum-chip-leak-color, #f44336);
+      color: var(--stratum-alarm);
       font-variant-numeric: tabular-nums;
       flex-shrink: 0;
     }
@@ -459,7 +466,7 @@ export const roomCardStyles = css`
       padding: 0;
       cursor: pointer;
       background: var(--divider-color, rgba(255, 255, 255, 0.2));
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, box-shadow 0.15s ease;
       flex-shrink: 0;
     }
     .hdr-switch .knob {
@@ -469,8 +476,8 @@ export const roomCardStyles = css`
       width: 24px;
       height: 24px;
       border-radius: 50%;
-      background: #fff;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      background: var(--stratum-ink-tint);
+      box-shadow: 0 1px 3px color-mix(in srgb, var(--stratum-ink-shade) 30%, transparent);
       transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
       display: flex;
       align-items: center;
@@ -490,8 +497,11 @@ export const roomCardStyles = css`
     .hdr-switch.on .knob {
       transform: translateX(26px);
     }
+    /* Ten sam łańcuch co kafle (--stratum-tile-lights): baza z dowolnego
+       miejsca, także z ha-card, potem token karty — przełącznik i kafle
+       nie mogą się rozjechać kolorem. */
     .hdr-switch.lights.on {
-      background: var(--stratum-chip-lights-color, #ffc107);
+      background: var(--stratum-chip-lights-color, var(--stratum-lights));
     }
     .hdr-switch.lights.on .knob {
       color: #b07908;
@@ -532,11 +542,18 @@ export const roomCardStyles = css`
       margin: 6px 0;
     }
 
+    /* overflow-x: auto przycina też w pionie, więc obrys fokusa przycisku
+       (2px + 2px offsetu) był ucięty z każdej strony. 4px zapasu na obrys,
+       z boków i od dołu zjedzone ujemnym marginesem (dół jak dawniej: 2px
+       pod paskiem przewijania). Od góry tylko -2px: nagłówek sekcji ma
+       margin-bottom: -6px i nieprzezroczyste tło, więc pełne -4px chowało
+       górną krawędź obrysu pod nagłówkiem. Przyciski schodzą przez to o 2px. */
     .cover-master {
       display: flex;
       gap: 8px;
       overflow-x: auto;
-      padding-bottom: 2px;
+      padding: 4px;
+      margin: -2px -4px -2px;
     }
 
     .cm-btn {
@@ -554,12 +571,14 @@ export const roomCardStyles = css`
       transition: filter 0.12s ease, transform 0.08s ease;
     }
 
-    .cm-btn:hover {
-      filter: brightness(1.2);
+    @media (hover: hover) {
+      .cm-btn:hover {
+        filter: brightness(1.2);
+      }
     }
 
     .cm-btn:active {
-      transform: scale(0.95);
+      transform: scale(0.96);
     }
 
     .cm-btn ha-icon {
@@ -607,8 +626,10 @@ export const roomCardStyles = css`
       transition: background 0.15s ease;
     }
 
-    .rest-toggle:hover {
-      background: var(--stratum-surface-3);
+    @media (hover: hover) {
+      .rest-toggle:hover {
+        background: var(--stratum-surface-3);
+      }
     }
 
     .rest-toggle ha-icon {
@@ -694,12 +715,14 @@ export const roomCardStyles = css`
     color: var(--primary-text-color);
     transition: background 0.15s ease;
   }
-  .media-sc:hover {
-    background: color-mix(
-      in srgb,
-      var(--stratum-card-accent, var(--primary-color, #ff9b42)) 20%,
-      transparent
-    );
+  @media (hover: hover) {
+    .media-sc:hover {
+      background: color-mix(
+        in srgb,
+        var(--stratum-card-accent, var(--primary-color)) 20%,
+        transparent
+      );
+    }
   }
   .media-sc ha-icon {
     --mdc-icon-size: 16px;
@@ -859,5 +882,67 @@ export const roomCardStyles = css`
     padding: 10px 10px 4px;
     border-top: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
     margin-top: 6px;
+  }
+
+  /* ====== Stany interaktywne przycisków popupu (CLAUDE.md §3) ======
+     Żaden z przycisków tego pliku nie miał obrysu fokusa — z klawiatury
+     nie było widać, gdzie jest fokus w nagłówku sekcji, w blokach rolet
+     i mediów. Jeden zestaw reguł dla wszystkich, żeby obrys i feedback
+     dotyku były wszędzie takie same. */
+  .alarm-row:focus-visible,
+  .hdr-switch:focus-visible,
+  .cm-btn:focus-visible,
+  .rest-toggle:focus-visible,
+  .media-tab:focus-visible,
+  .media-sc:focus-visible,
+  .media-group-btn:focus-visible,
+  .mg-cb:focus-visible,
+  .ms-row:focus-visible {
+    outline: 2px solid var(--stratum-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .alarm-row:active,
+  .hdr-switch:active,
+  .rest-toggle:active,
+  .media-tab:active,
+  .media-sc:active,
+  .media-group-btn:active,
+  .ms-row:active,
+  .mg-cb:active:not([disabled]) {
+    transform: scale(0.98);
+  }
+
+  /* Hover przełącznika nagłówka: poświata wokół toru, nie inny kolor —
+     kolor toru niesie stan (włączone / wyłączone). */
+  @media (hover: hover) {
+    .hdr-switch:hover {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+    }
+  }
+
+  /* Furtka ruchu (§4): bez tranzycji, bez skoku pod palcem i bez
+     sprężynującej gałki przełącznika — stan niesie kolor toru. */
+  @media (prefers-reduced-motion: reduce) {
+    .summary-item,
+    .hdr-switch,
+    .hdr-switch .knob,
+    .cm-btn,
+    .rest-toggle,
+    .media-tab,
+    .media-sc {
+      transition: none;
+    }
+    .alarm-row:active,
+    .hdr-switch:active,
+    .cm-btn:active,
+    .rest-toggle:active,
+    .media-tab:active,
+    .media-sc:active,
+    .media-group-btn:active,
+    .ms-row:active,
+    .mg-cb:active:not([disabled]) {
+      transform: none;
+    }
   }
 `;

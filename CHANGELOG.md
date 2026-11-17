@@ -4,6 +4,194 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.109.3] — 2026-11-17
+
+Dostępność, kontrast i porządki z pełnego audytu karty: klawiatura
+i czytnik ekranu, czytelne kolory na jasnym motywie, popup i sceny,
+„wstecz" w zagnieżdżonych warstwach, paczka, tłumaczenia i dokumentacja.
+
+### Changed (uwaga dla card-mod i motywów)
+- **`::part(header)` belki klasycznej to teraz kontener, a nie przycisk.**
+  Rozwijanie niesie nowy part `header-toggle` (ikona + nazwa) i to on ma
+  obrys fokusu. Reguły `::part(header):focus-visible` przenieś na
+  `::part(header-toggle):focus-visible`. Padding, tło, hover i pasek
+  akcentu belki dalej stylujesz przez `::part(header)`.
+- **Hover działa tylko przy myszy.** Efekty najechania (belka, odznaki
+  belki, chipy, wiersze i kafle pokoi w stylach `subtle`/`lift`/`glow`,
+  kafle popupu, sceny, lista chipa, × popupu) włączają się tylko na
+  urządzeniach z prawdziwym wskaźnikiem. Na telefonie wiersz nie zostaje
+  już podświetlony (ani uniesiony) po tapnięciu i zamknięciu popupu.
+- **Liczba w aktywnym chipie ma kolor mieszany** — 40% akcentu i 60%
+  koloru tekstu karty, czytelna na jasnym motywie; akcent zostaje na
+  ikonie i zabarwieniu pigułki. Dawny wygląd przywraca
+  `--stratum-chip-label-color: currentColor`.
+- **Jeden kolor fokusu w obu kartach:** `--stratum-focus` →
+  `--stratum-card-focus-color` → `--primary-color`, także z motywu HA
+  i z card-moda. Wcześniej motyw przemalowywał tylko część elementów.
+- Kolor alarmu ustawiaj przez `--stratum-chip-leak-color` — nadpisanie
+  samego `--stratum-alarm` w card-modzie nie działa. Bez tej zmiennej
+  **cały** alarm (odznaka ⚠ w belce, blok „Aktywne alarmy", chip wycieku
+  i jego lista) idzie za `--error-color` motywu, a nie za wpisanym
+  `#f44336`.
+- **Kolor świateł w karcie pokoju z `ha-card`:**
+  `ha-card { --stratum-chip-lights-color: … }` przemalowuje znowu kafle
+  świateł (także pasek jasności grupy) razem z przełącznikiem w nagłówku
+  sekcji — wcześniej przełącznik zmieniał kolor, a kafle zostawały
+  bursztynowe. Kafle biorą najpierw zmienną bazową, a `--stratum-lights`
+  dopiero, gdy bazy nie ustawiono nigdzie.
+- `::part(cover-master)` ma 4 px paddingu z ujemnym marginesem — miejsce
+  na obrys fokusu przycisków rolet.
+
+### Fixed (dostępność)
+- **Belka klasyczna:** chipy i odznaka ⚠ to osobne kontrolki obok
+  przycisku rozwijania, więc czytnik ekranu czyta liczniki i pozwala wejść
+  w odznakę. Odznaki belki mają opis z liczbą („Aktywne alarmy: 2. Pokaż
+  listę").
+- **Zwinięta karta nie łapie Tab.** Wiersze schowanej listy są poza
+  kolejnością fokusu i poza czytnikiem ekranu. Fokus z wiersza przed
+  zwinięciem (przycisk, auto-collapse, zejście aplikacji do tła) ląduje na
+  przycisku belki, a nie na początku strony. Auto-collapse odsuwa także
+  klawiatura.
+- Ikona pokoju z `room_icon_tap_action` działa z Enter/Spacji i mówi, co
+  zrobi („Kuchnia: przejdź do widoku"). Ta etykieta nie trafia do nazwy
+  samego wiersza — czytnik czyta wiersz jak dotąd (nazwa i pola),
+  a nie z czasownikiem ikony, który robi co innego niż Enter na wierszu.
+- **Popup pokoju** to dialog z nazwą pokoju, tytuł jest nagłówkiem.
+  Pierwszy Tab po otwarciu idzie na pierwszą kontrolkę (uchwyt albo ×),
+  Shift+Tab z pierwszej przechodzi na ostatnią, a Shift+Tab zaraz po
+  otwarciu nie wyprowadza już fokusu do wiersza pod popupem.
+- **Kafle popupu:** wrócił obrys fokusu; ikona rolety i plakietka playera
+  otwierają szczegóły z klawiatury; strzałki ←/→ na kaflu grupy świateł
+  (`rail`/`tint`) zmieniają jasność — seria naciśnięć to jedna komenda,
+  a Enter po strzałkach najpierw zatwierdza jasność, potem przełącza.
+- Komplet stanów (fokus, hover, wciśnięcie, wyłącznik ruchu) na
+  przełączniku świateł w wierszu, odznakach, chipach, przyciskach karty
+  pokoju (także hover przełącznika w nagłówku sekcji), liście chipa
+  (zakładki, przełączniki), ikonie rolety, plakietce playera i × popupu.
+  Wciśnięcie ikony pokoju skaluje do 0,96, jak reszta kontrolek.
+  Wciśnięcie domyślnego kafla „lift" znów daje natychmiastowy ślad.
+- Obrys fokusa zakładek listy chipa nie jest już ucięty od dołu przez
+  przewijany pasek zakładek.
+- Przy włączonym „ogranicz ruch" w systemie znikają animacje i skalowanie
+  kafli, przycisków rolet, playera, przełączników i „lift".
+
+### Fixed (wygląd i kontrast)
+- **Liczniki chipów na jasnym motywie:** żółty licznik świateł 1,42:1 →
+  5,14:1, ruch 2,42 → 6,90:1; na ciemnym bez pogorszenia.
+- Lista chipa: aktywna zakładka, czas i klasa czujki czytelne na jasnym
+  motywie; tor suwaka jasności ma obrys i nie znika.
+- **Kafel grupy świateł (`rail`):** nazwa i procent na pasku jasności
+  dostają atrament dobrany do koloru paska — 1,7 → 6,5:1 na ciemnym
+  motywie. Kafel mierzy pasek złożony na swoim tle (pasek jest kryty
+  w 80%) i bierze atrament o wyższym kontraście: czerwień i róż na jasnym
+  motywie 2,3–3,0 → 5,0–6,4:1, żarówka bez koloru przy ciemnym kolorze
+  świateł z motywu (granat, fiolet) 2,3 → 6,4–6,9:1.
+- Glif na kółku trybu `bubble` jest ciemny zamiast białego (1,6 → 7,9:1),
+  z nową zmienną `--stratum-tile-bubble-ink`.
+- Czujniki binarne i przyciski rolet biorą kolory z motywu
+  (`--error-color`, `--success-color`, `--warning-color`); alarm w popupie
+  idzie za `--stratum-chip-leak-color`, tak jak w wierszu.
+- Przełącznik świateł w wierszu: poświata i licznik idą za
+  `--stratum-chip-lights-color` (dawniej poświata zostawała bursztynowa).
+- Tor postępu playera bez okładki widoczny na jasnym motywie.
+
+### Fixed (popup i sceny)
+- **Kafle scen:** hover rozjaśnia zamiast podnosić (i tylko przy myszy);
+  zdjęcie, które się nie wczytało, nie zostawia białej dziury; obwódka
+  potwierdzenia ma ciemny kontur i jest widoczna na jasnych zdjęciach.
+- **Odrzucona aktywacja sceny** (scena usunięta, urządzenia offline):
+  czerwona obwódka zamiast „zrobione", bez błędu w konsoli.
+- **Gradient scen od pierwszego kadru** — bez przeskoku ikona → gradient.
+  Konfigurację scen pobiera tylko admin, najwyżej 2 zapytania naraz,
+  a wyniki są pamiętane w sesji; użytkownik bez uprawnień nie dostaje już
+  błędów 401/403 przy każdym otwarciu. Drugi pasek z tą samą sceną też
+  dostaje gradient.
+- Tap w kafel grupy świateł zawsze zdejmuje trzymaną jasność — zgaszone
+  światło nie pokazuje przez 6 s „40%". Dotyczy też akcji z listy, które
+  przełączają (`tap_action: toggle`, `perform-action`); `more-info`,
+  `navigate`, `url` i `none` trzymaną jasność zostawiają.
+- Zagnieżdżona grupa świateł w popupie przełącza się od razu po głównym
+  włączniku pokoju.
+
+### Fixed (nawigacja)
+- **„Wstecz" przy liście chipa karty pokoju w popupie** zamyka samą
+  listę, nie cały popup. × popupu przy otwartej liście zamyka obie warstwy
+  bez martwych kroków w historii.
+- **`navigate` z popupu na inny widok:** po powrocie jedno „wstecz"
+  wystarcza. Nawigacja samym hashem (np. pop-up Bubble Card `#salon`)
+  dokłada krok — pierwsze „wstecz" zamyka pop-up Bubble, drugie popup
+  Stratum.
+- **Karta w dialogu** (podgląd edytora, browser_mod): Escape zamyka
+  najwyższą warstwę Stratum, a nie cały dialog; pole dialogu (lista,
+  wyszukiwarka) dostaje Escape jako pierwsze. Dotyczy też pól edytora
+  karty obok podglądu (lista wyboru, edytor YAML) — Escape w nich nie
+  zamyka już popupu w podglądzie.
+
+### Changed (wydajność)
+- Tapnięcie światła w jednym piętrze przerysowuje tylko kartę, której
+  dotyczy (Ogród: 1 karta zamiast 3).
+- Otwarty popup obserwuje tylko encje, które pokazuje — raporty mocy,
+  energii czy linkquality nie przerysowują popupu ani paska scen (kuchnia:
+  528 → 109 encji).
+- Pasek scen przerysowuje się tylko przy zmianie swojej sceny, jej lamp
+  albo użytkownika.
+- Belka „Smugi" i lista pokoi liczą dane pokoju raz na render, nie dwa.
+
+### Fixed (paczka)
+- **Zdjęcia scen poza HACS.** `stratum:<id>` szuka zdjęcia obok bundla,
+  potem w `/hacsfiles/stratum-card/`, a na końcu rysuje wersję SVG, jeśli
+  scena ją ma. Instalacja ręczna w `/local/` i dev bez HACS nie dają już
+  pustych kafli; u HACS adresy się nie zmieniają.
+- **Jedna wersja w konsoli** dla obu kart, brana z `package.json` (koniec
+  „v1.24.0" w banerze karty pokoju). Bundle załadowany dwa razy (dwa
+  zasoby w HA) nie rzuca błędem, tylko ostrzega, która wersja jest
+  aktywna.
+- **Rozmiar paczki:** 482 306 → 573 151 B (gzip −9: 121 722 → 142 073 B,
+  +20 KB). Większość to słowniki PL/EN (~65 KB po minifikacji), z czego
+  ~83% to napisy edytorów. Te leżą teraz w osobnych słownikach
+  (`editor-pl.ts`/`editor-en.ts`), które importują tylko edytory — przy
+  jednym pliku bundla bajty są jeszcze te same, ale edytory w osobnym
+  pliku (v1.110.0) zabiorą je ze sobą i dashboard przestanie je pobierać.
+
+### Added (tłumaczenia)
+- Interfejs idzie za językiem użytkownika HA: polski, dla pozostałych
+  języków angielski — karta, popup, lista chipa i wszystkie edytory.
+- Poprawne polskie liczby mnogie w liście chipa („1 pozycja", „3 pozycje",
+  „12 pozycji", „2 pokoje", „9 pokoi").
+- Pigułka niedostępnego pokoju po polsku mówi „niedostępne" (po angielsku
+  „offline"). W wierszu węższym niż ~360 px zostaje z niej sama kropka —
+  słowo czyta czytnik ekranu i pokazuje dymek, a nazwa pokoju nie traci
+  miejsca („Pokój dzienny" na 300 px: 58 → 134 px, bez ucięcia).
+- Zmiana języka w profilu HA na żywo tłumaczy też kafle popupu i karty
+  pokoju (tytuły, opisy przycisków, „wyłączone"), nie tylko nagłówki —
+  wcześniej kafle zostawały w starym języku do zmiany stanu encji.
+- Literówka w opisie karty w katalogu: „świata" → „światła".
+
+### Changed (dokumentacja)
+- **`docs/styling.md` zgodny z kodem.** Usunięte zmienne, których karta
+  nie ma (`--stratum-card-room-divider`, `--scene-columns`,
+  `--scene-aspect`), i przepis „Full-screen popup" celujący w nieistniejące
+  elementy — nowy działa przez `--stratum-popup-*`. Poprawione wartości
+  domyślne (powierzchnie motywu zamiast `rgba(255,255,255,…)`, drzwi
+  `#ba68c8`). Dopisane nowe zmienne (`--stratum-chip-label-color`,
+  `--stratum-focus`, `--stratum-alarm`/`-ok`/`-warn`,
+  `--stratum-tile-bubble-ink`, `--stratum-scene-*`, `--stratum-popup-*`)
+  i party (`header-toggle`, `body-divider`, `alarms`, `cover-master`,
+  `chip-list-popup`). Nowy opis, które party są osiągalne skąd (party
+  zagnieżdżonych elementów nie są eksportowane) i gdzie ustawiać zmienne
+  (motyw, `:host`, `ha-card`).
+- README: auto-collapse jest domyślnie wyłączone, liczba sekcji i scen
+  zgodna z kodem (35 scen: 26 zdjęć i 9 SVG; sekcja „Sceny" w popupie ma
+  domyślnie 3 kolumny), język interfejsu.
+- `docs/styling.md`: przepis na mocniejsze wypełnienia nadpisuje na
+  `ha-card` tokeny, które czytają wiersze i kafle (`--stratum-room-row-bg`,
+  `--stratum-tile-background`…), a stopień `--stratum-surface-N` — na
+  `:host`; dawny przykład z `ha-card { --stratum-surface-1 }` nic nie
+  zmieniał.
+- `docs/development.md`: zdjęcia scen przy instalacji bez HACS (prefiks
+  `sceny-`) i release bez ręcznej stałej wersji. Roadmapa i decyzje
+  projektowe opisują stan faktyczny.
+
 ## [1.109.2] — 2026-11-17
 
 Wygoda na telefonie z pełnego audytu karty: wiersze, popup pokoju i kafle

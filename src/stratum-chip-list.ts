@@ -32,7 +32,8 @@ import {
   subscribePower,
   tapPower,
 } from './power-pending.js';
-import { ALARM_CLASS_LABELS } from './chip-list-helpers.js';
+import { alarmClassLabel } from './chip-list-helpers.js';
+import { localize } from './localize/localize.js';
 import { flushSwipesTouching } from './light-swipe.js';
 import { lightColorOf } from './tile-data.js';
 import { pushEscapeLayer } from './escape-stack.js';
@@ -107,7 +108,7 @@ export class StratumChipList extends LitElement {
   public connectedCallback(): void {
     super.connectedCallback();
     this._releaseEscape?.();
-    this._releaseEscape = pushEscapeLayer(() => this._close());
+    this._releaseEscape = pushEscapeLayer(() => this._close(), this);
     this._unsubPower = subscribePower((ids) => {
       if (this._shown.some((id) => ids.has(id))) this.requestUpdate();
     });
@@ -166,7 +167,7 @@ export class StratumChipList extends LitElement {
     if (!areaId && entry?.device_id) {
       areaId = this.hass?.devices?.[entry.device_id]?.area_id ?? undefined;
     }
-    if (!areaId) return { key: '__none__', name: 'Bez pomieszczenia' };
+    if (!areaId) return { key: '__none__', name: localize(this.hass, 'chip_list.no_room') };
     return { key: areaId, name: this.hass?.areas?.[areaId]?.name ?? areaId };
   }
 
@@ -417,11 +418,15 @@ export class StratumChipList extends LitElement {
             <div class="head-body">
               <div class="head-title">${this.label}</div>
               <div class="head-count">
-                ${total} ${total === 1 ? 'pozycja' : 'pozycji'} ·
-                ${groups.length} ${groups.length === 1 ? 'pokój' : 'pokoi'}
+                ${localize(this.hass, 'chip_list.items', { count: total })} ·
+                ${localize(this.hass, 'chip_list.rooms', { count: groups.length })}
               </div>
             </div>
-            <button class="close" title="Zamknij" @click=${this._close}>
+            <button
+              class="close"
+              title=${localize(this.hass, 'common.close')}
+              @click=${this._close}
+            >
               <ha-icon .icon=${'mdi:close'}></ha-icon>
             </button>
           </div>
@@ -432,7 +437,7 @@ export class StratumChipList extends LitElement {
                   class="tab ${filter === null ? 'on' : ''}"
                   @click=${() => (this._areaFilter = null)}
                 >
-                  Wszystkie · ${total}
+                  ${localize(this.hass, 'chip_list.all', { count: total })}
                 </button>
                 ${groups.map(
                   (g) => html`<button
@@ -448,7 +453,7 @@ export class StratumChipList extends LitElement {
           ${this._shown.length === 0
             ? html`<div class="empty">
                 <ha-icon .icon=${'mdi:check-circle-outline'}></ha-icon>
-                <span>Nic aktywnego — wszystko pod kontrolą.</span>
+                <span>${localize(this.hass, 'chip_list.empty')}</span>
               </div>`
             : html`<div class="list">
                 ${repeat(visible, (id) => id, (id) => this._renderRow(id))}
@@ -460,7 +465,7 @@ export class StratumChipList extends LitElement {
                   @click=${() => this._masterOffAll(visible)}
                 >
                   <ha-icon .icon=${'mdi:power'}></ha-icon>
-                  <span>Wyłącz wszystkie (${offCount})</span>
+                  <span>${localize(this.hass, 'chip_list.off_all', { count: offCount })}</span>
                 </button>
               </div>`
             : nothing}
@@ -495,7 +500,7 @@ export class StratumChipList extends LitElement {
       <button
         class="prow offline"
         @click=${() => this._moreInfo(entity_id)}
-        title="Więcej info"
+        title=${localize(this.hass, 'common.more_info')}
       >
         <span class="bub unav-icon" aria-hidden="true">
           <ha-icon .icon=${icon}></ha-icon>
@@ -504,7 +509,7 @@ export class StratumChipList extends LitElement {
           <span class="nm">${this._areaOf(entity_id).name}</span>
           <span class="sub">${this._friendlyName(entity_id)}</span>
         </span>
-        <span class="off-pill">offline</span>
+        <span class="off-pill">${localize(this.hass, 'common.offline')}</span>
       </button>
     `;
   }
@@ -562,7 +567,7 @@ export class StratumChipList extends LitElement {
           <button
             class="bub"
             @click=${() => this._moreInfo(entity_id)}
-            title="Więcej info"
+            title=${localize(this.hass, 'common.more_info')}
           >
             <ha-icon .icon=${icon}></ha-icon>
           </button>
@@ -575,7 +580,7 @@ export class StratumChipList extends LitElement {
             @click=${() => this._toggle(entity_id)}
             role="switch"
             aria-checked=${isOn}
-            title=${isOn ? 'Wyłącz' : 'Włącz'}
+            title=${localize(this.hass, isOn ? 'common.turn_off' : 'common.turn_on')}
           >
             <span class="toggle-knob"></span>
           </button>
@@ -643,7 +648,7 @@ export class StratumChipList extends LitElement {
       <button
         class="prow ${isOn ? 'active' : ''}"
         @click=${() => this._moreInfo(entity_id)}
-        title="Więcej info"
+        title=${localize(this.hass, 'common.more_info')}
       >
         <span class="bub">
           <ha-icon .icon=${icon}></ha-icon>
@@ -655,7 +660,7 @@ export class StratumChipList extends LitElement {
         ${this.showClassBadge
           ? (() => {
               const cls = state?.attributes?.device_class as string | undefined;
-              const label = cls ? ALARM_CLASS_LABELS[cls] ?? cls : undefined;
+              const label = cls ? alarmClassLabel(this.hass, cls) : undefined;
               return label
                 ? html`<span class="cls">${label}</span>`
                 : nothing;
@@ -718,6 +723,16 @@ export class StratumChipList extends LitElement {
       border-radius: 20px;
       background: var(--ha-card-background, var(--card-background-color, #1e1f22));
       color: var(--primary-text-color);
+      /* Akcent jako TEKST (aktywna zakładka, klasa i czas czujki): 40%
+         akcentu + 60% koloru tekstu. Żółty świateł i zielony ruchu jako
+         tekst na jasnym motywie miały 1,4–2,4:1; po zmieszaniu ≥ 4,8:1 na
+         jasnym i ≥ 5,4:1 na ciemnym, a odcień nadal mówi, czego dotyczy
+         lista. Ikony i tła zostają w czystym akcencie. */
+      --accent-ink: color-mix(
+        in srgb,
+        var(--accent, var(--primary-color)) 40%,
+        var(--primary-text-color)
+      );
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
       overflow: hidden;
       animation: pop-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -792,18 +807,32 @@ export class StratumChipList extends LitElement {
       transition: background 0.12s ease, transform 0.08s ease;
       flex-shrink: 0;
     }
-    .close:hover {
-      background: color-mix(in srgb, var(--error-color, #e53935) 22%, transparent);
-      color: var(--error-color, #e53935);
+    /* Hover tylko przy prawdziwym wskaźniku: na telefonie :hover zostaje po
+       tapnięciu i × wyglądał na „uzbrojony". Bez czerwieni — czerwony w
+       karcie znaczy alarm, a zamknięcie listy niczego nie niszczy;
+       przyciemnienie/rozjaśnienie tła z koloru tekstu działa w obu motywach. */
+    @media (hover: hover) {
+      .close:hover {
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color) 82%,
+          var(--primary-text-color)
+        );
+      }
     }
     .close:active {
-      transform: scale(0.95);
+      transform: scale(0.96);
     }
 
+    /* overflow-x: auto przycina też w pionie, a obrys fokusa zakładki
+       (2px + 2px offsetu) wystaje 4px pod nią — przy 2px dolnego paddingu
+       cała dolna krawędź obrysu znikała. 4px zapasu, nadwyżkę zjada ujemny
+       margines, więc lista pod spodem nie przesuwa się (wzór .cover-master). */
     .tabs {
       display: flex;
       gap: 8px;
-      padding: 12px 16px 2px;
+      padding: 12px 16px 4px;
+      margin-bottom: -2px;
       overflow-x: auto;
       scrollbar-width: none;
       flex-shrink: 0;
@@ -824,10 +853,13 @@ export class StratumChipList extends LitElement {
       transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
       font-variant-numeric: tabular-nums;
     }
+    /* Tekst w kolorze akcentu ginął na jasnym motywie (żółte „Wszystkie · 60"
+       na jasnym tle: 1,5:1). Tło i ramka zostają w akcencie, tekst bierze
+       --accent-ink (definicja przy .panel). */
     .tab.on {
-      background: color-mix(in srgb, var(--accent, var(--primary-color, #ff9b42)) 16%, transparent);
-      border-color: color-mix(in srgb, var(--accent, var(--primary-color, #ff9b42)) 45%, transparent);
-      color: var(--accent, var(--primary-color, #ff9b42));
+      background: color-mix(in srgb, var(--accent, var(--primary-color)) 16%, transparent);
+      border-color: color-mix(in srgb, var(--accent, var(--primary-color)) 45%, transparent);
+      color: var(--accent-ink);
     }
 
     .empty {
@@ -888,10 +920,21 @@ export class StratumChipList extends LitElement {
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: transform 0.08s ease;
+      transition: background 0.12s ease, transform 0.08s ease;
     }
-    .crow .bub:hover { transform: scale(1.06); }
-    .crow .bub:active { transform: scale(0.94); }
+    /* Hover = mocniejsze podbarwienie, nie powiększenie: scale(1.06)
+       przesuwał treść i na dotyku zostawał po tapnięciu (CLAUDE.md §3).
+       :active w widełkach 0.96–0.98 — 0.94 było za mocnym skokiem. */
+    @media (hover: hover) {
+      .crow .bub:hover {
+        background: color-mix(
+          in srgb,
+          var(--c, var(--accent, var(--primary-color))) 30%,
+          transparent
+        );
+      }
+    }
+    .crow .bub:active { transform: scale(0.96); }
     .crow .bub ha-icon { --mdc-icon-size: 20px; }
 
     .mid {
@@ -931,7 +974,7 @@ export class StratumChipList extends LitElement {
       background: var(--divider-color, rgba(255, 255, 255, 0.2));
       cursor: pointer;
       padding: 0;
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
       flex-shrink: 0;
     }
 
@@ -956,8 +999,14 @@ export class StratumChipList extends LitElement {
     }
 
     /* Tor bez bieli: rgba(255,255,255,.12) znikał na jasnym motywie HA.
-       Kciuk i cień z tokenów --stratum-ink-* (definiowanych przez kartę,
-       w której lista jest osadzona). */
+       22% koloru tekstu, nie 12%: przy 12% tor lampy na 25% był ledwie
+       widoczny (1,26:1 na jasnym, 1,38:1 na ciemnym; teraz 1,55 i 1,83)
+       i nie było wiadomo, gdzie suwak się kończy. Kciuk i cień z tokenów --stratum-ink-*
+       (definiowanych przez kartę, w której lista jest osadzona).
+       Granicę toru niesie obrys 1 px z 55% koloru tekstu (≥ 3:1 do tła
+       wiersza w obu motywach — próg WCAG 1.4.11 dla kontrolek). Sam tor
+       w 50%, żeby dobić do 3:1, byłby ciężką szarą belką przy każdej
+       lampie; obrys daje ten sam zasięg suwaka bez przyciemniania. */
     .bri-slider {
       -webkit-appearance: none;
       appearance: none;
@@ -968,8 +1017,9 @@ export class StratumChipList extends LitElement {
       background: linear-gradient(
         90deg,
         var(--c, var(--accent, var(--primary-color))) var(--pct, 0%),
-        color-mix(in srgb, var(--primary-text-color) 12%, transparent) var(--pct, 0%)
+        color-mix(in srgb, var(--primary-text-color) 22%, transparent) var(--pct, 0%)
       );
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-text-color) 55%, transparent);
       cursor: pointer;
       transition: opacity 0.15s ease;
     }
@@ -1003,15 +1053,23 @@ export class StratumChipList extends LitElement {
       cursor: pointer;
     }
 
-    .bri-slider:focus-visible {
-      outline: 2px solid var(--c, var(--accent, var(--primary-color)));
-      outline-offset: 2px;
-    }
-
+    /* × , zakładki i przycisk zbiorczy nie miały własnego obrysu — zostawał
+       tylko domyślny przeglądarki, inny w każdym silniku.
+       Kolor obrysu to token fokusa karty, NIE --accent/--c: --accent jest
+       kolorem chipa (na liście alarmu/wycieku czerwony), a --c kolorem
+       żarówki — obrys fokusa wychodził „alarmowy" albo żółty i ignorował
+       --stratum-focus z motywu. Jeden kolor = jedno znaczenie: fokus.
+       --stratum-focus-ring przychodzi z karty (surface-tokens, :host
+       i ha-card); lista poza kartą bierze --stratum-focus wprost. */
+    .bri-slider:focus-visible,
+    .close:focus-visible,
+    .tab:focus-visible,
+    .master:focus-visible,
     .toggle:focus-visible,
     .crow .bub:focus-visible,
     .prow:focus-visible {
-      outline: 2px solid var(--accent, var(--primary-color));
+      outline: 2px solid
+        var(--stratum-focus-ring, var(--stratum-focus, var(--primary-color)));
       outline-offset: 2px;
     }
 
@@ -1033,12 +1091,14 @@ export class StratumChipList extends LitElement {
       transition: background 0.12s ease, transform 0.1s ease;
       width: 100%;
     }
-    .prow:hover {
-      background: color-mix(
-        in srgb,
-        var(--accent, var(--primary-color)) 8%,
-        var(--secondary-background-color)
-      );
+    @media (hover: hover) {
+      .prow:hover {
+        background: color-mix(
+          in srgb,
+          var(--accent, var(--primary-color)) 8%,
+          var(--secondary-background-color)
+        );
+      }
     }
     .prow:active {
       transform: scale(0.98);
@@ -1115,10 +1175,10 @@ export class StratumChipList extends LitElement {
       border-radius: 999px;
       background: color-mix(
         in srgb,
-        var(--accent, var(--primary-color, #ff9b42)) 16%,
+        var(--accent, var(--primary-color)) 16%,
         transparent
       );
-      color: var(--accent, var(--primary-color, #ff9b42));
+      color: var(--accent-ink);
       flex-shrink: 0;
     }
 
@@ -1130,7 +1190,7 @@ export class StratumChipList extends LitElement {
       flex-shrink: 0;
     }
     .prow.active .tm {
-      color: var(--accent, var(--primary-color, #ff9b42));
+      color: var(--accent-ink);
     }
 
     /* --- sticky stopka --- */
@@ -1160,23 +1220,66 @@ export class StratumChipList extends LitElement {
       background: color-mix(in srgb, var(--error-color, #e53935) 16%, transparent);
       color: var(--error-color, #e53935);
       cursor: pointer;
-      transition: background 0.12s ease;
+      transition: background 0.12s ease, transform 0.08s ease;
     }
-    .master:hover {
-      background: color-mix(in srgb, var(--error-color, #e53935) 26%, transparent);
+    @media (hover: hover) {
+      .master:hover {
+        background: color-mix(in srgb, var(--error-color) 26%, transparent);
+      }
+    }
+    /* Zakładki i przycisk zbiorczy nie dawały żadnego feedbacku dotyku. */
+    .tab:active,
+    .master:active {
+      transform: scale(0.98);
+    }
+    .toggle:active {
+      transform: scale(0.96);
+    }
+    /* Hover zakładki i przełącznika — dotąd brakowało go w ogóle (§3).
+       Zakładka ciemnieje/jaśnieje w stronę tekstu, aktywna mocniej
+       w akcencie. Przełącznik dostaje poświatę wokół toru, a nie inny
+       kolor: kolor toru niesie stan (włączone / wyłączone). */
+    @media (hover: hover) {
+      .tab:hover {
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color) 88%,
+          var(--primary-text-color)
+        );
+        color: var(--primary-text-color);
+      }
+      .tab.on:hover {
+        background: color-mix(in srgb, var(--accent, var(--primary-color)) 24%, transparent);
+        color: var(--accent-ink);
+      }
+      .toggle:hover {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+      }
     }
     .master ha-icon { --mdc-icon-size: 18px; }
 
+    /* Furtka ruchu (§4) obejmuje też przyciski — wcześniej ×, bąbel i
+       zakładki dalej skakały pod palcem przy „Usuń animacje". */
     @media (prefers-reduced-motion: reduce) {
       .backdrop,
       .panel,
       .toggle-knob,
       .bri-slider,
-      .prow {
+      .prow,
+      .close,
+      .tab,
+      .toggle,
+      .crow .bub,
+      .master {
         animation: none;
         transition: none;
       }
-      .prow:active {
+      .prow:active,
+      .close:active,
+      .tab:active,
+      .toggle:active,
+      .crow .bub:active,
+      .master:active {
         transform: none;
       }
     }

@@ -7,23 +7,34 @@
 //
 // Użycie: `image: 'stratum:<id>'` w configu — runtime zamienia na data URI.
 
+import {
+  cssImageLayers,
+  photoBaseFromModuleUrl,
+  scenePhotoFile,
+  scenePhotoUrls,
+} from './scene-photo-url.js';
+
 /**
  * Zdjęcia scen jako osobne assety releasu (`sceny-<id>.webp`) — HACS
  * pobiera wszystkie assety do www/community/stratum-card/ (płasko).
  * Trzyma bundle JS małym (CLAUDE.md), zdjęcia ładują się leniwie.
  * Instalacja ręczna (bez HACS): pobierz z releasu stratum-card.js
- * i wszystkie sceny-*.webp do jednego katalogu w www.
+ * i wszystkie sceny-*.webp do jednego katalogu w www (np. /local/) —
+ * adresy liczymy względem bundla, więc zdjęcia znajdą się same.
+ * Fallbacki (HACS, SVG) opisuje scene-photo-url.ts.
  */
+const PHOTO_BASE = photoBaseFromModuleUrl(import.meta.url);
+
 function photoUrl(id: string): string {
-  return `/hacsfiles/stratum-card/sceny-${id}.webp`;
+  return `${PHOTO_BASE}${scenePhotoFile(id)}`;
 }
 
 export interface ScenePreset {
+  /** Id presetu; nazwa w UI: `editor.scene_presets.<id>` w słowniku. */
   id: string;
-  label: string;
   /** Grafika wektorowa (fallback dla scen bez zdjęcia). */
   svg?: string;
-  /** URL zdjęcia WebP (/hacsfiles/...) — wygrywa nad `svg`. */
+  /** URL zdjęcia WebP (obok bundla) — wygrywa nad `svg`. */
   photo?: string;
 }
 
@@ -341,41 +352,41 @@ const SCENES: Record<string, string> = {
 // configi `stratum:<id>` działają bez zmian — te same id wskazują teraz
 // nową grafikę.
 export const SCENE_PRESETS: ScenePreset[] = [
-  { id: 'jasne', label: 'Jasne', photo: photoUrl('jasne') },
-  { id: 'poranek', label: 'Poranek', photo: photoUrl('poranek') },
-  { id: 'kawa', label: 'Kawa', photo: photoUrl('kawa') },
-  { id: 'praca', label: 'Praca', svg: SCENES.praca! },
-  { id: 'nauka', label: 'Nauka', photo: photoUrl('nauka') },
-  { id: 'czytanie', label: 'Czytanie', photo: photoUrl('czytanie') },
-  { id: 'czytanie-2', label: 'Czytanie 2', photo: photoUrl('czytanie-2') },
-  { id: 'gotowanie', label: 'Gotowanie', svg: SCENES.gotowanie! },
-  { id: 'relaks', label: 'Relaks', photo: photoUrl('relaks') },
-  { id: 'medytacja', label: 'Medytacja', svg: SCENES.medytacja! },
-  { id: 'muzyka', label: 'Muzyka', svg: SCENES.muzyka! },
-  { id: 'tv', label: 'TV', photo: photoUrl('tv') },
-  { id: 'tv-2', label: 'TV 2', photo: photoUrl('tv-2') },
-  { id: 'kino', label: 'Kino', svg: SCENES.kino! },
-  { id: 'gaming', label: 'Gaming', svg: SCENES.gaming! },
-  { id: 'sport', label: 'Sport', svg: SCENES.sport! },
-  { id: 'goscie', label: 'Goście', svg: SCENES.goscie! },
-  { id: 'impreza', label: 'Impreza', photo: photoUrl('impreza') },
-  { id: 'impreza-2', label: 'Impreza 2', photo: photoUrl('impreza-2') },
-  { id: 'disco', label: 'Disco', photo: photoUrl('disco') },
-  { id: 'romantyczne', label: 'Romantyczne', photo: photoUrl('romantyczne') },
-  { id: 'kapiel', label: 'Kąpiel', photo: photoUrl('kapiel') },
-  { id: 'kapiel-cieply', label: 'Kąpiel ciepła', photo: photoUrl('kapiel-cieply') },
-  { id: 'kapiel-fiolet', label: 'Kąpiel fiolet', photo: photoUrl('kapiel-fiolet') },
-  { id: 'ogrod', label: 'Ogród', photo: photoUrl('ogrod') },
-  { id: 'wieczor', label: 'Wieczór', photo: photoUrl('wieczor') },
-  { id: 'usypianie', label: 'Usypianie', photo: photoUrl('usypianie') },
-  { id: 'noc', label: 'Noc', photo: photoUrl('noc') },
-  { id: 'noc-2', label: 'Noc 2', photo: photoUrl('noc-2') },
-  { id: 'bezpieczenstwo', label: 'Bezpieczeństwo', svg: SCENES.bezpieczenstwo! },
-  { id: 'kinkiet-cieply', label: 'Kinkiet ciepły', photo: photoUrl('kinkiet-cieply') },
-  { id: 'kinkiet-przygaszony', label: 'Kinkiet przygaszony', photo: photoUrl('kinkiet-przygaszony') },
-  { id: 'kinkiet-czerwony', label: 'Kinkiet czerwony', photo: photoUrl('kinkiet-czerwony') },
-  { id: 'kinkiet-fioletowy', label: 'Kinkiet fioletowy', photo: photoUrl('kinkiet-fioletowy') },
-  { id: 'kinkiet-niebieski', label: 'Kinkiet niebieski', photo: photoUrl('kinkiet-niebieski') },
+  { id: 'jasne', photo: photoUrl('jasne') },
+  { id: 'poranek', photo: photoUrl('poranek') },
+  { id: 'kawa', photo: photoUrl('kawa') },
+  { id: 'praca', svg: SCENES.praca! },
+  { id: 'nauka', photo: photoUrl('nauka') },
+  { id: 'czytanie', photo: photoUrl('czytanie') },
+  { id: 'czytanie-2', photo: photoUrl('czytanie-2') },
+  { id: 'gotowanie', svg: SCENES.gotowanie! },
+  { id: 'relaks', photo: photoUrl('relaks') },
+  { id: 'medytacja', svg: SCENES.medytacja! },
+  { id: 'muzyka', svg: SCENES.muzyka! },
+  { id: 'tv', photo: photoUrl('tv') },
+  { id: 'tv-2', photo: photoUrl('tv-2') },
+  { id: 'kino', svg: SCENES.kino! },
+  { id: 'gaming', svg: SCENES.gaming! },
+  { id: 'sport', svg: SCENES.sport! },
+  { id: 'goscie', svg: SCENES.goscie! },
+  { id: 'impreza', photo: photoUrl('impreza') },
+  { id: 'impreza-2', photo: photoUrl('impreza-2') },
+  { id: 'disco', photo: photoUrl('disco') },
+  { id: 'romantyczne', photo: photoUrl('romantyczne') },
+  { id: 'kapiel', photo: photoUrl('kapiel') },
+  { id: 'kapiel-cieply', photo: photoUrl('kapiel-cieply') },
+  { id: 'kapiel-fiolet', photo: photoUrl('kapiel-fiolet') },
+  { id: 'ogrod', photo: photoUrl('ogrod') },
+  { id: 'wieczor', photo: photoUrl('wieczor') },
+  { id: 'usypianie', photo: photoUrl('usypianie') },
+  { id: 'noc', photo: photoUrl('noc') },
+  { id: 'noc-2', photo: photoUrl('noc-2') },
+  { id: 'bezpieczenstwo', svg: SCENES.bezpieczenstwo! },
+  { id: 'kinkiet-cieply', photo: photoUrl('kinkiet-cieply') },
+  { id: 'kinkiet-przygaszony', photo: photoUrl('kinkiet-przygaszony') },
+  { id: 'kinkiet-czerwony', photo: photoUrl('kinkiet-czerwony') },
+  { id: 'kinkiet-fioletowy', photo: photoUrl('kinkiet-fioletowy') },
+  { id: 'kinkiet-niebieski', photo: photoUrl('kinkiet-niebieski') },
 ];
 
 const PRESET_PREFIX = 'stratum:';
@@ -391,8 +402,44 @@ export function resolveSceneImage(value: string | undefined): string | undefined
   const preset = SCENE_PRESETS.find((p) => p.id === id);
   if (!preset) return undefined;
   if (preset.photo) return preset.photo;
-  if (preset.svg) return `data:image/svg+xml;utf8,${encodeURIComponent(preset.svg)}`;
+  if (preset.svg) return svgDataUri(preset.svg);
   return undefined;
+}
+
+function svgDataUri(svg: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+// Wynik zależy tylko od wartości z configu, a kodowanie SVG do data URI
+// kosztuje — render kafla scen nie powinien go powtarzać przy każdym hass.
+const backgroundCache = new Map<string, string | undefined>();
+
+/**
+ * Gotowa wartość CSS `background-image` dla grafiki sceny/kafla — z łańcuchem
+ * fallbacków dla presetów ze zdjęciem: obok bundla → /hacsfiles/ → SVG
+ * (o ile scena ma jeszcze wersję wektorową). Dla zwykłego URL-a jedna warstwa.
+ * `resolveSceneImage` zostaje dla miejsc, które potrzebują jednego adresu.
+ */
+export function resolveSceneBackground(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (backgroundCache.has(value)) return backgroundCache.get(value);
+  let result: string | undefined;
+  if (!value.startsWith(PRESET_PREFIX)) {
+    result = cssImageLayers([value]);
+  } else {
+    const id = value.slice(PRESET_PREFIX.length);
+    const preset = SCENE_PRESETS.find((p) => p.id === id);
+    const svg = preset?.svg ?? SCENES[id];
+    if (preset?.photo) {
+      const layers = scenePhotoUrls(id, PHOTO_BASE);
+      if (svg) layers.push(svgDataUri(svg));
+      result = cssImageLayers(layers);
+    } else if (preset && svg) {
+      result = cssImageLayers([svgDataUri(svg)]);
+    }
+  }
+  backgroundCache.set(value, result);
+  return result;
 }
 
 export function presetIdFromValue(value: string | undefined): string | undefined {

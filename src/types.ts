@@ -1,10 +1,10 @@
 // Shared types for stratum-card.
 //
-// Rozszerzamy stopniowo — v0.1 ma minimum potrzebne do renderu.
+// Jedno źródło typów dla obu kart, edytorów i testów — nie duplikujemy
+// interface'ów w komponentach.
 
 /**
  * Konfiguracja karty przekazana z Lovelace YAML.
- * Od v0.3 rozszerzamy o `chips`, od v0.5 o `rooms` config, od v0.8 o customowe sloty.
  */
 export interface StratumCardConfig {
   /** Obowiązkowe pole dyskryminujące dla HA — zawsze `"custom:stratum-card"`. */
@@ -28,15 +28,19 @@ export interface StratumCardConfig {
   /** Override ikony. Fallback: ikona floor-a / area; potem `mdi:home`. */
   icon?: string;
 
-  /** Czy karta startuje rozwinięta (pamiętana tylko w sesji). */
+  /**
+   * Czy karta startuje rozwinięta. Do tego stanu karta wraca, gdy znika
+   * z widoku (zmiana widoku/dashboardu) albo dokument schodzi do tła.
+   */
   expanded?: boolean;
 
   /** Włącza `console.log` listy encji area przy każdym renderze. Tylko dev. */
   debug?: boolean;
 
   /**
-   * Liczba sekund bez interakcji po których rozwinięta karta sama się zwija.
-   * Default: 60. Ustaw `0` żeby wyłączyć auto-collapse.
+   * Liczba sekund bez interakcji (dotyk, klik, klawiatura), po których
+   * rozwinięta karta sama się zwija. Domyślnie wyłączone (`0` / brak) —
+   * zwijaniem rządzi powrót do `expanded` przy wyjściu z widoku.
    */
   auto_collapse?: number;
 
@@ -1140,6 +1144,11 @@ export interface HomeAssistant {
   entities: Record<string, HassEntityRegistryEntry>;
   devices: Record<string, HassDevice>;
   language: string;
+  /**
+   * Ustawienia regionalne profilu (HA ≥ 2022.x). `locale.language` to
+   * język wybrany w profilu — wygrywa nad `language` przy wyborze słownika.
+   */
+  locale?: { language?: string };
   themes: { darkMode: boolean };
   callService: (
     domain: string,

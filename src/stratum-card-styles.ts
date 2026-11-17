@@ -32,6 +32,9 @@ export const cardStyles = css`
       background: transparent;
       border: 0;
       width: 100%;
+      /* Belka była kiedyś <button>, który domyślnie liczy szerokość
+         z paddingiem; jako <div> bez tego wychodziła 32 px poza kartę. */
+      box-sizing: border-box;
       color: inherit;
       font: inherit;
       text-align: left;
@@ -49,13 +52,59 @@ export const cardStyles = css`
       background: var(--stratum-card-accent-bar-color, var(--primary-color, #ff9b42));
     }
 
-    .header:hover {
-      background: var(--stratum-card-hover-background, rgba(255, 255, 255, 0.04));
+    /* Hover tylko tam, gdzie jest prawdziwy kursor. Na dotyku przeglądarka
+       trzyma :hover na ostatnio tkniętym elemencie aż do następnego
+       dotknięcia gdzie indziej — belka zostawała podświetlona po zwinięciu.
+       (hover: hover) to pytanie o urządzenie, nie o rozmiar, więc tu media
+       query jest właściwe — jak prefers-reduced-motion. */
+    @media (hover: hover) {
+      .header:hover {
+        background: var(--stratum-card-hover-background, var(--stratum-surface-2));
+      }
     }
 
-    .header:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
-      outline-offset: -2px;
+    /* Przycisk rozwijania belki klasycznej: ikona + nazwa. Rośnie tak, jak
+       dawniej rosła sama nazwa (flex: 1 od zera), a odstęp między ikoną
+       a nazwą to ten sam gap co w belce — układ nie przesuwa się o piksel
+       względem czasów, gdy całość była przyciskiem. min-width odtwarza
+       ikonę, która nie mogła się kurczyć: z min-width: 0 wąska karta
+       ściskała przycisk do zera i chipy wjeżdżały na ikonę. */
+    .header-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: calc(var(--stratum-card-icon-size, 22px) + 10px);
+      margin: 0;
+      padding: 0;
+      border: 0;
+      /* Ten sam promień co .hs-title — jego odpowiednik w belce „stripes"
+         (obrys fokusa na tekście). Nie nowa wartość, tylko ten sam stopień. */
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    .header-toggle:focus-visible {
+      outline: 2px solid var(--stratum-focus-ring);
+      outline-offset: 2px;
+    }
+
+    .header-toggle:active {
+      transform: scale(0.98);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .header-toggle {
+        transition: none;
+      }
+      .header-toggle:active {
+        transform: none;
+      }
     }
 
     .area-icon {
@@ -90,7 +139,10 @@ export const cardStyles = css`
       padding: 4px 0;
     }
 
-    /* Badge alarmu na belce piętra — jak ⚠ N na wierszach. */
+    /* Badge alarmu na belce piętra — jak ⚠ N na wierszach. Kolor przez
+       alias --stratum-alarm (surface-tokens): baza --stratum-chip-leak-color,
+       potem --error-color motywu. Wpisany #f44336 dawał na Catppuccin/
+       Mushroom drugą czerwień obok wierszy, które szły już za motywem. */
     .header-alarm-badge {
       display: inline-flex;
       align-items: center;
@@ -98,9 +150,9 @@ export const cardStyles = css`
       padding: 4px 10px;
       border-radius: 999px;
       border: 1.5px solid
-        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 65%, transparent);
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
-      color: var(--stratum-chip-leak-color, #f44336);
+        color-mix(in srgb, var(--stratum-alarm) 65%, transparent);
+      background: color-mix(in srgb, var(--stratum-alarm) 18%, transparent);
+      color: var(--stratum-alarm);
       font-size: 12.5px;
       font-weight: 800;
       cursor: pointer;
@@ -109,6 +161,59 @@ export const cardStyles = css`
     }
     .header-alarm-badge ha-icon {
       --mdc-icon-size: 15px;
+    }
+
+    /* Pasek chipów przewija się poziomo (overflow-x), więc tnie wszystko,
+       co wystaje poza jego pudełko — także obrys fokusa skrajnej odznaki
+       czy chipa. 4 px paddingu po bokach daje obrysowi (2 px + 2 px
+       odstępu) miejsce, a ujemny margines oddaje je z powrotem: treść
+       stoi dokładnie tam, gdzie stała. Tylko belka klasyczna — w „stripes"
+       chipy mają własny, zerowy padding pod nazwą. */
+    .header-toggle ~ .chips {
+      padding: 4px;
+      margin: 0 -4px;
+    }
+
+    /* Odznaki belki (⚠ alarmy, niedostępne) to osobne kontrolki — komplet
+       stanów jak każdy przycisk karty. */
+    .header-alarm-badge,
+    .header-unav-badge {
+      transition: background 0.12s ease, transform 0.1s ease;
+    }
+    @media (hover: hover) {
+      .header-alarm-badge:hover {
+        background: color-mix(
+          in srgb,
+          var(--stratum-alarm) 28%,
+          transparent
+        );
+      }
+      .header-unav-badge:hover {
+        background: color-mix(
+          in srgb,
+          var(--stratum-chip-unavailable-color, var(--disabled-text-color)) 24%,
+          transparent
+        );
+      }
+    }
+    .header-alarm-badge:focus-visible,
+    .header-unav-badge:focus-visible {
+      outline: 2px solid var(--stratum-focus-ring);
+      outline-offset: 2px;
+    }
+    .header-alarm-badge:active,
+    .header-unav-badge:active {
+      transform: scale(0.96);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .header-alarm-badge,
+      .header-unav-badge {
+        transition: none;
+      }
+      .header-alarm-badge:active,
+      .header-unav-badge:active {
+        transform: none;
+      }
     }
     /* Puls = alarm wymagający reakcji. Poświata stoi na osobnej warstwie,
        a animujemy tylko jej opacity: to robi kompozytor. Animowany
@@ -121,7 +226,7 @@ export const cardStyles = css`
       border-radius: inherit;
       pointer-events: none;
       box-shadow: 0 0 8px 3px
-        color-mix(in srgb, var(--stratum-chip-leak-color, var(--error-color)) 25%, transparent);
+        color-mix(in srgb, var(--stratum-alarm) 25%, transparent);
       opacity: 0;
       animation: stratum-header-alarm-pulse 1.6s ease-in-out infinite;
     }
@@ -264,16 +369,20 @@ export const cardStyles = css`
       transition: transform 0.1s ease;
     }
 
-    .hs-title:hover {
-      color: color-mix(
-        in srgb,
-        var(--stratum-card-title-color, var(--primary-text-color)) 82%,
-        var(--stratum-surface-base)
-      );
+    /* Jak .header:hover — tylko przy prawdziwym kursorze, bez lepkiego
+       hovera po tapnięciu. */
+    @media (hover: hover) {
+      .hs-title:hover {
+        color: color-mix(
+          in srgb,
+          var(--stratum-card-title-color, var(--primary-text-color)) 82%,
+          var(--stratum-surface-base)
+        );
+      }
     }
 
     .hs-title:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring);
       outline-offset: 2px;
     }
 
@@ -343,7 +452,7 @@ export const cardStyles = css`
     }
 
     button.hs-stripe:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring);
       outline-offset: -4px;
     }
 
@@ -553,7 +662,7 @@ export const cardStyles = css`
       }
 
       .stratum-popup-grab:focus-visible {
-        outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+        outline: 2px solid var(--stratum-focus-ring);
         outline-offset: -2px;
         border-radius: 6px;
       }
@@ -652,10 +761,35 @@ export const cardStyles = css`
       align-items: center;
       justify-content: center;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      transition:
+        background-color 150ms ease,
+        transform 100ms ease;
     }
 
-    .stratum-popup-close:hover {
-      background: color-mix(in srgb, var(--card-background-color, #1c1e22) 45%, #000);
+    /* Hover tylko tam, gdzie jest kursor: na dotyku :hover „przykleja się"
+       po tapnięciu i × zostawał przyciemniony po powrocie do popupu.
+       Tło bez hexów — z tła karty w stronę --stratum-ink-shade. */
+    @media (hover: hover) {
+      .stratum-popup-close:hover {
+        background: color-mix(
+          in srgb,
+          var(--card-background-color, var(--stratum-surface-base)) 45%,
+          var(--stratum-ink-shade)
+        );
+      }
+    }
+
+    /* Domyślny obrys przeglądarki (auto 1px, ciemny) na ciemnym popupie był
+       prawie niewidoczny — klawiatura gubiła ×. */
+    .stratum-popup-close:focus-visible {
+      outline: 2px solid var(--stratum-focus-ring);
+      outline-offset: 2px;
+    }
+
+    /* translateY(10px) to pozycja bazowa (nakładka na nagłówek karty pod
+       spodem) — :active musi ją powtórzyć, inaczej × skacze o 10 px. */
+    .stratum-popup-close:active {
+      transform: translateY(10px) scale(0.96);
     }
 
     .stratum-popup-close ha-icon {
@@ -664,9 +798,13 @@ export const cardStyles = css`
 
     @media (prefers-reduced-motion: reduce) {
       .stratum-popup-backdrop,
-      .stratum-popup-card {
+      .stratum-popup-card,
+      .stratum-popup-close {
         animation: none;
         transition: none;
+      }
+      .stratum-popup-close:active {
+        transform: translateY(10px);
       }
     }
   

@@ -11,6 +11,12 @@
 // `toggle` bez encji), ma wrócić do swojego domyślnego kliknięcia, a chip
 // — do listy encji, zamiast udawać przycisk, który nic nie robi.
 
+import {
+  currentHistoryIndex,
+  isGuardOnTop,
+  liveGuards,
+  navigateMode,
+} from './back-guard.js';
 import type { HomeAssistant, TapActionConfig } from './types.js';
 
 /** Kontekst potrzebny do rozwiązania akcji (bez DOM-u — testowalny). */
@@ -121,6 +127,30 @@ export function resolveTapAction(
 }
 
 /**
+ * Czy akcja może zmienić stan encji (przełączyć, wywołać usługę).
+ *
+ * Kafel grupy świateł trzyma po geście jasność docelową na pasku, aż HA ją
+ * potwierdzi. Tap, który przełącza światło — także override z listy
+ * (`toggle`, `perform-action`) — musi tę wartość porzucić, inaczej pasek
+ * pokazuje np. 40% nad zgaszonym światłem do 6 s. Akcje tylko „patrzące"
+ * (more-info, navigate, url) i świadome `none` nic nie zmieniają, więc
+ * trzymana wartość zostaje — porzucona mignęłaby starym poziomem do echa
+ * HA. Nieznany typ liczymy jako zmianę: lepiej raz mignąć niż kłamać.
+ */
+export function tapMayChangeState(action: TapActionConfig | undefined): boolean {
+  if (!action) return false;
+  switch (action.action) {
+    case 'none':
+    case 'navigate':
+    case 'url':
+    case 'more-info':
+      return false;
+    default:
+      return true;
+  }
+}
+
+/**
  * Wykonuje tap_action. Zwraca `true`, gdy akcja została obsłużona; `false`,
  * gdy nie było czego wykonać — wywołujący wraca wtedy do swojego
  * domyślnego zachowania (toggle kafla, lista chipa, aktywacja sceny).
@@ -133,10 +163,19 @@ export function runTapAction(
   const plan = resolveTapAction(hass, action, ctx);
   if (!plan) return false;
   switch (plan.kind) {
-    case 'navigate':
-      history.pushState(null, '', plan.path);
-      window.dispatchEvent(new Event('location-changed'));
+    case 'navigate': {
+      // Z wnętrza popupu (strażnik „wstecz" na szczycie) na inny widok
+      // nadpisujemy wpis strażnika — uzasadnienie przy navigateMode
+      // w back-guard.ts. `replace` w szczególe zdarzenia — tak samo woła
+      // router HA navigate().
+      const guardOnTop = isGuardOnTop(liveGuards(), currentHistoryIndex(), history.state);
+      const replace =
+        navigateMode({ guardOnTop, fromHref: window.location.href, toPath: plan.path }) === 'replace';
+      if (replace) history.replaceState(null, '', plan.path);
+      else history.pushState(null, '', plan.path);
+      window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace } }));
       return true;
+    }
     case 'url':
       if (plan.newTab) window.open(plan.url, '_blank', 'noopener');
       else window.location.href = plan.url;

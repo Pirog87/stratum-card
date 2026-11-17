@@ -11,9 +11,10 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { TileDisplayConfig, TileField } from './types.js';
 import { resolveColor } from './colors.js';
-import { resolveSceneImage } from './scene-presets.js';
+import { resolveSceneBackground } from './scene-presets.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
 import { ALARM_ICONS, topAlarmField, withoutBadgeFields } from './row-fields.js';
+import { localize } from './localize/localize.js';
 
 @customElement('stratum-card-room-tile')
 export class StratumCardRoomTile extends LitElement {
@@ -33,6 +34,12 @@ export class StratumCardRoomTile extends LitElement {
 
   /** Całe pomieszczenie niedostępne (wszystkie encje unavailable). */
   @property({ type: Boolean }) public offline = false;
+
+  /**
+   * Język UI (`langOf(hass)` z karty) — kafel nie dostaje całego `hass`,
+   * a teksty (plakietka, podpisy, aria) muszą iść za profilem użytkownika.
+   */
+  @property({ attribute: false }) public uiLang?: string;
 
   /** Wilgotność (sformatowana, np. "54.2 %"). */
   @property({ type: String }) public humidity?: string;
@@ -146,7 +153,8 @@ export class StratumCardRoomTile extends LitElement {
     const borderWidthOvr =
       typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
     const bgColorOvr = resolveColor(ovr?.background_color);
-    const bgImage = resolveSceneImage(cfg.background_image);
+    // Lista warstw z fallbackami dla presetów `stratum:` (scene-photo-url.ts).
+    const bgImage = resolveSceneBackground(cfg.background_image);
 
     const iconPos = cfg.icon_position ?? 'top-left';
     const iconStyle = cfg.icon_style ?? 'bubble';
@@ -183,7 +191,7 @@ export class StratumCardRoomTile extends LitElement {
       opacityOvr !== undefined ? `opacity: ${opacityOvr};` : '',
       iconScaleOvr !== undefined ? `--stratum-room-tile-icon-scale: ${iconScaleOvr};` : '',
       bgImage
-        ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;`
+        ? `background-image: ${bgImage}; background-size: cover; background-position: center;`
         : '',
       this.styleOverride ?? '',
     ];
@@ -224,13 +232,15 @@ export class StratumCardRoomTile extends LitElement {
                 ? html`<ha-icon
                     class="motion-dot"
                     .icon=${'mdi:motion-sensor'}
-                    title="Obecność"
+                    title=${localize(this.uiLang, 'common.presence')}
                   ></ha-icon>`
                 : nothing}
             </span>`
           : nothing}
         ${showName ? html`<div class="name">${this.name}</div>` : nothing}
-        ${this.offline ? html`<span class="off-pill">offline</span>` : nothing}
+        ${this.offline
+          ? html`<span class="off-pill">${localize(this.uiLang, 'common.offline')}</span>`
+          : nothing}
         <div class="info">${this._renderFields(fields)}</div>
       </div>
     `;
@@ -248,8 +258,8 @@ export class StratumCardRoomTile extends LitElement {
     return html`<button
       class="alarm-badge"
       part="alarm-badge"
-      title="Pokaż aktywne alarmy"
-      aria-label="Aktywne alarmy: ${this.alarmsCount}. Pokaż listę"
+      title=${localize(this.uiLang, 'common.show_alarms')}
+      aria-label=${localize(this.uiLang, 'common.alarms_aria', { count: this.alarmsCount })}
       @click=${this._onAlarmBadge}
     >
       <ha-icon .icon=${icon} aria-hidden="true"></ha-icon>
@@ -448,24 +458,41 @@ export class StratumCardRoomTile extends LitElement {
     /* --- Klikalność + warianty hover --- */
     :host([clickable]) .tile { cursor: pointer; }
 
-    :host([clickable]) .tile[data-hover='subtle']:hover {
-      background: color-mix(in srgb, var(--primary-color, #ff9b42) 6%, var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03)));
-    }
-    :host([clickable]) .tile[data-hover='lift']:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-    }
-    :host([clickable]) .tile[data-hover='glow']:hover {
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #ff9b42) 55%, transparent),
-        0 4px 20px color-mix(in srgb, var(--primary-color, #ff9b42) 35%, transparent);
+    /* Hover tylko przy prawdziwym kursorze. Na dotyku :hover zostaje na
+       ostatnio tkniętym kaflu — domyślny „lift" zostawiał kafel uniesiony
+       z cieniem po zamknięciu popupu. (hover: hover) pyta o urządzenie,
+       nie o rozmiar, więc media query jest tu właściwe. */
+    @media (hover: hover) {
+      :host([clickable]) .tile[data-hover='subtle']:hover {
+        background: color-mix(in srgb, var(--primary-color) 6%, var(--stratum-room-tile-bg, var(--stratum-surface-1)));
+      }
+      :host([clickable]) .tile[data-hover='lift']:hover {
+        transform: translateY(-1px);
+        /* Cień z tokenu --stratum-ink-shade, nie z literału (jak wiersz). */
+        box-shadow: 0 4px 14px color-mix(in srgb, var(--stratum-ink-shade) 15%, transparent);
+      }
+      :host([clickable]) .tile[data-hover='glow']:hover {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 55%, transparent),
+          0 4px 20px color-mix(in srgb, var(--primary-color) 35%, transparent);
+      }
     }
 
-    :host([clickable]) .tile:active {
+    /* Za hoverem i z tą samą specyficznością ([data-hover]). Samo
+       .tile:active przegrywało z „lift" (domyślny efekt kafla), więc
+       wciśnięty kafel unosił się zamiast pomniejszyć — feedback dotyku
+       nie pokazywał się wcale. */
+    :host([clickable]) .tile:active,
+    :host([clickable]) .tile[data-hover]:active {
       transform: scale(var(--stratum-room-tile-press-scale, 0.98));
+    }
+    /* Wciśnięta odznaka alarmu ma własny feedback — kafel się nie kurczy.
+       Osobna reguła: bez :has() przeglądarka odrzuci tylko ją. */
+    :host([clickable]) .tile[data-hover]:active:has(.alarm-badge:active) {
+      transform: none;
     }
 
     :host([clickable]) .tile:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: 2px;
     }
 
@@ -603,15 +630,18 @@ export class StratumCardRoomTile extends LitElement {
     .tile[data-icon-pos='left'] .alarm-badge::after {
       inset: -12px -4px -4px;
     }
-    .alarm-badge:hover:not(:disabled) {
-      background: color-mix(
-        in srgb,
-        var(--stratum-alarm) 28%,
-        transparent
-      );
+    /* Bez lepkiego hovera na dotyku — jak hover kafla. */
+    @media (hover: hover) {
+      .alarm-badge:hover:not(:disabled) {
+        background: color-mix(
+          in srgb,
+          var(--stratum-alarm) 28%,
+          transparent
+        );
+      }
     }
     .alarm-badge:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: 2px;
     }
     .alarm-badge:active {
@@ -854,8 +884,12 @@ export class StratumCardRoomTile extends LitElement {
 
     @media (prefers-reduced-motion: reduce) {
       .tile { transition: none; }
+      /* [data-hover] — ta sama specyficzność co reguły hover/press wyżej;
+         samo .tile:hover przegrywało z „lift" i kafel dalej skakał. */
       :host([clickable]) .tile:hover,
-      :host([clickable]) .tile:active { transform: none; }
+      :host([clickable]) .tile:active,
+      :host([clickable]) .tile[data-hover]:hover,
+      :host([clickable]) .tile[data-hover]:active { transform: none; }
     }
   
     /* ====== Pomieszczenie offline ====== */

@@ -15,13 +15,28 @@ import type {
 import {
   SCENE_PRESETS,
   presetIdFromValue,
-  resolveSceneImage,
+  resolveSceneBackground,
 } from './scene-presets.js';
 import { getEntitiesInArea, getAreasInFloor, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ENTITY_UI_ACTIONS } from './tap-action.js';
+import { langOf, lookup, type Lang } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
+import { withCode } from './localize/with-code.js';
 
-const GLOBAL_SCHEMA = [
+// Schemat zależy od języka (etykiety opcji) — jeden obiekt na język, żeby
+// ha-form nie dostawał nowej tożsamości schematu przy każdym renderze.
+const GLOBAL_SCHEMA_CACHE = new Map<Lang, ReturnType<typeof buildGlobalSchema>>();
+function globalSchemaFor(lang: Lang): ReturnType<typeof buildGlobalSchema> {
+  let schema = GLOBAL_SCHEMA_CACHE.get(lang);
+  if (!schema) {
+    schema = buildGlobalSchema(lang);
+    GLOBAL_SCHEMA_CACHE.set(lang, schema);
+  }
+  return schema;
+}
+
+const buildGlobalSchema = (lang: Lang) => [
   {
     type: 'grid',
     name: '',
@@ -32,8 +47,8 @@ const GLOBAL_SCHEMA = [
           select: {
             mode: 'dropdown',
             options: [
-              { value: 'top', label: 'Na górze' },
-              { value: 'bottom', label: 'Na dole' },
+              { value: 'top', label: localizeUi(lang, 'editor.scene.pos_top') },
+              { value: 'bottom', label: localizeUi(lang, 'editor.scene.pos_bottom') },
             ],
           },
         },
@@ -44,9 +59,9 @@ const GLOBAL_SCHEMA = [
           select: {
             mode: 'dropdown',
             options: [
-              { value: 'sm', label: 'Mały' },
-              { value: 'md', label: 'Średni' },
-              { value: 'lg', label: 'Duży' },
+              { value: 'sm', label: localizeUi(lang, 'editor.header.size_sm') },
+              { value: 'md', label: localizeUi(lang, 'editor.header.size_md') },
+              { value: 'lg', label: localizeUi(lang, 'editor.header.size_lg') },
             ],
           },
         },
@@ -70,28 +85,17 @@ const GLOBAL_SCHEMA = [
       select: {
         mode: 'dropdown',
         options: [
-          { value: 'mesh', label: 'Mgławica (jak Hue)' },
-          { value: 'linear', label: 'Ukos' },
-          { value: 'glow', label: 'Poświata' },
-          { value: 'horizon', label: 'Horyzont' },
+          { value: 'mesh', label: localizeUi(lang, 'editor.scene.grad_mesh') },
+          { value: 'linear', label: localizeUi(lang, 'editor.scene.grad_linear') },
+          { value: 'glow', label: localizeUi(lang, 'editor.scene.grad_glow') },
+          { value: 'horizon', label: localizeUi(lang, 'editor.scene.grad_horizon') },
         ],
       },
     },
   },
 ];
 
-const GLOBAL_LABELS: Record<string, string> = {
-  position: 'Pozycja paska',
-  size: 'Rozmiar tile',
-  columns: 'Kolumny',
-  aspect: 'Proporcje tile (CSS)',
-  gradient: 'Gradient scen bez grafiki',
-};
-
-const GLOBAL_HELPERS: Record<string, string> = {
-  aspect: 'Przykłady: 1/1 (kwadrat, default), 16/9, 270/150.',
-  gradient: 'Puste = ustawienie globalne karty (default: Mgławica).',
-};
+// Etykiety i podpowiedzi pól: grupa `editor.scene` słownika.
 
 const SCENE_FIELDS_SCHEMA = [
   { name: 'entity', required: true, selector: { entity: { domain: ['scene', 'script'] } } },
@@ -108,23 +112,9 @@ const SCENE_FIELDS_SCHEMA = [
   { name: 'tap_action', selector: { ui_action: { actions: ENTITY_UI_ACTIONS } } },
 ];
 
-const SCENE_LABELS: Record<string, string> = {
-  entity: 'Encja sceny (scene.* lub script.*)',
-  name: 'Nazwa (override)',
-  icon: 'Ikona (gdy brak obrazu)',
-  color: 'Kolor tła (gdy brak obrazu)',
-  tap_action: 'Akcja po kliknięciu (override)',
-  label: 'Podpis separatora (opcjonalny)',
-};
 
 const SEPARATOR_FIELDS_SCHEMA = [{ name: 'label', selector: { text: {} } }];
 
-const SCENE_HELPERS: Record<string, string> = {
-  color: 'np. amber, #ff9b42. Domyślnie primary-color.',
-  tap_action:
-    'Domyślnie wywołuje scene.turn_on (lub script.turn_on). Nadpisuj tylko gdy potrzebujesz innego.',
-  label: 'Puste = sama linia. Z podpisem = linia z tekstem po środku.',
-};
 
 @customElement('stratum-scene-editor')
 export class StratumSceneEditor extends LitElement {
@@ -190,17 +180,21 @@ export class StratumSceneEditor extends LitElement {
     return items.length > 0 ? items : this._autoItems();
   }
 
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
+  }
+
   private _computeGlobalLabel = (schema: { name: string }): string =>
-    GLOBAL_LABELS[schema.name] ?? schema.name;
+    lookup(editorMessages(this.hass).scene.global_labels, schema.name) ?? schema.name;
 
   private _computeGlobalHelper = (schema: { name: string }): string =>
-    GLOBAL_HELPERS[schema.name] ?? '';
+    lookup(editorMessages(this.hass).scene.global_helpers, schema.name) ?? '';
 
   private _computeSceneLabel = (schema: { name: string }): string =>
-    SCENE_LABELS[schema.name] ?? schema.name;
+    lookup(editorMessages(this.hass).scene.labels, schema.name) ?? schema.name;
 
   private _computeSceneHelper = (schema: { name: string }): string =>
-    SCENE_HELPERS[schema.name] ?? '';
+    lookup(editorMessages(this.hass).scene.helpers, schema.name) ?? '';
 
   private _emit(next: SceneBarConfig): void {
     this.dispatchEvent(
@@ -316,15 +310,19 @@ export class StratumSceneEditor extends LitElement {
 
   private _sceneTitle(scene: SceneConfig): string {
     if (scene.separator) {
-      return scene.label ? `— ${scene.label} —` : '— separator —';
+      return scene.label ? `— ${scene.label} —` : this._t('editor.common.separator_title');
     }
     if (scene.name) return scene.name;
     const state = scene.entity ? this.hass?.states?.[scene.entity] : undefined;
     return (
       (state?.attributes?.friendly_name as string | undefined) ??
       scene.entity ??
-      '(nowa scena)'
+      this._t('editor.scene.new_scene')
     );
+  }
+
+  private _presetLabel(id: string): string {
+    return lookup(editorMessages(this.hass).scene_presets, id) ?? id;
   }
 
   private _selectPreset(index: number, id: string | null): void {
@@ -352,7 +350,7 @@ export class StratumSceneEditor extends LitElement {
   private async _loadGallery(force = false): Promise<void> {
     if (this._gallery && !force) return;
     if (!this.hass?.callWS) {
-      this._galleryError = 'Brak API WebSocket.';
+      this._galleryError = this._t('editor.scene.no_ws');
       return;
     }
     try {
@@ -362,7 +360,7 @@ export class StratumSceneEditor extends LitElement {
       this._gallery = imgs ?? [];
       this._galleryError = undefined;
     } catch (e) {
-      this._galleryError = `Nie udało się pobrać galerii: ${String(e)}`;
+      this._galleryError = this._t('editor.scene.gallery_failed', { error: String(e) });
     }
   }
 
@@ -385,7 +383,7 @@ export class StratumSceneEditor extends LitElement {
       this._updateScene(index, { image: `/api/image/serve/${img.id}/original` });
       this._galleryError = undefined;
     } catch (e) {
-      this._galleryError = `Upload nieudany: ${String(e)}`;
+      this._galleryError = this._t('editor.scene.upload_failed', { error: String(e) });
     } finally {
       this._galleryBusy = false;
     }
@@ -427,7 +425,7 @@ export class StratumSceneEditor extends LitElement {
   private async _browseWww(id?: string): Promise<void> {
     const target = id ?? StratumSceneEditor._WWW_ROOT;
     if (!this.hass?.callWS) {
-      this._wwwError = 'Brak API WebSocket.';
+      this._wwwError = this._t('editor.scene.no_ws');
       return;
     }
     try {
@@ -479,34 +477,32 @@ export class StratumSceneEditor extends LitElement {
       }}>
         <summary class="gallery-summary">
           <ha-icon .icon=${'mdi:folder-image'}></ha-icon>
-          Pliki z www/img
+          ${this._t('editor.scene.www_files')}
         </summary>
         <div class="gallery-body">
           ${this._wwwError === 'brak-media-dir'
             ? html`<p class="gallery-hint">
-                  Żeby karta mogła listować <code>www/img</code>, dodaj w
-                  <code>configuration.yaml</code> i zrestartuj HA:
+                  ${withCode(this._t('editor.scene.www_hint_1'))}
                 </p>
                 <pre class="gallery-yaml">homeassistant:
   media_dirs:
     local: /media
     img: /config/www/img</pre>
                 <p class="gallery-hint">
-                  (wpis <code>local</code> zachowuje standardowy katalog
-                  mediów). Potem wróć tutaj — pliki pojawią się z podglądem.
+                  ${withCode(this._t('editor.scene.www_hint_2'))}
                 </p>`
             : nothing}
           ${!this._wwwError && this._wwwItems === undefined
-            ? html`<p class="gallery-hint">Ładowanie…</p>`
+            ? html`<p class="gallery-hint">${this._t('editor.scene.loading')}</p>`
             : nothing}
           ${this._wwwItems && this._wwwRel
             ? html`<button class="gallery-upload" @click=${() => this._wwwUp()}>
                 <ha-icon .icon=${'mdi:arrow-up-left'}></ha-icon>
-                Wróć (${this._wwwRel})
+                ${this._t('editor.scene.back', { path: this._wwwRel })}
               </button>`
             : nothing}
           ${this._wwwItems && this._wwwItems.length === 0
-            ? html`<p class="gallery-hint">Pusty katalog.</p>`
+            ? html`<p class="gallery-hint">${this._t('editor.scene.empty_dir')}</p>`
             : nothing}
           ${this._wwwItems && this._wwwItems.length > 0
             ? html`<div class="preset-grid">
@@ -551,12 +547,12 @@ export class StratumSceneEditor extends LitElement {
       }}>
         <summary class="gallery-summary">
           <ha-icon .icon=${'mdi:image-multiple-outline'}></ha-icon>
-          Galeria HA — przeglądaj / wgraj obraz
+          ${this._t('editor.scene.gallery')}
         </summary>
         <div class="gallery-body">
           <label class="gallery-upload ${this._galleryBusy ? 'busy' : ''}">
             <ha-icon .icon=${'mdi:upload'}></ha-icon>
-            ${this._galleryBusy ? 'Wgrywanie…' : 'Wgraj nowy obraz (png/jpg/webp)'}
+            ${this._t(this._galleryBusy ? 'editor.scene.uploading' : 'editor.scene.upload')}
             <input
               type="file"
               accept="image/*"
@@ -568,13 +564,11 @@ export class StratumSceneEditor extends LitElement {
             ? html`<p class="gallery-error">${this._galleryError}</p>`
             : nothing}
           ${this._gallery === undefined && !this._galleryError
-            ? html`<p class="gallery-hint">Ładowanie…</p>`
+            ? html`<p class="gallery-hint">${this._t('editor.scene.loading')}</p>`
             : nothing}
           ${this._gallery && this._gallery.length === 0
             ? html`<p class="gallery-hint">
-                Galeria pusta — wgraj pierwszy obraz przyciskiem powyżej.
-                Obrazy trafiają do magazynu HA (Ustawienia → zdjęcia osób
-                używają tego samego), nie do katalogu www.
+                ${this._t('editor.scene.gallery_empty')}
               </p>`
             : nothing}
           ${this._gallery && this._gallery.length > 0
@@ -603,15 +597,17 @@ export class StratumSceneEditor extends LitElement {
 
   private _renderImageField(index: number, scene: SceneConfig): TemplateResult {
     const isPreset = Boolean(presetIdFromValue(scene.image));
-    const resolved = resolveSceneImage(scene.image);
+    // Podgląd z tymi samymi fallbackami co kafel na dashboardzie
+    // (scene-photo-url.ts) — inaczej poza HACS edytor pokazywałby pustkę.
+    const resolved = resolveSceneBackground(scene.image);
     return html`
       <div class="img-block">
-        <label class="img-label">Grafika sceny</label>
+        <label class="img-label">${this._t('editor.scene.image')}</label>
         <div class="img-row">
           <span
             class="img-preview"
-            style=${resolved ? `background-image:url("${resolved}");` : ''}
-            title=${resolved ? 'Podgląd' : 'Brak grafiki'}
+            style=${resolved ? `background-image:${resolved};` : ''}
+            title=${this._t(resolved ? 'editor.scene.preview' : 'editor.scene.no_image')}
           >
             ${resolved
               ? nothing
@@ -620,7 +616,7 @@ export class StratumSceneEditor extends LitElement {
           <input
             type="text"
             class="img-input"
-            placeholder="/local/sceny/noc.jpg"
+            placeholder=${this._t('editor.scene.image_placeholder')}
             .value=${isPreset ? '' : scene.image ?? ''}
             @change=${(ev: Event) => {
               const v = (ev.target as HTMLInputElement).value.trim();
@@ -629,11 +625,7 @@ export class StratumSceneEditor extends LitElement {
           />
         </div>
         <p class="img-hint">
-          Wrzuć plik (png/jpg) do katalogu <code>config/www</code> na serwerze
-          HA — jest wtedy dostępny pod <code>/local/…</code>. Przykład:
-          <code>www/sceny/noc.jpg</code> → wpisz <code>/local/sceny/noc.jpg</code>.
-          Możesz też wkleić pełny URL. Puste = ikona + kolor. Alternatywnie
-          wybierz wbudowaną grafikę poniżej.
+          ${withCode(this._t('editor.scene.image_hint'))}
         </p>
       </div>
     `;
@@ -644,10 +636,10 @@ export class StratumSceneEditor extends LitElement {
     return html`
       <div class="preset-block">
         <div class="preset-head">
-          <span>Wbudowane grafiki</span>
+          <span>${this._t('editor.scene.builtin')}</span>
           ${selected
             ? html`<button class="reset" @click=${() => this._selectPreset(index, null)}>
-                Wyczyść wybór
+                ${this._t('editor.scene.clear')}
               </button>`
             : nothing}
         </div>
@@ -656,14 +648,14 @@ export class StratumSceneEditor extends LitElement {
             (p) => html`
               <button
                 class="preset-thumb ${selected === p.id ? 'selected' : ''}"
-                title=${p.label}
+                title=${this._presetLabel(p.id)}
                 @click=${() => this._selectPreset(index, p.id)}
               >
                 <span
                   class="thumb-image"
-                  style=${`background-image:url("${resolveSceneImage('stratum:' + p.id)}");`}
+                  style=${`background-image:${resolveSceneBackground('stratum:' + p.id) ?? 'none'};`}
                 ></span>
-                <span class="thumb-label">${p.label}</span>
+                <span class="thumb-label">${this._presetLabel(p.id)}</span>
               </button>
             `,
           )}
@@ -679,22 +671,20 @@ export class StratumSceneEditor extends LitElement {
       ${auto && items.length > 0
         ? html`<p class="auto-hint">
             <ha-icon .icon=${'mdi:auto-fix'}></ha-icon>
-            Sceny wykryte automatycznie z obszaru (${items.length}). Każda
-            zmiana — nazwa, grafika, ukrycie, kolejność — utrwali tę listę
-            w konfiguracji pokoju.
+            ${this._t('editor.scene.auto_hint', { count: items.length })}
           </p>`
         : nothing}
       ${!auto && items.length > 0
         ? html`<button class="reset-auto" @click=${this._resetToAuto}>
             <ha-icon .icon=${'mdi:auto-fix'}></ha-icon>
-            Przywróć auto-wykrywanie z obszaru
+            ${this._t('editor.entity_list.reset_auto')}
           </button>`
         : nothing}
       ${items.length > 0
         ? html`<ha-form
             .hass=${this.hass}
             .data=${this.config}
-            .schema=${GLOBAL_SCHEMA}
+            .schema=${globalSchemaFor(langOf(this.hass))}
             .computeLabel=${this._computeGlobalLabel}
             .computeHelper=${this._computeGlobalHelper}
             @value-changed=${this._onGlobalChange}
@@ -705,7 +695,7 @@ export class StratumSceneEditor extends LitElement {
         ${items.map((scene, idx) => {
           const open = this._openScenes.has(idx);
           const sep = Boolean(scene.separator);
-          const thumb = sep ? undefined : resolveSceneImage(scene.image);
+          const thumb = sep ? undefined : resolveSceneBackground(scene.image);
           return html`
             <div
               class="stratum-row active ${scene.hidden ? 'scene-hidden' : ''} ${sep
@@ -715,7 +705,7 @@ export class StratumSceneEditor extends LitElement {
               <div class="stratum-row-head">
                 <span
                   class="stratum-row-avatar ${thumb ? 'scene-thumb' : ''}"
-                  style=${thumb ? `background-image:url("${thumb}");` : ''}
+                  style=${thumb ? `background-image:${thumb};` : ''}
                 >
                   ${thumb
                     ? nothing
@@ -725,12 +715,14 @@ export class StratumSceneEditor extends LitElement {
                 </span>
                 <span class="stratum-row-title">${this._sceneTitle(scene)}</span>
                 ${scene.hidden
-                  ? html`<span class="stratum-badge ghost">ukryta</span>`
+                  ? html`<span class="stratum-badge ghost"
+                      >${this._t('editor.scene.hidden_badge')}</span
+                    >`
                   : nothing}
                 <div class="stratum-row-actions">
                   <button
                     class="stratum-icon-btn"
-                    title=${scene.hidden ? 'Pokaż scenę' : 'Ukryj scenę'}
+                    title=${this._t(scene.hidden ? 'editor.scene.show' : 'editor.scene.hide')}
                     @click=${() =>
                       this._updateScene(idx, { hidden: !scene.hidden })}
                   >
@@ -740,7 +732,7 @@ export class StratumSceneEditor extends LitElement {
                   </button>
                   <button
                     class="stratum-icon-btn"
-                    title="Przesuń w górę"
+                    title=${this._t('editor.common.move_up')}
                     ?disabled=${idx === 0}
                     @click=${() => this._moveScene(idx, -1)}
                   >
@@ -748,7 +740,7 @@ export class StratumSceneEditor extends LitElement {
                   </button>
                   <button
                     class="stratum-icon-btn"
-                    title="Przesuń w dół"
+                    title=${this._t('editor.common.move_down')}
                     ?disabled=${idx === items.length - 1}
                     @click=${() => this._moveScene(idx, 1)}
                   >
@@ -756,14 +748,14 @@ export class StratumSceneEditor extends LitElement {
                   </button>
                   <button
                     class="stratum-icon-btn ${open ? 'accent' : ''}"
-                    title=${open ? 'Zwiń' : 'Edytuj'}
+                    title=${this._t(open ? 'editor.common.collapse' : 'editor.common.edit')}
                     @click=${() => this._toggleEdit(idx)}
                   >
                     <ha-icon .icon=${open ? 'mdi:chevron-up' : 'mdi:pencil'}></ha-icon>
                   </button>
                   <button
                     class="stratum-icon-btn danger"
-                    title="Usuń"
+                    title=${this._t('editor.common.remove')}
                     @click=${() => this._removeScene(idx)}
                   >
                     <ha-icon .icon=${'mdi:delete-outline'}></ha-icon>
@@ -794,11 +786,11 @@ export class StratumSceneEditor extends LitElement {
       <div class="add-row">
         <button class="stratum-add-btn" @click=${this._addScene}>
           <ha-icon .icon=${'mdi:plus'}></ha-icon>
-          Dodaj scenę (także spoza obszaru)
+          ${this._t('editor.scene.add')}
         </button>
         <button class="stratum-add-btn" @click=${this._addSeparator}>
           <ha-icon .icon=${'mdi:minus'}></ha-icon>
-          Dodaj separator
+          ${this._t('editor.entity_list.add_separator')}
         </button>
       </div>
     `;
