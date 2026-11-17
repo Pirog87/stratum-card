@@ -64,6 +64,13 @@ import './stratum-room-card.js';
 import './stratum-scene-bar.js';
 
 import { cardStyles } from './stratum-card-styles.js';
+import {
+  decidePopState,
+  stateHasDialog,
+  type GuardEntry,
+  type GuardKind,
+} from './back-guard.js';
+import { pushEscapeLayer } from './escape-stack.js';
 import { fieldColorStyle } from './field-colors.js';
 import {
   buildHeaderStripes,
@@ -594,7 +601,7 @@ export class StratumCard extends LitElement {
 
   private _openChipList(chip: import('./types.js').ChipConfig): void {
     const entityIds = this._getChipEntityIds(chip);
-    this._popupChip = {
+    this._showChipList({
       chip,
       entityIds,
       label: CHIP_LIST_LABELS[chip.type] ?? 'Lista',
@@ -603,41 +610,112 @@ export class StratumCard extends LitElement {
         resolveChipColor(chip) ??
         CHIP_LIST_COLORS[chip.type] ??
         'var(--primary-color)',
-    };
-    this._pushBackGuard();
+    });
   }
 
   /**
-   * Liczba wpisów historii wypchniętych przez otwarte popupy Stratum.
-   * Android „wstecz" (popstate) zamyka najwyższy popup zamiast opuszczać
-   * widok — jak natywne dialogi HA.
+   * Wspólne wejście do listy chipa (chip, alarmy, niedostępne). Gdy lista
+   * jest już otwarta, podmieniamy tylko treść — drugi strażnik historii
+   * zostawiłby po zamknięciu wpis, na którym kolejne „wstecz" nic nie robi.
    */
-  private _historyDepth = 0;
-
-  private _pushBackGuard(): void {
-    window.history.pushState({ stratum: true }, '');
-    this._historyDepth++;
-    if (this._historyDepth === 1) {
-      window.addEventListener('popstate', this._onPopState);
-    }
+  private _showChipList(data: NonNullable<StratumCard['_popupChip']>): void {
+    const wasOpen = Boolean(this._popupChip);
+    this._popupChip = data;
+    if (!wasOpen) this._pushBackGuard('chip');
   }
 
-  private _onPopState = (): void => {
-    if (this._historyDepth === 0) return;
-    this._historyDepth--;
-    if (this._historyDepth === 0) {
-      window.removeEventListener('popstate', this._onPopState);
+  /**
+   * Strażnicy historii otwartych popupów Stratum, od najstarszego. Android
+   * „wstecz" zamyka najwyższy popup zamiast opuszczać widok — jak natywne
+   * dialogi HA. Decyzja, które popupy zamyka dany popstate, siedzi
+   * w back-guard.ts (tam też uzasadnienie, czemu po indeksie historii).
+   */
+  private _guards: GuardEntry[] = [];
+
+  /** Dialogi HA otwarte nad popupem — tylko dla trybu bez Navigation API. */
+  private _dialogsAbove = 0;
+
+  /** Popstate wywołany naszym history.back() (×, Escape, tło, uchwyt). */
+  private _selfBack = false;
+
+  /** Indeks bieżącego wpisu historii albo null bez Navigation API. */
+  private _historyIndex(): number | null {
+    const nav = (
+      window as unknown as {
+        navigation?: { currentEntry?: { index: number } | null };
+      }
+    ).navigation;
+    const idx = nav?.currentEntry?.index;
+    return typeof idx === 'number' && idx >= 0 ? idx : null;
+  }
+
+  private _pushBackGuard(kind: GuardKind): void {
+    window.history.pushState({ stratum: true }, '');
+    if (this._guards.length === 0) {
+      window.addEventListener('popstate', this._onPopState);
+      // Zdarzenia z wnętrza popupów (wiersz listy, ikona kafla) przechodzą
+      // przez host karty — tak wiemy, że HA otworzy dialog nad nami.
+      this.addEventListener('hass-more-info', this._onDialogAbove);
+      this.addEventListener('show-dialog', this._onDialogAbove);
     }
-    // Zamykamy najwyższy otwarty popup (historia już cofnięta przez system).
-    if (this._popupChip) this._closeChipListNow();
-    else if (this._popupRoom) this._closeRoomPopupNow();
+    // Indeks czytamy PO pushState — to pozycja naszego wpisu.
+    this._guards.push({ kind, index: this._historyIndex() });
+  }
+
+  private _onDialogAbove = (ev: Event): void => {
+    // hass-more-info bez encji zamyka more-info, a nie otwiera nowego.
+    if (ev.type === 'hass-more-info') {
+      const id = (ev as CustomEvent<{ entityId?: string | null }>).detail?.entityId;
+      if (!id) return;
+    }
+    this._dialogsAbove++;
   };
 
-  /** Programowe zamknięcie (×/Escape/backdrop) — zdejmij też wpis historii. */
-  private _consumeBackGuard(): boolean {
-    if (this._historyDepth > 0) {
+  private _dropGuardListeners(): void {
+    window.removeEventListener('popstate', this._onPopState);
+    this.removeEventListener('hass-more-info', this._onDialogAbove);
+    this.removeEventListener('show-dialog', this._onDialogAbove);
+    this._dialogsAbove = 0;
+    this._selfBack = false;
+  }
+
+  private _onPopState = (ev: PopStateEvent): void => {
+    const decision = decidePopState(
+      this._guards,
+      this._historyIndex(),
+      this._dialogsAbove,
+      stateHasDialog(ev.state),
+      this._selfBack,
+    );
+    this._selfBack = false;
+    this._dialogsAbove = decision.dialogsAbove;
+    // Historia jest już cofnięta przez system — zamykamy bez history.back().
+    for (let i = 0; i < decision.pop; i++) {
+      const guard = this._guards.pop();
+      if (guard?.kind === 'chip') this._closeChipListNow();
+      else if (guard?.kind === 'room') this._closeRoomPopupNow();
+    }
+    if (this._guards.length === 0) this._dropGuardListeners();
+  };
+
+  /**
+   * Programowe zamknięcie (×/Escape/backdrop) — zdejmij też wpis historii.
+   * history.back() robimy tylko, gdy zamykany popup ma strażnika na szczycie;
+   * inaczej cofnięcie zamknęłoby inny popup. Strażnik spod spodu po prostu
+   * wypada ze stosu (jego wpis zostaje w historii — mniejsze zło niż
+   * zamknięcie nie tego popupu).
+   */
+  private _consumeBackGuard(kind: GuardKind): boolean {
+    const top = this._guards[this._guards.length - 1];
+    if (top?.kind === kind) {
+      this._selfBack = true;
       window.history.back(); // popstate zamknie popup
       return true;
+    }
+    const i = this._guards.map((g) => g.kind).lastIndexOf(kind);
+    if (i >= 0) {
+      this._guards.splice(i, 1);
+      if (this._guards.length === 0) this._dropGuardListeners();
     }
     return false;
   }
@@ -647,7 +725,7 @@ export class StratumCard extends LitElement {
   }
 
   private _closeChipList = (): void => {
-    if (this._consumeBackGuard()) return;
+    if (this._consumeBackGuard('chip')) return;
     this._closeChipListNow();
   };
 
@@ -674,9 +752,16 @@ export class StratumCard extends LitElement {
     this._resetExpanded();
     this._templates.destroy();
     this._clearAutoCollapse();
-    document.removeEventListener('keydown', this._onPopupKey);
-    window.removeEventListener('popstate', this._onPopState);
-    this._historyDepth = 0;
+    // Popupy zamykamy razem ze strażnikami. Widok z pamięci HA (powrót po
+    // akcji navigate z wnętrza popupu) pokazałby inaczej popup bez
+    // strażnika historii i bez Escape.
+    this._dropGuardListeners();
+    this._guards = [];
+    this._releaseRoomEscape?.();
+    this._releaseRoomEscape = undefined;
+    this._popupRoom = undefined;
+    this._popupChip = undefined;
+    this._prevFocus = undefined;
     this._unsubPower?.();
     this._unsubPower = undefined;
     // Żadnych spóźnionych komend jasności po zniknięciu karty z widoku.
@@ -1210,15 +1295,14 @@ export class StratumCard extends LitElement {
 
   /** Otwiera listę „Aktywne alarmy" dla pomieszczenia (badge ⚠ na wierszu). */
   private _openAlarmList(areaIds: string[]): void {
-    this._popupChip = {
+    this._showChipList({
       chip: { type: 'problem' } as import('./types.js').ChipConfig,
       entityIds: [],
       label: 'Aktywne alarmy',
       icon: 'mdi:alert',
       color: 'var(--stratum-chip-leak-color, #f44336)',
       alarmAreaIds: areaIds,
-    };
-    this._pushBackGuard();
+    });
   }
 
   /**
@@ -1273,15 +1357,14 @@ export class StratumCard extends LitElement {
   }
 
   private _openUnavailableList(areaIds: string[]): void {
-    this._popupChip = {
+    this._showChipList({
       chip: { type: 'filter' } as import('./types.js').ChipConfig,
       entityIds: [],
       label: 'Urządzenia niedostępne',
       icon: 'mdi:lan-disconnect',
       color: 'var(--stratum-chip-unavailable-color, #9e9e9e)',
       unavailableAreaIds: areaIds,
-    };
-    this._pushBackGuard();
+    });
   }
 
   private _unavailableScopeIds(areaIds: string[]): string[] {
@@ -1816,6 +1899,10 @@ export class StratumCard extends LitElement {
       chips?: import('./types.js').ChipConfig[];
     },
   ): void {
+    // Popup już otwarty (np. drugi tap, zanim tło przechwyciło dotyk) —
+    // podmieniamy treść bez drugiego strażnika, drugiej warstwy Escape
+    // i bez nadpisania elementu, do którego ma wrócić fokus.
+    const wasOpen = Boolean(this._popupRoom);
     this._popupRoom = {
       area_id: areaId,
       merge_with: overrides?.merge_with,
@@ -1832,8 +1919,9 @@ export class StratumCard extends LitElement {
       popup_extra: overrides?.popup_extra,
       chips: overrides?.chips,
     };
-    document.addEventListener('keydown', this._onPopupKey);
-    this._pushBackGuard();
+    if (wasOpen) return;
+    this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup());
+    this._pushBackGuard('room');
     // Popup to zwykly div nad trescia, nie natywny dialog, wiec fokus
     // klawiatury sam do niego nie wejdzie - zostalby na wierszu pod
     // spodem i pierwszy Tab poszedlby do NASTEPNEGO pokoju, po ekranie
@@ -1851,7 +1939,8 @@ export class StratumCard extends LitElement {
 
   private _closeRoomPopupNow(): void {
     this._popupRoom = undefined;
-    document.removeEventListener('keydown', this._onPopupKey);
+    this._releaseRoomEscape?.();
+    this._releaseRoomEscape = undefined;
     // Fokus wraca tam, skad popup zostal otwarty - inaczej po Escape
     // kursor klawiatury przepada na poczatek dokumentu.
     const prev = this._prevFocus;
@@ -1863,6 +1952,14 @@ export class StratumCard extends LitElement {
 
   /** Element, ktory mial fokus przed otwarciem popupu. */
   private _prevFocus?: HTMLElement | null;
+
+  /**
+   * Zdjęcie warstwy Escape popupu pokoju. Escape idzie przez wspólny stos
+   * (escape-stack.ts): reaguje tylko najwyższa warstwa Stratum, więc lista
+   * chipa nad popupem zamyka się sama, a Escape z more-info HA nie rusza
+   * popupu wcale.
+   */
+  private _releaseRoomEscape?: () => void;
 
   /**
    * Pulapka fokusa na wartownikach: puste, focusowalne spany na poczatku
@@ -1891,15 +1988,8 @@ export class StratumCard extends LitElement {
   };
 
   private _closeRoomPopup = (): void => {
-    if (this._consumeBackGuard()) return;
+    if (this._consumeBackGuard('room')) return;
     this._closeRoomPopupNow();
-  };
-
-  private _onPopupKey = (ev: KeyboardEvent): void => {
-    if (ev.key === 'Escape' && this._popupRoom) {
-      ev.stopPropagation();
-      this._closeRoomPopup();
-    }
   };
 
   private _onBackdropClick(ev: MouseEvent): void {

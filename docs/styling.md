@@ -53,6 +53,9 @@ card_mod:
 | Zmienna | Default | Opis |
 |---|---|---|
 | `--stratum-section-sticky` | `static` | `sticky` przykleja nagłówki sekcji do góry przy przewijaniu. Popup ustawia to sam; na dashboardzie zostaje `static`, żeby nagłówki nie łapały viewportu całej strony. |
+| `--stratum-section-sticky-top` | `0px`; w popupie na telefonie (≤ 600 px) = `--stratum-popup-grab-height` | odległość przyklejonego nagłówka sekcji od góry. W popupie na telefonie nagłówek staje pod uchwytem arkusza, a nie pod nim — inaczej master-switch świateł w nagłówku był zasłonięty paskiem uchwytu. |
+| `--stratum-room-header-pad-right` | `0px`; w popupie `62px` | rezerwa z prawej w headerze pokoju **i** w nagłówkach sekcji na przycisk × popupu. Bez niej przyklejony nagłówek wjeżdżał pod ×, a tap w master-switch zamykał popup. |
+| `--stratum-popup-grab-height` | `24px` | wysokość uchwytu arkusza popupu (tylko telefon, ≤ 600 px). Jeden token — o tyle samo schodzą w dół przyklejone nagłówki sekcji. Ustawiaj w motywie albo na `:host` karty (card-mod) — popup jest rodzeństwem `ha-card`, nie jego dzieckiem, więc zmienna ustawiona na `ha-card` do niego nie dotrze. |
 
 ```yaml
 # przykład: przyklejone nagłówki także w karcie na dashboardzie
