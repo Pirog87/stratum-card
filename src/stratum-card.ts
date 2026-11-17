@@ -63,12 +63,15 @@ import { LightSwipe } from './light-swipe.js';
 import { subscribePower, swipePowerHook, toggleRoomLights } from './power-pending.js';
 import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
-// Edytory importowane statycznie — świadomie (PKG-3, v1.109.3). Dystrybucja
-// to jeden plik, więc bajtów do pobrania i tak nie ubędzie; zostaje tylko
-// ewaluacja. `import()` + output.inlineDynamicImports rollupa nic nie daje
-// (wklejony moduł ewaluuje się od razu przy starcie), a ręczne zszycie
-// leniwego chunku w funkcję dało w Chromium 5–8 ms ewaluacji przy 4x CPU
-// throttle (w granicach szumu) — za mało na własną chirurgię AST w buildzie.
+// Edytory importowane statycznie — to NIE jest rozwiązanie PKG-3, tylko stan
+// do decyzji użytkownika. Edytory to ~184 kB / ~43 kB gzip (~36% bundla
+// v1.109.3), które telefon pobiera przy zimnym starcie, choć prawie nigdy nie
+// otwiera edytora. Te bajty da się zdjąć tylko osobnym chunkiem ładowanym
+// przez `import()` w getConfigElement — a to łamie dystrybucję jednym plikiem
+// (ADR-005, krok „Verify single-file output” w validate.yml), więc bez zgody
+// użytkownika zostaje tak. Półśrodki w jednym pliku nie pomagają: przy
+// output.inlineDynamicImports wklejony moduł ewaluuje się od razu, a ręczne
+// zszycie leniwej funkcji oszczędzało 5–8 ms ewaluacji przy 4x CPU (szum).
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 import './stratum-card-room-tile.js';
