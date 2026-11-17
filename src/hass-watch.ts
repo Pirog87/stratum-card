@@ -14,6 +14,7 @@
 
 import type { HomeAssistant } from './types.js';
 import { groupMemberIds } from './area-entities.js';
+import { lightControllerOf } from './light-dimming.js';
 
 /**
  * Klucze `hass`, których zmiana tożsamości zawsze wymusza render: rejestry
@@ -146,6 +147,10 @@ export function addGroupMembers(
   let guard = 0;
   while (queue.length > 0 && guard++ < 5000) {
     const id = queue.pop()!;
+    // Sterownik WLED segmentu — jego włączenie/zgaszenie zmienia to, co
+    // widać na segmencie, choć stan samego segmentu się nie zmienia.
+    const controller = lightControllerOf(hass, id);
+    if (controller && !ids.has(controller)) ids.add(controller);
     const members = groupMemberIds(hass.states?.[id]);
     if (!members) continue;
     for (const m of members) {

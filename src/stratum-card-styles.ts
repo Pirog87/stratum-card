@@ -494,6 +494,11 @@ export const cardStyles = css`
     }
 
     @media (max-width: 600px) {
+      /* Wysokość uchwytu to jeden token: o tyle samo przyklejone nagłówki
+         sekcji schodzą w dół, żeby master-switch nie stał pod paskiem.
+         Uchwyt zostaje na pełną szerokość i dostaje nieprzezroczyste tło —
+         przy offsecie treść przewijana pod spodem prześwitywałaby nad
+         nagłówkiem, a przezroczyste boki przepuszczałyby tapnięcia do kafli. */
       .stratum-popup-grab {
         display: flex;
         position: sticky;
@@ -501,10 +506,15 @@ export const cardStyles = css`
         z-index: 6;
         align-items: center;
         justify-content: center;
-        height: 24px;
+        height: var(--stratum-popup-grab-height, 24px);
         flex-shrink: 0;
         touch-action: none;
         cursor: grab;
+        background: var(--stratum-surface-base);
+      }
+
+      .stratum-popup-card stratum-room-card {
+        --stratum-section-sticky-top: var(--stratum-popup-grab-height, 24px);
       }
 
       .stratum-popup-grab::before {

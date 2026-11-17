@@ -185,3 +185,38 @@ export function buildDefaultCustomConfig(
   // Fallback — większość kart obsługuje `entity` jako pole root.
   return { type, entity: entityId };
 }
+
+/** Override'y jednej pozycji listy popupu (edytor list: nazwa/ikona/akcja). */
+export interface CustomTileOverrides {
+  name?: string;
+  icon?: string;
+  tap_action?: unknown;
+}
+
+/**
+ * Składa config karty custom:* dla jednej encji. Warstwy, od najsłabszej:
+ * template sekcji < auto-config (`base`) < override pozycji < `type`/`entity`.
+ *
+ * Override pozycji musi wygrać także z auto-configiem, nie tylko z
+ * template'em: base bubble-card dla światła i sceny ma własne `tap_action`,
+ * które inaczej po cichu zjadałoby akcję ustawioną przez usera dla tej
+ * jednej encji. `type` i `entity` z base zawsze na wierzchu — nic nie może
+ * wyłamać iteracji po encjach sekcji.
+ */
+export function mergeCustomTileConfig(
+  template: Record<string, unknown> | undefined,
+  overrides: CustomTileOverrides,
+  base: Record<string, unknown>,
+): Record<string, unknown> {
+  const picked: Record<string, unknown> = {};
+  if (overrides.name) picked.name = overrides.name;
+  if (overrides.icon) picked.icon = overrides.icon;
+  if (overrides.tap_action) picked.tap_action = overrides.tap_action;
+  return {
+    ...(template ?? {}),
+    ...base,
+    ...picked,
+    type: base.type,
+    entity: base.entity,
+  };
+}

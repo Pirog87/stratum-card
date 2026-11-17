@@ -19,7 +19,9 @@ import {
   ARM_THRESHOLD,
   BRIGHTNESS_FLOOR,
   OFF_THRESHOLD,
+  closedControllers,
   expandLightIds,
+  gateView,
   liveIntervalMs,
   meanLevel,
   onLights,
@@ -27,6 +29,7 @@ import {
   roomLevel,
   scaleTargets,
   viewOf,
+  type ControllerState,
   type DimLight,
   type LightView,
   type WaveCall,
@@ -92,10 +95,47 @@ interface Memory {
 }
 const memory = new Map<string, Memory>();
 
+/**
+ * Sterowniki WLED włączone przed chwilą przez nas (gest albo włącznik), na
+ * tych samych zasadach co nakładka: ważne, dopóki HA nie zaraportował dla
+ * sterownika niczego nowego i nie minęło 5 s. Bez tego segmenty, których
+ * echo przyszło przed echem sterownika, na chwilę czytały się jako zgaszone.
+ */
+const controllersOn = new Map<string, { at: number; seen: unknown }>();
+
 /** Tylko do testów: czyści pamięć między przypadkami. */
 export function resetLightSwipeState(): void {
   overlay.clear();
   memory.clear();
+  controllersOn.clear();
+}
+
+/** Zapisuje, że sami właśnie włączyliśmy te sterowniki WLED. */
+export function markControllersOn(
+  hass: HomeAssistant | undefined,
+  ids: readonly string[],
+  now: number = Date.now(),
+): void {
+  for (const id of ids) controllersOn.set(id, { at: now, seen: hass?.states?.[id] });
+}
+
+/** Czy sterownik włączyliśmy przed chwilą (a HA jeszcze tego nie odesłał). */
+export function controllerOpenedBySwipe(
+  hass: HomeAssistant | undefined,
+  id: string,
+  now: number = Date.now(),
+): boolean {
+  const e = controllersOn.get(id);
+  if (!e) return false;
+  if (now - e.at > OVERLAY_TTL_MS || e.seen !== hass?.states?.[id]) {
+    controllersOn.delete(id);
+    return false;
+  }
+  return true;
+}
+
+function controllerStateAt(hass: HomeAssistant | undefined, now: number): ControllerState {
+  return (c) => (controllerOpenedBySwipe(hass, c, now) ? 'on' : hass?.states?.[c]?.state);
 }
 
 function viewWithOverlay(
@@ -104,7 +144,9 @@ function viewWithOverlay(
   now: number,
 ): LightView {
   const state = hass?.states?.[id];
-  const base = viewOf(state);
+  // Segment zgaszonego sterownika WLED jest dla gestu ciemny — także gdy
+  // HA raportuje go jako „on" (patrz light-dimming.ts, „bramka zasilania").
+  const base = gateView(hass, id, viewOf(state), controllerStateAt(hass, now));
   const o = overlay.get(id);
   if (!o) return base;
   if (now - o.at > OVERLAY_TTL_MS || o.seen !== state) {
@@ -129,6 +171,11 @@ export function rememberBeforeOff(
   const leaves = expandLightIds(hass, ids);
   const lit = onLights(leaves, (id) => viewWithOverlay(hass, id, now));
   if (lit.scaled.length === 0 && lit.switchOnly.length === 0) return;
+  // Pokój ma ściemnialne, a świeciły same przekaźniki / diody statusu:
+  // to nie jest zestaw „do przywrócenia". Dawniej zapamiętany sam LED AP
+  // sprawiał, że przeciągnięcie po ciemnym wierszu zapalało tylko LED,
+  // a żarówki zostawały zgaszone.
+  if (lit.scaled.length === 0 && lit.dimmableTotal > 0) return;
   memory.set(key, { scaled: lit.scaled, switchOnly: lit.switchOnly, at: now });
 }
 
@@ -267,7 +314,12 @@ export class LightSwipe {
       );
       const scaled = memScaled.filter((l) => view(l.id).available);
       const switchOnly = memSwitch.filter((id) => view(id).available);
-      if (stillOff && scaled.length + switchOnly.length > 0) {
+      // W pokoju ze ściemnialnymi przywracamy tylko zestaw z żarówkami —
+      // same przekaźniki to nie „jasność do przywrócenia" (patrz
+      // rememberBeforeOff); wtedy gest idzie dalej jak z ciemności.
+      const restorable =
+        lit.dimmableTotal > 0 ? scaled.length > 0 : scaled.length + switchOnly.length > 0;
+      if (stillOff && restorable) {
         this._g = fresh('restore', scaled, switchOnly, 0);
         return { level: 0, active: true };
       }
@@ -343,6 +395,17 @@ export class LightSwipe {
       const calls: WaveCall[] = [...byValue.entries()]
         .sort((a, b) => b[0] - a[0])
         .map(([brightness, ids]) => ({ brightness, ids }));
+      // Zgaszony sterownik WLED najpierw — osobno i BEZ jasności (ta idzie
+      // do segmentów; na sterowniku by się z nią mnożyła).
+      const controllers = closedControllers(
+        hass,
+        [...g.scaled.map((l) => l.id), ...g.switchOnly],
+        controllerStateAt(hass, now),
+      );
+      if (controllers.length > 0) {
+        markControllersOn(hass, controllers, now);
+        this._turnOn(controllers);
+      }
       void this._send(g, calls, FINAL_TRANSITION_S);
       if (g.switchOnly.length > 0) this._turnOn(g.switchOnly);
       memory.delete(this._key);

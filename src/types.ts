@@ -561,12 +561,6 @@ export interface RoomSectionConfig {
    */
   intercom?: boolean;
   /**
-   * Tylko `lights`: grupowanie po pomocnikach „Grupa światła" przypisanych do
-   * obszaru. `helpers` (default) — pokazuj kafle GRUP, chowaj ich encje-składowe,
-   * światła spoza grup w zwijanym „Pozostałe". `none` — płaska lista jak dotąd.
-   */
-  group_by?: 'helpers' | 'none';
-  /**
    * Tylko `covers`: pasek akcji zbiorczych nad listą (Otwórz / Stop / Zamknij
    * + szybkie pozycje %) działający na wszystkie rolety sekcji. Default: true.
    */
@@ -1090,11 +1084,23 @@ export type TapActionConfig =
   /** Przełącz światła pokoju: jeśli cokolwiek świeci → zgaś wszystkie, inaczej zapal. */
   | { action: 'toggle-lights' }
   | { action: 'navigate'; navigation_path: string }
+  /** Bez `entity` — encja kontekstu (kafel, chip encji, scena). */
   | { action: 'more-info'; entity?: string }
+  /** Przełącz encję; bez `entity` — encja kontekstu. */
+  | { action: 'toggle'; entity?: string }
   | { action: 'url'; url_path: string; new_tab?: boolean }
+  /** Zapis edytora akcji HA od 2024.8. */
+  | {
+      action: 'perform-action';
+      perform_action: string;
+      data?: Record<string, unknown>;
+      target?: Record<string, unknown>;
+    }
+  /** Starszy zapis — `data` (edytor HA) albo `service_data` (YAML). */
   | {
       action: 'call-service';
       service: string;
+      data?: Record<string, unknown>;
       service_data?: Record<string, unknown>;
       target?: Record<string, unknown>;
     };
@@ -1161,22 +1167,28 @@ export interface HassFloor {
   aliases?: string[];
 }
 
+/**
+ * Wpis `hass.entities` — rejestr WYŚWIETLANIA HA (EntityRegistryDisplayEntry),
+ * nie pełny rejestr encji. Dawniej typ opisywał pełny rejestr (`hidden_by`,
+ * `disabled_by`, `device_class`), którego HA tu nigdy nie wysyła — filtr
+ * „ukryte pomijamy" sprawdzał więc pola, których nie ma, i nie działał.
+ * Encje wyłączone w ogóle do tej listy nie trafiają.
+ */
 export interface HassEntityRegistryEntry {
   entity_id: string;
   device_id?: string | null;
   area_id?: string | null;
   name?: string | null;
   labels?: string[];
-  hidden_by?: string | null;
-  disabled_by?: string | null;
+  /** Ukryta przez użytkownika albo integrację — znika z auto-list karty. */
+  hidden?: boolean;
   /**
-   * User override klasy urządzenia (Entity options → „Pokaż jako klasę urządzenia").
-   * Niektóre integracje (np. SATEL) nie aktualizują `state.attributes.device_class`
-   * po zmianie — trzeba czytać override z registry.
+   * Encja pomocnicza urządzenia: `config` (np. dioda statusu punktu dostępowego
+   * UniFi) albo `diagnostic` (bateria, temperatura wewnętrzna wtyczki).
    */
-  device_class?: string | null;
-  /** Native `device_class` z integracji (przed user override). */
-  original_device_class?: string | null;
+  entity_category?: 'config' | 'diagnostic' | null;
+  /** Integracja, która utworzyła encję (`wled`, `group`, `unifi`…). */
+  platform?: string;
 }
 
 export interface HassDevice {

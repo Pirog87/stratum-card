@@ -32,8 +32,14 @@ export class StratumCardChip extends LitElement {
    */
   @property({ type: Boolean, reflect: true }) public tinted = false;
 
-  private _onClick = (): void => {
+  private _onClick = (ev?: Event): void => {
     if (!this.clickable) return;
+    // Klik obsłużony przez chip nie może dojść do rodzica. W belce
+    // klasycznej chipy siedzą wewnątrz <button> headera, więc natywny klik
+    // (composed) zwijał albo rozwijał kartę w tej samej chwili, w której
+    // otwierała się lista chipa. Chip nieklikalny przepuszcza klik dalej —
+    // tam tapnięcie dalej przełącza kartę, jak cała reszta headera.
+    ev?.stopPropagation();
     this.dispatchEvent(
       new CustomEvent('chip-tap', { bubbles: true, composed: true }),
     );

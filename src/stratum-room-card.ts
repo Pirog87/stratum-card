@@ -15,6 +15,7 @@ import type {
   ChipConfig,
   HassEntityRegistryEntry,
   HomeAssistant,
+  RoomEntityItemConfig,
   RoomPopupOrderItem,
   MediaShortcutConfig,
   RoomSectionConfig,
@@ -25,9 +26,10 @@ import type {
 import { DEFAULT_POPUP_ORDER } from './types.js';
 import {
   getEntitiesInArea,
-  filterByDomain,
   filterBinarySensorDeviceClass,
   groupMemberIds,
+  countableLights,
+  filterPrimary,
 } from './area-entities.js';
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import {
@@ -49,12 +51,14 @@ import {
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
 import { anyLightOn, subscribePower, toggleRoomLights } from './power-pending.js';
+import { lightOnInHass } from './light-dimming.js';
 import { runTapAction } from './tap-action.js';
 import {
   autoRoomChips,
   autoSections,
   entitiesForSection,
   normalizeSections,
+  resolveMediaList,
 } from './room-sections.js';
 import { roomCardStyles } from './stratum-room-card-styles.js';
 import { SECTION_ICON, SECTION_LABEL, SECTION_LAYOUT } from './section-defaults.js';
@@ -318,9 +322,11 @@ export class StratumRoomCard extends LitElement {
     const name = this._resolveName();
     const icon = this._resolveIcon();
     const autoTypes = autoSections(this.hass, entries);
-    const sections = normalizeSections(this._config.sections, autoTypes).filter(
-      (s) => !s.hidden,
-    );
+    // Dwie listy: pełna (z ukrytymi) do decyzji o blokach świateł/rolet/
+    // mediów/scen — ukryta sekcja ma ten blok wyłączyć, a nie podmienić go
+    // na domyślny `{type}` — oraz widoczna do pętli „extra" i placeholdera.
+    const allSections = normalizeSections(this._config.sections, autoTypes);
+    const sections = allSections.filter((s) => !s.hidden);
 
     // Explicit scenes config zastępuje sekcję scenes.
     const hasExplicitScenes =
@@ -335,7 +341,12 @@ export class StratumRoomCard extends LitElement {
             ? html`<div class="placeholder">
                 Brak encji do wyświetlenia — sprawdź przypisanie area.
               </div>`
-            : this._renderOrderedBlocks(entries, sections, Boolean(hasExplicitScenes))}
+            : this._renderOrderedBlocks(
+                entries,
+                allSections,
+                sections,
+                Boolean(hasExplicitScenes),
+              )}
         </div>
       </ha-card>
       ${this._renderChipListPopup(entries)}
@@ -530,20 +541,31 @@ export class StratumRoomCard extends LitElement {
   /**
    * Body popupu jako bloki w konfigurowalnej kolejności: sceny, grupy
    * świateł, encje światła (poza grupami), rolety, media, pozostałe sekcje.
-   * `hidden` na pozycji wyłącza blok całkowicie.
+   * `hidden` na pozycji wyłącza blok całkowicie — tak samo `hidden` na
+   * sekcji lights/covers/media/scenes (oko w „Dodatkowe sekcje" edytora).
    */
   private _renderOrderedBlocks(
     entries: HassEntityRegistryEntry[],
+    allSections: RoomSectionConfig[],
     sections: RoomSectionConfig[],
     hasExplicitScenes: boolean,
   ): TemplateResult[] {
     const findSec = (t: RoomSectionType): RoomSectionConfig =>
-      sections.find((s) => s.type === t) ?? { type: t };
+      allSections.find((s) => s.type === t) ?? { type: t };
+    // Sprawdzane NA POCZĄTKU każdego case'a, przed ścieżkami split/explicit:
+    // wcześniej ukryta sekcja wypadała z listy, findSec oddawał świeże
+    // `{type}` i blok renderował się dalej — bez tytułu, trybu i kolumn,
+    // które user ustawił.
+    const isHidden = (t: RoomSectionType): boolean =>
+      Boolean(allSections.find((s) => s.type === t)?.hidden);
     const out: TemplateResult[] = [];
     for (const item of this._resolvedPopupOrder()) {
       if (item.hidden) continue;
       switch (item.section) {
         case 'scenes':
+          // Ukryta sekcja scen chowa też jawny pasek scen — oko znaczy
+          // „nie pokazuj tego bloku", niezależnie od źródła scen.
+          if (isHidden('scenes')) break;
           if (hasExplicitScenes) {
             // Globalny default rozmiaru; `scenes.size` per pokój wygrywa.
             out.push(
@@ -562,12 +584,15 @@ export class StratumRoomCard extends LitElement {
           }
           break;
         case 'light_groups':
+          if (isHidden('lights')) break;
           out.push(this._renderLightsMain(findSec('lights'), entries));
           break;
         case 'light_entities':
+          if (isHidden('lights')) break;
           out.push(this._renderLightsRest(findSec('lights'), entries));
           break;
         case 'covers':
+          if (isHidden('covers')) break;
           if ((this._config?.covers_list?.items?.length ?? 0) > 0) {
             out.push(this._renderCoversExplicit(findSec('covers')));
           } else {
@@ -581,8 +606,9 @@ export class StratumRoomCard extends LitElement {
           }
           break;
         case 'media':
+          if (isHidden('media')) break;
           if ((this._config?.media_list?.items?.length ?? 0) > 0) {
-            out.push(this._renderMediaExplicit(findSec('media')));
+            out.push(this._renderMediaFromList(findSec('media')));
           } else {
             out.push(
               this._renderSection(
@@ -1026,19 +1052,9 @@ export class StratumRoomCard extends LitElement {
     items = this._appendExtra(items, extraIds);
     if (items.length === 0) return html``;
 
-    // Światła — jawna lista z konfiguracji pokoju (widoczność, nazwy,
-    // kolejność, separatory) wygrywa nad auto-discovery.
-    if (type === 'lights' && (this._config?.lights?.items?.length ?? 0) > 0) {
-      return this._renderLightsExplicit(section, title, iconName);
-    }
-
-    // Światła: grupowanie po pomocnikach „Grupa światła" (default). Gdy area
-    // ma light-grupy — pokazujemy TYLKO je, składowe chowamy, resztę do
-    // zwijanego „Pozostałe". Bez grup (albo group_by: none) — płaska lista.
-    if (type === 'lights' && (section.group_by ?? 'helpers') === 'helpers') {
-      const grouped = this._renderLightsGrouped(section, items, title, iconName);
-      if (grouped) return grouped;
-    }
+    // Światła tu nie trafiają: bloki light_groups/light_entities renderują
+    // _renderLightsMain/_renderLightsRest, a pętla „extra" pomija 'lights'.
+    // Dawne gałęzie (jawna lista, group_by) były martwe — usunięte.
 
     // Media: default = JEDEN duży player z okładką (auto: ten, który gra),
     // reszta odtwarzaczy w zwijanym „Pozostałe". mode: tile przywraca listę.
@@ -1315,131 +1331,36 @@ export class StratumRoomCard extends LitElement {
     `;
   }
 
-  /** Jawna lista mediów: pierwszy widoczny (lub wskazany) jako duży player. */
-  private _renderMediaExplicit(section: RoomSectionConfig): TemplateResult {
-    const all = this._visibleListItems(this._config?.media_list);
-    const entityItems = all.filter((i) => !i.separator && i.entity);
-    if (entityItems.length === 0) return html``;
-    // Styl custom (bubble/mushroom): każda pozycja jako karta HACS.
+  /**
+   * Jawna lista mediów (`media_list`) jako filtr i override'y przed
+   * _renderMediaSection — nie osobny renderer. Lista decyduje, KTÓRE
+   * odtwarzacze i w jakiej kolejności, plus nazwy/ikony/akcje; zakładki,
+   * wybór grającego, hide_when_off, Grupuj/Źródło i krótkofalówka zostają
+   * jak w auto-sekcji. Tryby inne niż player (tile, bubble, custom:*)
+   * renderują listę 1:1 z separatorami — tam separator ma sens.
+   */
+  private _renderMediaFromList(section: RoomSectionConfig): TemplateResult {
+    const title = section.title ?? SECTION_LABEL['media'];
+    const iconName = section.icon ?? SECTION_ICON['media'];
     const mMode = section.mode ?? 'player';
-    if (mMode.startsWith('custom:')) {
+    if (mMode !== 'player') {
+      const all = this._visibleListItems(this._config?.media_list);
+      const count = all.filter((i) => !i.separator && i.entity).length;
+      if (count === 0) return html``;
       return html`
         <div class="section" part="section">
           <div class="section-header" part="section-header">
-            <ha-icon .icon=${section.icon ?? SECTION_ICON['media']}></ha-icon>
-            <span>${section.title ?? SECTION_LABEL['media']}</span>
-            <span class="count">${entityItems.length}</span>
+            <ha-icon .icon=${iconName}></ha-icon>
+            <span>${title}</span>
+            <span class="count">${count}</span>
           </div>
           ${this._renderListBlocks(all, mMode, 'grid-template-columns:1fr;', section.card_template)}
         </div>
       `;
     }
-    const featured =
-      entityItems.find((i) => i.entity === section.entity) ?? entityItems[0]!;
-    const rest = all.filter((i) => i !== featured);
-    const restCount = rest.filter((i) => !i.separator && i.entity).length;
-    const restKey = 'media:list';
-    const restOpen = this._openRest.has(restKey);
-    return html`
-      <div class="section" part="section">
-        <div class="section-header" part="section-header">
-          <ha-icon .icon=${section.icon ?? SECTION_ICON['media']}></ha-icon>
-          <span>${section.title ?? SECTION_LABEL['media']}</span>
-          ${restCount > 0
-            ? html`<span class="count">${entityItems.length}</span>`
-            : nothing}
-        </div>
-        <stratum-room-tile
-          .hass=${this.hass}
-          .entity=${featured.entity!}
-          .mode=${'player'}
-          .volumeStep=${section.volume_step}
-          .intercom=${section.intercom}
-          .nameOverride=${featured.name}
-          .tapAction=${featured.tap_action}
-        ></stratum-room-tile>
-        ${this._renderMediaShortcuts(section, featured.entity!)}
-        ${restCount > 0
-          ? html`
-              <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
-                <ha-icon
-                  .icon=${restOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
-                ></ha-icon>
-                <span>Pozostałe odtwarzacze</span>
-                <span class="rest-count">${restCount}</span>
-              </button>
-              ${restOpen
-                ? html`${this._renderListBlocks(rest, 'tile', 'grid-template-columns:1fr;')}`
-                : nothing}
-            `
-          : nothing}
-      </div>
-    `;
-  }
-
-  /**
-   * Sekcja lights pogrupowana po light-grupach (pomocnikach) z area.
-   * Zwraca null gdy area nie ma żadnej grupy — wtedy caller renderuje
-   * płaską listę jak dotychczas.
-   */
-  private _renderLightsGrouped(
-    section: RoomSectionConfig,
-    items: HassEntityRegistryEntry[],
-    title: string,
-    iconName: string,
-  ): TemplateResult | null {
-    const hass = this.hass!;
-    const isGroup = (id: string): boolean =>
-      groupMemberIds(hass.states?.[id]) !== undefined;
-    const groups = items.filter((e) => isGroup(e.entity_id));
-    if (groups.length === 0) return null;
-
-    const members = new Set<string>();
-    for (const g of groups) {
-      const ids = hass.states![g.entity_id]!.attributes!.entity_id as string[];
-      for (const m of ids) members.add(m);
-    }
-    const rest = items.filter(
-      (e) => !isGroup(e.entity_id) && !members.has(e.entity_id),
-    );
-
-    const mode = section.mode ?? 'rail';
-    const layout =
-      section.columns === 1 ? 'grid-1' : section.columns === 3 ? 'grid-3' : 'grid-2';
-    const restKey = `lights:${title}`;
-    const restOpen = this._openRest.has(restKey);
-    const tile = (e: HassEntityRegistryEntry): TemplateResult =>
-      html`<stratum-room-tile
-        .hass=${this.hass}
-        .entity=${e.entity_id}
-        .mode=${mode}
-        .cardTemplate=${section.card_template}
-      ></stratum-room-tile>`;
-
-    return html`
-      <div class="section" part="section">
-        <div class="section-header" part="section-header">
-          <ha-icon .icon=${iconName}></ha-icon>
-          <span>${title}</span>
-          <span class="count">${groups.length}</span>
-        </div>
-        <div class="tiles ${layout}">${groups.map(tile)}</div>
-        ${rest.length > 0
-          ? html`
-              <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
-                <ha-icon
-                  .icon=${restOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
-                ></ha-icon>
-                <span>Pozostałe światła</span>
-                <span class="rest-count">${rest.length}</span>
-              </button>
-              ${restOpen
-                ? html`<div class="tiles ${layout}">${rest.map(tile)}</div>`
-                : nothing}
-            `
-          : nothing}
-      </div>
-    `;
+    const { entries, overrides } = resolveMediaList(this.hass!, this._config?.media_list);
+    if (entries.length === 0) return html``;
+    return this._renderMediaSection(section, entries, title, iconName, overrides);
   }
 
   /**
@@ -1735,8 +1656,10 @@ export class StratumRoomCard extends LitElement {
     items: HassEntityRegistryEntry[],
     title: string,
     iconName: string,
+    overrides?: Map<string, RoomEntityItemConfig>,
   ): TemplateResult {
     const hass = this.hass!;
+    const ov = (id: string): RoomEntityItemConfig | undefined => overrides?.get(id);
     const priority = (id: string): number => {
       const s = hass.states?.[id]?.state;
       switch (s) {
@@ -1771,7 +1694,9 @@ export class StratumRoomCard extends LitElement {
     let featured: HassEntityRegistryEntry | undefined;
     if (section.entity) {
       featured = items.find((e) => e.entity_id === section.entity);
-      if (!featured && hass.states?.[section.entity]) {
+      // Z listy mediów (overrides): odtwarzacz ukryty albo nieobecny na liście
+      // nie może wrócić jako główny — lista decyduje, co jest widoczne.
+      if (!featured && !overrides && hass.states?.[section.entity]) {
         featured = { entity_id: section.entity } as HassEntityRegistryEntry;
       }
     }
@@ -1812,6 +1737,7 @@ export class StratumRoomCard extends LitElement {
                 ${items.map((e) => {
                   const st = hass.states?.[e.entity_id];
                   const name =
+                    ov(e.entity_id)?.name ??
                     (st?.attributes?.friendly_name as string | undefined) ??
                     e.entity_id;
                   return html`<button
@@ -1832,8 +1758,11 @@ export class StratumRoomCard extends LitElement {
             .hass=${this.hass}
             .entity=${selected}
             .mode=${'player'}
-          .volumeStep=${section.volume_step}
-          .intercom=${section.intercom}
+            .volumeStep=${section.volume_step}
+            .intercom=${section.intercom}
+            .nameOverride=${ov(selected)?.name}
+            .iconOverride=${ov(selected)?.icon}
+            .tapAction=${ov(selected)?.tap_action}
           ></stratum-room-tile>
           ${this._renderMediaShortcuts(section, selected)}
           ${this._renderMediaGroup(section, items, selected, key)}
@@ -1842,9 +1771,11 @@ export class StratumRoomCard extends LitElement {
       `;
     }
 
-    const rest = items
-      .filter((e) => e.entity_id !== featured!.entity_id)
-      .sort((a, b) => priority(b.entity_id) - priority(a.entity_id));
+    const rest = items.filter((e) => e.entity_id !== featured!.entity_id);
+    // Jawna lista ma kolejność ustawioną przez usera w edytorze — nie
+    // przestawiamy jej wg stanu. Auto-sekcja nie ma żadnej intencji
+    // kolejności, więc tam grające idą na górę.
+    if (!overrides) rest.sort((a, b) => priority(b.entity_id) - priority(a.entity_id));
     const restKey = `media:${title}`;
     const restOpen = this._openRest.has(restKey);
 
@@ -1863,6 +1794,9 @@ export class StratumRoomCard extends LitElement {
           .mode=${'player'}
           .volumeStep=${section.volume_step}
           .intercom=${section.intercom}
+          .nameOverride=${ov(featured.entity_id)?.name}
+          .iconOverride=${ov(featured.entity_id)?.icon}
+          .tapAction=${ov(featured.entity_id)?.tap_action}
         ></stratum-room-tile>
         ${this._renderMediaShortcuts(section, featured.entity_id)}
         ${rest.length > 0
@@ -1881,6 +1815,9 @@ export class StratumRoomCard extends LitElement {
                         .hass=${this.hass}
                         .entity=${e.entity_id}
                         .mode=${'tile'}
+                        .nameOverride=${ov(e.entity_id)?.name}
+                        .iconOverride=${ov(e.entity_id)?.icon}
+                        .tapAction=${ov(e.entity_id)?.tap_action}
                       ></stratum-room-tile>`,
                     )}
                   </div>`
@@ -2004,7 +1941,8 @@ export class StratumRoomCard extends LitElement {
     switch (field) {
       case 'motion':
       case 'occupancy': {
-        const on = filterBinarySensorDeviceClass(hass, entries, field).some(
+        // Bez diagnostycznych/konfiguracyjnych — jak wiersz i chip ruchu.
+        const on = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), field).some(
           (e) => hass.states?.[e.entity_id]?.state === 'on',
         );
         return mk('Obecność', 'mdi:motion-sensor', on ? 'aktywna' : 'brak', on, '#4caf50');
@@ -2012,7 +1950,9 @@ export class StratumRoomCard extends LitElement {
       case 'temperature':
       case 'humidity': {
         const cls = field;
-        const entry = entries.find(
+        // Pierwszy czujnik pierwszoplanowy — wewnętrzna temperatura wtyczki
+        // (encja diagnostyczna) nie jest temperaturą pokoju.
+        const entry = filterPrimary(hass, entries).find(
           (e) =>
             e.entity_id.startsWith('sensor.') &&
             hass.states?.[e.entity_id]?.attributes?.device_class === cls,
@@ -2028,21 +1968,23 @@ export class StratumRoomCard extends LitElement {
         return mk(label, icon, `${state.state} ${unit}`, true, color);
       }
       case 'lights_on': {
-        const n = filterByDomain(entries, 'light').reduce(
-          (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
-          0,
-        );
+        // Ten sam zbiór co licznik wiersza i chip nagłówka: bez diod statusu
+        // (config/diagnostic), bez ukrytych, grupa tylko gdy jej członków
+        // nie ma w puli — dawniej świecąca grupa liczyła się drugi raz.
+        const n = countableLights(hass, entries).filter((e) =>
+          lightOnInHass(hass, e.entity_id),
+        ).length;
         return mk('Światła', 'mdi:lightbulb-on', n > 0 ? `${n} włącz.` : 'wszystkie wył.', n > 0, '#ffc107');
       }
       case 'windows_open': {
-        const n = filterBinarySensorDeviceClass(hass, entries, 'window').reduce(
+        const n = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'window').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
         return mk('Okna', 'mdi:window-open-variant', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, '#42a5f5');
       }
       case 'doors_open': {
-        const n = filterBinarySensorDeviceClass(hass, entries, 'door').reduce(
+        const n = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'door').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );

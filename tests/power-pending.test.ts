@@ -15,12 +15,28 @@ import { entity } from './helpers.js';
 
 interface Call { service: string; ids: string[] }
 
+
+/**
+ * Rejestr wyświetlania dla fałszywego HA: sterowniki główne WLED (stan z
+ * `group_entities`, nazwa „wled") dostają platform: 'wled' — tylko takie
+ * encje karta uznaje za bramkę zasilania segmentów.
+ */
+function registryFor(initial: HassEntity[]): Record<string, { entity_id: string; platform?: string }> {
+  return Object.fromEntries(
+    initial.map((s) => [
+      s.entity_id,
+      { entity_id: s.entity_id, platform: s.entity_id.includes('wled') ? 'wled' : 'mqtt' },
+    ]),
+  );
+}
+
 function ha(initial: HassEntity[]) {
   const states: Record<string, HassEntity> = {};
   for (const s of initial) states[s.entity_id] = s;
   const calls: Call[] = [];
   const hass = {
     states,
+    entities: registryFor(initial),
     callService: (_d: string, service: string, _data: unknown, target?: { entity_id?: string | string[] }) => {
       calls.push({ service, ids: ([] as string[]).concat(target?.entity_id ?? []) });
       return Promise.resolve();
@@ -173,5 +189,95 @@ describe('poprawki z przeglądu', () => {
     await Promise.resolve();
     expect(effectiveState(hass, 'light.a')).toBe('on');
     expect(effectiveState(hass, 'light.grupa')).toBe('on');
+  });
+});
+
+describe('sterownik WLED (group_entities) jako bramka zasilania segmentów', () => {
+  const main = (state: string) =>
+    entity('light.wled_main', state, {
+      supported_color_modes: ['brightness'],
+      group_entities: ['light.seg1', 'light.seg2'],
+    });
+  const SEGS = ['light.seg1', 'light.seg2'];
+
+  it('sterownik zgaszony, segmenty „on" w HA: pokój ciemny, tap zapala sterownik i segmenty', () => {
+    const { hass, calls } = ha([main('off'), on('light.seg1'), on('light.seg2')]);
+    expect(anyLightOn(hass, SEGS)).toBe(false);
+    expect(effectiveState(hass, 'light.seg1')).toBe('off');
+    toggleRoomLights(hass, SEGS, 'k');
+    // Sterownik osobnym wywołaniem (bez jasności — toggle i tak jej nie
+    // wysyła), potem segmenty. Bez gaszenia „świecących" segmentów.
+    expect(calls).toEqual([
+      { service: 'turn_on', ids: ['light.wled_main'] },
+      { service: 'turn_on', ids: SEGS },
+    ]);
+    // Stan w toku: od razu widać „świeci".
+    expect(anyLightOn(hass, SEGS)).toBe(true);
+    expect(pendingWant(hass, 'light.wled_main')).toBe('on');
+  });
+
+  it('sterownik włączony: zachowanie bez zmian (tap gasi segmenty, sterownika nie dotyka)', () => {
+    const { hass, calls } = ha([main('on'), on('light.seg1'), off('light.seg2')]);
+    expect(anyLightOn(hass, SEGS)).toBe(true);
+    toggleRoomLights(hass, SEGS);
+    expect(calls).toEqual([{ service: 'turn_off', ids: ['light.seg1'] }]);
+  });
+
+  it('sterownik niedostępny (WLED z jednym segmentem): nigdy nie jest celem, segment czyta się sam', () => {
+    const { hass, calls } = ha([
+      entity('light.wled_main', 'unavailable', { group_entities: ['light.seg1'] }),
+      off('light.seg1'),
+    ]);
+    toggleRoomLights(hass, ['light.seg1']);
+    expect(calls).toEqual([{ service: 'turn_on', ids: ['light.seg1'] }]);
+    const lit = ha([
+      entity('light.wled_main', 'unavailable', { group_entities: ['light.seg1'] }),
+      on('light.seg1'),
+    ]);
+    expect(anyLightOn(lit.hass, ['light.seg1'])).toBe(true);
+  });
+
+  it('pomocnik „Grupa świateł" (entity_id) zostaje przezroczysty — nie jest sterownikiem', () => {
+    const { hass, calls } = ha([
+      entity('light.grupa', 'off', { entity_id: ['light.a'] }),
+      on('light.a'),
+    ]);
+    expect(anyLightOn(hass, ['light.a'])).toBe(true);
+    toggleRoomLights(hass, ['light.a']);
+    expect(calls).toEqual([{ service: 'turn_off', ids: ['light.a'] }]);
+  });
+
+  it('tap kafla segmentu przy zgaszonym sterowniku zapala też sterownik', () => {
+    const { hass, calls } = ha([main('off'), on('light.seg1'), off('light.seg2')]);
+    expect(tapPower(hass, 'light.seg1')).toBe(true);
+    expect(calls).toEqual([
+      { service: 'turn_on', ids: ['light.wled_main'] },
+      { service: 'turn_on', ids: ['light.seg1'] },
+    ]);
+  });
+});
+
+describe('bramka zasilania tylko dla WLED (przegląd v1.109.0)', () => {
+  it('grupa pokoju z innej integracji (group_entities) nie jest bramką', () => {
+    const states: Record<string, HassEntity> = {
+      'light.salon_room': entity('light.salon_room', 'off', { group_entities: ['light.b1', 'light.b2'] }),
+      'light.b1': entity('light.b1', 'off', { supported_color_modes: ['brightness'] }),
+      'light.b2': entity('light.b2', 'off', { supported_color_modes: ['brightness'] }),
+    };
+    const calls: Call[] = [];
+    const hass = {
+      states,
+      entities: {
+        'light.salon_room': { entity_id: 'light.salon_room', platform: 'hue' },
+        'light.b1': { entity_id: 'light.b1', platform: 'hue' },
+        'light.b2': { entity_id: 'light.b2', platform: 'hue' },
+      },
+      callService: (_d: string, service: string, _x: unknown, target?: { entity_id?: string | string[] }) => {
+        calls.push({ service, ids: ([] as string[]).concat(target?.entity_id ?? []) });
+        return Promise.resolve();
+      },
+    } as unknown as HomeAssistant;
+    tapPower(hass, 'light.b1');
+    expect(calls).toEqual([{ service: 'turn_on', ids: ['light.b1'] }]);
   });
 });

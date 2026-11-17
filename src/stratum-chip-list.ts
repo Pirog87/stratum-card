@@ -32,6 +32,7 @@ import {
 } from './power-pending.js';
 import { ALARM_CLASS_LABELS } from './chip-list-helpers.js';
 import { lightColorOf } from './tile-data.js';
+import { pushEscapeLayer } from './escape-stack.js';
 
 interface AreaGroup {
   /** Area ID albo pusty string dla „Bez pomieszczenia". */
@@ -78,18 +79,19 @@ export class StratumChipList extends LitElement {
     if (ev.target === ev.currentTarget) this._close();
   }
 
-  private _onKeydown = (ev: KeyboardEvent): void => {
-    if (ev.key === 'Escape') {
-      ev.stopPropagation();
-      this._close();
-    }
-  };
-
   private _unsubPower?: () => void;
+
+  /**
+   * Escape przez wspólny stos warstw: lista otwarta nad popupem pokoju jest
+   * na szczycie, więc Escape zamyka tylko ją, a Escape wciśnięty w more-info
+   * HA (otwartym z wiersza listy) nie zamyka listy wcale.
+   */
+  private _releaseEscape?: () => void;
 
   public connectedCallback(): void {
     super.connectedCallback();
-    document.addEventListener('keydown', this._onKeydown);
+    this._releaseEscape?.();
+    this._releaseEscape = pushEscapeLayer(() => this._close());
     this._unsubPower = subscribePower((ids) => {
       if (this._shown.some((id) => ids.has(id))) this.requestUpdate();
     });
@@ -97,7 +99,8 @@ export class StratumChipList extends LitElement {
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
-    document.removeEventListener('keydown', this._onKeydown);
+    this._releaseEscape?.();
+    this._releaseEscape = undefined;
     this._unsubPower?.();
     this._unsubPower = undefined;
   }
