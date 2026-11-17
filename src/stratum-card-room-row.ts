@@ -27,6 +27,8 @@ import {
   ALARM_ICONS,
   badgeCap,
   capByPriority,
+  rowNarrowLevel,
+  singleLineCap,
   topAlarmField,
   withoutBadgeFields,
 } from './row-fields.js';
@@ -178,16 +180,24 @@ export class StratumCardRoomRow extends LitElement {
    * Poziom ciasnoty wiersza (0 = normalnie, 1 = ≤360 px, 2 = ≤310 px) —
    * mierzony ResizeObserverem na hoście. Reakcję wybiera `narrow_mode`.
    */
-  @state() private _narrow = 0;
+  @state() private _narrow: 0 | 1 | 2 = 0;
+
+  /**
+   * Pasmo 361–450 px — tu odznaka alarmu + 3 pola dusiły nazwę pokoju.
+   * Osobna flaga, nie kolejny poziom `_narrow`: ma znaczenie tylko przy
+   * alarmie (`singleLineCap`). ResizeObserver, a nie container query, bo
+   * od tego zależy LICZBA renderowanych pól (wyjątek z CLAUDE.md).
+   */
+  @state() private _tight = false;
 
   private _narrowRo?: ResizeObserver;
 
   public connectedCallback(): void {
     super.connectedCallback();
     this._narrowRo = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      const lvl = w > 0 && w <= 310 ? 2 : w > 0 && w <= 360 ? 1 : 0;
-      if (lvl !== this._narrow) this._narrow = lvl;
+      const { level, tight } = rowNarrowLevel(entries[0]?.contentRect.width ?? 0);
+      if (level !== this._narrow) this._narrow = level;
+      if (tight !== this._tight) this._tight = tight;
     });
     this._narrowRo.observe(this);
   }
@@ -727,14 +737,11 @@ export class StratumCardRoomRow extends LitElement {
     const narrowTwo = twoLine && nl > 0;
     // Odznaka ⚠ N w rządku po prawej (w wąskim dwuliniowym siedzi pod nazwą).
     const badge = alarmed && this.alarmsCount > 0 && !narrowTwo;
-    // Przy alarmie zwijamy pola o poziom wcześniej: odznaka + 3 pola przy
-    // 361–412 px zostawiały nazwie 54–86 px („Łazienka parter" potrzebuje
-    // 124). Temperatura poczeka w „+n" — w czasie alarmu liczy się, KTÓRY
-    // to pokój. Pomiar (412 px): nazwa 47 → 128 px, cała.
-    const nlCap = badge && narrowMode === 'fields' ? Math.min(2, nl + 1) : nl;
-    let cap: number | undefined;
-    if (nlCap > 0 && narrowMode === 'fields') cap = nlCap === 2 ? 1 : 2;
-    if (nl === 2 && narrowMode === 'compact') cap = 3;
+    // Przy alarmie pola zwijają się o poziom wcześniej, ale tylko w paśmie,
+    // gdzie odznaka dusi nazwę (≤450 px) — uzasadnienie i pomiar w
+    // row-fields.ts (`singleLineCap`). Szeroki wiersz zostaje przy odznace
+    // + 3 polach.
+    const cap = singleLineCap(narrowMode, nl, this._tight, badge);
     const rightCap = nl === 2 && narrowMode === 'two-line' ? 2 : undefined;
     // Najciaśniej (≤310 px) z odznaką: „+n" ustępuje nazwie. To czysta
     // informacja (pełna lista jest w popupie), a włącznik i odznaka działają.

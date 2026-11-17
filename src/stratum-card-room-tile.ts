@@ -201,7 +201,7 @@ export class StratumCardRoomTile extends LitElement {
       <div
         class="tile ${effectiveActive ? 'active' : ''} ${lightsOn ? 'lights-on' : ''} ${alarmed
           ? 'alerted'
-          : ''} ${bgImage ? 'has-bg' : ''} ${tileAnim ? `anim-${tileAnim}` : ''} ${this.offline ? 'offline' : ''}"
+          : ''} ${badge ? 'has-badge' : ''} ${bgImage ? 'has-bg' : ''} ${tileAnim ? `anim-${tileAnim}` : ''} ${this.offline ? 'offline' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -414,6 +414,22 @@ export class StratumCardRoomTile extends LitElement {
       top: 8px;
       right: 8px;
     }
+    /* Z odznaką alarmu róg dostaje własny rządek nad nazwą. Absolutny róg
+       był dobry dla 18-px kropki obecności, ale odznaka ma ~70 px: na kaflu
+       140 px przykrywała prawie całą nazwę, a jej pole trafienia łapało
+       tapnięcia w górną połowę nazwy (row-alarms zamiast row-tap). Akurat
+       przy alarmie, kiedy najważniejsze jest, KTÓRY to pokój. Własny rządek
+       (a nie kolumna) zostawia nazwie całą szerokość obok ikony. */
+    .tile[data-icon-pos='left'].has-badge {
+      grid-template-rows: auto auto auto;
+      grid-template-areas:
+        'icon   motion'
+        'icon   name  '
+        'icon   info  ';
+    }
+    .tile[data-icon-pos='left'].has-badge .corner {
+      position: static;
+    }
 
     .icon-slot { grid-area: icon; }
     /* Róg kafla: odznaka alarmu + kropka obecności w jednym slocie siatki
@@ -580,6 +596,12 @@ export class StratumCardRoomTile extends LitElement {
       position: absolute;
       inset: -12px -4px;
       border-radius: 999px;
+    }
+    /* W układzie 'left' pod odznaką jest nazwa (6 px odstępu siatki) —
+       pole trafienia rośnie w górę, do krawędzi kafla, a w dół tylko
+       w obrębie odstępu, żeby nie zabierać tapnięć nazwie. */
+    .tile[data-icon-pos='left'] .alarm-badge::after {
+      inset: -12px -4px -4px;
     }
     .alarm-badge:hover:not(:disabled) {
       background: color-mix(

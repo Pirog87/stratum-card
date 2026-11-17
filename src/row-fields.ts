@@ -81,6 +81,59 @@ export function badgeCap(cap: number, badge: boolean): number {
 }
 
 /**
+ * Górna granica pasma, w którym odznaka ⚠ N + 3 pola duszą nazwę.
+ * Pomiar (Chromium, „Łazienka parter", pola temp/światła/ruch + „+2"):
+ * nazwa dostaje ≈ szerokość wiersza − 319 px, a potrzebuje ~124 px —
+ * mieści się dopiero od ~443 px. 450 to ten próg z zapasem; tablet,
+ * desktop i sections view są daleko powyżej.
+ */
+export const TIGHT_MAX_WIDTH = 450;
+
+/**
+ * Poziom ciasnoty wiersza z jego zmierzonej szerokości (ResizeObserver).
+ * `level`: 0 = normalnie, 1 = ≤360 px, 2 = ≤310 px. `tight` to osobne
+ * pasmo 361–450 px — znaczy coś tylko przy odznace alarmu (patrz
+ * `singleLineCap`), więc nie podnosi `level` i nie rusza trybów
+ * compact/two-line. Szerokość 0 (karta jeszcze niewymierzona, ukryta
+ * zakładka) = brak ciasnoty, żeby nie zwijać pól na ślepo.
+ */
+export function rowNarrowLevel(width: number): { level: 0 | 1 | 2; tight: boolean } {
+  if (!(width > 0)) return { level: 0, tight: false };
+  if (width <= 310) return { level: 2, tight: false };
+  if (width <= 360) return { level: 1, tight: false };
+  return { level: 0, tight: width <= TIGHT_MAX_WIDTH };
+}
+
+/**
+ * Limit pól w jednej linii wiersza (PRZED odjęciem slotu odznaki przez
+ * `badgeCap`); `undefined` = pełny limit.
+ *
+ * Przy alarmie w trybie `fields` zwijamy pola o poziom wcześniej: odznaka
+ * + 3 pola przy 361–412 px zostawiały nazwie 54–86 px („Łazienka parter"
+ * potrzebuje 124). Temperatura poczeka w „+n" — w czasie alarmu liczy się,
+ * KTÓRY to pokój. Pomiar (412 px): nazwa 47 → 128 px, cała.
+ *
+ * Dodatkowy poziom TYLKO w zmierzonym paśmie (`tight`, do
+ * `TIGHT_MAX_WIDTH`) albo gdy wiersz i tak jest wąski. Szerszy wiersz (tablet, desktop, sections view) ma miejsce na
+ * odznakę + 3 pola — zwijanie go do jednego pola chowało temperaturę, ruch
+ * i okna w „+n" bez żadnego powodu.
+ */
+export function singleLineCap(
+  narrowMode: 'fields' | 'two-line' | 'compact' | 'off',
+  level: 0 | 1 | 2,
+  tight: boolean,
+  badge: boolean,
+): number | undefined {
+  if (narrowMode === 'off') return undefined;
+  if (narrowMode === 'compact') return level === 2 ? 3 : undefined;
+  if (narrowMode !== 'fields') return undefined;
+  const eff = badge ? (level > 0 ? Math.min(2, level + 1) : tight ? 1 : 0) : level;
+  if (eff === 2) return 1;
+  if (eff === 1) return 2;
+  return undefined;
+}
+
+/**
  * Najważniejsze aktywne pole alarmowe — jego ikonę pokazuje odznaka, żeby
  * po zniknięciu pola z rządka dalej było widać, CO się dzieje (woda, dym).
  */

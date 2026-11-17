@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   badgeCap,
   capByPriority,
+  rowNarrowLevel,
+  singleLineCap,
   topAlarmField,
   withoutBadgeFields,
 } from '../src/row-fields.js';
@@ -56,5 +58,58 @@ describe('odznaka alarmu w wierszu (R1)', () => {
     expect(topAlarmField({ smoke: 1, leak: 3 })).toBe('smoke');
     expect(topAlarmField({ problem: 1 })).toBe('problem');
     expect(topAlarmField({ leak: 0 })).toBeUndefined();
+  });
+});
+
+describe('poziom ciasnoty wiersza z szerokości', () => {
+  it('progi 310 / 360 / 450 px', () => {
+    expect(rowNarrowLevel(300)).toEqual({ level: 2, tight: false });
+    expect(rowNarrowLevel(310)).toEqual({ level: 2, tight: false });
+    expect(rowNarrowLevel(320)).toEqual({ level: 1, tight: false });
+    expect(rowNarrowLevel(360)).toEqual({ level: 1, tight: false });
+    expect(rowNarrowLevel(390)).toEqual({ level: 0, tight: true });
+    expect(rowNarrowLevel(412)).toEqual({ level: 0, tight: true });
+    // 413 px: odznaka + 3 pola zostawiały nazwie 94 px — wciąż ciasno.
+    expect(rowNarrowLevel(413)).toEqual({ level: 0, tight: true });
+    expect(rowNarrowLevel(450)).toEqual({ level: 0, tight: true });
+    expect(rowNarrowLevel(451)).toEqual({ level: 0, tight: false });
+    expect(rowNarrowLevel(600)).toEqual({ level: 0, tight: false });
+    expect(rowNarrowLevel(900)).toEqual({ level: 0, tight: false });
+  });
+
+  it('niewymierzony wiersz (0 px) nie jest ciasny', () => {
+    expect(rowNarrowLevel(0)).toEqual({ level: 0, tight: false });
+  });
+});
+
+describe('limit pól w jednej linii (singleLineCap)', () => {
+  it('szeroki wiersz z alarmem: pełny limit → odznaka + 3 pola', () => {
+    // Zgłoszony przypadek: 900 px, alarm zwijał pola do samego włącznika.
+    const cap = singleLineCap('fields', 0, false, true);
+    expect(cap).toBeUndefined();
+    expect(badgeCap(cap ?? 4, true)).toBe(3);
+  });
+
+  it('pasmo 361–450 px z alarmem: o poziom wcześniej (2 → odznaka + 1 pole)', () => {
+    expect(singleLineCap('fields', 0, true, true)).toBe(2);
+  });
+
+  it('pasmo 361–450 px BEZ alarmu: bez zwijania', () => {
+    expect(singleLineCap('fields', 0, true, false)).toBeUndefined();
+  });
+
+  it('wąskie poziomy: alarm zwija o poziom, maksymalnie do 1', () => {
+    expect(singleLineCap('fields', 1, false, false)).toBe(2);
+    expect(singleLineCap('fields', 1, false, true)).toBe(1);
+    expect(singleLineCap('fields', 2, false, false)).toBe(1);
+    expect(singleLineCap('fields', 2, false, true)).toBe(1);
+  });
+
+  it('inne tryby nie reagują na odznakę ani na pasmo 361–450 px', () => {
+    expect(singleLineCap('compact', 2, false, true)).toBe(3);
+    expect(singleLineCap('compact', 1, false, true)).toBeUndefined();
+    expect(singleLineCap('compact', 0, true, true)).toBeUndefined();
+    expect(singleLineCap('two-line', 2, false, true)).toBeUndefined();
+    expect(singleLineCap('off', 0, true, true)).toBeUndefined();
   });
 });
