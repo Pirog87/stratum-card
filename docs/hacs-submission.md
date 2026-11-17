@@ -9,6 +9,7 @@ Repozytorium jest gotowe do włączenia do oficjalnej listy HACS (tak że użytk
 - [x] `hacs.json` z `filename`, `render_readme`, `homeassistant`
 - [x] Przynajmniej jeden publikowany GitHub release
 - [x] `stratum-card.js` jako asset releasu (auto-release workflow)
+- [x] `stratum-card-editors.js` (+ `.gz`) jako asset releasu — edytory ładowane na żądanie z tego samego katalogu (ADR-005); nie jest zasobem Lovelace i nie pasuje do nazw, które HACS rejestruje automatycznie
 - [x] GitHub topics: `home-assistant`, `lovelace`, `hacs`, `custom-card`, `lovelace-card`, `homeassistant`
 - [x] Obrazek w README (`preview.png`)
 - [x] Ten guide + CHANGELOG

@@ -16,8 +16,15 @@ Wymagane: Node 20+, npm 10+.
 npm run build
 ```
 
-Produkcyjny build (z terser-em) → `dist/stratum-card.js`. Ten plik kopiujesz
-do HA żeby go użyć.
+Produkcyjny build (z terser-em) → dwa pliki w `dist/`:
+
+- `stratum-card.js` — obie karty; to jest zasób Lovelace,
+- `stratum-card-editors.js` — edytory wizualne, które karta dociąga sama
+  (z tego samego katalogu) dopiero przy „Edytuj" (ADR-005).
+
+Oba kopiujesz do HA, **do jednego katalogu**. `npm run build` najpierw
+czyści `dist/`, więc nie zostają tam pozostałości (np. `.map` z watcha) —
+`validate.yml` przepuszcza wyłącznie te dwa pliki.
 
 ## Watch mode (zalecane do dev)
 
@@ -25,8 +32,12 @@ do HA żeby go użyć.
 npm run watch
 ```
 
-Rollup będzie rebuildował przy każdym save do `dist/stratum-card.js`.
-Build watch jest bez terser-a (czytalne + sourcemaps).
+Rollup będzie rebuildował przy każdym save oba pliki (`dist/stratum-card.js`
+i `dist/stratum-card-editors.js`). Build watch jest bez terser-a (czytalne
++ sourcemaps). W dev-buildzie adres edytorów dostaje znacznik czasu
+ładowania strony (`?sv=<wersja>-<znacznik>`), więc po Ctrl+Shift+R
+przeglądarka nie poda starych edytorów z cache, choć wersja w
+`package.json` się nie zmieniła.
 
 ## Podpięcie do Home Assistant
 
@@ -35,7 +46,7 @@ Build watch jest bez terser-a (czytalne + sourcemaps).
 Po każdym buildzie:
 
 ```bash
-cp dist/stratum-card.js /path/to/ha/config/www/stratum-card.js
+cp dist/stratum-card.js dist/stratum-card-editors.js /path/to/ha/config/www/
 ```
 
 W HA raz: *Settings → Dashboards → Resources → Add resource*
@@ -43,7 +54,9 @@ W HA raz: *Settings → Dashboards → Resources → Add resource*
 - Type: `JavaScript Module`
 
 Przy każdej zmianie: zmień `?v=2`, `?v=3` żeby wymusić cache bust.
-Albo Ctrl+Shift+R.
+Albo Ctrl+Shift+R. Query zasobu (`?v=…`, a u HACS `?hacstag=…`) karta
+przepisuje do adresu edytorów, więc cache bust działa na oba pliki.
+`stratum-card-editors.js` **nie** dodawaj jako zasobu.
 
 ### Opcja B — symlink (szybszy dev loop)
 
@@ -51,7 +64,12 @@ Jeśli masz HA jako docker / HAOS z dostępem do `/config`:
 
 ```bash
 ln -s /path/to/stratum-card/dist/stratum-card.js /path/to/ha/config/www/stratum-card.js
+ln -s /path/to/stratum-card/dist/stratum-card-editors.js /path/to/ha/config/www/stratum-card-editors.js
 ```
+
+Albo jeden symlink na cały katalog (`ln -s /path/to/stratum-card/dist
+/path/to/ha/config/www/stratum`) i zasób `/local/stratum/stratum-card.js` —
+karta szuka edytorów i zdjęć scen obok siebie, więc podkatalog działa.
 
 Teraz `npm run watch` automatycznie aktualizuje plik w HA. Tylko F5 w
 przeglądarce i widzisz zmiany.
@@ -85,8 +103,8 @@ Jeśli HA jest na innej maszynie (np. raspberry), użyj `rsync`:
 npm run watch
 
 # w drugim — restartuje się w pętli po zmianie
-while inotifywait -e close_write dist/stratum-card.js; do
-  rsync dist/stratum-card.js user@ha-host:/config/www/stratum-card.js
+while inotifywait -e close_write dist/stratum-card.js dist/stratum-card-editors.js; do
+  rsync dist/stratum-card.js dist/stratum-card-editors.js user@ha-host:/config/www/
 done
 ```
 
@@ -160,8 +178,10 @@ Patrz `examples/` w repo.
 2. Wpis w `CHANGELOG.md`.
 3. Merge do `main`. Workflow `release.yml` czyta wersję z `package.json`;
    jeśli tagu `v<wersja>` jeszcze nie ma, odpala typecheck, testy i build,
-   tworzy tag i release z assetami: `stratum-card.js`, `stratum-card.js.gz`
-   i zdjęciami scen `sceny-*.webp`.
+   tworzy tag i release z assetami: `stratum-card.js`, `stratum-card.js.gz`,
+   `stratum-card-editors.js`, `stratum-card-editors.js.gz` i zdjęciami scen
+   `sceny-*.webp`. Każdy `.gz` jest sprawdzany (`gzip -t` + porównanie
+   z `.js`) przed publikacją.
 
 ## Częste problemy
 
@@ -173,3 +193,18 @@ jest jeszcze wstrzyknięty. Zawsze `if (!this.hass) return nothing`.
 
 **Zmiana w TS nie widać w HA** — sprawdź czy `npm run watch` chodzi
 i czy `dist/stratum-card.js` został zaktualizowany (timestamp pliku).
+
+**„Edytor wizualny nie jest obsługiwany" przy edycji karty Stratum** — karta
+nie dostała pliku edytorów; edycja w YAML-u działa, „Zapisz" też. W konsoli
+jest jedno ostrzeżenie `Stratum: edytor wizualny niedostępny (<powód>)`:
+
+- *nie udało się wczytać pliku* — `stratum-card-editors.js` nie leży w tym
+  samym katalogu co `stratum-card.js` (instalacja ręczna, symlink tylko na
+  kartę) albo serwer zwrócił błąd. W zakładce Network widać żądanie
+  `stratum-card-editors.js?…&sv=<wersja>` z błędem. Skopiuj plik i zrób
+  Ctrl+Shift+R. Karta sama ponawia próbę najwcześniej po 30 s;
+- *plik edytorów jest z innej wersji niż karta* — obok nowej karty leży
+  stary plik edytorów (podmieniony tylko jeden plik) albo na stronie są dwie
+  kopie karty w różnych wersjach. Podmień oba pliki naraz;
+- *plik ładuje się zbyt długo* — brak odpowiedzi przez 20 s (wolna sieć).
+  Gdy plik dojdzie, kolejne otwarcie edytora pokaże już wersję wizualną.

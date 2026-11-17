@@ -1,9 +1,9 @@
 // Lokalizacja edytorów — osobne wejście, żeby napisy edytorów (editor-pl.ts,
 // editor-en.ts) importowały WYŁĄCZNIE edytory. Runtime karty (dashboard)
 // woła localize() z localize.ts i nie ciągnie ~54 KB tekstów, których nie
-// pokazuje. Dziś bundle jest jednym plikiem (ADR-005), więc bajty jeszcze
-// się nie zmieniają; podział jest pod PKG-3 (v1.110.0): edytory ładowane
-// na żądanie zabiorą swoje słowniki ze sobą bez dalszych zmian.
+// pokazuje. Od v1.110.0 (PKG-3) edytory są osobnym plikiem ładowanym na
+// żądanie (ADR-005) i zabierają te słowniki ze sobą — dashboard ich nie
+// pobiera.
 //
 // Klucze edytora zachowują pełną ścieżkę `editor.…`, więc teksty w kodzie
 // czyta się tak samo jak dotąd, a `localizeUi` przyjmuje też zwykłe klucze

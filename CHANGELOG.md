@@ -4,6 +4,43 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.110.0] — 2026-11-17
+
+Edytory wizualne w osobnym pliku ładowanym na żądanie (PKG-3). Dashboard
+pobiera i parsuje o 41% mniej kodu: `stratum-card.js` 573 094 → 339 299 B
+(gzip −9: 142 059 → 89 007 B). Edytory i ich słowniki
+(`stratum-card-editors.js`, 278 102 B / 69 532 B gzip) przychodzą dopiero,
+gdy otworzysz edycję karty.
+
+### Changed (uwaga przy instalacji ręcznej)
+- **Release ma drugi plik JS: `stratum-card-editors.js` (+ `.gz`).** HACS
+  pobiera go sam, obok `stratum-card.js` — u użytkowników HACS nic się nie
+  zmienia, zasób Lovelace zostaje ten sam. Przy instalacji ręcznej
+  i w dev-loopie skopiuj **oba** pliki do jednego katalogu; zasobem jest
+  tylko `stratum-card.js`. Bez pliku edytorów karta działa, a edycja jest
+  tylko w YAML-u („Edytor wizualny nie jest obsługiwany", „Zapisz" działa)
+  i w konsoli pojawia się jedno ostrzeżenie z powodem.
+- Adres edytorów to katalog karty + jej query (`?hacstag=…` z HACS,
+  `?v=…` z instalacji ręcznej) + `sv=<wersja>` — po aktualizacji
+  przeglądarka nie łączy nowej karty ze starymi edytorami z cache.
+  Edytory z innej wersji niż karta nie są używane (YAML + ostrzeżenie).
+- `npm run build` czyści `dist/` przed buildem; buduje dwa niezależne pliki
+  i zatrzymuje się, gdy edytory trafiłyby do pliku dashboardu albo runtime
+  karty do pliku edytorów (plugin `stratum-boundary`).
+
+### Unchanged
+- Edytory działają i wyglądają tak samo (wszystkie 11, PL/EN, pasek
+  cofania, sub-edytory) — zrzut tekstów identyczny z v1.109.3.
+- Katalog kart („Dodaj kartę") i domyślny config nowej karty nie
+  potrzebują pliku edytorów.
+
+### Docs
+- ADR-005 przepisany: dwa samodzielne pliki ES zamiast jednego, z
+  uzasadnieniem i odrzuconymi wariantami (chunk rollupa = druga instancja
+  karty bez `?hacstag=`). ADR-007 i ADR-010 zaktualizowane.
+- README: sekcja „Instalacja ręczna (bez HACS)". `docs/development.md`:
+  kopiowanie/symlink/rsync obu plików, nowy wpis w „Częstych problemach".
+
 ## [1.109.3] — 2026-11-17
 
 Dostępność, kontrast i porządki z pełnego audytu karty: klawiatura

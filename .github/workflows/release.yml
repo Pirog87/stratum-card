@@ -61,15 +61,25 @@ jobs:
 
       - name: Package release assets (JS + grafiki scen)
         if: steps.tag_check.outputs.exists == 'false'
+        # bash, nie sh: weryfikacja .gz niżej używa process substitution.
+        shell: bash
         run: |
+          set -euo pipefail
           # HACS (bez zip_release) pobiera KAŻDY asset releasu płasko do
           # www/community/stratum-card/ — więc assetami są dokładnie pliki,
-          # które mają wylądować na dysku. Grafiki z prefiksem sceny-.
+          # które mają wylądować na dysku. Od v1.110.0 (PKG-3) to dwa pliki
+          # JS: dashboard i edytory, które karta dociąga z tego samego
+          # katalogu dopiero przy „Edytuj". Grafiki z prefiksem sceny-.
           mkdir -p build
-          cp dist/stratum-card.js build/
-          # Świeży .js.gz nadpisuje ewentualną pozostałość po starej
-          # instalacji — HA potrafi serwować .gz zamiast .js, gdy istnieje.
-          gzip -9 -c dist/stratum-card.js > build/stratum-card.js.gz
+          for f in stratum-card.js stratum-card-editors.js; do
+            cp "dist/$f" build/
+            # Świeży .gz nadpisuje ewentualną pozostałość po starej
+            # instalacji — HA potrafi serwować .gz zamiast .js, gdy istnieje,
+            # więc stary .gz obok nowego .js podałby przeglądarce starą wersję.
+            gzip -9 -c "dist/$f" > "build/$f.gz"
+            gzip -t "build/$f.gz"
+            cmp <(gunzip -c "build/$f.gz") "build/$f"
+          done
           for f in assets/sceny/*.webp; do
             cp "$f" "build/sceny-$(basename "$f")"
           done
@@ -85,5 +95,7 @@ jobs:
           files: |
             build/stratum-card.js
             build/stratum-card.js.gz
+            build/stratum-card-editors.js
+            build/stratum-card-editors.js.gz
             build/sceny-*.webp
           fail_on_unmatched_files: true

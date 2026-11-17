@@ -1,8 +1,8 @@
 // Słownik EDYTORÓW, polski — baza. Wydzielony z pl.ts (v1.109.3): napisy
 // edytorów to ~83% słowników, a dashboard ich nie potrzebuje. Importują go
-// wyłącznie edytory (przez editor-localize.ts), więc gdy edytory staną się
-// osobnym plikiem ładowanym na żądanie (PKG-3, v1.110.0), te napisy pójdą
-// razem z nimi, a runtime karty zostanie przy pl.ts/en.ts.
+// wyłącznie edytory (przez editor-localize.ts), więc od v1.110.0 (PKG-3)
+// te napisy jadą w osobnym pliku stratum-card-editors.js ładowanym na
+// żądanie, a runtime karty zostaje przy pl.ts/en.ts.
 //
 // Kształt tego obiektu definiuje typ `EditorMessages`, więc editor-en.ts
 // musi mieć dokładnie te same klucze. Klucze w kodzie: `editor.<ścieżka>`.

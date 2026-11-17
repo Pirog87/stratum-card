@@ -209,5 +209,14 @@ export const pl = {
       'została pominięta. Usuń zdublowany zasób Lovelace (np. /local/stratum-card.js ' +
       'obok /hacsfiles/stratum-card/stratum-card.js) i odśwież przeglądarkę.',
     unknown_section: 'Nieznany typ sekcji „{type}" — pomijam. Dostępne: {known}.',
+    // Plik edytorów ładowany na żądanie (PKG-3). Karta działa bez niego —
+    // komunikat ma powiedzieć to wprost i dać dwie drogi wyjścia.
+    editors_unavailable:
+      'Stratum: edytor wizualny niedostępny ({reason}). Karta działa normalnie — ' +
+      'edytuj ją w YAML albo skopiuj {file} do tego samego katalogu co stratum-card.js ' +
+      'i odśwież przeglądarkę (Ctrl+Shift+R).',
+    editors_reason_missing: 'nie udało się wczytać pliku',
+    editors_reason_mismatch: 'plik edytorów jest z innej wersji niż karta',
+    editors_reason_timeout: 'plik ładuje się zbyt długo',
   },
 };

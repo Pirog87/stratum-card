@@ -100,21 +100,101 @@ od najprostszego do najbardziej zaawansowanego:
 
 ---
 
-## ADR-005: Bundling — single file, ES module
+## ADR-005: Bundling — dwa samodzielne pliki ES: dashboard + edytory na żądanie
 
-**Decyzja:** Jeden plik wyjściowy `dist/stratum-card.js`, format `es`,
-wszystkie zależności bundlowane.
+**Status:** od v1.110.0 (PKG-3). Zastępuje pierwotną decyzję „jeden plik"
+(zachowana niżej, w „Historii").
+
+**Decyzja:** Rollup buduje dwa niezależne, samodzielne pliki ES:
+
+| Plik | Wejście | Co zawiera | v1.110.0 (surowy / gzip -9) |
+|---|---|---|---|
+| `dist/stratum-card.js` | `src/stratum-card.ts` | obie karty, cały runtime dashboardu, słowniki `pl.ts`/`en.ts` | 339 299 B / 89 007 B |
+| `dist/stratum-card-editors.js` | `src/editors-entry.ts` | wszystkie edytory (`*-editor.ts`), ich słowniki `editor-pl.ts`/`editor-en.ts`, style i helpery tylko-edytorowe | 278 102 B / 69 532 B |
+
+Dla porównania v1.109.3 (jeden plik): 573 094 B / 142 059 B. Dashboard
+pobiera i parsuje o ~41% mniej (gzip −37%).
+
+- Użytkownik dalej dodaje **jeden** zasób Lovelace (`stratum-card.js`).
+  Plik edytorów nie jest zasobem — ładuje go `loadEditor()`
+  (`src/editor-loader.ts`) z `getConfigElement()` obu kart, czyli dopiero
+  przy „Edytuj".
+- Adres edytorów liczy `editorsUrl()` (`src/editors-url.ts`, czyste,
+  testy w `tests/editors-url.test.ts`): katalog z `import.meta.url` karty,
+  **to samo query** co karta (`?hacstag=<n>` z HACS, `?v=1` z instalacji
+  ręcznej) plus `sv=<wersja>`. Po aktualizacji przez HACS adres się
+  zmienia, więc przeglądarka nie sparuje nowej karty ze starymi edytorami
+  z cache. W dev-buildzie (`npm run watch`) `sv` ma dodatkowo znacznik czasu
+  ładowania strony. Ponowna próba po błędzie dostaje `retry=<n>` (Chrome
+  pamięta nieudany import pod danym adresem), najwcześniej po 30 s.
+  Fallback jak dla zdjęć scen (ADR-010): adres nie-http(s) →
+  `/hacsfiles/stratum-card/`.
+- Brak pliku, timeout (20 s) albo edytory innej wersji niż karta →
+  `getConfigElement()` **rozwiązuje się `undefined`, nie odrzuca**. Sprawdzone
+  w źródłach frontendu HA: odrzucenie ustawia w `hui-element-editor`
+  `_errors` i `GUImode=false`, a `_canSave` w `hui-dialog-edit-card` zwraca
+  przy błędzie `false` — „Zapisz" zablokowany, podgląd rozmyty, a każda
+  zmiana YAML-u woła `getConfigElement()` ponownie i znów kończy się błędem.
+  `undefined` → komunikat „Edytor wizualny nie jest obsługiwany" + YAML
+  z działającym „Zapisz". Do tego jedno zlokalizowane ostrzeżenie w konsoli
+  (`console.editors_unavailable`) na stronę.
+- Plik edytorów ma własny guard (`src/editors-boot-guard.ts`, ten sam
+  `installLoadGuard` co karta, z wartownikiem `stratum-card-editor` i kluczem
+  `Symbol.for('stratum-card.editors-version')`): druga ewaluacja pod innym
+  adresem niczego nie definiuje i nie rzuca, a zapisana wersja pozwala
+  loaderowi odrzucić niezgodne edytory.
+- `getStubConfig()` i rejestracja w `window.customCards` zostają w pliku
+  dashboardu — katalog kart i „Dodaj kartę" działają bez pliku edytorów.
+
+**Granica pilnowana przy buildzie.** Plugin `stratum-boundary`
+w `rollup.config.js` zatrzymuje build, gdy któryś plik ma więcej niż jeden
+chunk albo jakikolwiek import; gdy dashboard zawiera moduł edytora (ścieżka
+z „editor" poza loaderem albo jawna lista modułów tylko-edytorowych); gdy
+plik edytorów zawiera runtime karty (`stratum-card`, `hass-watch`,
+`boot-guard`, …) albo moduł definiujący nie-edytorowy element `stratum-*`.
+Liczą się tylko moduły, które naprawdę trafiły do wyjścia. Wspólne helpery
+(`lit`, `localize`, `tap-action`, `area-entities`…) są w obu plikach
+osobno — trzymają tylko cache, więc dwie kopie niczego nie psują.
+`validate.yml` sprawdza, że `dist/` to dokładnie te dwa pliki, a dashboard
+mieści się w budżecie 360 000 B.
 
 **Dlaczego:**
-- HACS dostarcza jeden plik do `/config/www/`
-- Użytkownik dodaje jeden `resource` w HA
+- Edytory to ~41% kodu, którego dashboard nie pokazuje, a telefon pobierał
+  i parsował je przy każdym zimnym starcie
+- Dwa samodzielne pliki zamiast chunków, bo HACS ładuje kartę jako
+  `/hacsfiles/stratum-card/stratum-card.js?hacstag=<n>` — patrz niżej
 - ES module = natywny import w nowoczesnych przeglądarkach
 
-**Alternatywa odrzucona:** Multi-chunk z lazy loadingiem — overkill dla
-komponentu tej wielkości. Dodatkowe HTTP requesty spowolnią ładowanie.
+**Alternatywy odrzucone:**
+- _Code-splitting rollupa (wspólny chunk / `import('./…')`)_ — chunk
+  edytorów importuje `./stratum-card.js` (albo chunk wspólny) **bez**
+  `?hacstag=…`. Dla przeglądarki to inny URL = druga instancja modułu karty:
+  drugi `customElements.define` (`NotSupportedError`), drugi obserwator
+  `hass`, drugi baner.
+- _Wstrzykiwanie powiązań karty do edytorów (wspólny `lit` przez obiekt
+  na karcie)_ — wymaga przepisywania wyjścia rollupa po renderze (AST,
+  analiza zasięgu, nowa devDependency) i eksponuje zminifikowane nazwy;
+  oszczędza ~15 KB gzip tylko przy otwarciu edytora, dashboard zyskuje
+  tyle samo co tutaj.
+- _Współdzielenie `lit` w runtime (import map, globalny `lit`)_ — HA nie daje
+  kartom import map, a poleganie na wewnętrznej kopii `lit` z frontendu HA
+  wiąże nas z jego wersją.
+- _`output.inlineDynamicImports`_ — wklejony moduł ewaluuje się od razu,
+  bajty i parsowanie zostają w dashboardzie.
+- _Jeden plik (pierwotna decyzja)_ — prosty, ale każdy start dashboardu
+  płaci za edytory.
 
-> Status: JS dalej jest jednym plikiem; release ma jednak więcej assetów
-> (zdjęcia scen, `.gz`) — patrz ADR-010.
+**Konsekwencje:**
+- Release niesie dwa pliki JS, każdy ze świeżym `.gz` (ADR-010).
+- Instalacja ręczna: oba pliki do **jednego** katalogu, zasobem jest tylko
+  `stratum-card.js`. Bez pliku edytorów karta działa, a edycja jest tylko
+  w YAML-u (`README.md`, `docs/development.md`).
+
+**Historia (do v1.109.3):** „Jeden plik wyjściowy `dist/stratum-card.js`,
+format `es`, wszystkie zależności bundlowane. HACS dostarcza jeden plik,
+użytkownik dodaje jeden `resource`. Multi-chunk z lazy loadingiem odrzucony
+jako overkill." Edytory urosły do ~36% bundla (v1.109.3), a ich słowniki
+wydzielono już wtedy (ADR-007) — to przesądziło o zmianie.
 
 ---
 
@@ -167,10 +247,11 @@ i `editor-en.ts` (typ `EditorMessages` z `editor-pl.ts`), a czytają je tylko
 edytory przez `localizeUi()` / `editorMessages()` z
 `src/localize/editor-localize.ts` — ta sama ścieżka awaryjna, klucze z pełnym
 prefiksem `editor.…`. Runtime karty importuje wyłącznie `pl.ts`/`en.ts`.
-Dopóki bundle jest jednym plikiem (ADR-005), bajty są te same; podział jest
-pod PKG-3 (v1.110.0) — edytory ładowane na żądanie zabiorą swoje słowniki
-ze sobą. Budżet: 1.109.2 → 1.109.3 bundle 482 306 → 573 151 B
-(gzip −9: 121 722 → 142 073 B), z czego słowniki ~65 KB po minifikacji.
+Od v1.110.0 (PKG-3, ADR-005) słowniki edytorów jadą w pliku
+`stratum-card-editors.js` ładowanym na żądanie — dashboard ich nie pobiera.
+Budżet: 1.109.2 → 1.109.3 bundle 482 306 → 573 151 B
+(gzip −9: 121 722 → 142 073 B), z czego słowniki ~65 KB po minifikacji;
+w v1.110.0 dashboard 339 299 B (gzip −9: 89 007 B).
 
 > Status: obowiązuje — mechanizm. Decyzję, który język widzi użytkownik,
 > opisuje ADR-009.
@@ -214,25 +295,30 @@ opisuje mechanizm (słowniki `pl.ts`/`en.ts`, `localize()`, `.uiLang`).
 
 ---
 
-## ADR-010: Release — bundle JS + zdjęcia scen jako osobne assety
+## ADR-010: Release — pliki JS + zdjęcia scen jako osobne assety
 
-**Decyzja:** Kod dalej jest jednym plikiem `stratum-card.js` (ADR-005),
-ale release niesie też `stratum-card.js.gz` i zdjęcia wbudowanych scen
-`sceny-<id>.webp`. HACS pobiera wszystkie assety płasko do jednego
-katalogu, a karta szuka zdjęć obok bundla (adres liczony z
-`import.meta.url`), potem pod `/hacsfiles/stratum-card/`, na końcu rysuje
-wersję SVG, jeśli scena ją ma.
+**Decyzja:** Release niesie pliki JS z ADR-005 — od v1.110.0 dwa:
+`stratum-card.js` i `stratum-card-editors.js`, każdy ze swoim `.gz` —
+oraz zdjęcia wbudowanych scen `sceny-<id>.webp`. HACS pobiera wszystkie
+assety płasko do jednego katalogu. Karta szuka zdjęć obok bundla (adres
+liczony z `import.meta.url`), potem pod `/hacsfiles/stratum-card/`, na końcu
+rysuje wersję SVG, jeśli scena ją ma; plik edytorów — tak samo obok bundla
+(ADR-005).
 
 **Dlaczego:**
 - Zdjęcia w bundlu (base64) rozdęłyby JS, który telefon pobiera i parsuje
   przy każdym starcie — a zdjęcie potrzebne jest tylko scenie, która je
   pokazuje
 - `.gz` nadpisuje pozostałość po starszej instalacji (HA potrafi serwować
-  `.gz` zamiast `.js`)
+  `.gz` zamiast `.js`) — dlatego **każdy** plik JS ma świeży `.gz`, a release
+  sprawdza go (`gzip -t` + porównanie z `.js`) przed publikacją
 
 **Konsekwencja:** instalacja ręczna i dev-loop bez HACS muszą skopiować
-zdjęcia obok bundla z prefiksem `sceny-` (`docs/development.md`).
-Workflow `validate.yml` pilnuje, że `dist/` to wciąż jeden plik JS.
+plik edytorów i zdjęcia obok bundla (zdjęcia z prefiksem `sceny-`,
+`docs/development.md`). Workflow `validate.yml` pilnuje, że `dist/` to
+dokładnie dwa pliki JS (do v1.109.3: jeden).
+
+> Status: obowiązuje; do v1.109.3 kod był jednym plikiem JS.
 
 ---
 

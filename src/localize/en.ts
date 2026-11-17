@@ -200,5 +200,12 @@ export const en: Messages = {
       'was skipped. Remove the duplicate Lovelace resource (e.g. /local/stratum-card.js ' +
       'next to /hacsfiles/stratum-card/stratum-card.js) and reload the browser.',
     unknown_section: 'Unknown section type "{type}" — skipping. Available: {known}.',
+    editors_unavailable:
+      'Stratum: visual editor unavailable ({reason}). The card works normally — ' +
+      'edit it in YAML or copy {file} into the same directory as stratum-card.js ' +
+      'and reload the browser (Ctrl+Shift+R).',
+    editors_reason_missing: 'the file could not be loaded',
+    editors_reason_mismatch: 'the editors file is from a different version than the card',
+    editors_reason_timeout: 'the file is taking too long to load',
   },
 };

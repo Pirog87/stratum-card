@@ -38,15 +38,25 @@ jobs:
       - name: Build
         run: npm run build
 
-      # HACS pobiera z releasu jeden plik JS — drugi chunk (np. po dodaniu
-      # dynamicznego import() bez inlineDynamicImports) nie może przejść
-      # niezauważony, bo w releasie by go zabrakło.
-      - name: Verify single-file output
+      # Od v1.110.0 (PKG-3, ADR-005) dist/ to DOKŁADNIE dwa samodzielne
+      # pliki: dashboard i edytory ładowane na żądanie. Trzeci plik (np. chunk
+      # rollupa po dodaniu import() z literałem) nie może przejść
+      # niezauważony — w releasie by go zabrakło, a chunk importujący kartę
+      # bez ?hacstag= ewaluowałby ją drugi raz. Budżet rozmiaru pilnuje, żeby
+      # edytory po cichu nie wróciły do pliku dashboardu (dziś ~339 KB).
+      - name: Verify dist output
         run: |
           test -f dist/stratum-card.js
-          extra=$(find dist -type f ! -name stratum-card.js)
+          test -f dist/stratum-card-editors.js
+          extra=$(find dist -type f ! -name stratum-card.js ! -name stratum-card-editors.js)
           if [ -n "$extra" ]; then
             echo "Nieoczekiwane pliki w dist/: $extra"
+            exit 1
+          fi
+          size=$(stat -c%s dist/stratum-card.js)
+          echo "dist/stratum-card.js: $size B"
+          if [ "$size" -gt 360000 ]; then
+            echo "dist/stratum-card.js przekracza budżet 360000 B — czy edytory wróciły do dashboardu?"
             exit 1
           fi
 

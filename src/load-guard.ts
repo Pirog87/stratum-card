@@ -34,6 +34,18 @@ export const VERSION_KEY: symbol = Symbol.for('stratum-card.version');
 /** Tag, po którym poznajemy, że karty są już zarejestrowane. */
 export const SENTINEL_TAG = 'stratum-card';
 
+/**
+ * Ten sam mechanizm dla pliku edytorów (PKG-3, v1.110.0). Plik
+ * stratum-card-editors.js może zostać ewaluowany drugi raz pod innym adresem
+ * (ponowna próba po timeoucie, ktoś dodał go ręcznie jako zasób Lovelace) —
+ * wtedy też nie wolno rzucić `NotSupportedError`. Osobny klucz wersji, bo
+ * loader karty porównuje wersję edytorów ze swoją i nie użyje niezgodnych.
+ */
+export const EDITORS_VERSION_KEY: symbol = Symbol.for('stratum-card.editors-version');
+
+/** Tag, po którym poznajemy, że edytory są już zarejestrowane. */
+export const EDITORS_SENTINEL_TAG = 'stratum-card-editor';
+
 /** Tylko nasze elementy są pomijane — cudze definicje przechodzą bez zmian. */
 const GUARDED_PREFIX = 'stratum-';
 
@@ -46,17 +58,27 @@ export interface LoadGuard {
   release(): void;
 }
 
+export interface LoadGuardOptions {
+  /** Tag-wartownik; domyślnie `stratum-card` (bundle kart). */
+  sentinel?: string;
+  /** Gdzie zapisać wersję aktywnej kopii; domyślnie `VERSION_KEY`. */
+  versionKey?: symbol;
+}
+
 export function installLoadGuard(
   registry: ElementRegistry,
   store: Record<symbol, unknown>,
   version: string,
+  opts: LoadGuardOptions = {},
 ): LoadGuard {
-  if (!registry.get(SENTINEL_TAG)) {
-    store[VERSION_KEY] = version;
+  const sentinel = opts.sentinel ?? SENTINEL_TAG;
+  const versionKey = opts.versionKey ?? VERSION_KEY;
+  if (!registry.get(sentinel)) {
+    store[versionKey] = version;
     return { duplicate: false, release: () => {} };
   }
 
-  const active = store[VERSION_KEY];
+  const active = store[versionKey];
   const activeVersion = typeof active === 'string' ? active : undefined;
   const hadOwn = Object.prototype.hasOwnProperty.call(registry, 'define');
   const original = registry.define;
