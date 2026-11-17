@@ -1191,10 +1191,12 @@ export class StratumRoomCard extends LitElement {
 
   /**
    * Config paska scen o stałej tożsamości, dopóki treść się nie zmieni.
-   * Obiekt budowany w renderze był za każdym razem nowy, więc Lit
-   * traktował go jak zmianę właściwości paska i przerysowywał pasek nawet
-   * wtedy, gdy jedyną nowością był `hass` niezwiązany ze scenami. Porównanie
-   * po JSON wystarcza: config to dane z YAML (kilka scen), bez funkcji.
+   * Obiekt budowany w renderze był za każdym razem nowy, więc dla bramki
+   * paska (shouldUpdate w stratum-scene-bar.ts) zawsze „zmieniał się
+   * config" i bramka przepuszczała render przy każdym `hass`. Dopiero
+   * stała tożsamość tutaj pozwala bramce odrzucić `hass` niezwiązany ze
+   * scenami — jedno bez drugiego nic nie daje. Porównanie po JSON
+   * wystarcza: config to dane z YAML (kilka scen), bez funkcji.
    */
   private _sceneBarMemo = new Map<string, { key: string; value: import('./types.js').SceneBarConfig }>();
 

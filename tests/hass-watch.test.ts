@@ -3,6 +3,7 @@ import {
   addGroupMembers,
   collectEntityIds,
   popupRelevantFilter,
+  sceneBarHassChanged,
   statesEmpty,
   statesReadyLatch,
   structureChanged,
@@ -316,5 +317,75 @@ describe('popupRelevantFilter — co obserwuje otwarty popup pokoju', () => {
 
   it('czujnik bez stanu (klasa jeszcze nieznana) jest obserwowany', () => {
     expect(popupRelevantFilter(hass, {})('sensor.nowy')).toBe(true);
+  });
+});
+
+describe('sceneBarHassChanged', () => {
+  const items = [
+    { entity: 'scene.wieczor' },
+    { separator: true, label: 'Inne' },
+    { entity: 'script.film' },
+  ];
+  const base = () => {
+    const states: Record<string, unknown> = {
+      'scene.wieczor': st('scene.wieczor', '2026-01-01', { entity_id: ['light.a', 'light.b'] }),
+      'script.film': st('script.film', 'off'),
+      'light.a': st('light.a', 'on', { rgb_color: [255, 0, 0] }),
+      'light.b': st('light.b', 'off'),
+      'light.c': st('light.c', 'on'),
+      'sensor.kuchnia_power': st('sensor.kuchnia_power', '12'),
+    };
+    return hassOf(states, { user: { id: 'u', is_admin: true } });
+  };
+
+  it('pierwsze podanie hass zawsze renderuje', () => {
+    expect(sceneBarHassChanged(undefined, base(), items)).toBe(true);
+    expect(sceneBarHassChanged(undefined, undefined, items)).toBe(false);
+  });
+
+  it('ten sam obiekt states — bez renderu', () => {
+    const a = base();
+    expect(sceneBarHassChanged(a, { ...a } as HomeAssistant, items)).toBe(false);
+  });
+
+  it('raport mocy, temperatury albo obcej lampy nie budzi paska', () => {
+    const a = base();
+    for (const id of ['sensor.kuchnia_power', 'light.c']) {
+      const b = { ...a, states: { ...a.states, [id]: st(id, '99') } } as HomeAssistant;
+      expect(sceneBarHassChanged(a, b, items)).toBe(false);
+    }
+  });
+
+  it('zmiana sceny, skryptu albo lampy-członka — render', () => {
+    const a = base();
+    for (const id of ['scene.wieczor', 'script.film', 'light.a', 'light.b']) {
+      const b = { ...a, states: { ...a.states, [id]: st(id, 'x') } } as HomeAssistant;
+      expect(sceneBarHassChanged(a, b, items)).toBe(true);
+    }
+  });
+
+  it('lampa usunięta ze sceny nadal jest obserwowana w tej zmianie', () => {
+    const a = base();
+    const b = {
+      ...a,
+      states: {
+        ...a.states,
+        'scene.wieczor': st('scene.wieczor', '2026-01-01', { entity_id: ['light.a'] }),
+        'light.b': st('light.b', 'on'),
+      },
+    } as HomeAssistant;
+    expect(sceneBarHassChanged(a, b, items)).toBe(true);
+  });
+
+  it('zmiana użytkownika (bramka admina) — render', () => {
+    const a = base();
+    const b = { ...a, user: { id: 'u', is_admin: false } } as unknown as HomeAssistant;
+    expect(sceneBarHassChanged(a, b, items)).toBe(true);
+  });
+
+  it('brak items — tylko pierwsze podanie i user', () => {
+    const a = base();
+    const b = { ...a, states: { ...a.states, 'light.a': st('light.a', 'off') } } as HomeAssistant;
+    expect(sceneBarHassChanged(a, b, undefined)).toBe(false);
   });
 });

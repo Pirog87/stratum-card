@@ -4,9 +4,10 @@
 // scenę przez `scene.turn_on` (albo script/automation analogicznie).
 // Layout (liczba kolumn, aspect ratio, rozmiar) pełna customization z configu.
 
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant, SceneBarConfig, SceneConfig } from './types.js';
+import { sceneBarHassChanged } from './hass-watch.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
 import { runTapAction } from './tap-action.js';
@@ -306,6 +307,24 @@ export class StratumSceneBar extends LitElement {
         <span class="tile-name">${name}</span>
       </button>
     `;
+  }
+
+  /**
+   * Własna bramka paska. Rodzic (popup, belka) podaje świeży `hass` przy
+   * każdej zmianie dowolnej encji, a stały config z rodzica niczego nie
+   * dawał bez bramki tutaj — pasek i tak przerysowywał wszystkie kafle.
+   * Przepuszczamy: każdą zmianę poza samym `hass` (config, potwierdzenia,
+   * sceny w toku) oraz `hass`, w którym zmieniło się coś czytanego przez
+   * kafle (sceneBarHassChanged). Timery scen w toku czytają `this.hass`
+   * same, więc odrzucony render nie zatrzymuje wykrycia końca sceny.
+   */
+  protected shouldUpdate(changed: PropertyValues<this>): boolean {
+    if (changed.size !== 1 || !changed.has('hass')) return true;
+    return sceneBarHassChanged(
+      changed.get('hass') as HomeAssistant | undefined,
+      this.hass,
+      this.config?.items,
+    );
   }
 
   protected render(): TemplateResult {

@@ -259,3 +259,37 @@ export function addGroupMembers(
   }
   return ids;
 }
+
+/**
+ * Bramka paska scen: czy nowy `hass` zmienia coś, co pasek pokazuje.
+ *
+ * Popup i belka podają pasekowi świeży `hass` przy każdej zmianie
+ * dowolnej encji. Bez bramki pasek przerysowywał wszystkie kafle przy
+ * każdym raporcie temperatury, okna czy światła w pokoju (60 renderów na
+ * 60 zmian), choć jego kafle czytają tylko: stan samej sceny (nazwa,
+ * `id` do REST, lista członków), stany świateł-członków (gradient
+ * z kolorów „na żywo") i użytkownika (bramka admina dla configu z REST).
+ *
+ * Członków bierzemy z OBU obiektów — scena, której skład się zmienił,
+ * i tak ma nowy stan, ale lampa usunięta ze sceny też zmienia gradient.
+ * Brak któregoś `hass` (pierwsze podanie) = render: dopiero z `hass`
+ * kafle dostają nazwy i kolory.
+ */
+export function sceneBarHassChanged(
+  prev: HomeAssistant | undefined,
+  next: HomeAssistant | undefined,
+  items: ReadonlyArray<{ entity?: string; separator?: boolean }> | undefined,
+): boolean {
+  if (!prev || !next) return prev !== next;
+  if (prev.user !== next.user) return true;
+  if (prev.states === next.states) return false;
+  const ids = new Set<string>();
+  for (const item of items ?? []) {
+    if (item.separator || !item.entity) continue;
+    ids.add(item.entity);
+    for (const h of [prev, next]) {
+      for (const m of groupMemberIds(h.states?.[item.entity]) ?? []) ids.add(m);
+    }
+  }
+  return watchedStateChanged(prev, next, ids);
+}

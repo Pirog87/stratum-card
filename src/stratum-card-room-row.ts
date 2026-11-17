@@ -22,6 +22,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 import type { RowDisplayConfig, RowPreset, TileField } from './types.js';
 import { resolveColor } from './colors.js';
+import { lightsSwitchGlowStyle } from './lights-switch-glow.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
 import {
   ALARM_ICONS,
@@ -908,20 +909,13 @@ export class StratumCardRoomRow extends LitElement {
           </span>`;
         }
         // H4: mini-switch z czystą gałką; licznik na torze, poświata
-        // w obu stanach — intensywność z configu (inline, bo alpha cieni
-        // nie da się prosto sterować var-ami).
+        // w obu stanach — intensywność z configu. Inline idą tylko krycia
+        // warstw (--lt-g1…3), kolor poświaty jest w CSS z tokenu świateł
+        // (lights-switch-glow.ts).
         const on = this.lightsOn > 0;
-        const f =
-          Math.max(0, Math.min(100, on ? this.lightsGlowOn : this.lightsGlowOff)) /
-          100;
-        const glow =
-          f <= 0
-            ? ''
-            : on
-            ? `box-shadow: 0 0 5px 1px rgba(255,224,130,${(0.95 * f).toFixed(2)}), 0 0 16px 5px rgba(255,193,7,${(0.6 * f).toFixed(2)}), 0 0 30px 10px rgba(255,193,7,${(0.25 * f).toFixed(2)});`
-            : `box-shadow: 0 0 5px 1px rgba(255,213,79,${(0.65 * f).toFixed(2)}), 0 0 14px 5px rgba(255,193,7,${(0.35 * f).toFixed(2)});`;
+        const glow = lightsSwitchGlowStyle(on, this.lightsGlowOn, this.lightsGlowOff);
         return html`<button
-          class="field lights-toggle ${on ? 'on' : ''}"
+          class="field lights-toggle ${on ? 'on' : ''} ${glow ? 'glow' : ''}"
           style=${glow}
           role="switch"
           aria-checked=${on}
@@ -978,6 +972,26 @@ export class StratumCardRoomRow extends LitElement {
          --stratum-chip-leak-color; ten alias tylko zbiera łańcuch fallbacku,
          żeby reguły alarmu nie powtarzały go (i hexa) w każdym miejscu. */
       --stratum-alarm: var(--stratum-chip-leak-color, var(--error-color, #f44336));
+      /* Kolor przełącznika świateł (tor, poświata, licznik) — alias o tym
+         samym celu co --stratum-alarm. Definiowany tu, na wierszu, a nie
+         brany z --stratum-lights karty: nadpisanie
+         --stratum-chip-lights-color w card-mod na ha-card musi dojść także
+         do poświaty, a token karty rozwiązuje się wyżej, na :host karty. */
+      --stratum-row-lights: var(--stratum-chip-lights-color, #ffc107);
+      /* Rdzeń poświaty: kolor świateł rozjaśniony w stronę bieli (dawne
+         rgba(255,224,130) przy domyślnym bursztynie). */
+      --stratum-row-lights-core: color-mix(
+        in srgb,
+        var(--stratum-row-lights) 55%,
+        var(--stratum-ink-tint, #fff)
+      );
+      /* Licznik na zapalonym torze: ten sam odcień przyciemniony w stronę
+         czerni (dawne #2a1c05). Przy domyślnym bursztynie ~8:1. */
+      --stratum-row-lights-ink: color-mix(
+        in srgb,
+        var(--stratum-row-lights) 25%,
+        var(--stratum-ink-shade, #000)
+      );
     }
 
     /* ====== BAZA wspólna dla presetów ====== */
@@ -1596,7 +1610,20 @@ export class StratumCardRoomRow extends LitElement {
       border-radius: 999px;
     }
     .lights-toggle.on {
-      background: var(--stratum-chip-lights-color, #ffc107);
+      background: var(--stratum-row-lights);
+    }
+    /* Poświata: krycia warstw z inline --lt-g1…3 (intensywność z configu),
+       kolor z tokenów wiersza — przemalowane światła świecą swoim kolorem. */
+    .lights-toggle.glow {
+      box-shadow:
+        0 0 5px 1px color-mix(in srgb, var(--stratum-row-lights-core) var(--lt-g1), transparent),
+        0 0 14px 5px color-mix(in srgb, var(--stratum-row-lights) var(--lt-g2), transparent);
+    }
+    .lights-toggle.on.glow {
+      box-shadow:
+        0 0 5px 1px color-mix(in srgb, var(--stratum-row-lights-core) var(--lt-g1), transparent),
+        0 0 16px 5px color-mix(in srgb, var(--stratum-row-lights) var(--lt-g2), transparent),
+        0 0 30px 10px color-mix(in srgb, var(--stratum-row-lights) var(--lt-g3), transparent);
     }
     .lights-toggle .lt-knob {
       position: absolute;
@@ -1619,7 +1646,7 @@ export class StratumCardRoomRow extends LitElement {
       transform: translateY(-50%);
       font-size: 12px;
       font-weight: 800;
-      color: #2a1c05;
+      color: var(--stratum-row-lights-ink);
       font-variant-numeric: tabular-nums;
       line-height: 1;
     }

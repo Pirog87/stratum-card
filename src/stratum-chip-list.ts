@@ -972,7 +972,11 @@ export class StratumChipList extends LitElement {
        22% koloru tekstu, nie 12%: przy 12% tor lampy na 25% był ledwie
        widoczny (1,26:1 na jasnym, 1,38:1 na ciemnym; teraz 1,55 i 1,83)
        i nie było wiadomo, gdzie suwak się kończy. Kciuk i cień z tokenów --stratum-ink-*
-       (definiowanych przez kartę, w której lista jest osadzona). */
+       (definiowanych przez kartę, w której lista jest osadzona).
+       Granicę toru niesie obrys 1 px z 55% koloru tekstu (≥ 3:1 do tła
+       wiersza w obu motywach — próg WCAG 1.4.11 dla kontrolek). Sam tor
+       w 50%, żeby dobić do 3:1, byłby ciężką szarą belką przy każdej
+       lampie; obrys daje ten sam zasięg suwaka bez przyciemniania. */
     .bri-slider {
       -webkit-appearance: none;
       appearance: none;
@@ -985,6 +989,7 @@ export class StratumChipList extends LitElement {
         var(--c, var(--accent, var(--primary-color))) var(--pct, 0%),
         color-mix(in srgb, var(--primary-text-color) 22%, transparent) var(--pct, 0%)
       );
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-text-color) 55%, transparent);
       cursor: pointer;
       transition: opacity 0.15s ease;
     }
