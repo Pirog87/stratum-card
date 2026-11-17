@@ -3,6 +3,12 @@
 // Customowa karta Home Assistant: podsumowanie warstwy (floor lub area)
 // z rozwijanym body. Zobacz docs/roadmap.md dla kolejnych milestone'ów.
 
+// MUSI zostać pierwszym importem: ochrona przed podwójnym załadowaniem
+// bundla działa tylko, jeśli ruszy przed dekoratorami @customElement
+// w pozostałych modułach (patrz load-guard.ts).
+import { loadGuard } from './boot-guard.js';
+import { consoleBanner, duplicateLoadNotice } from './load-guard.js';
+import { VERSION } from './version.js';
 import {
   LitElement,
   html,
@@ -57,6 +63,12 @@ import { LightSwipe } from './light-swipe.js';
 import { subscribePower, swipePowerHook, toggleRoomLights } from './power-pending.js';
 import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
+// Edytory importowane statycznie — świadomie (PKG-3, v1.109.3). Dystrybucja
+// to jeden plik, więc bajtów do pobrania i tak nie ubędzie; zostaje tylko
+// ewaluacja. `import()` + output.inlineDynamicImports rollupa nic nie daje
+// (wklejony moduł ewaluuje się od razu przy starcie), a ręczne zszycie
+// leniwego chunku w funkcję dało w Chromium 5–8 ms ewaluacji przy 4x CPU
+// throttle (w granicach szumu) — za mało na własną chirurgię AST w buildzie.
 import './stratum-card-editor.js';
 import './stratum-card-room-row.js';
 import './stratum-card-room-tile.js';
@@ -79,8 +91,6 @@ import {
   type HeaderStripe,
   type StripeRoom,
 } from './header-stripes.js';
-
-const VERSION = '1.109.2';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -2162,10 +2172,17 @@ if (!w.customCards.some((c) => c.type === 'stratum-card')) {
   });
 }
 
-// Sygnatura w konsoli — pomocna w debugowaniu wersji u użytkownika.
-// eslint-disable-next-line no-console
-console.info(
-  `%c STRATUM %c v${VERSION} `,
-  'color: #fff; background: #ff9b42; padding: 2px 6px; border-radius: 3px 0 0 3px; font-weight: 500;',
-  'color: #ff9b42; background: #1e1f22; padding: 2px 6px; border-radius: 0 3px 3px 0;',
-);
+// Koniec ewaluacji bundla: wszystkie @customElement już się wykonały
+// (stratum-card.ts biegnie po swoich importach), więc zdejmujemy filtr
+// z customElements.define — dalej rejestr działa bez naszego udziału.
+loadGuard.release();
+
+// Sygnatura w konsoli — jedna dla obu kart, z wersją z package.json.
+// Kopia-duplikat zamiast banera mówi wprost, która wersja naprawdę działa.
+if (loadGuard.duplicate) {
+  // eslint-disable-next-line no-console
+  console.warn(duplicateLoadNotice(loadGuard.activeVersion, VERSION));
+} else {
+  // eslint-disable-next-line no-console
+  console.info(...consoleBanner(VERSION));
+}

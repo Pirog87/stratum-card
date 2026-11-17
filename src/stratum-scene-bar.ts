@@ -8,7 +8,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant, SceneBarConfig, SceneConfig } from './types.js';
 import { resolveColor } from './colors.js';
-import { resolveSceneImage } from './scene-presets.js';
+import { resolveSceneBackground } from './scene-presets.js';
 import { runTapAction } from './tap-action.js';
 import { sceneSettled, startScenePending, type ScenePending } from './scene-pending.js';
 import { lightColorOf } from './tile-data.js';
@@ -269,8 +269,10 @@ export class StratumSceneBar extends LitElement {
       (state?.attributes?.friendly_name as string | undefined) ??
       scene.entity ??
       '';
-    const resolvedImage = resolveSceneImage(scene.image);
-    const hasImage = Boolean(resolvedImage);
+    // Warstwy z fallbackami (obok bundla → /hacsfiles/ → SVG) — patrz
+    // scene-photo-url.ts; pojedynczy URL dawał pusty kafel poza HACS.
+    const backgroundImage = resolveSceneBackground(scene.image);
+    const hasImage = Boolean(backgroundImage);
     const icon = scene.icon ?? 'mdi:palette';
     // Bez grafiki i bez jawnego koloru: gradient z kolorów świateł sceny
     // (styl Hue); fallback — kolor akcentu.
@@ -280,7 +282,7 @@ export class StratumSceneBar extends LitElement {
         : undefined;
     const accent = resolveColor(scene.color) ?? 'var(--primary-color, #ff9b42)';
     const style = hasImage
-      ? `background-image: url("${resolvedImage}");`
+      ? `background-image: ${backgroundImage};`
       : `background: ${gradient ?? accent};`;
     // Gradient traktujemy jak grafikę: nazwa na dole na scrimie, bez ikony.
     const hasBackdrop = hasImage || Boolean(gradient);

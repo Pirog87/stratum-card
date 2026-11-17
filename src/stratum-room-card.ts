@@ -71,8 +71,6 @@ import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
-const VERSION = '1.24.0';
-
 interface SummaryDatum {
   label: string;
   icon: string;
@@ -2082,9 +2080,6 @@ declare global {
   }
 }
 
-// eslint-disable-next-line no-console
-console.info(
-  `%c STRATUM-ROOM %c v${VERSION} `,
-  'color: #fff; background: #42a5f5; padding: 2px 6px; border-radius: 3px 0 0 3px; font-weight: 500;',
-  'color: #42a5f5; background: #1e1f22; padding: 2px 6px; border-radius: 0 3px 3px 0;',
-);
+// Bez własnego banera: popup jest częścią tego samego bundla, więc wersję
+// loguje jeden baner w stratum-card.ts. Osobna, ręcznie utrzymywana stała
+// rozjechała się kiedyś do v1.24.0 przy v1.108.2 i myliła diagnozę cache.

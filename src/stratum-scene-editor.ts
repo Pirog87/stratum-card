@@ -15,7 +15,7 @@ import type {
 import {
   SCENE_PRESETS,
   presetIdFromValue,
-  resolveSceneImage,
+  resolveSceneBackground,
 } from './scene-presets.js';
 import { getEntitiesInArea, getAreasInFloor, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
@@ -603,14 +603,16 @@ export class StratumSceneEditor extends LitElement {
 
   private _renderImageField(index: number, scene: SceneConfig): TemplateResult {
     const isPreset = Boolean(presetIdFromValue(scene.image));
-    const resolved = resolveSceneImage(scene.image);
+    // Podgląd z tymi samymi fallbackami co kafel na dashboardzie
+    // (scene-photo-url.ts) — inaczej poza HACS edytor pokazywałby pustkę.
+    const resolved = resolveSceneBackground(scene.image);
     return html`
       <div class="img-block">
         <label class="img-label">Grafika sceny</label>
         <div class="img-row">
           <span
             class="img-preview"
-            style=${resolved ? `background-image:url("${resolved}");` : ''}
+            style=${resolved ? `background-image:${resolved};` : ''}
             title=${resolved ? 'Podgląd' : 'Brak grafiki'}
           >
             ${resolved
@@ -661,7 +663,7 @@ export class StratumSceneEditor extends LitElement {
               >
                 <span
                   class="thumb-image"
-                  style=${`background-image:url("${resolveSceneImage('stratum:' + p.id)}");`}
+                  style=${`background-image:${resolveSceneBackground('stratum:' + p.id) ?? 'none'};`}
                 ></span>
                 <span class="thumb-label">${p.label}</span>
               </button>
@@ -705,7 +707,7 @@ export class StratumSceneEditor extends LitElement {
         ${items.map((scene, idx) => {
           const open = this._openScenes.has(idx);
           const sep = Boolean(scene.separator);
-          const thumb = sep ? undefined : resolveSceneImage(scene.image);
+          const thumb = sep ? undefined : resolveSceneBackground(scene.image);
           return html`
             <div
               class="stratum-row active ${scene.hidden ? 'scene-hidden' : ''} ${sep
@@ -715,7 +717,7 @@ export class StratumSceneEditor extends LitElement {
               <div class="stratum-row-head">
                 <span
                   class="stratum-row-avatar ${thumb ? 'scene-thumb' : ''}"
-                  style=${thumb ? `background-image:url("${thumb}");` : ''}
+                  style=${thumb ? `background-image:${thumb};` : ''}
                 >
                   ${thumb
                     ? nothing
