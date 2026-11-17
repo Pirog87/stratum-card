@@ -45,7 +45,11 @@ function areaIndex(hass: HomeAssistant): AreaIndex | undefined {
   const byArea = new Map<string, HassEntityRegistryEntry[]>();
   for (const id in entities) {
     const entry = entities[id]!;
-    if (entry.hidden_by || entry.disabled_by) continue;
+    // Ukryta w HA = użytkownik nie chce jej widzieć nigdzie. Sprawdzamy
+    // `hidden` z rejestru wyświetlania — dawny warunek na `hidden_by` /
+    // `disabled_by` nigdy nie odpalał, bo HA tych pól tu nie wysyła
+    // (a wyłączonych encji w `hass.entities` po prostu nie ma).
+    if (entry.hidden === true) continue;
     // Własne area encji wygrywa; dopiero jego brak (null/undefined)
     // oznacza dziedziczenie po urządzeniu.
     const areaId =
@@ -63,7 +67,10 @@ function areaIndex(hass: HomeAssistant): AreaIndex | undefined {
 
 /**
  * Zwraca wszystkie wpisy registry encji przypisane do podanego area —
- * bezpośrednio lub przez urządzenie. Encje ukryte / wyłączone są pomijane.
+ * bezpośrednio lub przez urządzenie. Encje ukryte (`hidden`) są pomijane;
+ * wyłączonych HA w ogóle nie wysyła. Encje config/diagnostic ZOSTAJĄ —
+ * odfiltrowują je dopiero konsumenci (patrz `isPrimaryEntity`), bo np.
+ * baterie są diagnostyczne z natury i chip „niska bateria" ich potrzebuje.
  * Wynik pochodzi z indeksu (ta sama tablica dla tego samego rejestru) —
  * nie mutuj go; do sortowania/filtrowania zrób kopię.
  */
@@ -127,9 +134,10 @@ export function filterByDomain(
  *    pierwszeństwo przed klasą integracji), więc to źródło wystarcza także
  *    dla SATEL — sprawdzone na żywej instancji (okna/drzwi SATEL mają klasę
  *    w atrybutach stanu).
- * 2. `hass.entities[id]` — wpis wyświetlania, gdy stanu jeszcze nie ma.
  *
- * Dawniej był tu trzeci poziom: pełny rejestr encji pobierany przez
+ * Dawniej był tu też odczyt `device_class` z `hass.entities`, ale rejestr
+ * wyświetlania HA tego pola nie zawiera — warunek był martwy. Wcześniej
+ * jeszcze był tu trzeci poziom: pełny rejestr encji pobierany przez
  * WebSocket (~3 MB przy 5 tys. encji) przy każdym starcie i po każdej
  * zmianie rejestru, w tej samej kolejce co pierwsze tapnięcia użytkownika.
  * Nie wnosił niczego, czego nie ma w (1), więc go usunęliśmy.
@@ -142,13 +150,7 @@ export function filterBinarySensorDeviceClass(
   return entries.filter((entry) => {
     if (!entry.entity_id.startsWith('binary_sensor.')) return false;
     const state: HassEntity | undefined = hass.states?.[entry.entity_id];
-    const stateClass = state?.attributes?.device_class;
-    if (stateClass === deviceClass) return true;
-    // Fallback #1: display-entry in hass.entities (inconsistently populated).
-    const registryEntry = hass.entities?.[entry.entity_id] ?? entry;
-    const regClass =
-      registryEntry.device_class ?? registryEntry.original_device_class ?? null;
-    return regClass === deviceClass;
+    return state?.attributes?.device_class === deviceClass;
   });
 }
 
@@ -162,6 +164,38 @@ export function getState(
 
 
 /**
+ * Czy encja jest „pierwszoplanowa": nie ukryta i bez kategorii
+ * config/diagnostic. Tylko takie bierzemy do auto-wykrywanych świateł,
+ * ruchu, okien, drzwi i temperatury pomieszczenia.
+ *
+ * Dlaczego nie w indeksie area: baterie, czujniki sabotażu i problemów
+ * integracje (Zigbee2MQTT, ZHA) oznaczają jako `diagnostic` z założenia —
+ * chip „niska bateria" i alarmy muszą je dalej widzieć. Natomiast dioda
+ * statusu punktu dostępowego UniFi (`config`, wystawiona jako `light.*`)
+ * nie może robić z ciemnego pokoju „1 światło włączone", a temperatura
+ * wewnętrzna wtyczki (`diagnostic`) — udawać temperatury pokoju.
+ *
+ * Wpis łączymy z `hass.entities` — wywołujący bywają testami albo
+ * listami złożonymi ręcznie, nie zawsze wpisami prosto z rejestru.
+ */
+export function isPrimaryEntity(
+  hass: HomeAssistant,
+  e: HassEntityRegistryEntry,
+): boolean {
+  const reg = hass.entities?.[e.entity_id];
+  if (e.hidden === true || reg?.hidden === true) return false;
+  return !(e.entity_category ?? reg?.entity_category);
+}
+
+/** Tylko encje pierwszoplanowe (patrz `isPrimaryEntity`). */
+export function filterPrimary(
+  hass: HomeAssistant,
+  entries: EntityEntries,
+): HassEntityRegistryEntry[] {
+  return entries.filter((e) => isPrimaryEntity(hass, e));
+}
+
+/**
  * Odfiltrowuje encje, których user nie chce widzieć w auto-listach popupu:
  * ukryte/wyłączone w rejestrze HA, kategorie config/diagnostic oraz stany
  * unavailable/unknown (lub brak stanu). Jawne listy usera NIE są filtrowane.
@@ -171,15 +205,7 @@ export function filterDisplayable(
   entries: EntityEntries,
 ): HassEntityRegistryEntry[] {
   return entries.filter((e) => {
-    const frontend = hass.entities?.[e.entity_id] as
-      | (HassEntityRegistryEntry & { hidden?: boolean; entity_category?: string | null })
-      | undefined;
-    const reg = { ...e, ...(frontend ?? {}) } as HassEntityRegistryEntry & {
-      hidden?: boolean;
-      entity_category?: string | null;
-    };
-    if (reg.hidden === true || reg.hidden_by || reg.disabled_by) return false;
-    if (reg.entity_category) return false;
+    if (!isPrimaryEntity(hass, e)) return false;
     const st = hass.states?.[e.entity_id];
     if (!st) return false;
     if (st.state === 'unavailable' || st.state === 'unknown') return false;
@@ -228,6 +254,36 @@ export function excludeLightGroups(
 }
 
 /**
+ * Światła pokoju/piętra liczone i sterowane z auto-wykrywania: licznik
+ * wiersza, chip „światła" w nagłówku, jego lista, smugi, włącznik i gest.
+ * Jeden zbiór dla wszystkich — inaczej chip mówi „1", a jego lista jest
+ * pusta, albo włącznik gasi coś, czego wiersz nie liczy.
+ *
+ *  1. Bez encji ukrytych i config/diagnostic (dioda AP UniFi, LED-y
+ *     statusu) — patrz `isPrimaryEntity`.
+ *  2. Grupę świateł (pomocnik HA, sterownik WLED) pomijamy tylko wtedy,
+ *     gdy choć jeden jej członek zostaje w puli — wtedy liczą się
+ *     członkowie, a grupa dublowałaby zliczenie. Grupa, której wszyscy
+ *     członkowie są ukryci albo stoją w innym area, ZASTĘPUJE ich: bez
+ *     tego pokój, w którym user ukrył żarówki za grupą, pokazywałby
+ *     0 świateł, a gest nie miałby czego ściemnić.
+ *  3. Niedostępnych NIE odrzucamy — mają się liczyć jako niedostępne
+ *     (wzorzec off-pill), a nie znikać.
+ */
+export function countableLights(
+  hass: HomeAssistant,
+  entries: EntityEntries,
+): HassEntityRegistryEntry[] {
+  const pool = filterByDomain(entries, 'light').filter((e) => isPrimaryEntity(hass, e));
+  const inPool = new Set(pool.map((e) => e.entity_id));
+  return pool.filter((e) => {
+    const members = groupMemberIds(hass.states?.[e.entity_id]);
+    if (!members) return true;
+    return !members.some((m) => inPool.has(m));
+  });
+}
+
+/**
  * Encje NIEDOSTĘPNE (stan `unavailable`) w podanym zbiorze — z tym samym
  * filtrem rejestru co filterDisplayable (bez ukrytych/wyłączonych i
  * kategorii config/diagnostic), ale wybiera właśnie te, które
@@ -238,20 +294,9 @@ export function unavailableEntityIds(
   entries: EntityEntries,
 ): string[] {
   return entries
-    .filter((e) => {
-      const frontend = hass.entities?.[e.entity_id] as
-        | (HassEntityRegistryEntry & {
-            hidden?: boolean;
-            entity_category?: string | null;
-          })
-        | undefined;
-      const reg = { ...e, ...(frontend ?? {}) } as HassEntityRegistryEntry & {
-        hidden?: boolean;
-        entity_category?: string | null;
-      };
-      if (reg.hidden === true || reg.hidden_by || reg.disabled_by) return false;
-      if (reg.entity_category) return false;
-      return hass.states?.[e.entity_id]?.state === 'unavailable';
-    })
+    .filter(
+      (e) =>
+        isPrimaryEntity(hass, e) && hass.states?.[e.entity_id]?.state === 'unavailable',
+    )
     .map((e) => e.entity_id);
 }

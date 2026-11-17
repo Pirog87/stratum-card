@@ -148,6 +148,140 @@ export function expandLightIds(
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Sterowniki WLED — „bramka zasilania" segmentów
+//
+// Sterownik główny WLED (wiele segmentów) wystawia `group_entities` i w
+// zliczeniach znika jako grupa — liczymy i sterujemy segmentami. Ale w
+// WLED to nie jest przezroczysta grupa: `turn_on` segmentu NIE włącza
+// sterownika, gdy ten istnieje, a segment po zgaszeniu sterownika (nocna
+// automatyzacja, aplikacja WLED, przycisk) dalej raportuje „on". Efekt:
+// wiersz pokazywał „świeci", tapnięcie gasiło segmenty, następne zapalało
+// je z powrotem — a pasek cały czas był ciemny.
+//
+// Dlatego: segment zgaszonego sterownika czytamy jako zgaszony, a każda
+// ścieżka „zapal" dokłada osobne `turn_on` BEZ jasności do zgaszonego
+// sterownika (z jasnością WLED mnożyłby ją przez jasność segmentu).
+// Ścieżki „zgaś" zostają bez zmian — gaszą segmenty, sterownik zostaje.
+//
+// Sterownik NIEDOSTĘPNY nie zamyka bramki: WLED z jednym segmentem nie ma
+// sterownika głównego (HA trzyma go jako „unavailable"), a segment steruje
+// paskiem sam — nie wolno go wtedy uznać za martwy ani celować w sterownik.
+// Pomocnik „Grupa świateł" HA (`entity_id`) zostaje przezroczysty: komenda
+// do niego zapaliłaby wszystkich członków.
+// ---------------------------------------------------------------------------
+
+type StateMap = HomeAssistant['states'];
+
+/** Lista id `light.*` — na tożsamość rejestru (zmienia się rzadko). */
+const lightIdsCache = new WeakMap<object, string[]>();
+/** Segment → sterownik, na tożsamość `hass.states` (członkostwo z atrybutów). */
+const controllerCache = new WeakMap<object, Map<string, string>>();
+
+function lightIds(hass: HomeAssistant): string[] {
+  const registry = hass.entities;
+  if (!registry) {
+    // Bez rejestru (testy, start aplikacji) — skan stanów, bez cache:
+    // ten sam obiekt stanów bywa wtedy uzupełniany w miejscu.
+    return Object.keys(hass.states ?? {}).filter((id) => id.startsWith('light.'));
+  }
+  let ids = lightIdsCache.get(registry);
+  if (!ids) {
+    ids = Object.keys(registry).filter((id) => id.startsWith('light.'));
+    lightIdsCache.set(registry, ids);
+  }
+  return ids;
+}
+
+/** Segmenty sterownika WLED albo `undefined`, gdy encja nie jest sterownikiem. */
+function controllerSegments(hass: HomeAssistant, id: string): string[] | undefined {
+  const attrs = hass.states?.[id]?.attributes;
+  if (!attrs) return undefined;
+  if (Array.isArray(attrs.entity_id)) return undefined;
+  if (hass.entities?.[id]?.platform === 'group') return undefined;
+  const members = attrs.group_entities;
+  if (!Array.isArray(members) || members.length === 0) return undefined;
+  return members.filter((m): m is string => typeof m === 'string');
+}
+
+function controllerIndex(hass: HomeAssistant): Map<string, string> {
+  const states: StateMap | undefined = hass.states;
+  if (!states) return new Map();
+  const cached = controllerCache.get(states);
+  if (cached) return cached;
+  const index = new Map<string, string>();
+  for (const id of lightIds(hass)) {
+    for (const seg of controllerSegments(hass, id) ?? []) {
+      if (!index.has(seg)) index.set(seg, id);
+    }
+  }
+  controllerCache.set(states, index);
+  return index;
+}
+
+/** Sterownik WLED trzymający segment `leafId` (przez `group_entities`). */
+export function lightControllerOf(
+  hass: HomeAssistant | undefined,
+  leafId: string,
+): string | undefined {
+  if (!hass || !leafId.startsWith('light.')) return undefined;
+  return controllerIndex(hass).get(leafId);
+}
+
+/** Odczyt stanu sterownika — wołający wstrzykuje stan „w toku", jeśli go zna. */
+export type ControllerState = (controllerId: string) => string | undefined;
+
+function rawState(hass: HomeAssistant | undefined): ControllerState {
+  return (id) => hass?.states?.[id]?.state;
+}
+
+/** Czy segment jest wygaszony przez zgaszony (nie: niedostępny) sterownik. */
+export function gatedOff(
+  hass: HomeAssistant | undefined,
+  leafId: string,
+  controllerState: ControllerState = rawState(hass),
+): boolean {
+  const c = lightControllerOf(hass, leafId);
+  return c !== undefined && controllerState(c) === 'off';
+}
+
+/** Widok światła z bramką sterownika: segment zgaszonego sterownika nie świeci. */
+export function gateView(
+  hass: HomeAssistant | undefined,
+  leafId: string,
+  base: LightView,
+  controllerState: ControllerState = rawState(hass),
+): LightView {
+  if (!base.on || !gatedOff(hass, leafId, controllerState)) return base;
+  return { ...base, on: false, brightness: undefined };
+}
+
+/**
+ * Zgaszone sterowniki dla zapalanych segmentów — do osobnego `turn_on`
+ * bez jasności. Bez duplikatów, w kolejności pierwszego wystąpienia.
+ */
+export function closedControllers(
+  hass: HomeAssistant | undefined,
+  leafIds: readonly string[],
+  controllerState: ControllerState = rawState(hass),
+): string[] {
+  const out: string[] = [];
+  for (const id of leafIds) {
+    const c = lightControllerOf(hass, id);
+    if (c === undefined || out.includes(c)) continue;
+    if (controllerState(c) === 'off') out.push(c);
+  }
+  return out;
+}
+
+/**
+ * Czy światło świeci według samego `hass` — stan „on" i nie wygaszone przez
+ * sterownik. Dla liczników i list chipów, które nie znają stanu „w toku".
+ */
+export function lightOnInHass(hass: HomeAssistant | undefined, id: string): boolean {
+  return hass?.states?.[id]?.state === 'on' && !gatedOff(hass, id);
+}
+
 /** Dzieli żarówki na skalowane i „tylko włącznik" — spośród tych, które świecą. */
 export function onLights(
   leafIds: readonly string[],
@@ -200,7 +334,7 @@ export function roomLevel(lights: OnLights): number | undefined {
 export function roomLevelFromHass(
   hass: HomeAssistant | undefined,
   ids: readonly string[],
-  view: (id: string) => LightView = (id) => viewOf(hass?.states?.[id]),
+  view: (id: string) => LightView = (id) => gateView(hass, id, viewOf(hass?.states?.[id])),
 ): number | undefined {
   const leaves = expandLightIds(hass, ids);
   return roomLevel(onLights(leaves, view));

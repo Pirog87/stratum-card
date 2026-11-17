@@ -12,9 +12,14 @@ import type {
   TileField,
   TileFieldEntities,
 } from './types.js';
-import { filterBinarySensorDeviceClass, filterByDomain, isLightGroupEntity } from './area-entities.js';
+import {
+  countableLights,
+  filterBinarySensorDeviceClass,
+  filterPrimary,
+  isPrimaryEntity,
+} from './area-entities.js';
 import { roomLevelFromHass } from './light-dimming.js';
-import { effectiveView, isOnEffective, pendingWant } from './power-pending.js';
+import { effectiveView, isOnEffective } from './power-pending.js';
 
 // Domyślny zestaw pól row/tile — wszystkie „informatywne" metryki.
 // Każde pole renderuje się tylko gdy ma sensowną wartość (> 0 / truthy),
@@ -117,6 +122,9 @@ function firstAttrSensor(
 ): { formatted: string; value: number } | undefined {
   for (const entry of entries) {
     if (!entry.entity_id.startsWith('sensor.')) continue;
+    // Temperatura wewnętrzna wtyczki/przekaźnika (`diagnostic`, np. 41 °C
+    // z Zigbee2MQTT) to nie temperatura pokoju — a bywała pierwsza na liście.
+    if (!isPrimaryEntity(hass, entry)) continue;
     const state = hass.states?.[entry.entity_id];
     if (!state) continue;
     if (state.attributes?.device_class !== deviceClass) continue;
@@ -156,32 +164,39 @@ export function resolveFieldEntityIds(
 ): string[] {
   switch (field) {
     case 'lights': {
+      // Jawna lista usera wygrywa bez filtrów — tak można świadomie
+      // wskazać nawet encję config (np. LED-owy pasek oznaczony jako config).
       if (fieldEntities?.lights?.length) return fieldEntities.lights;
-      // Bez grup-pomocników: liczymy/sterujemy encjami bezpośrednimi,
-      // inaczej jedna żarówka liczy się podwójnie (sama + grupa).
-      return filterByDomain(entries, 'light')
-        .filter((e) => !isLightGroupEntity(hass, e.entity_id))
-        .map((e) => e.entity_id);
+      // Ten sam zbiór co chip „światła" i jego lista (patrz countableLights):
+      // bez diod statusu i bez grup dublujących zliczenie.
+      return countableLights(hass, entries).map((e) => e.entity_id);
     }
     case 'motion': {
       if (fieldEntities?.motion?.length) return fieldEntities.motion;
-      const motion = filterBinarySensorDeviceClass(hass, entries, 'motion');
-      const occupancy = filterBinarySensorDeviceClass(hass, entries, 'occupancy');
+      // Pomocnicze czujniki config/diagnostic nie są „ruchem w pokoju".
+      const primary = filterPrimary(hass, entries);
+      const motion = filterBinarySensorDeviceClass(hass, primary, 'motion');
+      const occupancy = filterBinarySensorDeviceClass(hass, primary, 'occupancy');
       return [...motion, ...occupancy].map((e) => e.entity_id);
     }
     case 'windows': {
       if (fieldEntities?.windows?.length) return fieldEntities.windows;
+      const primary = filterPrimary(hass, entries);
       // `window` + generyczne `opening` (Aqara/Xiaomi często używają tego drugiego).
-      const w = filterBinarySensorDeviceClass(hass, entries, 'window');
-      const o = filterBinarySensorDeviceClass(hass, entries, 'opening');
+      const w = filterBinarySensorDeviceClass(hass, primary, 'window');
+      const o = filterBinarySensorDeviceClass(hass, primary, 'opening');
       return Array.from(new Set([...w, ...o].map((e) => e.entity_id)));
     }
     case 'doors': {
       if (fieldEntities?.doors?.length) return fieldEntities.doors;
-      const d = filterBinarySensorDeviceClass(hass, entries, 'door');
-      const g = filterBinarySensorDeviceClass(hass, entries, 'garage_door');
+      const primary = filterPrimary(hass, entries);
+      const d = filterBinarySensorDeviceClass(hass, primary, 'door');
+      const g = filterBinarySensorDeviceClass(hass, primary, 'garage_door');
       return Array.from(new Set([...d, ...g].map((e) => e.entity_id)));
     }
+    // Wyciek, dym, gaz i problemy celowo BEZ filtra kategorii: integracje
+    // często oznaczają je jako `diagnostic`, a przegapiony alarm kosztuje
+    // więcej niż jeden fałszywy.
     case 'leak': {
       if (fieldEntities?.leak?.length) return fieldEntities.leak;
       return filterBinarySensorDeviceClass(hass, entries, 'moisture').map(
@@ -326,8 +341,9 @@ function readLightsColor(
   for (const id of entityIds) {
     const state = hass.states?.[id];
     if (!state || state.state !== 'on') continue;
-    // Tapnięte „zgaś", zanim HA potwierdził — nie barwi już akcentu.
-    if (pendingWant(hass, id) === 'off') continue;
+    // Tapnięte „zgaś", zanim HA potwierdził — nie barwi już akcentu. To samo
+    // segment WLED przy zgaszonym sterowniku: HA mówi „on", a pasek jest ciemny.
+    if (!isOnEffective(hass, id)) continue;
     const brightnessRaw = state.attributes?.brightness as number | undefined;
     const brightness =
       typeof brightnessRaw === 'number'

@@ -4,7 +4,7 @@ import {
   chipEntityIds,
   chipSupportsList,
 } from '../src/chip-list-helpers.js';
-import type { ChipConfig } from '../src/types.js';
+import type { ChipConfig, HomeAssistant } from '../src/types.js';
 import { entity, entry, makeHass } from './helpers.js';
 
 describe('chipSupportsList', () => {
@@ -77,15 +77,65 @@ describe('chipEntityIds', () => {
     ).toEqual(['binary_sensor.kontaktron', 'binary_sensor.okno']);
   });
 
-  it('device_class czytany też z registry (override, np. SATEL)', () => {
+  it('device_class wyłącznie z atrybutów stanu (tam HA wpisuje też override „Pokaż jako")', () => {
+    // Rejestr wyświetlania HA (`hass.entities`) nie ma pola device_class —
+    // override usera (np. SATEL) i tak ląduje w atrybutach stanu.
     const hass = makeHass({
-      // brak device_class w attributes — tylko w registry entry
-      'binary_sensor.satel': entity('binary_sensor.satel', 'on'),
+      'binary_sensor.satel': entity('binary_sensor.satel', 'on', { device_class: 'window' }),
+      'binary_sensor.bez_klasy': entity('binary_sensor.bez_klasy', 'on'),
     });
-    const entries = [entry('binary_sensor.satel', { device_class: 'window' })];
+    const entries = [entry('binary_sensor.satel'), entry('binary_sensor.bez_klasy')];
     expect(
       chipEntityIds(hass, entries, { type: 'windows' } as ChipConfig),
     ).toEqual(['binary_sensor.satel']);
+  });
+
+  it('lights: bez diody statusu (config) i ukrytych; grupa za ukrytymi członkami liczy się raz', () => {
+    const hass = {
+      states: {
+        'light.sufit': entity('light.sufit', 'on'),
+        'light.ap_led': entity('light.ap_led', 'on'),
+        'light.kinkiet': entity('light.kinkiet', 'on'),
+        // Członkowie grupy są ukryci (nie trafiają do puli) — grupa ich zastępuje.
+        'light.grupa_listwy': entity('light.grupa_listwy', 'on', {
+          entity_id: ['light.listwa_1', 'light.listwa_2'],
+        }),
+      },
+      entities: {
+        'light.ap_led': { entity_id: 'light.ap_led', entity_category: 'config' },
+        'light.kinkiet': { entity_id: 'light.kinkiet', hidden: true },
+      },
+    } as unknown as HomeAssistant;
+    const entries = [
+      entry('light.sufit'),
+      entry('light.ap_led'),
+      entry('light.kinkiet'),
+      entry('light.grupa_listwy'),
+    ];
+    expect(chipEntityIds(hass, entries, { type: 'lights' } as ChipConfig)).toEqual([
+      'light.sufit',
+      'light.grupa_listwy',
+    ]);
+  });
+
+  it('motion pomija czujnik diagnostyczny, battery_low i problem go zostawiają', () => {
+    const hass = makeHass({
+      'binary_sensor.ruch_diag': entity('binary_sensor.ruch_diag', 'on', { device_class: 'motion' }),
+      'binary_sensor.bateria': entity('binary_sensor.bateria', 'on', { device_class: 'battery' }),
+      'binary_sensor.sabotaz': entity('binary_sensor.sabotaz', 'on', { device_class: 'tamper' }),
+    });
+    const entries = [
+      entry('binary_sensor.ruch_diag', { entity_category: 'diagnostic' }),
+      entry('binary_sensor.bateria', { entity_category: 'diagnostic' }),
+      entry('binary_sensor.sabotaz', { entity_category: 'diagnostic' }),
+    ];
+    expect(chipEntityIds(hass, entries, { type: 'motion' } as ChipConfig)).toEqual([]);
+    expect(chipEntityIds(hass, entries, { type: 'battery_low' } as ChipConfig)).toEqual([
+      'binary_sensor.bateria',
+    ]);
+    expect(chipEntityIds(hass, entries, { type: 'problem' } as ChipConfig)).toEqual([
+      'binary_sensor.sabotaz',
+    ]);
   });
 
   it('filter: domena + device_class + niestandardowy stan', () => {

@@ -13,8 +13,16 @@
 
 import type { HomeAssistant } from './types.js';
 import { groupMemberIds } from './area-entities.js';
-import { expandLightIds, viewOf, type LightView } from './light-dimming.js';
-import { markOff, rememberBeforeOff } from './light-swipe.js';
+import {
+  closedControllers,
+  expandLightIds,
+  gateView,
+  lightControllerOf,
+  viewOf,
+  type ControllerState,
+  type LightView,
+} from './light-dimming.js';
+import { controllerOpenedBySwipe, markControllersOn, markOff, rememberBeforeOff } from './light-swipe.js';
 
 export type PowerWant = 'on' | 'off';
 
@@ -65,10 +73,16 @@ export function markPower(
   ids: readonly string[],
   want: PowerWant,
   now: number = Date.now(),
+  /**
+   * `false` = zaznacz tylko podane encje, bez członków. Dla sterownika WLED
+   * włączanego obok segmentów: jego segmenty spoza zapalanego zestawu nie
+   * dostają komendy, więc nie mogą też udawać, że zaraz się zapalą.
+   */
+  expandGroups = true,
 ): Set<string> {
   const all = new Set<string>(ids);
   for (const id of ids) {
-    if (!id.startsWith('light.')) continue;
+    if (!expandGroups || !id.startsWith('light.')) continue;
     for (const leaf of expandLightIds(hass, [id])) all.add(leaf);
   }
   for (const id of [...all]) {
@@ -126,6 +140,39 @@ export function pendingWant(
   return p.want;
 }
 
+/**
+ * Stan sterownika WLED widziany przez przełączniki: oczekiwany (tapnięcie),
+ * włączony przed chwilą gestem, albo ten z HA. Celowo NIE `effectiveState`
+ * — ten dla grupy liczy stan z segmentów, a segmenty pytają o sterownik
+ * (nieskończona rekurencja).
+ */
+function controllerStateAt(hass: HomeAssistant | undefined, now: number): ControllerState {
+  return (c) =>
+    pendingWant(hass, c, now) ??
+    (controllerOpenedBySwipe(hass, c, now) ? 'on' : hass?.states?.[c]?.state);
+}
+
+/**
+ * Włącza zgaszone sterowniki WLED zapalanych segmentów: osobne `turn_on`
+ * BEZ jasności (jasność na sterowniku mnożyłaby się z jasnością segmentów)
+ * i stan „w toku", żeby segmenty od razu czytały się jako zapalane.
+ * Sterownik niedostępny i włączony zostają w spokoju.
+ */
+export function turnOnControllers(
+  hass: HomeAssistant | undefined,
+  leafIds: readonly string[],
+  now: number = Date.now(),
+): void {
+  if (!hass) return;
+  const controllers = closedControllers(hass, leafIds, controllerStateAt(hass, now));
+  if (controllers.length === 0) return;
+  markControllersOn(hass, controllers, now);
+  const marked = markPower(hass, controllers, 'on', now, false);
+  void Promise.resolve(
+    hass.callService('light', 'turn_on', {}, { entity_id: controllers }),
+  ).catch(() => clearPower(marked));
+}
+
 /** Stan do pokazania: oczekiwany, jeśli coś czeka; inaczej ten z HA. */
 export function effectiveState(
   hass: HomeAssistant | undefined,
@@ -135,6 +182,14 @@ export function effectiveState(
   const own = pendingWant(hass, id, now);
   if (own) return own;
   const raw = hass?.states?.[id];
+  // Segment zgaszonego sterownika WLED nie świeci, choć HA mówi „on".
+  // Tylko „on" — niedostępny segment ma dalej wyglądać na niedostępny.
+  if (raw?.state === 'on') {
+    const controller = lightControllerOf(hass, id);
+    if (controller !== undefined && controllerStateAt(hass, now)(controller) === 'off') {
+      return 'off';
+    }
+  }
   // Grupa świateł: gdy któryś członek czeka na potwierdzenie, stan grupy
   // wyliczamy z członków — inaczej kafel grupy po głównym włączniku pokoju
   // świecił „on, 0%" aż do raportu ostatniego członka. Bez członków w toku
@@ -164,7 +219,7 @@ export function effectiveView(
   id: string,
   now: number = Date.now(),
 ): LightView {
-  const base = viewOf(hass?.states?.[id]);
+  const base = gateView(hass, id, viewOf(hass?.states?.[id]), controllerStateAt(hass, now));
   const want = pendingWant(hass, id, now);
   if (want === 'off') return { ...base, on: false, brightness: undefined };
   if (want === 'on') return { ...base, on: true };
@@ -206,6 +261,11 @@ export function tapPower(hass: HomeAssistant | undefined, entityId: string): boo
   if (!hass || !TOGGLEABLE.has(domain)) return false;
   const on = isOnEffective(hass, entityId);
   const want: PowerWant = on ? 'off' : 'on';
+  // Kafel segmentu WLED przy zgaszonym sterowniku: zapalamy też sterownik.
+  // (Tapnięcie samego sterownika i tak go włącza — nie dublujemy komendy.)
+  if (want === 'on' && lightControllerOf(hass, entityId) !== undefined) {
+    turnOnControllers(hass, [entityId]);
+  }
   const marked = markPower(hass, [entityId], want);
   void Promise.resolve(
     hass.callService(domain, want === 'on' ? 'turn_on' : 'turn_off', {}, { entity_id: entityId }),
@@ -254,6 +314,9 @@ export function toggleRoomLights(
   }
   const targets = scope.filter((id) => hass.states?.[id]?.state !== 'unavailable');
   if (targets.length === 0) return;
+  // Najpierw zgaszone sterowniki WLED — sam `turn_on` segmentów nie
+  // zapala paska, gdy sterownik jest wyłączony.
+  turnOnControllers(hass, targets, now);
   const marked = markPower(hass, targets, 'on', now);
   void Promise.resolve(
     hass.callService('light', 'turn_on', {}, { entity_id: targets }),

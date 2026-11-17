@@ -160,8 +160,12 @@ describe('indeks area → encje', () => {
     'light.a': { entity_id: 'light.a', area_id: 'kuchnia' },
     'light.b': { entity_id: 'light.b', device_id: 'dev1' },
     'light.c': { entity_id: 'light.c', area_id: 'salon', device_id: 'dev1' },
-    'light.ukryte': { entity_id: 'light.ukryte', area_id: 'kuchnia', hidden_by: 'user' },
-    'light.wylaczone': { entity_id: 'light.wylaczone', area_id: 'kuchnia', disabled_by: 'user' },
+    // Kształt rejestru WYŚWIETLANIA HA: `hidden: true`, nie `hidden_by`.
+    // Wyłączonych encji HA tu w ogóle nie wysyła, więc ich nie modelujemy.
+    'light.ukryte': { entity_id: 'light.ukryte', area_id: 'kuchnia', hidden: true },
+    // Config/diagnostic zostają w indeksie — filtrują je konsumenci
+    // (bateria diagnostyczna musi dalej zapalać chip „niska bateria").
+    'sensor.bateria': { entity_id: 'sensor.bateria', area_id: 'strych', entity_category: 'diagnostic' },
     'sensor.bez_area': { entity_id: 'sensor.bez_area' },
   };
   const devices = { dev1: { id: 'dev1', area_id: 'kuchnia' } };
@@ -172,15 +176,16 @@ describe('indeks area → encje', () => {
   };
   const hass = { states: {}, entities, devices, areas, floors: {} } as unknown as HomeAssistant;
 
-  it('area encji wygrywa z area urządzenia; ukryte i wyłączone odpadają', () => {
+  it('area encji wygrywa z area urządzenia; ukryte odpadają, diagnostyczne zostają', () => {
     expect(getEntitiesInArea(hass, 'kuchnia').map((e) => e.entity_id)).toEqual(['light.a', 'light.b']);
     expect(getEntitiesInArea(hass, 'salon').map((e) => e.entity_id)).toEqual(['light.c']);
+    expect(getEntitiesInArea(hass, 'strych').map((e) => e.entity_id)).toEqual(['sensor.bateria']);
     expect(getEntitiesInArea(hass, 'nie_ma')).toEqual([]);
   });
 
   it('piętro zbiera swoje strefy bez duplikatów', () => {
     expect(getEntitiesInFloor(hass, 'parter').map((e) => e.entity_id).sort()).toEqual(['light.a', 'light.b', 'light.c']);
-    expect(getEntitiesInFloor(hass, 'pietro')).toEqual([]);
+    expect(getEntitiesInFloor(hass, 'pietro').map((e) => e.entity_id)).toEqual(['sensor.bateria']);
   });
 
   it('nowy rejestr encji albo urządzeń unieważnia indeks', () => {

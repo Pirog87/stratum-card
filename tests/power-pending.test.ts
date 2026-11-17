@@ -175,3 +175,68 @@ describe('poprawki z przeglądu', () => {
     expect(effectiveState(hass, 'light.grupa')).toBe('on');
   });
 });
+
+describe('sterownik WLED (group_entities) jako bramka zasilania segmentów', () => {
+  const main = (state: string) =>
+    entity('light.wled_main', state, {
+      supported_color_modes: ['brightness'],
+      group_entities: ['light.seg1', 'light.seg2'],
+    });
+  const SEGS = ['light.seg1', 'light.seg2'];
+
+  it('sterownik zgaszony, segmenty „on" w HA: pokój ciemny, tap zapala sterownik i segmenty', () => {
+    const { hass, calls } = ha([main('off'), on('light.seg1'), on('light.seg2')]);
+    expect(anyLightOn(hass, SEGS)).toBe(false);
+    expect(effectiveState(hass, 'light.seg1')).toBe('off');
+    toggleRoomLights(hass, SEGS, 'k');
+    // Sterownik osobnym wywołaniem (bez jasności — toggle i tak jej nie
+    // wysyła), potem segmenty. Bez gaszenia „świecących" segmentów.
+    expect(calls).toEqual([
+      { service: 'turn_on', ids: ['light.wled_main'] },
+      { service: 'turn_on', ids: SEGS },
+    ]);
+    // Stan w toku: od razu widać „świeci".
+    expect(anyLightOn(hass, SEGS)).toBe(true);
+    expect(pendingWant(hass, 'light.wled_main')).toBe('on');
+  });
+
+  it('sterownik włączony: zachowanie bez zmian (tap gasi segmenty, sterownika nie dotyka)', () => {
+    const { hass, calls } = ha([main('on'), on('light.seg1'), off('light.seg2')]);
+    expect(anyLightOn(hass, SEGS)).toBe(true);
+    toggleRoomLights(hass, SEGS);
+    expect(calls).toEqual([{ service: 'turn_off', ids: ['light.seg1'] }]);
+  });
+
+  it('sterownik niedostępny (WLED z jednym segmentem): nigdy nie jest celem, segment czyta się sam', () => {
+    const { hass, calls } = ha([
+      entity('light.wled_main', 'unavailable', { group_entities: ['light.seg1'] }),
+      off('light.seg1'),
+    ]);
+    toggleRoomLights(hass, ['light.seg1']);
+    expect(calls).toEqual([{ service: 'turn_on', ids: ['light.seg1'] }]);
+    const lit = ha([
+      entity('light.wled_main', 'unavailable', { group_entities: ['light.seg1'] }),
+      on('light.seg1'),
+    ]);
+    expect(anyLightOn(lit.hass, ['light.seg1'])).toBe(true);
+  });
+
+  it('pomocnik „Grupa świateł" (entity_id) zostaje przezroczysty — nie jest sterownikiem', () => {
+    const { hass, calls } = ha([
+      entity('light.grupa', 'off', { entity_id: ['light.a'] }),
+      on('light.a'),
+    ]);
+    expect(anyLightOn(hass, ['light.a'])).toBe(true);
+    toggleRoomLights(hass, ['light.a']);
+    expect(calls).toEqual([{ service: 'turn_off', ids: ['light.a'] }]);
+  });
+
+  it('tap kafla segmentu przy zgaszonym sterowniku zapala też sterownik', () => {
+    const { hass, calls } = ha([main('off'), on('light.seg1'), off('light.seg2')]);
+    expect(tapPower(hass, 'light.seg1')).toBe(true);
+    expect(calls).toEqual([
+      { service: 'turn_on', ids: ['light.wled_main'] },
+      { service: 'turn_on', ids: ['light.seg1'] },
+    ]);
+  });
+});

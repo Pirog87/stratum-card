@@ -11,7 +11,14 @@ import type {
   HassEntityRegistryEntry,
   HomeAssistant,
 } from './types.js';
-import { filterByDomain, filterBinarySensorDeviceClass, excludeLightGroups } from './area-entities.js';
+import {
+  countableLights,
+  filterByDomain,
+  filterBinarySensorDeviceClass,
+  filterPrimary,
+  isPrimaryEntity,
+} from './area-entities.js';
+import { lightOnInHass } from './light-dimming.js';
 import { resolveColor } from './colors.js';
 import type { TemplateRenderer } from './template-renderer.js';
 import { noteAge } from './ago-ticker.js';
@@ -167,6 +174,8 @@ function climateChipValue(
     entries.find(
       (e) =>
         e.entity_id.startsWith('sensor.') &&
+        // Jak w wierszu (firstAttrSensor): bez temperatury wewnętrznej wtyczek.
+        isPrimaryEntity(hass, e) &&
         hass.states?.[e.entity_id]?.attributes?.device_class === kind,
     )?.entity_id;
   const st = id ? hass.states?.[id] : undefined;
@@ -210,36 +219,52 @@ export function evaluateChip(
   templates: TemplateRenderer,
 ): ChipValue {
   switch (chip.type) {
-    case 'lights':
-      // Tylko encje bezpośrednie — grupy-pomocniki dublowałyby zliczenie.
-      return countedValue(hass, excludeLightGroups(hass, filterByDomain(entries, 'light')), chip);
+    case 'lights': {
+      // Ten sam zbiór co licznik wiersza i lista chipa (countableLights):
+      // bez diod statusu AP i bez grup dublujących zliczenie. Segment WLED
+      // przy zgaszonym sterowniku nie świeci, choć HA pokazuje go jako „on".
+      const lights = countableLights(hass, entries);
+      if (chip.show_last_changed) return lastChangedValue(hass, lights);
+      const n = lights.filter((e) => lightOnInHass(hass, e.entity_id)).length;
+      return { label: String(n), active: n > 0 };
+    }
     case 'motion': {
       // Spójnie z row/tile: motion chip obejmuje też `device_class: occupancy`
-      // (czujki presence mmWave).
+      // (czujki presence mmWave). Bez pomocniczych config/diagnostic.
+      const primary = filterPrimary(hass, entries);
       const merged = dedupe([
-        filterBinarySensorDeviceClass(hass, entries, 'motion'),
-        filterBinarySensorDeviceClass(hass, entries, 'occupancy'),
+        filterBinarySensorDeviceClass(hass, primary, 'motion'),
+        filterBinarySensorDeviceClass(hass, primary, 'occupancy'),
       ]);
       return countedValue(hass, merged, chip);
     }
     case 'occupancy':
-      return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'occupancy'), chip);
+      return countedValue(
+        hass,
+        filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'occupancy'),
+        chip,
+      );
     case 'windows': {
       // `device_class: window` albo generyczne `opening` (wiele Aqara /
       // Xiaomi / Zigbee sensorów raportuje jako `opening`).
+      const primary = filterPrimary(hass, entries);
       const merged = dedupe([
-        filterBinarySensorDeviceClass(hass, entries, 'window'),
-        filterBinarySensorDeviceClass(hass, entries, 'opening'),
+        filterBinarySensorDeviceClass(hass, primary, 'window'),
+        filterBinarySensorDeviceClass(hass, primary, 'opening'),
       ]);
       return countedValue(hass, merged);
     }
     case 'doors': {
+      const primary = filterPrimary(hass, entries);
       const merged = dedupe([
-        filterBinarySensorDeviceClass(hass, entries, 'door'),
-        filterBinarySensorDeviceClass(hass, entries, 'garage_door'),
+        filterBinarySensorDeviceClass(hass, primary, 'door'),
+        filterBinarySensorDeviceClass(hass, primary, 'garage_door'),
       ]);
       return countedValue(hass, merged);
     }
+    // Od tego miejsca (wyciek, dym, gaz, problem, bateria, filtr) BEZ filtra
+    // kategorii: baterie i czujniki sabotażu są `diagnostic` z założenia,
+    // a chip „niska bateria" bez nich nigdy by się nie zapalił.
     case 'leak':
       return countedValue(hass, filterBinarySensorDeviceClass(hass, entries, 'moisture'));
     case 'smoke':

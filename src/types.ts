@@ -1161,22 +1161,28 @@ export interface HassFloor {
   aliases?: string[];
 }
 
+/**
+ * Wpis `hass.entities` — rejestr WYŚWIETLANIA HA (EntityRegistryDisplayEntry),
+ * nie pełny rejestr encji. Dawniej typ opisywał pełny rejestr (`hidden_by`,
+ * `disabled_by`, `device_class`), którego HA tu nigdy nie wysyła — filtr
+ * „ukryte pomijamy" sprawdzał więc pola, których nie ma, i nie działał.
+ * Encje wyłączone w ogóle do tej listy nie trafiają.
+ */
 export interface HassEntityRegistryEntry {
   entity_id: string;
   device_id?: string | null;
   area_id?: string | null;
   name?: string | null;
   labels?: string[];
-  hidden_by?: string | null;
-  disabled_by?: string | null;
+  /** Ukryta przez użytkownika albo integrację — znika z auto-list karty. */
+  hidden?: boolean;
   /**
-   * User override klasy urządzenia (Entity options → „Pokaż jako klasę urządzenia").
-   * Niektóre integracje (np. SATEL) nie aktualizują `state.attributes.device_class`
-   * po zmianie — trzeba czytać override z registry.
+   * Encja pomocnicza urządzenia: `config` (np. dioda statusu punktu dostępowego
+   * UniFi) albo `diagnostic` (bateria, temperatura wewnętrzna wtyczki).
    */
-  device_class?: string | null;
-  /** Native `device_class` z integracji (przed user override). */
-  original_device_class?: string | null;
+  entity_category?: 'config' | 'diagnostic' | null;
+  /** Integracja, która utworzyła encję (`wled`, `group`, `unifi`…). */
+  platform?: string;
 }
 
 export interface HassDevice {

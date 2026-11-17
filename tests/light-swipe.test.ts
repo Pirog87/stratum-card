@@ -355,6 +355,39 @@ describe('LightSwipe — zgaszenie i przywracanie', () => {
     expect(byId.get('light.a')!.data.brightness).toBe(200);
     expect(byId.get('light.b')!.data.brightness).toBe(100);
   });
+
+  it('włącznik zgasił samą diodę AP — przeciągnięcie nie „przywraca" diody, tylko zapala żarówki', () => {
+    const ha = fakeHa([relay('light.ap_led'), dark('light.a'), dark('light.b')]);
+    const ids = ['light.ap_led', 'light.a', 'light.b'];
+    // Tap włącznika (świeci „1" = dioda): zapamiętanie przed zgaszeniem.
+    rememberBeforeOff('korytarz', ha.hass, ids);
+    markOff(ha.hass, ['light.ap_led']);
+    ha.set('light.ap_led', { state: 'off' });
+    const sw = new LightSwipe('korytarz', { hass: () => ha.hass });
+    expect(sw.start(ids)).toEqual({ level: 0, active: true });
+    sw.move(60);
+    const res = sw.end(60);
+    // Tryb „wszystkie" (nie restore z samą diodą): żarówki dostają jasność.
+    expect(res).toEqual({ outcome: 'set', level: expect.closeTo(60, 0) });
+    const lit = ha.calls.filter((c) => typeof c.data.brightness === 'number');
+    expect(allIds(lit).sort()).toEqual(['light.a', 'light.b']);
+  });
+
+  it('stara pamięć z samym przekaźnikiem w pokoju ze ściemnialnymi: przy fromOff „none" gest nieaktywny', () => {
+    const ha = fakeHa([relay('light.r'), dim('light.a', 200)]);
+    const ids = ['light.r', 'light.a'];
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    // Lampę a ktoś gasi przy ścianie W TRAKCIE gestu — zjazd do zera gasi
+    // już tylko przekaźnik i zapisuje pamięć bez żadnej żarówki.
+    sw.start(ids);
+    ha.set('light.a', { state: 'off', attributes: { supported_color_modes: ['brightness'] } });
+    expect(sw.end(0).outcome).toBe('off');
+    ha.echo();
+    ha.calls.length = 0;
+    expect(sw.start(ids, 'none')).toEqual({ level: 0, active: false });
+    expect(sw.end(60)).toEqual({ outcome: 'noop', level: 0 });
+    expect(ha.calls).toEqual([]);
+  });
 });
 
 describe('LightSwipe — gest z ciemnego pokoju', () => {
@@ -570,6 +603,40 @@ describe('LightSwipe — poprawki z przeglądu', () => {
     sw.start(['light.wled_main', 'light.seg1', 'light.seg2']);
     sw.end(30);
     expect(allIds(ha.calls).sort()).toEqual(['light.seg1', 'light.seg2']);
+  });
+
+  it('zgaszony sterownik WLED: segmenty „on" w HA czytają się jako ciemne, gest zapala sterownik bez jasności', () => {
+    const ha = fakeHa([
+      entity('light.wled_main', 'off', { supported_color_modes: ['brightness'], group_entities: ['light.seg1', 'light.seg2'] }),
+      // Segmenty po zgaszeniu sterownika (aplikacja WLED) dalej raportują „on".
+      dim('light.seg1', 200),
+      dim('light.seg2', 100),
+    ]);
+    const ids = ['light.seg1', 'light.seg2'];
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    expect(sw.level(ids)).toBeUndefined();
+    expect(sw.start(ids)).toEqual({ level: 0, active: true });
+    sw.move(50);
+    expect(sw.end(50).outcome).toBe('set');
+    // Najpierw sterownik — osobno i bez jasności; jasność tylko do segmentów.
+    expect(ha.calls[0]).toEqual({ service: 'turn_on', data: {}, ids: ['light.wled_main'] });
+    const segCalls = ha.calls.slice(1);
+    expect(allIds(segCalls).sort()).toEqual(['light.seg1', 'light.seg2']);
+    for (const c of segCalls) expect(typeof c.data.brightness).toBe('number');
+    // Od razu (przed echem HA) segmenty czytają się jako świecące.
+    expect(sw.level(ids)).toBeGreaterThan(0);
+  });
+
+  it('niedostępny sterownik (WLED z jednym segmentem) nie wygasza segmentu i nie dostaje komend', () => {
+    const ha = fakeHa([
+      entity('light.wled_main', 'unavailable', { group_entities: ['light.seg1'] }),
+      dark('light.seg1'),
+    ]);
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    sw.start(['light.seg1']);
+    sw.move(50);
+    sw.end(50);
+    expect(allIds(ha.calls)).toEqual(['light.seg1']);
   });
 
   it('dispose wysyła zatwierdzoną komendę czekającą na falę w locie', async () => {

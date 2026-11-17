@@ -9,10 +9,12 @@ import type {
   HomeAssistant,
 } from './types.js';
 import {
+  countableLights,
   filterByDomain,
   filterBinarySensorDeviceClass,
-  isLightGroupEntity,
+  filterPrimary,
 } from './area-entities.js';
+import { lightOnInHass } from './light-dimming.js';
 
 /** Czy chip otwiera listę encji po kliku (bez jawnego tap_action). */
 export function chipSupportsList(chip: ChipConfig): boolean {
@@ -36,42 +38,47 @@ export function chipEntityIds(
     };
   };
   if (chip.type === 'lights') {
-    // Bez grup-pomocników — lista pokazuje tylko encje bezpośrednie.
-    return filterByDomain(entries, 'light')
-      .filter((e) => !isLightGroupEntity(hass, e.entity_id))
+    // Ten sam zbiór i to samo „świeci" co licznik chipa (chip-defaults) —
+    // inaczej chip mówi „1", a lista po kliknięciu jest pusta albo dłuższa.
+    return countableLights(hass, entries)
       .map((e) => e.entity_id)
-      .filter(matches(['on']));
+      .filter((id) => lightOnInHass(hass, id));
   }
+  // Ruch/okna/drzwi: bez pomocniczych encji config/diagnostic — spójnie
+  // z licznikiem chipa. Alarmy, baterie i filtry niżej zostają bez filtra.
   if (chip.type === 'motion') {
     // Spójnie z chip-defaults: motion + occupancy, zdeduplikowane.
-    const motion = filterBinarySensorDeviceClass(hass, entries, 'motion').map(
+    const primary = filterPrimary(hass, entries);
+    const motion = filterBinarySensorDeviceClass(hass, primary, 'motion').map(
       (e) => e.entity_id,
     );
-    const occ = filterBinarySensorDeviceClass(hass, entries, 'occupancy').map(
+    const occ = filterBinarySensorDeviceClass(hass, primary, 'occupancy').map(
       (e) => e.entity_id,
     );
     return Array.from(new Set([...motion, ...occ])).filter(matches(['on']));
   }
   if (chip.type === 'occupancy') {
-    return filterBinarySensorDeviceClass(hass, entries, 'occupancy')
+    return filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'occupancy')
       .map((e) => e.entity_id)
       .filter(matches(['on']));
   }
   if (chip.type === 'windows') {
     // window + opening (generyczne Aqara/Xiaomi), zdeduplikowane.
-    const w = filterBinarySensorDeviceClass(hass, entries, 'window').map(
+    const primary = filterPrimary(hass, entries);
+    const w = filterBinarySensorDeviceClass(hass, primary, 'window').map(
       (e) => e.entity_id,
     );
-    const o = filterBinarySensorDeviceClass(hass, entries, 'opening').map(
+    const o = filterBinarySensorDeviceClass(hass, primary, 'opening').map(
       (e) => e.entity_id,
     );
     return Array.from(new Set([...w, ...o])).filter(matches(['on']));
   }
   if (chip.type === 'doors') {
-    const d = filterBinarySensorDeviceClass(hass, entries, 'door').map(
+    const primary = filterPrimary(hass, entries);
+    const d = filterBinarySensorDeviceClass(hass, primary, 'door').map(
       (e) => e.entity_id,
     );
-    const g = filterBinarySensorDeviceClass(hass, entries, 'garage_door').map(
+    const g = filterBinarySensorDeviceClass(hass, primary, 'garage_door').map(
       (e) => e.entity_id,
     );
     return Array.from(new Set([...d, ...g])).filter(matches(['on']));
