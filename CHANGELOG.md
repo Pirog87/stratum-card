@@ -29,7 +29,16 @@ i czytnik ekranu, czytelne kolory na jasnym motywie, popup i sceny,
   `--stratum-card-focus-color` → `--primary-color`, także z motywu HA
   i z card-moda. Wcześniej motyw przemalowywał tylko część elementów.
 - Kolor alarmu ustawiaj przez `--stratum-chip-leak-color` — nadpisanie
-  samego `--stratum-alarm` w card-modzie nie działa.
+  samego `--stratum-alarm` w card-modzie nie działa. Bez tej zmiennej
+  **cały** alarm (odznaka ⚠ w belce, blok „Aktywne alarmy", chip wycieku
+  i jego lista) idzie za `--error-color` motywu, a nie za wpisanym
+  `#f44336`.
+- **Kolor świateł w karcie pokoju z `ha-card`:**
+  `ha-card { --stratum-chip-lights-color: … }` przemalowuje znowu kafle
+  świateł (także pasek jasności grupy) razem z przełącznikiem w nagłówku
+  sekcji — wcześniej przełącznik zmieniał kolor, a kafle zostawały
+  bursztynowe. Kafle biorą najpierw zmienną bazową, a `--stratum-lights`
+  dopiero, gdy bazy nie ustawiono nigdzie.
 - `::part(cover-master)` ma 4 px paddingu z ujemnym marginesem — miejsce
   na obrys fokusu przycisków rolet.
 
@@ -44,17 +53,25 @@ i czytnik ekranu, czytelne kolory na jasnym motywie, popup i sceny,
   przycisku belki, a nie na początku strony. Auto-collapse odsuwa także
   klawiatura.
 - Ikona pokoju z `room_icon_tap_action` działa z Enter/Spacji i mówi, co
-  zrobi („Kuchnia: przejdź do widoku").
-- **Popup pokoju** to dialog z nazwą pokoju, tytuł jest nagłówkiem, a
-  Shift+Tab z pierwszej kontrolki przechodzi na ostatnią.
+  zrobi („Kuchnia: przejdź do widoku"). Ta etykieta nie trafia do nazwy
+  samego wiersza — czytnik czyta wiersz jak dotąd (nazwa i pola),
+  a nie z czasownikiem ikony, który robi co innego niż Enter na wierszu.
+- **Popup pokoju** to dialog z nazwą pokoju, tytuł jest nagłówkiem.
+  Pierwszy Tab po otwarciu idzie na pierwszą kontrolkę (uchwyt albo ×),
+  Shift+Tab z pierwszej przechodzi na ostatnią, a Shift+Tab zaraz po
+  otwarciu nie wyprowadza już fokusu do wiersza pod popupem.
 - **Kafle popupu:** wrócił obrys fokusu; ikona rolety i plakietka playera
   otwierają szczegóły z klawiatury; strzałki ←/→ na kaflu grupy świateł
   (`rail`/`tint`) zmieniają jasność — seria naciśnięć to jedna komenda,
   a Enter po strzałkach najpierw zatwierdza jasność, potem przełącza.
-- Komplet stanów (fokus, wciśnięcie, wyłącznik ruchu) na przełączniku
-  świateł w wierszu, odznakach, chipach, przyciskach karty pokoju, liście
-  chipa i × popupu. Wciśnięcie domyślnego kafla „lift" znów daje
-  natychmiastowy ślad.
+- Komplet stanów (fokus, hover, wciśnięcie, wyłącznik ruchu) na
+  przełączniku świateł w wierszu, odznakach, chipach, przyciskach karty
+  pokoju (także hover przełącznika w nagłówku sekcji), liście chipa
+  (zakładki, przełączniki), ikonie rolety, plakietce playera i × popupu.
+  Wciśnięcie ikony pokoju skaluje do 0,96, jak reszta kontrolek.
+  Wciśnięcie domyślnego kafla „lift" znów daje natychmiastowy ślad.
+- Obrys fokusa zakładek listy chipa nie jest już ucięty od dołu przez
+  przewijany pasek zakładek.
 - Przy włączonym „ogranicz ruch" w systemie znikają animacje i skalowanie
   kafli, przycisków rolet, playera, przełączników i „lift".
 
@@ -65,7 +82,10 @@ i czytnik ekranu, czytelne kolory na jasnym motywie, popup i sceny,
   motywie; tor suwaka jasności ma obrys i nie znika.
 - **Kafel grupy świateł (`rail`):** nazwa i procent na pasku jasności
   dostają atrament dobrany do koloru paska — 1,7 → 6,5:1 na ciemnym
-  motywie.
+  motywie. Kafel mierzy pasek złożony na swoim tle (pasek jest kryty
+  w 80%) i bierze atrament o wyższym kontraście: czerwień i róż na jasnym
+  motywie 2,3–3,0 → 5,0–6,4:1, żarówka bez koloru przy ciemnym kolorze
+  świateł z motywu (granat, fiolet) 2,3 → 6,4–6,9:1.
 - Glif na kółku trybu `bubble` jest ciemny zamiast białego (1,6 → 7,9:1),
   z nową zmienną `--stratum-tile-bubble-ink`.
 - Czujniki binarne i przyciski rolet biorą kolory z motywu
@@ -126,6 +146,12 @@ i czytnik ekranu, czytelne kolory na jasnym motywie, popup i sceny,
   „v1.24.0" w banerze karty pokoju). Bundle załadowany dwa razy (dwa
   zasoby w HA) nie rzuca błędem, tylko ostrzega, która wersja jest
   aktywna.
+- **Rozmiar paczki:** 482 306 → 573 151 B (gzip −9: 121 722 → 142 073 B,
+  +20 KB). Większość to słowniki PL/EN (~65 KB po minifikacji), z czego
+  ~83% to napisy edytorów. Te leżą teraz w osobnych słownikach
+  (`editor-pl.ts`/`editor-en.ts`), które importują tylko edytory — przy
+  jednym pliku bundla bajty są jeszcze te same, ale edytory w osobnym
+  pliku (v1.110.0) zabiorą je ze sobą i dashboard przestanie je pobierać.
 
 ### Added (tłumaczenia)
 - Interfejs idzie za językiem użytkownika HA: polski, dla pozostałych
@@ -133,8 +159,12 @@ i czytnik ekranu, czytelne kolory na jasnym motywie, popup i sceny,
 - Poprawne polskie liczby mnogie w liście chipa („1 pozycja", „3 pozycje",
   „12 pozycji", „2 pokoje", „9 pokoi").
 - Pigułka niedostępnego pokoju po polsku mówi „niedostępne" (po angielsku
-  „offline") — jest szersza, więc długa nazwa pokoju w wąskim wierszu
-  skraca się wcześniej.
+  „offline"). W wierszu węższym niż ~360 px zostaje z niej sama kropka —
+  słowo czyta czytnik ekranu i pokazuje dymek, a nazwa pokoju nie traci
+  miejsca („Pokój dzienny" na 300 px: 58 → 134 px, bez ucięcia).
+- Zmiana języka w profilu HA na żywo tłumaczy też kafle popupu i karty
+  pokoju (tytuły, opisy przycisków, „wyłączone"), nie tylko nagłówki —
+  wcześniej kafle zostawały w starym języku do zmiany stanu encji.
 - Literówka w opisie karty w katalogu: „świata" → „światła".
 
 ### Changed (dokumentacja)
@@ -151,7 +181,13 @@ i czytnik ekranu, czytelne kolory na jasnym motywie, popup i sceny,
   zagnieżdżonych elementów nie są eksportowane) i gdzie ustawiać zmienne
   (motyw, `:host`, `ha-card`).
 - README: auto-collapse jest domyślnie wyłączone, liczba sekcji i scen
-  zgodna z kodem, język interfejsu.
+  zgodna z kodem (35 scen: 26 zdjęć i 9 SVG; sekcja „Sceny" w popupie ma
+  domyślnie 3 kolumny), język interfejsu.
+- `docs/styling.md`: przepis na mocniejsze wypełnienia nadpisuje na
+  `ha-card` tokeny, które czytają wiersze i kafle (`--stratum-room-row-bg`,
+  `--stratum-tile-background`…), a stopień `--stratum-surface-N` — na
+  `:host`; dawny przykład z `ha-card { --stratum-surface-1 }` nic nie
+  zmieniał.
 - `docs/development.md`: zdjęcia scen przy instalacji bez HACS (prefiks
   `sceny-`) i release bez ręcznej stałej wersji. Roadmapa i decyzje
   projektowe opisują stan faktyczny.

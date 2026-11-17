@@ -258,7 +258,7 @@ export const CHIP_LIST_COLORS: Record<string, string> = {
   occupancy: 'var(--stratum-chip-motion-color, #4caf50)',
   windows: 'var(--stratum-chip-windows-color, #2196f3)',
   doors: 'var(--stratum-chip-doors-color, #9c27b0)',
-  leak: 'var(--stratum-chip-leak-color, #f44336)',
+  leak: 'var(--stratum-chip-leak-color, var(--error-color, #f44336))',
   smoke: 'var(--stratum-chip-smoke-color, #e53935)',
   gas: 'var(--stratum-chip-gas-color, #ff5722)',
   co: 'var(--stratum-chip-co-color, #d84315)',

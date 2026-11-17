@@ -29,15 +29,26 @@ ustawisz:
 
 Dwie pułapki:
 
-- **Tokeny, które karta sama definiuje** (powierzchnie, `--stratum-lights`,
-  `--stratum-ok`, `--stratum-warn`, `--stratum-ink-*`) liczą się na `:host`
-  karty ze zmiennych bazowych. Wartość z motywu przegrywa z tą definicją —
-  w motywie ustawiaj zmienną bazową (np. `--stratum-chip-lights-color`,
-  `--stratum-card-background`, `--success-color`), a sam token nadpisuj
-  card-modem na `ha-card`. Zmienna bazowa ustawiona na `ha-card` nie dojdzie
-  do tokenu policzonego wyżej, na `:host` — np.
-  `ha-card { --stratum-chip-lights-color: … }` przemaluje chipy i przełącznik
-  w wierszu, ale nie paski belki „Smugi"; `:host { … }` przemaluje wszystko.
+- **Tokeny, które karta sama definiuje** (powierzchnie `--stratum-surface-*`,
+  `--stratum-lights`, `--stratum-ok`, `--stratum-warn`, `--stratum-ink-*`)
+  liczą się na `:host` karty ze zmiennych bazowych. Wartość z motywu przegrywa
+  z tą definicją — w motywie ustawiaj zmienną bazową (np.
+  `--stratum-chip-lights-color`, `--stratum-card-background`,
+  `--success-color`). Zmiennej liczonej z innej zmiennej nie przemalujesz
+  na `ha-card` przez jej źródło: wartość policzona wyżej, na `:host`, jest już
+  zamrożona. Dlatego:
+  - **wypełnienia** zmieniasz na `ha-card` tokenami, których czytają
+    elementy — `--stratum-room-row-bg`, `--stratum-tile-background`,
+    `--stratum-room-tile-bg`, `--stratum-chip-background` i reszta listy
+    z „Powierzchnie". `ha-card { --stratum-surface-1: … }` nie zmieni
+    wierszy ani kafli, bo te tokeny policzyły się z surface-1 na `:host`;
+    sam stopień `--stratum-surface-N` (i bazę `--stratum-card-background`)
+    ustawiaj na `:host` albo w motywie;
+  - **kolor świateł**: `ha-card { --stratum-chip-lights-color: … }`
+    przemaluje chipy, przełącznik w wierszu, kafle i przełącznik nagłówka
+    sekcji w karcie pokoju (czytają zmienną bazową wprost), ale nie paski
+    belki „Smugi", które idą za `--stratum-lights` z `:host`;
+    `:host { … }` przemaluje wszystko.
 - **Zmienne ustawiane inline z configu** (np. `--stratum-card-title-size`
   z `header.title_size`) siedzą bezpośrednio na elemencie i wygrywają
   z każdą wartością odziedziczoną. Zmieniaj je przez config albo
@@ -77,7 +88,9 @@ Te tokeny zasilają domyślne wartości `--stratum-tile-background`,
 `--stratum-tile-chip-background` (surface-1), `--stratum-chip-background`,
 `--stratum-card-hover-background`, `--stratum-card-room-hover` (surface-2),
 `--stratum-chip-hover-background` i `--stratum-tile-hover-background`
-(surface-3). Nadpisanie któregokolwiek z nich na `ha-card` działa jak dotąd.
+(surface-3). To one są właściwym miejscem na zmianę wypełnień przez card-mod
+na `ha-card` — sam `--stratum-surface-N` ustawiony na `ha-card` przychodzi
+za późno (zob. „Gdzie ustawiać zmienne").
 
 `--stratum-card-background` ustawione na `ha-card` zmienia samo tło karty,
 ale powierzchnie dalej liczą się z tła motywu. Żeby poszły za nowym tłem,
@@ -88,6 +101,11 @@ ustaw zmienną na `:host` (card-mod) albo w motywie.
 card_mod:
   style: |
     ha-card {
+      --stratum-room-row-bg: color-mix(in srgb, var(--card-background-color) 90%, var(--primary-text-color));
+      --stratum-tile-background: color-mix(in srgb, var(--card-background-color) 90%, var(--primary-text-color));
+    }
+    /* albo cały stopień naraz — na :host, nie na ha-card */
+    :host {
       --stratum-surface-1: color-mix(in srgb, var(--card-background-color) 90%, var(--primary-text-color));
     }
 ```
@@ -102,7 +120,7 @@ więc Mushroom, Catppuccin czy własny motyw przemalowują je bez card-moda.
 | `--stratum-focus` | nieustawiona → `--stratum-card-focus-color` → `--primary-color` | **obrys fokusu klawiatury** we wszystkich elementach obu kart: przycisk belki (`header-toggle`, tytuł „Smug"), paski, odznaki belki, chipy, wiersze i ich przełącznik świateł, ikona wiersza, kafle pokoi, lista chipa (×, zakładki, przycisk zbiorczy, przełączniki, kółka koloru, wiersze, suwak), popup pokoju (×, uchwyt, kafle, player, sceny) i przyciski karty pokoju. Karta jej nie definiuje — ustaw w motywie, na `:host` albo na `ha-card` (wtedy bez popupu karty piętra, patrz wyżej) |
 | `--stratum-card-focus-color` | `--primary-color` | starsza nazwa obrysu fokusu — działa, gdy `--stratum-focus` nie jest ustawione |
 | `--stratum-focus-ring` | wynik łańcucha wyżej | **wewnętrzny**, nie ustawiaj — karta liczy go sama na `:host` i `ha-card` |
-| `--stratum-chip-leak-color` | `--error-color` | **kolor alarmu w całej karcie**: odznaka ⚠ w belce, wiersz i kafel pokoju (ramka, ikona, odznaka ⚠ N), blok „Aktywne alarmy" karty pokoju, chip wycieku, aktywne czujniki binarne w popupie, hover przycisku ↓ rolety, obwódka nieudanej sceny |
+| `--stratum-chip-leak-color` | `--error-color` (bez motywu `#f44336`) | **kolor alarmu w całej karcie**: odznaka ⚠ w belce, wiersz i kafel pokoju (ramka, ikona, odznaka ⚠ N), blok „Aktywne alarmy" karty pokoju, chip wycieku, aktywne czujniki binarne w popupie, hover przycisku ↓ rolety, obwódka nieudanej sceny |
 | `--stratum-alarm` | `--stratum-chip-leak-color` → `--error-color` | **wewnętrzny alias** alarmu — ustawiaj `--stratum-chip-leak-color`. Karta definiuje alias na `:host` i `ha-card`, więc jego nadpisanie w card-modzie przegrywa |
 | `--stratum-ok` | `--success-color` | spoczynek czujników binarnych w popupie (stan `off`: zamknięte, brak ruchu) i hover przycisku ↑ rolety |
 | `--stratum-warn` | `--warning-color` | hover przycisku ■ (stop) rolety |
@@ -159,7 +177,7 @@ popup nie leży w `ha-card`.
 
 | Zmienna | Default | Opis |
 |---|---|---|
-| `--stratum-lights` | `--stratum-chip-lights-color` (#ffc107) | kolor „świeci się": paski bez własnego koloru, poświata i ikona belki, akcent kafli świateł w popupie. Liczony na `:host` — zob. „Gdzie ustawiać zmienne" |
+| `--stratum-lights` | `--stratum-chip-lights-color` (#ffc107) | kolor „świeci się": paski bez własnego koloru, poświata i ikona belki. Liczony na `:host` — zob. „Gdzie ustawiać zmienne". Kafle i przełącznik nagłówka w karcie pokoju biorą najpierw `--stratum-chip-lights-color`, a ten token dopiero, gdy bazy nie ustawiono nigdzie (`--stratum-tile-lights`) |
 | `--stratum-header-glow-color` | `--stratum-lights` | kolor poświaty i ikony belki, gdy na piętrze świeci światło (też z configu: `header.glow_color`) |
 | `--stratum-header-icon-radius` | `12px` | zaokrąglenie kwadratu ikony (`header.icon_frame: true`) |
 | `--stratum-header-stripe-width` | `44px` (34px, gdy karta jest węższa niż ok. 330px) | szerokość pojedynczego paska |
@@ -208,7 +226,7 @@ pokoi oraz listę chipa, tam gdzie dany typ występuje:
 | `--stratum-chip-occupancy-color` | `#4caf50` (lista chipa obecności bierze kolor ruchu) |
 | `--stratum-chip-windows-color` | `#42a5f5` |
 | `--stratum-chip-doors-color` | `#ba68c8` |
-| `--stratum-chip-leak-color` | `#f44336` w chipie; alarm w karcie: `--error-color` (patrz „Znaczenia stanów") |
+| `--stratum-chip-leak-color` | `--error-color` (bez motywu `#f44336`) — chip, lista i wszystkie alarmy karty (patrz „Znaczenia stanów") |
 | `--stratum-chip-smoke-color` | `#e53935` |
 | `--stratum-chip-gas-color` | `#ff5722` |
 | `--stratum-chip-co-color` | `#d84315` |
@@ -224,8 +242,10 @@ Bez ustawionej zmiennej lista chipa okien i drzwi bierze nieco inne odcienie
 ### Pasek scen (`stratum-scene-bar`)
 
 Liczba kolumn i proporcja kafla idą z configu (`scenes.columns`,
-`scenes.aspect`, domyślnie `16/9`; bez `columns` siatka sama dobiera liczbę
-kolumn). Pasek ustawia je inline, więc nie da się ich nadpisać z CSS.
+`scenes.aspect`, domyślnie `16/9`; jawny pasek bez `columns` sam dobiera
+liczbę kolumn). Sekcja „Sceny" w popupie, zbudowana ze scen pokoju, ma
+domyślnie 3 kolumny (`rooms_scene_columns` albo `columns` sekcji). Pasek
+ustawia je inline, więc nie da się ich nadpisać z CSS.
 
 | Zmienna | Default | Opis |
 |---|---|---|
@@ -254,12 +274,19 @@ dziury.
 |---|---|---|
 | `--stratum-tile-background` | `--stratum-surface-1` | tło kafla (stan nieaktywny) |
 | `--stratum-tile-hover-background` | `--stratum-surface-3` | tło kafla przy hover (tylko przy myszy) |
-| `--stratum-tile-accent` | `--primary-color`; włączony kafel przełączalny (klasa `toggle`): `--stratum-lights` | akcent ramki/ikony aktywnego kafla. Włączone światło ustawia go inline na swój kolor świecenia |
+| `--stratum-tile-accent` | `--primary-color`; włączony kafel przełączalny (klasa `toggle`): `--stratum-tile-lights` | akcent ramki/ikony aktywnego kafla. Włączone światło ustawia go inline na swój kolor świecenia |
+| `--stratum-tile-lights` | `--stratum-chip-lights-color` → `--stratum-lights` | **wewnętrzny alias** koloru świateł kafla (akcent, pasek jasności kafla grupy, żarówka bez koloru w trybie `ambient`). Kafel liczy go na własnym `:host`, więc `--stratum-chip-lights-color` ustawione na `ha-card` dociera do kafli. Ustawiaj zmienną bazową, nie alias |
 | `--stratum-tile-bubble-ink` | 25% akcentu kółka + `--stratum-ink-shade` | kolor glifu na wypełnionym kółku w trybie `bubble`. Ciemny atrament podbarwiony akcentem — biała ikona na żółtym kółku miała ~1,6:1. Motyw z ciemnymi akcentami ustawia tu jasny kolor |
 | `--stratum-player-accent` | `--primary-color` | akcent playera: przycisk ⏯, pasek postępu, suwak głośności, stan „wysyłanie" krótkofalówki |
 | `--stratum-player-min-height` | `168px` | minimalna wysokość kafla playera (`mode: player`) |
 | `--stratum-glight-pad` | `12px` | **wewnętrzna** — padding kafla grupy świateł (rail/tint), z którego liczy się krawędź napisu na pasku jasności. Nie nadpisuj |
 | `--stratum-glight-t` | inline, `0`–`1` | **wewnętrzna** — jasność jako ułamek; ustawiana przez kafel w każdej klatce gestu |
+
+Napis na pasku jasności kafla `rail` (klasy `ink-dark` / `ink-light`) kafel
+dobiera sam: mierzy w przeglądarce kolor paska (80% krycia) złożony na
+własnym tle i bierze ten z dwóch atramentów (`--stratum-ink-shade` /
+`--stratum-ink-tint` z domieszką koloru światła), który ma wyższy kontrast.
+Dzięki temu działa też z kolorem świateł z motywu i z żarówką bez koloru.
 
 Rząd sterowania playera zawija się w dwa rzędy (transport / głośność), gdy
 kafel ma poniżej ~430 px szerokości — to container query na kaflu

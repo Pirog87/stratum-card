@@ -139,7 +139,10 @@ export const cardStyles = css`
       padding: 4px 0;
     }
 
-    /* Badge alarmu na belce piętra — jak ⚠ N na wierszach. */
+    /* Badge alarmu na belce piętra — jak ⚠ N na wierszach. Kolor przez
+       alias --stratum-alarm (surface-tokens): baza --stratum-chip-leak-color,
+       potem --error-color motywu. Wpisany #f44336 dawał na Catppuccin/
+       Mushroom drugą czerwień obok wierszy, które szły już za motywem. */
     .header-alarm-badge {
       display: inline-flex;
       align-items: center;
@@ -147,9 +150,9 @@ export const cardStyles = css`
       padding: 4px 10px;
       border-radius: 999px;
       border: 1.5px solid
-        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 65%, transparent);
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
-      color: var(--stratum-chip-leak-color, #f44336);
+        color-mix(in srgb, var(--stratum-alarm) 65%, transparent);
+      background: color-mix(in srgb, var(--stratum-alarm) 18%, transparent);
+      color: var(--stratum-alarm);
       font-size: 12.5px;
       font-weight: 800;
       cursor: pointer;
@@ -181,7 +184,7 @@ export const cardStyles = css`
       .header-alarm-badge:hover {
         background: color-mix(
           in srgb,
-          var(--stratum-chip-leak-color, var(--error-color)) 28%,
+          var(--stratum-alarm) 28%,
           transparent
         );
       }
@@ -223,7 +226,7 @@ export const cardStyles = css`
       border-radius: inherit;
       pointer-events: none;
       box-shadow: 0 0 8px 3px
-        color-mix(in srgb, var(--stratum-chip-leak-color, var(--error-color)) 25%, transparent);
+        color-mix(in srgb, var(--stratum-alarm) 25%, transparent);
       opacity: 0;
       animation: stratum-header-alarm-pulse 1.6s ease-in-out infinite;
     }

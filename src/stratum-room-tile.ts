@@ -38,6 +38,7 @@ import {
 import { LightSwipe } from './light-swipe.js';
 import { GLIGHT_KEY_COMMIT_MS, glightKeyLevel } from './glight-keys.js';
 import { stripeInk } from './header-stripes.js';
+import { inkForFill, mixRgb, parseCssColor, type Rgb } from './ink-contrast.js';
 import { appBrandGradient } from './media-brands.js';
 import { encodeWav } from './audio-wav.js';
 import { playPauseService, playerCaps, volumeMode } from './media-features.js';
@@ -61,6 +62,7 @@ import {
   tileStrings,
 } from './tile-state-text.js';
 import { localize } from './localize/localize.js';
+import { languageChanged, themeChanged } from './hass-watch.js';
 import type { TileStrings } from './localize/tile.js';
 
 /** Stany z podmienionym `state` (w toku) — ta sama tożsamość między renderami. */
@@ -723,6 +725,9 @@ export class StratumRoomTile extends LitElement {
       return false;
     }
     if (a !== b) return true;
+    // Teksty kafla (tytuły, aria, „wyłączono") idą ze słownika wg języka HA,
+    // a atrament paska „rail" — z kolorów motywu.
+    if (languageChanged(prev, next) || themeChanged(prev, next)) return true;
     // Krótkofalówka zależy od uprawnień użytkownika.
     if (prev.user !== next.user) return true;
     // Grupa świateł: pasek jasności liczy się ze stanów członków, a te
@@ -754,8 +759,36 @@ export class StratumRoomTile extends LitElement {
    */
   private _progressTimer?: number;
 
+  /**
+   * Atrament napisu na pasku kafla „rail", zmierzony z kolorów, które
+   * naprawdę widać (patrz ink-contrast.ts). Do pierwszego pomiaru render
+   * bierze zgadywankę ze stripeInk — pomiar w updated() poprawia ją przed
+   * namalowaniem klatki (update z updated() idzie w tej samej mikrokolejce).
+   */
+  @state() private _glightInk?: 'dark' | 'light';
+
+  private _measureGlightInk(): void {
+    const g = this.shadowRoot?.querySelector('.glight.rail') as HTMLElement | null;
+    const fillEl = g?.querySelector('.glight-fill');
+    if (!g || !fillEl) return;
+    const gcs = getComputedStyle(g);
+    const fill = parseCssColor(getComputedStyle(fillEl).backgroundColor);
+    const surface = parseCssColor(gcs.backgroundColor);
+    // Pusty/nieczytelny pomiar (kafel jeszcze bez stylów) — zostaje domysł.
+    if (!fill || !surface || fill[3] === 0) return;
+    const accent: Rgb = [fill[0], fill[1], fill[2]];
+    const tint = parseCssColor(gcs.getPropertyValue('--stratum-ink-tint')) ?? [255, 255, 255, 1];
+    const shade = parseCssColor(gcs.getPropertyValue('--stratum-ink-shade')) ?? [0, 0, 0, 1];
+    // Te same proporcje co .glight.ink-light / .ink-dark .glight-ink w CSS.
+    const light = mixRgb(accent, 12, [tint[0], tint[1], tint[2]]);
+    const dark = mixRgb(accent, 20, [shade[0], shade[1], shade[2]]);
+    const ink = inkForFill(fill, [surface[0], surface[1], surface[2]], light, dark);
+    if (ink !== this._glightInk) this._glightInk = ink;
+  }
+
   protected updated(changed: PropertyValues): void {
     super.updated(changed);
+    if (this.mode === 'rail') this._measureGlightInk();
     const st = this._state();
     const need =
       this.mode === 'player' &&
@@ -1275,10 +1308,11 @@ export class StratumRoomTile extends LitElement {
       // liczy z niej krawędź w układzie nagłówka (patrz .glight-head-base).
       `--stratum-glight-t:${pct / 100};`,
     ].join('');
-    // Napis NA pasku dostaje atrament z luminancji koloru światła (ten sam
-    // wybór co paski belki piętra). Bez koloru (żarówka bez rgb) pasek
-    // bierze żółty --stratum-lights, czyli jasny — ciemny atrament.
-    const ink = stripeInk(color);
+    // Napis NA pasku: atrament zmierzony z paska złożonego na powierzchni
+    // kafla (_measureGlightInk). Surowy kolor żarówki to tylko pierwszy
+    // domysł — pasek jest kryty w 80%, a bez rgb jego kolor to token
+    // motywu, którego JS nie zna.
+    const ink = this._glightInk ?? stripeInk(color);
     const name = this._displayName(state);
     const stateLine = on || overridden ? `${pct}%` : this._s.group_off;
 
@@ -2314,6 +2348,17 @@ export class StratumRoomTile extends LitElement {
   static styles = css`
     :host {
       display: block;
+      /* Kolor „świeci się" kafla. --stratum-lights liczy się na :host karty,
+         więc card-mod w zwykłej formie (ha-card { --stratum-chip-lights-color })
+         do niego nie dochodził: przełącznik w nagłówku sekcji robił się
+         zielony, a kafle zostawały bursztynowe. Kafel czyta więc najpierw
+         zmienną bazową — odziedziczoną z miejsca, w którym ją ustawiono,
+         także z ha-card — a token karty dopiero gdy bazy nie ma nigdzie.
+         Ten sam łańcuch ma przełącznik nagłówka (stratum-room-card-styles). */
+      --stratum-tile-lights: var(
+        --stratum-chip-lights-color,
+        var(--stratum-lights, #ffc107)
+      );
       /* Kafel wypełnia rząd siatki, który .tiles z grid-auto-rows: 1fr
          wyrównuje do najwyższego elementu w sekcji. Bez tego host się
          rozciąga, a kafel w środku zostaje na swojej min-height i pod nim
@@ -2371,12 +2416,12 @@ export class StratumRoomTile extends LitElement {
     .tile.toggle.on {
       background: color-mix(
         in srgb,
-        var(--stratum-tile-accent, var(--stratum-lights)) 12%,
+        var(--stratum-tile-accent, var(--stratum-tile-lights)) 12%,
         var(--stratum-tile-background)
       );
       border-color: color-mix(
         in srgb,
-        var(--stratum-tile-accent, var(--stratum-lights)) 40%,
+        var(--stratum-tile-accent, var(--stratum-tile-lights)) 40%,
         transparent
       );
     }
@@ -2398,10 +2443,10 @@ export class StratumRoomTile extends LitElement {
     .tile.on .tile-icon-wrap {
       background: color-mix(
         in srgb,
-        var(--stratum-tile-accent, var(--stratum-lights)) 22%,
+        var(--stratum-tile-accent, var(--stratum-tile-lights)) 22%,
         transparent
       );
-      color: var(--stratum-tile-accent, var(--stratum-lights));
+      color: var(--stratum-tile-accent, var(--stratum-tile-lights));
     }
 
     .progress-bar {
@@ -2419,7 +2464,7 @@ export class StratumRoomTile extends LitElement {
       display: block;
       height: 100%;
       width: var(--pct, 0%);
-      background: var(--stratum-tile-accent, var(--stratum-lights));
+      background: var(--stratum-tile-accent, var(--stratum-tile-lights));
       transition: width 0.25s ease-out;
       border-radius: 3px;
     }
@@ -2583,7 +2628,7 @@ export class StratumRoomTile extends LitElement {
     }
 
     .tile.toggle.on .tile-icon {
-      color: var(--stratum-lights);
+      color: var(--stratum-tile-lights);
     }
 
     /* Kolory binarnych z motywu (--stratum-alarm / --stratum-ok delegują do
@@ -2726,7 +2771,7 @@ export class StratumRoomTile extends LitElement {
     .range {
       width: 100%;
       height: 4px;
-      accent-color: var(--stratum-lights);
+      accent-color: var(--stratum-tile-lights);
       cursor: pointer;
     }
 
@@ -2849,7 +2894,7 @@ export class StratumRoomTile extends LitElement {
 
     /* Per-domain bubble accent */
     :host([data-domain='light']) .bubble-tile.on {
-      --stratum-tile-bubble-accent: var(--stratum-lights);
+      --stratum-tile-bubble-accent: var(--stratum-tile-lights);
     }
     :host([data-domain='switch']) .bubble-tile.on,
     :host([data-domain='fan']) .bubble-tile.on,
@@ -2893,7 +2938,7 @@ export class StratumRoomTile extends LitElement {
     }
 
     :host([data-domain='light']) .icon-tile.on {
-      --stratum-tile-icon-accent: var(--stratum-lights);
+      --stratum-tile-icon-accent: var(--stratum-tile-lights);
     }
     :host([data-domain='binary_sensor']) .icon-tile.on {
       --stratum-tile-icon-accent: var(--stratum-alarm);
@@ -3453,7 +3498,7 @@ export class StratumRoomTile extends LitElement {
       width: var(--stratum-glight-pct, 0%);
       background: color-mix(
         in srgb,
-        var(--stratum-glight-accent, var(--stratum-lights)) 80%,
+        var(--stratum-glight-accent, var(--stratum-tile-lights)) 80%,
         transparent
       );
       transition: width 0.25s ease-out;
@@ -3554,13 +3599,14 @@ export class StratumRoomTile extends LitElement {
       transition: none;
     }
 
-    /* Atrament z koloru światła (stripeInk w JS → klasa ink-*), wzór
-       z pasków belki piętra. Specyficzność ponad .glight.off .glight-name,
+    /* Atrament zmierzony z paska złożonego na powierzchni kafla
+       (_measureGlightInk w JS → klasa ink-*; proporcje 20%/12% muszą się
+       zgadzać z tymi w JS). Specyficzność ponad .glight.off .glight-name,
        bo przy przeciąganiu z zera kafel jest jeszcze „off". */
     .glight.ink-dark .glight-ink {
       color: color-mix(
         in srgb,
-        var(--stratum-glight-accent, var(--stratum-lights)) 20%,
+        var(--stratum-glight-accent, var(--stratum-tile-lights)) 20%,
         var(--stratum-ink-shade)
       );
     }
@@ -3573,7 +3619,7 @@ export class StratumRoomTile extends LitElement {
     .glight.ink-light .glight-ink {
       color: color-mix(
         in srgb,
-        var(--stratum-glight-accent, var(--stratum-lights)) 12%,
+        var(--stratum-glight-accent, var(--stratum-tile-lights)) 12%,
         var(--stratum-ink-tint)
       );
     }
@@ -3614,13 +3660,53 @@ export class StratumRoomTile extends LitElement {
       cursor: pointer;
     }
 
+    /* Ikona rolety i plakietka playera to od tego wydania osobne przyciski
+       (role=button) — dostały obrys fokusa, ale bez hover i bez feedbacku
+       wciśnięcia (§3). Tło idzie w stronę tekstu z motywu; na plakietce
+       z okładką — mocniejszy scrim z tokenów atramentu. */
+    .cover-row .tile-icon-wrap[role='button'],
+    .player-tag {
+      transition: background 0.15s ease, color 0.15s ease, transform 0.08s ease;
+    }
+    .cover-row .tile-icon-wrap[role='button']:active,
+    .player-tag:active {
+      transform: scale(0.96);
+    }
+    @media (hover: hover) {
+      .cover-row .tile-icon-wrap[role='button']:hover,
+      .player-tile:not(.has-art) .player-tag:hover {
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color) 85%,
+          var(--primary-text-color)
+        );
+        color: var(--primary-text-color);
+      }
+      .player-tile.has-art .player-tag:hover {
+        background: color-mix(in srgb, var(--stratum-ink-shade) 62%, transparent);
+        color: var(--stratum-ink-tint);
+      }
+    }
+    /* Furtka ruchu tuż pod regułami — wspólny blok reduced-motion stoi
+       wyżej w arkuszu i przegrałby z nimi kolejnością. */
+    @media (prefers-reduced-motion: reduce) {
+      .cover-row .tile-icon-wrap[role='button'],
+      .player-tag {
+        transition: none;
+      }
+      .cover-row .tile-icon-wrap[role='button']:active,
+      .player-tag:active {
+        transform: none;
+      }
+    }
+
     .glight-bubble ha-icon {
       --mdc-icon-size: 22px;
       color: var(--secondary-text-color);
     }
 
     .glight.on .glight-bubble ha-icon {
-      color: var(--stratum-glight-accent, var(--stratum-lights));
+      color: var(--stratum-glight-accent, var(--stratum-tile-lights));
     }
 
     /* tint: tło kafla w kolorze światła + pasek jasności na dole */
@@ -3633,19 +3719,19 @@ export class StratumRoomTile extends LitElement {
           135deg,
           color-mix(
             in srgb,
-            var(--stratum-glight-accent, var(--stratum-lights)) 24%,
+            var(--stratum-glight-accent, var(--stratum-tile-lights)) 24%,
             transparent
           ),
           color-mix(
             in srgb,
-            var(--stratum-glight-accent, var(--stratum-lights)) 6%,
+            var(--stratum-glight-accent, var(--stratum-tile-lights)) 6%,
             transparent
           ) 65%
         ),
         var(--stratum-tile-background, rgba(255, 255, 255, 0.04));
       border-color: color-mix(
         in srgb,
-        var(--stratum-glight-accent, var(--stratum-lights)) 35%,
+        var(--stratum-glight-accent, var(--stratum-tile-lights)) 35%,
         transparent
       );
     }
@@ -3671,7 +3757,7 @@ export class StratumRoomTile extends LitElement {
       height: 100%;
       width: var(--stratum-glight-pct, 0%);
       border-radius: 4px;
-      background: var(--stratum-glight-accent, var(--stratum-lights));
+      background: var(--stratum-glight-accent, var(--stratum-tile-lights));
       transition: width 0.25s ease-out;
     }
 
@@ -3690,7 +3776,7 @@ export class StratumRoomTile extends LitElement {
 
     /* Per-domain akcenty w chips mode */
     :host([data-domain='light']) .chips-tile.on {
-      --stratum-tile-chip-accent: var(--stratum-lights);
+      --stratum-tile-chip-accent: var(--stratum-tile-lights);
     }
     :host([data-domain='binary_sensor']) .chips-tile.on {
       --stratum-tile-chip-accent: var(--stratum-alarm);

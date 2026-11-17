@@ -812,6 +812,7 @@ export class StratumCardRoomRow extends LitElement {
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
+        aria-labelledby=${this.iconTappable ? 'row-main row-info' : nothing}
         data-preset=${preset}
         data-hover=${hoverEffect}
         style=${styles}
@@ -827,6 +828,11 @@ export class StratumCardRoomRow extends LitElement {
           ? html`<span class="fill" aria-hidden="true"></span>`
           : nothing}
         ${preset === 'rail' ? html`<span class="bar" aria-hidden="true"></span>` : nothing}
+        <!-- Klikalna ikona ma własną nazwę („Kuchnia: przełącz światła").
+             Wiersz z role=button liczył nazwę z treści, więc ta etykieta
+             wchodziła na początek nazwy WIERSZA, a Enter na wierszu robi co
+             innego (otwiera popup). Stąd aria-labelledby na wierszu: nazwa
+             i pola, bez ikony — tak samo jak bez klikalnej ikony. -->
         ${showIcon
           ? html`<span
               class="iconwrap"
@@ -846,7 +852,7 @@ export class StratumCardRoomRow extends LitElement {
             </span>`
           : nothing}
         ${twoLine
-          ? html`<span class="body">
+          ? html`<span class="body" id="row-main">
               ${showName
                 ? html`<span class="name">${this.name}</span>`
                 : nothing}
@@ -867,11 +873,13 @@ export class StratumCardRoomRow extends LitElement {
                 : nothing}
             </span>`
           : showName
-          ? html`<span class="name">${this.name}</span>`
-          : html`<span class="name-spacer"></span>`}
-        <div class="info">
+          ? html`<span class="name" id="row-main">${this.name}</span>`
+          : html`<span class="name-spacer" id="row-main"></span>`}
+        <div class="info" id="row-info">
           ${this.offline
-            ? html`<span class="off-pill">${localize(this.uiLang, 'common.offline')}</span>`
+            ? html`<span class="off-pill" title=${localize(this.uiLang, 'common.offline')}
+                ><span class="off-text">${localize(this.uiLang, 'common.offline')}</span></span
+              >`
             : nothing}
           ${badge ? this._renderAlarmBadge() : nothing}
           ${(twoLine ? split!.right : single!.shown).map((f) => this._renderField(f))}
@@ -1082,8 +1090,9 @@ export class StratumCardRoomRow extends LitElement {
       outline-offset: -2px;
     }
 
+    /* §3: 0.96–0.98 — tak jak pozostałe kontrolki tego wydania. */
     :host([icon-tappable]) .iconwrap:active {
-      scale: 0.94;
+      scale: 0.96;
     }
 
     :host([clickable]) .row:focus-visible {
@@ -1484,6 +1493,30 @@ export class StratumCardRoomRow extends LitElement {
       height: 6px;
       border-radius: 50%;
       background: rgba(128, 132, 140, 0.9);
+    }
+
+    /* „niedostępne" jest o ~35 px szersze od dawnego „offline", a .info się
+       nie kurczy — każdy piksel pigułki szedł z nazwy pokoju, jedynego
+       tekstu, po którym rozpoznać wyłączony wiersz (300 px: nazwa 58 px).
+       W wąskim wierszu pigułka zostaje samą kropką, a słowo wychodzi tylko
+       z widoku: czytnik ekranu dalej je czyta, kursor dostaje title. Stan
+       i tak niesie przygaszony wiersz i przekreślona ikona. Kontener na
+       .row, nie na :host — rozmiar hosta wyznacza karta. */
+    .row {
+      container: stratum-row / inline-size;
+    }
+    @container stratum-row (max-width: 360px) {
+      .off-pill {
+        padding: 3px 7px;
+      }
+      .off-text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
     }
 
     /* ====== hover ======

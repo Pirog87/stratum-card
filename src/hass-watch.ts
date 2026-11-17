@@ -48,6 +48,32 @@ export function structureChanged(
 }
 
 /**
+ * Czy zmienił się język interfejsu. HA przełącza język profilu na żywo, bez
+ * przeładowania: nowy `hass` ma nowe `language`/`locale`, a `states` tę samą
+ * tożsamość. Komponent, który wpuszcza render tylko po zmianie własnej encji
+ * (kafel popupu), bez tej bramki zostawał przy starym języku aż do
+ * najbliższej zmiany stanu — obok sekcji już przetłumaczonych.
+ */
+export function languageChanged(
+  prev: HomeAssistant,
+  next: HomeAssistant,
+): boolean {
+  return prev.language !== next.language || prev.locale !== next.locale;
+}
+
+/**
+ * Czy zmienił się motyw (także przełączenie jasny/ciemny — HA podmienia
+ * wtedy obiekt `themes`). Kafel „rail" mierzy atrament napisu z kolorów
+ * motywu; bez tej bramki po przełączeniu trybu zostawał atrament dobrany
+ * do poprzedniej powierzchni.
+ */
+export function themeChanged(prev: HomeAssistant, next: HomeAssistant): boolean {
+  const a = prev as unknown as Record<string, unknown>;
+  const b = next as unknown as Record<string, unknown>;
+  return a.themes !== b.themes || a.selectedTheme !== b.selectedTheme;
+}
+
+/**
  * Czy `states` jest puste.
  *
  * UWAGA: to NIE jest O(1). HA buduje `states` na nowo przy każdym zdarzeniu

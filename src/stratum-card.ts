@@ -1439,6 +1439,7 @@ export class StratumCard extends LitElement {
           aria-modal="true"
           aria-label=${this._popupRoomName()}
           @click=${(ev: Event) => ev.stopPropagation()}
+          @keydown=${this._onPopupKeydown}
         >
           <span
             class="stratum-popup-sentinel"
@@ -1488,7 +1489,7 @@ export class StratumCard extends LitElement {
       entityIds: [],
       label: localize(this.hass, 'common.active_alarms'),
       icon: 'mdi:alert',
-      color: 'var(--stratum-chip-leak-color, #f44336)',
+      color: 'var(--stratum-chip-leak-color, var(--error-color, #f44336))',
       alarmAreaIds: areaIds,
     });
   }
@@ -2244,7 +2245,35 @@ export class StratumCard extends LitElement {
     el?.focus();
   }
 
-  private _onSentinelStart = (): void => {
+  /**
+   * Wartownik poczatkowy lapie dwa rozne ruchy i rozroznia je po tym, skad
+   * przyszedl fokus. Po otwarciu fokus stoi na samym kontenerze
+   * (tabindex=-1), a wartownik jest jego pierwszym dzieckiem — wiec
+   * PIERWSZY zwykly Tab tez tu laduje. Bez tego rozroznienia pierwszy Tab
+   * byl brany za Shift+Tab z gory i wyrzucal na ostatnia kontrolke, na dol
+   * arkusza (zmierzone: glosnosc playera, popup przewiniety do konca).
+   * Kontener i wartownik sa w tym samym shadow root, wiec relatedTarget nie
+   * jest retargetowany; kontrolka z karty pokoju przychodzi jako jej host
+   * — tez „w srodku".
+   */
+  private _onSentinelStart = (ev: FocusEvent): void => {
+    const card = this.shadowRoot?.querySelector('.stratum-popup-card');
+    const from = ev.relatedTarget as Node | null;
+    const fromInside = !!card && !!from && from !== card && card.contains(from);
+    this._focusPopupEdge(fromInside ? 'last' : 'first');
+  };
+
+  /**
+   * Shift+Tab prosto po otwarciu: fokus stoi na kontenerze, a przed nim
+   * w drzewie nie ma wartownika — przegladarka wyprowadzala fokus z dialogu
+   * na wiersz pod spodem, choc popup deklaruje aria-modal. Lapiemy tylko
+   * klawisz wcisniety na SAMYM kontenerze; z kontrolek w srodku Shift+Tab
+   * idzie normalnie (i na gorze odbija sie od wartownika).
+   */
+  private _onPopupKeydown = (ev: KeyboardEvent): void => {
+    if (ev.key !== 'Tab' || !ev.shiftKey) return;
+    if (ev.composedPath()[0] !== ev.currentTarget) return;
+    ev.preventDefault();
     this._focusPopupEdge('last');
   };
 

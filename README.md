@@ -51,12 +51,15 @@ Widok detalu pomieszczenia. Header z chipami specyficznymi dla pokoju, sekcje au
   - **`custom:<any-hacs-card>`** — każda encja w sekcji jako dowolna karta HACS (mushroom, bubble-card, button-card…)
 
 ### Sceny
-- **36 wbudowanych scen** (`image: stratum:<id>`): 26 zdjęć (jasne / noc /
+- **35 wbudowanych scen** (`image: stratum:<id>`): 26 zdjęć (jasne / noc /
   usypianie / czytanie / relaks / disco / kinkiety / …) dostarczanych jako
-  osobne pliki `sceny-<id>.webp` obok bundla i 10 grafik SVG w bundlu
+  osobne pliki `sceny-<id>.webp` obok bundla i 9 grafik SVG w bundlu
   (praca / kino / gaming / medytacja / …)
 - Własne URL obrazków albo ikony + kolor
-- Konfigurowalna pozycja, rozmiar, kolumny, aspect ratio (default 16:9; bez `columns` siatka sama dobiera liczbę kolumn)
+- Konfigurowalna pozycja, rozmiar, kolumny, aspect ratio (default 16:9).
+  Kolumny: sekcja „Sceny" w popupie (sceny znalezione w pokoju) ma domyślnie
+  3 — zmienisz `rooms_scene_columns` albo `columns` sekcji; jawny pasek
+  `scenes:` bez `columns` sam dobiera liczbę kolumn
 - Tap action override per scena
 
 ### Konfiguracja

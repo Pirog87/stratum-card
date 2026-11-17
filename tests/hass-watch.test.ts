@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   addGroupMembers,
   collectEntityIds,
+  languageChanged,
+  themeChanged,
   popupRelevantFilter,
   sceneBarHassChanged,
   statesEmpty,
@@ -78,6 +80,30 @@ describe('structureChanged', () => {
     expect(structureChanged(prev, hassOf({}, { ...shared, areas: {} }))).toBe(true);
     expect(structureChanged(prev, hassOf({}, { ...shared, themes: {} }))).toBe(true);
     expect(structureChanged(prev, hassOf({}, { ...shared, user: {} }))).toBe(true);
+  });
+});
+
+describe('languageChanged', () => {
+  it('przepuszcza przełączenie języka profilu przy tych samych stanach', () => {
+    const states = { 'light.a': st('light.a') };
+    const locale = { language: 'pl' };
+    const prev = hassOf(states, { language: 'pl', locale });
+    expect(languageChanged(prev, hassOf(states, { language: 'pl', locale }))).toBe(false);
+    expect(
+      languageChanged(prev, hassOf(states, { language: 'en', locale: { language: 'en' } })),
+    ).toBe(true);
+    // Sam nowy obiekt locale (np. zmiana formatu liczb) też zmienia teksty.
+    expect(languageChanged(prev, hassOf(states, { language: 'pl', locale: { language: 'pl' } }))).toBe(true);
+  });
+});
+
+describe('themeChanged', () => {
+  it('reaguje na nowy obiekt motywów (jasny/ciemny) i wybrany motyw', () => {
+    const themes = { darkMode: false };
+    const prev = hassOf({}, { themes, selectedTheme: null });
+    expect(themeChanged(prev, hassOf({}, { themes, selectedTheme: null }))).toBe(false);
+    expect(themeChanged(prev, hassOf({}, { themes: { darkMode: true }, selectedTheme: null }))).toBe(true);
+    expect(themeChanged(prev, hassOf({}, { themes, selectedTheme: { theme: 'x' } }))).toBe(true);
   });
 });
 

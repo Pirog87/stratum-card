@@ -345,11 +345,12 @@ export const roomCardStyles = css`
       color: var(--secondary-text-color);
     }
 
-    /* A3: blok „Aktywne alarmy" na górze popupu. */
+    /* A3: blok „Aktywne alarmy" na górze popupu. Cały blok przez alias
+       --stratum-alarm — jedno źródło alarmu z wierszem i kafelkami. */
     .alarms-block {
       border: 1.5px solid
-        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 50%, transparent);
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 7%, transparent);
+        color-mix(in srgb, var(--stratum-alarm) 50%, transparent);
+      background: color-mix(in srgb, var(--stratum-alarm) 7%, transparent);
       border-radius: 14px;
       padding: 10px 12px;
       display: flex;
@@ -364,7 +365,7 @@ export const roomCardStyles = css`
       font-weight: 800;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--stratum-chip-leak-color, #f44336);
+      color: var(--stratum-alarm);
       margin-bottom: 4px;
     }
     .alarms-head ha-icon {
@@ -375,7 +376,7 @@ export const roomCardStyles = css`
       font-size: 10px;
       padding: 1px 7px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
+      background: color-mix(in srgb, var(--stratum-alarm) 18%, transparent);
     }
     .alarm-row {
       display: flex;
@@ -396,15 +397,15 @@ export const roomCardStyles = css`
        o rozmiar — zostaje media query. */
     @media (hover: hover) {
       .alarm-row:hover {
-        background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 8%, transparent);
+        background: color-mix(in srgb, var(--stratum-alarm) 8%, transparent);
       }
     }
     .ab-bub {
       width: 38px;
       height: 38px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 16%, transparent);
-      color: var(--stratum-chip-leak-color, #f44336);
+      background: color-mix(in srgb, var(--stratum-alarm) 16%, transparent);
+      color: var(--stratum-alarm);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -436,14 +437,14 @@ export const roomCardStyles = css`
       text-transform: uppercase;
       padding: 3px 8px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 15%, transparent);
-      color: var(--stratum-chip-leak-color, #f44336);
+      background: color-mix(in srgb, var(--stratum-alarm) 15%, transparent);
+      color: var(--stratum-alarm);
       flex-shrink: 0;
     }
     .ab-tm {
       font-size: 12px;
       font-weight: 700;
-      color: var(--stratum-chip-leak-color, #f44336);
+      color: var(--stratum-alarm);
       font-variant-numeric: tabular-nums;
       flex-shrink: 0;
     }
@@ -465,7 +466,7 @@ export const roomCardStyles = css`
       padding: 0;
       cursor: pointer;
       background: var(--divider-color, rgba(255, 255, 255, 0.2));
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, box-shadow 0.15s ease;
       flex-shrink: 0;
     }
     .hdr-switch .knob {
@@ -496,8 +497,11 @@ export const roomCardStyles = css`
     .hdr-switch.on .knob {
       transform: translateX(26px);
     }
+    /* Ten sam łańcuch co kafle (--stratum-tile-lights): baza z dowolnego
+       miejsca, także z ha-card, potem token karty — przełącznik i kafle
+       nie mogą się rozjechać kolorem. */
     .hdr-switch.lights.on {
-      background: var(--stratum-chip-lights-color, #ffc107);
+      background: var(--stratum-chip-lights-color, var(--stratum-lights));
     }
     .hdr-switch.lights.on .knob {
       color: #b07908;
@@ -907,6 +911,14 @@ export const roomCardStyles = css`
   .ms-row:active,
   .mg-cb:active:not([disabled]) {
     transform: scale(0.98);
+  }
+
+  /* Hover przełącznika nagłówka: poświata wokół toru, nie inny kolor —
+     kolor toru niesie stan (włączone / wyłączone). */
+  @media (hover: hover) {
+    .hdr-switch:hover {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+    }
   }
 
   /* Furtka ruchu (§4): bez tranzycji, bez skoku pod palcem i bez

@@ -824,10 +824,15 @@ export class StratumChipList extends LitElement {
       transform: scale(0.96);
     }
 
+    /* overflow-x: auto przycina też w pionie, a obrys fokusa zakładki
+       (2px + 2px offsetu) wystaje 4px pod nią — przy 2px dolnego paddingu
+       cała dolna krawędź obrysu znikała. 4px zapasu, nadwyżkę zjada ujemny
+       margines, więc lista pod spodem nie przesuwa się (wzór .cover-master). */
     .tabs {
       display: flex;
       gap: 8px;
-      padding: 12px 16px 2px;
+      padding: 12px 16px 4px;
+      margin-bottom: -2px;
       overflow-x: auto;
       scrollbar-width: none;
       flex-shrink: 0;
@@ -969,7 +974,7 @@ export class StratumChipList extends LitElement {
       background: var(--divider-color, rgba(255, 255, 255, 0.2));
       cursor: pointer;
       padding: 0;
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
       flex-shrink: 0;
     }
 
@@ -1227,6 +1232,30 @@ export class StratumChipList extends LitElement {
     .master:active {
       transform: scale(0.98);
     }
+    .toggle:active {
+      transform: scale(0.96);
+    }
+    /* Hover zakładki i przełącznika — dotąd brakowało go w ogóle (§3).
+       Zakładka ciemnieje/jaśnieje w stronę tekstu, aktywna mocniej
+       w akcencie. Przełącznik dostaje poświatę wokół toru, a nie inny
+       kolor: kolor toru niesie stan (włączone / wyłączone). */
+    @media (hover: hover) {
+      .tab:hover {
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color) 88%,
+          var(--primary-text-color)
+        );
+        color: var(--primary-text-color);
+      }
+      .tab.on:hover {
+        background: color-mix(in srgb, var(--accent, var(--primary-color)) 24%, transparent);
+        color: var(--accent-ink);
+      }
+      .toggle:hover {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+      }
+    }
     .master ha-icon { --mdc-icon-size: 18px; }
 
     /* Furtka ruchu (§4) obejmuje też przyciski — wcześniej ×, bąbel i
@@ -1239,6 +1268,7 @@ export class StratumChipList extends LitElement {
       .prow,
       .close,
       .tab,
+      .toggle,
       .crow .bub,
       .master {
         animation: none;
@@ -1247,6 +1277,7 @@ export class StratumChipList extends LitElement {
       .prow:active,
       .close:active,
       .tab:active,
+      .toggle:active,
       .crow .bub:active,
       .master:active {
         transform: none;
