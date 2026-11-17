@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   alarmEntityIds,
+  chipDefaultTap,
   chipEntityIds,
+  chipMoreInfoEntity,
   chipSupportsList,
 } from '../src/chip-list-helpers.js';
 import type { ChipConfig, HomeAssistant } from '../src/types.js';
@@ -21,6 +23,96 @@ describe('chipSupportsList', () => {
     expect(
       chipSupportsList({ type: 'lights', show_list: false } as ChipConfig),
     ).toBe(false);
+  });
+
+  it('temperatura i wilgotność nie otwierają (zawsze pustej) listy', () => {
+    expect(chipSupportsList({ type: 'temperature' } as ChipConfig)).toBe(false);
+    expect(chipSupportsList({ type: 'humidity' } as ChipConfig)).toBe(false);
+  });
+});
+
+describe('chipMoreInfoEntity', () => {
+  const hass = makeHass({
+    'sensor.salon_temp': entity('sensor.salon_temp', '21.5', { device_class: 'temperature' }),
+    'sensor.salon_hum': entity('sensor.salon_hum', '48', { device_class: 'humidity' }),
+    'sensor.kuchnia_temp': entity('sensor.kuchnia_temp', '23', { device_class: 'temperature' }),
+    'switch.ekspres': entity('switch.ekspres', 'off'),
+  });
+  const entries = [entry('sensor.salon_hum'), entry('sensor.salon_temp')];
+
+  it('temperatura/wilgotność: wykryty czujnik strefy — ten sam, z którego chip bierze wartość', () => {
+    expect(chipMoreInfoEntity(hass, entries, { type: 'temperature' } as ChipConfig)).toBe(
+      'sensor.salon_temp',
+    );
+    expect(chipMoreInfoEntity(hass, entries, { type: 'humidity' } as ChipConfig)).toBe(
+      'sensor.salon_hum',
+    );
+  });
+
+  it('jawna encja z configu wygrywa nad wykrytą', () => {
+    expect(
+      chipMoreInfoEntity(hass, entries, {
+        type: 'temperature',
+        entity: 'sensor.kuchnia_temp',
+      } as ChipConfig),
+    ).toBe('sensor.kuchnia_temp');
+  });
+
+  it('brak czujnika, nieznana encja albo tap_action: none = chip nieklikalny', () => {
+    expect(chipMoreInfoEntity(hass, [], { type: 'temperature' } as ChipConfig)).toBeUndefined();
+    expect(
+      chipMoreInfoEntity(hass, entries, { type: 'entity', entity: 'switch.literowka' } as ChipConfig),
+    ).toBeUndefined();
+    expect(
+      chipMoreInfoEntity(hass, entries, {
+        type: 'temperature',
+        tap_action: { action: 'none' },
+      } as ChipConfig),
+    ).toBeUndefined();
+  });
+
+  it('chip encji: more-info swojej encji; chipy zbiorcze: nic (mają listę)', () => {
+    expect(
+      chipMoreInfoEntity(hass, entries, { type: 'entity', entity: 'switch.ekspres' } as ChipConfig),
+    ).toBe('switch.ekspres');
+    expect(chipMoreInfoEntity(hass, entries, { type: 'lights' } as ChipConfig)).toBeUndefined();
+  });
+});
+
+describe('chipDefaultTap', () => {
+  const hass = makeHass({
+    'sensor.t': entity('sensor.t', '21.5', { device_class: 'temperature' }),
+    'sensor.h': entity('sensor.h', '45', { device_class: 'humidity' }),
+    'switch.ekspres': entity('switch.ekspres', 'off'),
+  });
+  const entries = [entry('sensor.t'), entry('sensor.h')];
+
+  it('temperatura/wilgotność w karcie pokoju: more-info czujnika, nie martwy chip', () => {
+    expect(chipDefaultTap(hass, entries, { type: 'temperature' } as ChipConfig)).toEqual({
+      kind: 'more-info',
+      entityId: 'sensor.t',
+    });
+    expect(chipDefaultTap(hass, entries, { type: 'humidity' } as ChipConfig)).toEqual({
+      kind: 'more-info',
+      entityId: 'sensor.h',
+    });
+    expect(
+      chipDefaultTap(hass, entries, { type: 'entity', entity: 'switch.ekspres' } as ChipConfig),
+    ).toEqual({ kind: 'more-info', entityId: 'switch.ekspres' });
+  });
+
+  it('chipy zbiorcze: lista', () => {
+    expect(chipDefaultTap(hass, entries, { type: 'lights' } as ChipConfig)).toEqual({
+      kind: 'list',
+    });
+  });
+
+  it('brak listy i brak czujnika = nieklikalny', () => {
+    expect(chipDefaultTap(hass, [], { type: 'temperature' } as ChipConfig)).toBeUndefined();
+    expect(chipDefaultTap(hass, entries, { type: 'template' } as ChipConfig)).toBeUndefined();
+    expect(
+      chipDefaultTap(hass, entries, { type: 'lights', show_list: false } as ChipConfig),
+    ).toBeUndefined();
   });
 });
 

@@ -18,7 +18,9 @@ import {
   type TemplateResult,
   nothing,
 } from 'lit';
+import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { ChipConfig, HomeAssistant } from './types.js';
 import { ago } from './chip-defaults.js';
@@ -31,8 +33,22 @@ import {
   tapPower,
 } from './power-pending.js';
 import { ALARM_CLASS_LABELS } from './chip-list-helpers.js';
+import { flushSwipesTouching } from './light-swipe.js';
 import { lightColorOf } from './tile-data.js';
 import { pushEscapeLayer } from './escape-stack.js';
+import { isDimmable } from './light-dimming.js';
+import {
+  COVER_WANT_TTL_MS,
+  chipRowKind,
+  coverServiceForTap,
+  coverShownOpen,
+  coverShownPos,
+  isControlDomain,
+  sliderPct,
+  type ChipRowKind,
+  type CoverTarget,
+  type CoverWant,
+} from './chip-list-control.js';
 
 interface AreaGroup {
   /** Area ID albo pusty string dla „Bez pomieszczenia". */
@@ -173,7 +189,49 @@ export class StratumChipList extends LitElement {
   }
 
   private _canControl(domain: string): boolean {
-    return domain === 'light' || domain === 'switch' || domain === 'cover';
+    return isControlDomain(domain);
+  }
+
+  /**
+   * Ostatnia znana jasność (%) lampy w tej sesji listy — suwak zgaszonej
+   * lampy stoi na niej (przygaszony), zamiast znikać i skracać wiersz.
+   */
+  private _lastPct = new Map<string, number>();
+
+  /** Oczekiwany stan przełącznika rolety po tapnięciu (patrz coverShownOpen). */
+  private _coverWant = new Map<string, CoverWant>();
+
+  /** Cel suwaka rolety trzymany do dojechania (patrz coverShownPos). */
+  private _coverTarget = new Map<string, CoverTarget>();
+
+  private _rowKind(id: string): ChipRowKind {
+    return chipRowKind(id.split('.')[0] ?? '', this.hass?.states?.[id]);
+  }
+
+  /**
+   * „Włączony" w sensie przełącznika wiersza. Roleta: otwarta/otwierająca
+   * się (HA nigdy nie mówi o niej `on`), z uwzględnieniem świeżego tapu.
+   * Reszta: stan z power-pending (natychmiastowa reakcja na tap).
+   */
+  private _isOn(id: string): boolean {
+    if (!id.startsWith('cover.')) return isOnEffective(this.hass, id);
+    const shown = coverShownOpen(
+      this.hass?.states?.[id]?.state,
+      this._coverWant.get(id),
+      Date.now(),
+    );
+    if (shown.settled) this._coverWant.delete(id);
+    return shown.open;
+  }
+
+  /**
+   * Co „Wyłącz wszystkie" naprawdę wyłączy: sterowalne, dostępne i pokazane
+   * jako włączone. Jedna reguła dla widoczności stopki, licznika na
+   * przycisku i samej komendy — dawniej licznik doliczał każdą roletę,
+   * a stopka żadnej, więc lista „Otwarte rolety" nie miała stopki wcale.
+   */
+  private _offTargets(ids: readonly string[]): string[] {
+    return ids.filter((id) => this._rowKind(id) === 'control' && this._isOn(id));
   }
 
   /** Zwraca mapę domain → ids dla zbioru encji — do master off. */
@@ -190,34 +248,56 @@ export class StratumChipList extends LitElement {
   /** Master off dla zbioru encji — iteruje po domenach. */
   private _masterOffAll(ids: string[]): void {
     if (!this.hass) return;
-    const byDomain = this._splitByDomain(ids);
-    for (const [domain, list] of byDomain) {
-      if (!this._canControl(domain)) continue;
-      const service = domain === 'cover' ? 'close_cover' : 'turn_off';
-      // Tylko to, co faktycznie włączone — bez komend do już zgaszonych.
-      const targets =
-        domain === 'cover' ? list : list.filter((id) => isOnEffective(this.hass, id));
-      if (targets.length === 0) continue;
-      if (domain !== 'cover') markPower(this.hass, targets, 'off');
+    // Tylko to, co faktycznie włączone — bez komend do już zgaszonych
+    // i zamkniętych, i bez komend do encji niedostępnych.
+    const byDomain = this._splitByDomain(this._offTargets(ids));
+    for (const [domain, targets] of byDomain) {
+      if (domain === 'cover') {
+        this._wantCovers(targets, false);
+        void Promise.resolve(
+          this.hass.callService('cover', 'close_cover', {}, { entity_id: targets }),
+        ).catch(() => this._forgetCovers(targets));
+        continue;
+      }
+      // Odroczona komenda gestu na tych światłach idzie pierwsza — inaczej
+      // przyszłaby po naszym turn_off i go nadpisała. Cofnięcie przez zbiór
+      // z markPower: nieudana komenda nie kasuje nowszego tapnięcia.
+      flushSwipesTouching(targets);
+      const marked = markPower(this.hass, targets, 'off');
       void Promise.resolve(
-        this.hass.callService(domain, service, {}, { entity_id: targets }),
-      ).catch(() => clearPower(targets));
+        this.hass.callService(domain, 'turn_off', {}, { entity_id: targets }),
+      ).catch(() => clearPower(marked));
     }
   }
 
-  /** Czy jakiekolwiek encje w zbiorze są kontrolowalne i ON. */
-  private _hasControllableOn(ids: string[]): boolean {
-    return ids.some((id) => {
-      const domain = id.split('.')[0] ?? '';
-      if (!this._canControl(domain)) return false;
-      return isOnEffective(this.hass, id);
-    });
+  /** Przełącznik rolety przestawia się od razu, zanim silnik zgłosi kierunek. */
+  private _wantCovers(ids: readonly string[], open: boolean): void {
+    const at = Date.now();
+    for (const id of ids) this._coverWant.set(id, { open, at });
+    this.requestUpdate();
+    // Bez potwierdzenia z HA przełącznik ma wrócić do prawdy, a nie wisieć.
+    window.setTimeout(() => this.requestUpdate(), COVER_WANT_TTL_MS + 50);
+  }
+
+  private _forgetCovers(ids: readonly string[]): void {
+    for (const id of ids) this._coverWant.delete(id);
+    this.requestUpdate();
   }
 
   private _toggle(entity_id: string): void {
     if (!this.hass) return;
     const domain = entity_id.split('.')[0] ?? '';
-    if (!this._canControl(domain)) return;
+    if (this._rowKind(entity_id) !== 'control') return;
+    if (domain === 'cover') {
+      // Jawne otwórz/zamknij wg tego, co pokazuje przełącznik — `toggle`
+      // odwracał stan z HA, więc „włącz" przy otwartej rolecie ją zamykał.
+      const open = this._isOn(entity_id);
+      this._wantCovers([entity_id], !open);
+      void Promise.resolve(
+        this.hass.callService('cover', coverServiceForTap(open), {}, { entity_id }),
+      ).catch(() => this._forgetCovers([entity_id]));
+      return;
+    }
     // Jawne włącz/wyłącz ze stanu, który widać — drugi tap w trakcie nie
     // odwraca akcji, a przełącznik przestawia się od razu (power-pending.ts).
     if (tapPower(this.hass, entity_id)) return;
@@ -227,19 +307,57 @@ export class StratumChipList extends LitElement {
   private _setBrightness(entity_id: string, ev: Event): void {
     if (!this.hass) return;
     const pct = parseInt((ev.target as HTMLInputElement).value, 10);
-    void this.hass.callService('light', 'turn_on', {
-      entity_id,
-      brightness_pct: pct,
+    this._lastPct.set(entity_id, pct);
+    // Suwak stoi też przy zgaszonej lampie — przeciągnięcie zapala ją na tym
+    // poziomie (light.turn_on z brightness_pct), więc przełącznik ma się
+    // przestawić od razu, jak przy tapnięciu.
+    const marked = isOnEffective(this.hass, entity_id)
+      ? undefined
+      : markPower(this.hass, [entity_id], 'on');
+    void Promise.resolve(
+      this.hass.callService('light', 'turn_on', {
+        entity_id,
+        brightness_pct: pct,
+      }),
+    ).catch(() => {
+      if (marked) clearPower(marked);
     });
+  }
+
+  private _onCoverInput(entity_id: string, ev: Event): void {
+    const el = ev.target as HTMLInputElement;
+    el.style.setProperty('--pct', `${el.value}%`);
+    // W trakcie przeciągania kciuk należy do palca — render z raportem
+    // pozycji (roleta w ruchu) nie może go przestawić.
+    this._coverTarget.set(entity_id, { pos: Number(el.value), at: Date.now(), sent: false });
+  }
+
+  /**
+   * Koniec przeciągania bez zatwierdzenia (palec wrócił na start — wtedy
+   * `change` nie przychodzi — albo gest przerwany). Niewysłany cel znika po
+   * ewentualnym `change`, inaczej suwak zamarzałby na stałe.
+   */
+  private _endCoverDrag(entity_id: string): void {
+    const t = this._coverTarget.get(entity_id);
+    if (!t || t.sent) return;
+    window.setTimeout(() => {
+      if (this._coverTarget.get(entity_id) === t) {
+        this._coverTarget.delete(entity_id);
+        this.requestUpdate();
+      }
+    }, 0);
   }
 
   private _setCoverPosition(entity_id: string, ev: Event): void {
     if (!this.hass) return;
     const pos = parseInt((ev.target as HTMLInputElement).value, 10);
+    this._coverTarget.set(entity_id, { pos, at: Date.now(), sent: true });
     void this.hass.callService('cover', 'set_cover_position', {
       entity_id,
       position: pos,
     });
+    // Gdy roleta w ogóle nie ruszy, po 3 s suwak wraca do jej pozycji.
+    window.setTimeout(() => this.requestUpdate(), 3100);
   }
 
   private _moreInfo(entity_id: string): void {
@@ -276,12 +394,9 @@ export class StratumChipList extends LitElement {
     const visible = filter
       ? groups.find((g) => g.area_id === filter)!.entity_ids
       : groups.flatMap((g) => g.entity_ids);
-    const showFooter = this._hasControllableOn(visible);
-    // Tyle, ile „Wyłącz wszystkie" naprawdę wyłączy.
-    const offCount = visible.filter((id) => {
-      const domain = id.split('.')[0] ?? '';
-      return this._canControl(domain) && (domain === 'cover' || isOnEffective(this.hass, id));
-    }).length;
+    // Tyle, ile „Wyłącz wszystkie" naprawdę wyłączy — stopka tylko wtedy.
+    const offCount = this._offTargets(visible).length;
+    const showFooter = offCount > 0;
     return html`
       <div
         class="backdrop"
@@ -356,9 +471,42 @@ export class StratumChipList extends LitElement {
 
   private _renderRow(entity_id: string): TemplateResult {
     const domain = entity_id.split('.')[0] ?? '';
-    return this._canControl(domain)
-      ? this._renderControlRow(entity_id, domain)
-      : this._renderSensorRow(entity_id);
+    switch (this._rowKind(entity_id)) {
+      case 'offline':
+        return this._renderOfflineRow(entity_id, domain);
+      case 'control':
+        return this._renderControlRow(entity_id, domain);
+      default:
+        return this._renderSensorRow(entity_id);
+    }
+  }
+
+  /**
+   * Wiersz encji niedostępnej — ten sam wzorzec co kafel i wiersz pokoju:
+   * przekreślona ikona + plakietka „offline", bez martwego przełącznika
+   * i suwaka. Klik = more-info (diagnoza, historia).
+   */
+  private _renderOfflineRow(entity_id: string, domain: string): TemplateResult {
+    const state = this.hass?.states?.[entity_id];
+    const icon =
+      (state?.attributes?.icon as string | undefined) ??
+      this._defaultIcon(domain, false);
+    return html`
+      <button
+        class="prow offline"
+        @click=${() => this._moreInfo(entity_id)}
+        title="Więcej info"
+      >
+        <span class="bub unav-icon" aria-hidden="true">
+          <ha-icon .icon=${icon}></ha-icon>
+        </span>
+        <span class="mid">
+          <span class="nm">${this._areaOf(entity_id).name}</span>
+          <span class="sub">${this._friendlyName(entity_id)}</span>
+        </span>
+        <span class="off-pill">offline</span>
+      </button>
+    `;
   }
 
   /** Duży wiersz sterowalny: ikona + pokój/urządzenie + toggle + gruby suwak. */
@@ -367,27 +515,41 @@ export class StratumChipList extends LitElement {
     domain: string,
   ): TemplateResult {
     const state = this.hass?.states?.[entity_id];
-    const isOn = isOnEffective(this.hass, entity_id);
+    const isOn = this._isOn(entity_id);
     const name = this._friendlyName(entity_id);
     const icon =
       (state?.attributes?.icon as string | undefined) ??
       this._defaultIcon(domain, isOn);
-    const supportsDim =
-      domain === 'light' && typeof state?.attributes?.brightness === 'number';
-    const brightnessPct = supportsDim
-      ? Math.round(((state?.attributes?.brightness as number) / 255) * 100)
-      : 0;
+    // Suwak jasności stoi w wierszu zawsze, gdy lampa jest ściemnialna — też
+    // zgaszona. Dawniej był tylko przy świecącej i z raportem jasności, więc
+    // gaszenie skracało wiersz o 21 px, a następny przełącznik uciekał spod
+    // kciuka; zapalanie wydłużało go z powrotem, gdy HA odesłał jasność.
+    // supported_color_modes HA podaje także dla zgaszonej lampy; „widziana
+    // już jako ściemnialna" chroni starsze integracje bez listy trybów.
+    const dimmable =
+      domain === 'light' && (isDimmable(state) || this._lastPct.has(entity_id));
+    const slider = dimmable
+      ? sliderPct(isOn, state?.attributes?.brightness, this._lastPct.get(entity_id))
+      : undefined;
+    if (slider?.live) this._lastPct.set(entity_id, slider.pct);
     const coverPosRaw = state?.attributes?.current_position;
-    const coverPos =
-      domain === 'cover' && typeof coverPosRaw === 'number'
-        ? Math.round(coverPosRaw)
-        : undefined;
+    let coverPos: number | undefined;
+    if (domain === 'cover' && typeof coverPosRaw === 'number') {
+      const shown = coverShownPos(
+        Math.round(coverPosRaw),
+        state?.state,
+        this._coverTarget.get(entity_id),
+        Date.now(),
+      );
+      if (shown.settled) this._coverTarget.delete(entity_id);
+      coverPos = shown.pos;
+    }
     const lightColor =
       domain === 'light' && isOn ? lightColorOf(state) : undefined;
     // Pokój wyboldowany u góry, pod spodem urządzenie (+ % gdy jest).
     const area = this._areaOf(entity_id).name;
     const hintParts: string[] = [name];
-    if (supportsDim && isOn) hintParts.push(`${brightnessPct}%`);
+    if (slider && isOn) hintParts.push(`${slider.pct}%`);
     if (coverPos !== undefined) hintParts.push(`${coverPos}%`);
     const sub = hintParts.join(' · ');
 
@@ -418,15 +580,16 @@ export class StratumChipList extends LitElement {
             <span class="toggle-knob"></span>
           </button>
         </div>
-        ${supportsDim && isOn
+        ${slider
           ? html`<input
               type="range"
               class="bri-slider"
               min="1"
               max="100"
               step="1"
-              style="--pct:${brightnessPct}%;"
-              .value=${String(brightnessPct)}
+              aria-label=${name}
+              style="--pct:${slider.pct}%;"
+              .value=${String(Math.max(1, slider.pct))}
               @input=${(ev: Event) => {
                 const el = ev.target as HTMLInputElement;
                 el.style.setProperty('--pct', `${el.value}%`);
@@ -436,18 +599,24 @@ export class StratumChipList extends LitElement {
             />`
           : nothing}
         ${coverPos !== undefined
-          ? html`<input
+          ? // live() i styleMap porównują z DOM-em / zapisują przy każdym
+            // renderze, a nie z ostatnią wartością zatwierdzoną przez Lita.
+            // Przeciąganie zmienia suwak poza Litem (`_onCoverInput`), więc
+            // zwykłe wiązanie widziało „50 → 50" i pomijało zapis: gdy roleta
+            // nie ruszyła albo gest przerwano, suwak zostawał na 80% na stałe.
+            html`<input
               type="range"
               class="bri-slider"
               min="0"
               max="100"
               step="1"
-              style="--pct:${coverPos}%;"
-              .value=${String(coverPos)}
-              @input=${(ev: Event) => {
-                const el = ev.target as HTMLInputElement;
-                el.style.setProperty('--pct', `${el.value}%`);
-              }}
+              aria-label=${name}
+              style=${styleMap({ '--pct': `${coverPos}%` })}
+              .value=${live(String(coverPos))}
+              @input=${(ev: Event) => this._onCoverInput(entity_id, ev)}
+              @pointerup=${() => this._endCoverDrag(entity_id)}
+              @pointercancel=${() => this._endCoverDrag(entity_id)}
+              @blur=${() => this._endCoverDrag(entity_id)}
               @change=${(ev: Event) => this._setCoverPosition(entity_id, ev)}
               @click=${(ev: Event) => ev.stopPropagation()}
             />`
@@ -502,7 +671,7 @@ export class StratumChipList extends LitElement {
   private _defaultIcon(domain: string, on: boolean): string {
     if (domain === 'light') return on ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline';
     if (domain === 'switch') return on ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off-outline';
-    if (domain === 'cover') return 'mdi:window-shutter';
+    if (domain === 'cover') return on ? 'mdi:window-shutter-open' : 'mdi:window-shutter';
     if (domain === 'binary_sensor') return 'mdi:motion-sensor';
     return 'mdi:label-outline';
   }
@@ -786,6 +955,9 @@ export class StratumChipList extends LitElement {
       transform: translateX(22px);
     }
 
+    /* Tor bez bieli: rgba(255,255,255,.12) znikał na jasnym motywie HA.
+       Kciuk i cień z tokenów --stratum-ink-* (definiowanych przez kartę,
+       w której lista jest osadzona). */
     .bri-slider {
       -webkit-appearance: none;
       appearance: none;
@@ -795,11 +967,18 @@ export class StratumChipList extends LitElement {
       border-radius: 999px;
       background: linear-gradient(
         90deg,
-        var(--c, var(--accent, var(--primary-color, #ff9b42))) var(--pct, 0%),
-        rgba(255, 255, 255, 0.12) var(--pct, 0%)
+        var(--c, var(--accent, var(--primary-color))) var(--pct, 0%),
+        color-mix(in srgb, var(--primary-text-color) 12%, transparent) var(--pct, 0%)
       );
       cursor: pointer;
-      outline: none;
+      transition: opacity 0.15s ease;
+    }
+
+    /* Suwak zgaszonej lampy zostaje na miejscu (stała wysokość wiersza),
+       tylko przygaszony — nadal działa: przeciągnięcie zapala lampę na
+       wybranym poziomie. */
+    .crow:not(.active) .bri-slider {
+      opacity: 0.45;
     }
 
     .bri-slider::-webkit-slider-thumb {
@@ -808,9 +987,9 @@ export class StratumChipList extends LitElement {
       width: 22px;
       height: 22px;
       border-radius: 50%;
-      background: #fff;
+      background: var(--stratum-ink-tint);
       border: 0;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 1px 4px color-mix(in srgb, var(--stratum-ink-shade) 45%, transparent);
       cursor: pointer;
     }
 
@@ -818,14 +997,21 @@ export class StratumChipList extends LitElement {
       width: 22px;
       height: 22px;
       border-radius: 50%;
-      background: #fff;
+      background: var(--stratum-ink-tint);
       border: 0;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 1px 4px color-mix(in srgb, var(--stratum-ink-shade) 45%, transparent);
       cursor: pointer;
     }
 
     .bri-slider:focus-visible {
-      outline: 2px solid var(--c, var(--accent, var(--primary-color, #ff9b42)));
+      outline: 2px solid var(--c, var(--accent, var(--primary-color)));
+      outline-offset: 2px;
+    }
+
+    .toggle:focus-visible,
+    .crow .bub:focus-visible,
+    .prow:focus-visible {
+      outline: 2px solid var(--accent, var(--primary-color));
       outline-offset: 2px;
     }
 
@@ -844,15 +1030,59 @@ export class StratumChipList extends LitElement {
       color: var(--primary-text-color);
       cursor: pointer;
       text-align: left;
-      transition: background 0.12s ease;
+      transition: background 0.12s ease, transform 0.1s ease;
       width: 100%;
     }
     .prow:hover {
       background: color-mix(
         in srgb,
-        var(--accent, var(--primary-color, #ff9b42)) 8%,
-        var(--secondary-background-color, rgba(255, 255, 255, 0.04))
+        var(--accent, var(--primary-color)) 8%,
+        var(--secondary-background-color)
       );
+    }
+    .prow:active {
+      transform: scale(0.98);
+    }
+
+    /* --- wiersz encji niedostępnej (wzorzec off-pill z kafla pokoju) --- */
+
+    .prow.offline .bub,
+    .prow.offline .mid {
+      opacity: 0.6;
+    }
+    .prow .unav-icon {
+      position: relative;
+    }
+    /* Przekreślenie ikony — „urządzenie nie odpowiada", nie „wyłączone". */
+    .prow .unav-icon::after {
+      content: '';
+      position: absolute;
+      left: 22%;
+      right: 22%;
+      top: 50%;
+      height: 2px;
+      border-radius: 1px;
+      background: var(--secondary-text-color);
+      transform: rotate(-40deg);
+    }
+    .off-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--secondary-text-color);
+      background: var(--stratum-surface-3);
+      border-radius: 999px;
+      padding: 2px 8px;
+      flex-shrink: 0;
+    }
+    .off-pill::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--disabled-text-color, var(--secondary-text-color));
     }
 
     .prow .bub {
@@ -940,9 +1170,14 @@ export class StratumChipList extends LitElement {
     @media (prefers-reduced-motion: reduce) {
       .backdrop,
       .panel,
-      .toggle-knob {
+      .toggle-knob,
+      .bri-slider,
+      .prow {
         animation: none;
         transition: none;
+      }
+      .prow:active {
+        transform: none;
       }
     }
   `;

@@ -41,6 +41,7 @@ import {
   CHIP_LIST_LABELS,
   alarmEntityIds,
   chipEntityIds,
+  chipMoreInfoEntity,
   chipSupportsList,
 } from './chip-list-helpers.js';
 import { TemplateRenderer } from './template-renderer.js';
@@ -53,7 +54,7 @@ import {
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
 import { LightSwipe } from './light-swipe.js';
-import { subscribePower, toggleRoomLights } from './power-pending.js';
+import { subscribePower, swipePowerHook, toggleRoomLights } from './power-pending.js';
 import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
@@ -79,7 +80,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.109.1';
+const VERSION = '1.109.2';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -105,6 +106,9 @@ export class StratumCard extends LitElement {
     popup_order?: import('./types.js').RoomPopupOrderItem[];
     popup_extra?: import('./types.js').RoomPopupExtraConfig;
     chips?: import('./types.js').ChipConfig[];
+    /** Nazwa i ikona z wiersza (RoomConfig) — popup ma mówić to samo, co wiersz. */
+    name?: string;
+    icon?: string;
   };
 
   /** Popup listy encji po kliknięciu chipa nagłówka. */
@@ -555,7 +559,8 @@ export class StratumCard extends LitElement {
       if (!value.active && !showWhenZero) continue;
       const tapSet = this._isTapActionSet(chip);
       const listAvailable = this._chipSupportsList(chip);
-      const clickable = tapSet || listAvailable;
+      const clickable =
+        tapSet || listAvailable || Boolean(chipMoreInfoEntity(this.hass, entries, chip));
       rendered.push(html`<stratum-card-chip
         .icon=${chip.icon ?? value.icon ?? resolveChipIcon(chip)}
         .label=${value.label}
@@ -606,6 +611,15 @@ export class StratumCard extends LitElement {
     }
     if (this._chipSupportsList(chip)) {
       this._openChipList(chip);
+      return;
+    }
+    // Chip jednego czujnika (temperatura, wilgotność, encja): more-info
+    // tego czujnika, jak domyślny tap encji w HA — zamiast pustej listy.
+    const entityId = this.hass
+      ? chipMoreInfoEntity(this.hass, this._getEntries(), chip)
+      : undefined;
+    if (entityId) {
+      runTapAction(this.hass, { action: 'more-info' }, { source: this, entity_id: entityId });
     }
   }
 
@@ -777,6 +791,13 @@ export class StratumCard extends LitElement {
     // Tapnięty włącznik ma się przestawić od razu, a nie po raporcie z HA.
     this._unsubPower = subscribePower(() => this.requestUpdate());
     document.addEventListener('visibilitychange', this._onVisibilityChange);
+    // Powrót z pamięci widoków HA (przełączenie widoku i z powrotem): przy
+    // odpięciu skasowaliśmy subskrypcje szablonów i zegar etykiet „5min",
+    // a odnawia je dopiero render — który bramka `shouldUpdate` przepuszcza
+    // tylko przy zmianie obserwowanej encji. Bez tego chip szablonu i „temu"
+    // stały zamrożone. Gołe requestUpdate() (pusta mapa zmian) bramka
+    // zawsze przepuszcza.
+    if (this.hasUpdated) this.requestUpdate();
   }
 
   public disconnectedCallback(): void {
@@ -1035,6 +1056,10 @@ export class StratumCard extends LitElement {
       popup_order: room.popup_order,
       popup_extra: room.popup_extra,
       chips: room.chips,
+      // Bez tych dwóch popup brał nazwę i ikonę z rejestru area — wiersz
+      // „Salon + jadalnia" otwierał popup „Salon" z inną ikoną.
+      name: room.name,
+      icon: room.icon,
     };
   }
 
@@ -1257,6 +1282,8 @@ export class StratumCard extends LitElement {
       popup_order: this._popupRoom.popup_order,
       popup_extra: this._popupRoom.popup_extra,
       chips: this._popupRoom.chips,
+      name: this._popupRoom.name,
+      icon: this._popupRoom.icon,
       scene_size_default: this._config?.rooms_scene_size,
       scene_columns_default: this._config?.rooms_scene_columns,
       scene_gradient_default: this._config?.rooms_scene_gradient,
@@ -1660,6 +1687,8 @@ export class StratumCard extends LitElement {
       popup_order?: import('./types.js').RoomPopupOrderItem[];
       popup_extra?: import('./types.js').RoomPopupExtraConfig;
       chips?: import('./types.js').ChipConfig[];
+      name?: string;
+      icon?: string;
     },
     display: 'row' | 'tile' = 'row',
     fieldEntities?: import('./types.js').TileFieldEntities,
@@ -1757,6 +1786,8 @@ export class StratumCard extends LitElement {
         .styleOverride=${tileStyleOverride}
         .clickable=${clickable}
         .offline=${roomOffline}
+        .alarmsCount=${alarmEntityIds(this.hass!, entries).length}
+        @row-alarms=${() => this._openAlarmList(areaIds)}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
           this._onRoomTap(ev, effectiveTap, popupOverrides, entries, fieldEntities, swipeKey)}
       ></stratum-card-room-tile>`;
@@ -1814,7 +1845,11 @@ export class StratumCard extends LitElement {
   private _swipeFor(key: string): LightSwipe {
     let swipe = this._swipes.get(key);
     if (!swipe) {
-      swipe = new LightSwipe(key, { hass: () => this.hass });
+      swipe = new LightSwipe(key, {
+        hass: () => this.hass,
+        // Przełącznik i licznik wiersza idą za wynikiem gestu od razu.
+        onPower: swipePowerHook(() => this.hass),
+      });
       this._swipes.set(key, swipe);
     }
     return swipe;
@@ -1881,6 +1916,8 @@ export class StratumCard extends LitElement {
       popup_order?: import('./types.js').RoomPopupOrderItem[];
       popup_extra?: import('./types.js').RoomPopupExtraConfig;
       chips?: import('./types.js').ChipConfig[];
+      name?: string;
+      icon?: string;
     },
     entries?: readonly HassEntityRegistryEntry[],
     fieldEntities?: import('./types.js').TileFieldEntities,
@@ -1952,6 +1989,8 @@ export class StratumCard extends LitElement {
       popup_order?: import('./types.js').RoomPopupOrderItem[];
       popup_extra?: import('./types.js').RoomPopupExtraConfig;
       chips?: import('./types.js').ChipConfig[];
+      name?: string;
+      icon?: string;
     },
   ): void {
     // Popup już otwarty (np. drugi tap, zanim tło przechwyciło dotyk) —
@@ -1973,6 +2012,8 @@ export class StratumCard extends LitElement {
       popup_order: overrides?.popup_order,
       popup_extra: overrides?.popup_extra,
       chips: overrides?.chips,
+      name: overrides?.name,
+      icon: overrides?.icon,
     };
     if (wasOpen) return;
     this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup());

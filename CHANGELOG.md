@@ -4,6 +4,64 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.109.2] — 2026-11-17
+
+Wygoda na telefonie z pełnego audytu karty: wiersze, popup pokoju i kafle
+encji.
+
+### Fixed (wiersze i kafle pokoi)
+- **Alarm nie zjada nazwy pokoju.** Odznaka ⚠ N zastępuje pola alarmowe
+  (wyciek, dym, gaz, problem) i zajmuje jedno miejsce w limicie pól. Na
+  wąskim wierszu (do ~450 px) pola zwijają się o poziom wcześniej, a przy
+  ≤310 px najpierw znika „+n" — przełącznik świateł zostaje zawsze.
+  „Łazienka parter" z wyciekiem na 360 px: nazwa 37 → 76 px. Na szerokim
+  wierszu (tablet, sections) alarm nie chowa temperatury ani ruchu.
+- **Kafel pokoju (`rooms_display: tile`) ma stan alarmu:** czerwona ramka
+  i ikona, odznaka otwiera listę czujników. W układzie `icon_position:
+  left` odznaka dostaje własny rząd i nie zasłania nazwy. Sam ruch nie
+  barwi już kafla kolorem świateł — obecność pokazuje kropka w rogu.
+- **Suwak od razu przestawia włącznik.** Przesunięcie do zera (albo
+  rozjaśnienie z ciemności) przełącza włącznik, licznik i podświetlenie
+  wiersza natychmiast, a nie po 1–3 s. Tapnięcie włącznika tuż po geście
+  zawsze wygrywa z odroczoną komendą gestu; nieudana komenda cofa tylko
+  własny stan, nie nowsze tapnięcie.
+- Enter/Spacja na odznace alarmu i przełączniku nie otwiera popupu.
+- **Chip temperatury/wilgotności** otwiera kartę more-info czujnika
+  zamiast pustej „Listy" (w karcie piętra i w popupie pokoju).
+- **Powrót z pamięci widoków HA** (przełączenie widoku i z powrotem):
+  szablony, etykiety „x min temu" i pasek postępu playera znów się
+  odświeżają; wynik szablonu nie mruga pustką.
+
+### Fixed (popup pokoju)
+- **Nazwa pokoju widoczna na telefonie.** Chipy w nagłówku zawijają się do
+  drugiej linii zamiast ściskać nazwę do zera (360 px: 0 → 209 px). Popup
+  bierze nazwę i ikonę z wiersza (`rooms[].name`/`icon`).
+- **Encje niedostępne zostają jako kafle offline** zamiast znikać — pokój
+  z jedyną roletą offline nie traci sekcji, licznik rolet nie skacze.
+- Podsumowanie: temperatura/wilgotność z działającego czujnika,
+  zaokrąglona jak chip, „—" zamiast „unavailable °C".
+- **Lista chipa:** wiersz lampy nie skraca się pod kciukiem po zgaszeniu
+  (suwak zostaje przygaszony); rolety — przełącznik wg otwarta/otwiera się,
+  jawne otwórz/zamknij zamiast toggle, suwak wraca do pozycji, gdy roleta
+  nie ruszy; „Wyłącz wszystkie" nie przegrywa z gestem.
+
+### Fixed (kafle encji)
+- **Tło ambient w kolorze żarówki** działa dla RGB i barwy (K) — wcześniej
+  przeglądarka odrzucała wygenerowany kolor.
+- **Player na telefonie:** przyciski ⏮ ⏯ ⏭ wg możliwości urządzenia
+  (nieobsługiwane wyszarzone), ⏯ jako play/pause jak w HA, ± przez
+  głośniej/ciszej gdy urządzenie nie ma suwaka głośności, 🎙 tylko gdy
+  głośnik odtwarza pliki. Głośność zawija się do drugiego rzędu — przy
+  300 px nic nie wystaje, pola dotyku 44 px nie nachodzą na siebie, tytuł
+  nie wchodzi pod ⏻.
+- **Krótkofalówka:** każdy błąd (brak zgody na mikrofon, brak mikrofonu,
+  403, brak `media_dirs`, sieć) daje stan błędu i komunikat HA; przycisk
+  nie wisi już na „wysyłaniu". Długi komunikat nie jest zgłaszany jako
+  błąd. Działa też z klawiatury (przytrzymaj Enter/Spację).
+- **Polskie stany kafla:** tekst stanu z tłumaczeń HA (jednostki, liczby
+  z przecinkiem), czujnik binarny wg klasy (otwarte/zamknięte,
+  wykryto/brak; nieznany — „nieznany"); koniec z „off"/„offline".
+
 ## [1.109.1] — 2026-11-17
 
 Poprawki edytora z pełnego audytu karty — edytor nie gubi już konfiguracji.

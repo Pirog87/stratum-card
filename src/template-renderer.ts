@@ -84,7 +84,13 @@ export class TemplateRenderer {
       });
   }
 
-  /** Usuwa wszystkie subskrypcje — wołać z disconnectedCallback. */
+  /**
+   * Usuwa wszystkie subskrypcje — wołać z disconnectedCallback. Ostatnie
+   * wyniki ZOSTAJĄ: karta wraca z pamięci widoków HA tym samym elementem i
+   * do odpowiedzi nowej subskrypcji ma pokazać poprzednią wartość, a nie
+   * mrugnąć pustą etykietą. Stary wynik nie wycieknie — nowa subskrypcja
+   * odsyła aktualny wynik od razu po założeniu.
+   */
   destroy(): void {
     this._gen++;
     if (this._retryTimer !== undefined) {
@@ -96,6 +102,5 @@ export class TemplateRenderer {
     }
     this._subscriptions.clear();
     this._pending.clear();
-    this._results.clear();
   }
 }

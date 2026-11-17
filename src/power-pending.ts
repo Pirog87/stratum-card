@@ -22,7 +22,14 @@ import {
   type ControllerState,
   type LightView,
 } from './light-dimming.js';
-import { controllerOpenedBySwipe, markControllersOn, markOff, rememberBeforeOff } from './light-swipe.js';
+import {
+  controllerOpenedBySwipe,
+  flushSwipesTouching,
+  markControllersOn,
+  markOff,
+  rememberBeforeOff,
+  type SwipePowerUndo,
+} from './light-swipe.js';
 
 export type PowerWant = 'on' | 'off';
 
@@ -41,9 +48,18 @@ interface Pending {
    * „inny stan → oczekiwany".
    */
   sawOther: boolean;
+  /** Które wywołanie `markPower` ustawiło wpis — patrz `clearPower`. */
+  token: number;
 }
 
 const pending = new Map<string, Pending>();
+/**
+ * Zbiór zwrócony przez `markPower` → numer tego zaznaczenia. WeakMap, bo
+ * zbiory żyją tylko w domknięciach `.catch()` wołających; po rozstrzygnięciu
+ * komendy znikają same.
+ */
+const owners = new WeakMap<ReadonlySet<string>, number>();
+let lastToken = 0;
 const listeners = new Set<(ids: ReadonlySet<string>) => void>();
 
 /** Subskrypcja zmian stanu „w toku" (ustawienie, wygaśnięcie). */
@@ -85,6 +101,7 @@ export function markPower(
     if (!expandGroups || !id.startsWith('light.')) continue;
     for (const leaf of expandLightIds(hass, [id])) all.add(leaf);
   }
+  const token = ++lastToken;
   for (const id of [...all]) {
     const actual = hass?.states?.[id]?.state;
     // Encja niedostępna nie dostaje stanu w toku — ma wyglądać na martwą,
@@ -93,8 +110,9 @@ export function markPower(
       all.delete(id);
       continue;
     }
-    pending.set(id, { want, at: now, sawOther: actual !== want });
+    pending.set(id, { want, at: now, sawOther: actual !== want, token });
   }
+  owners.set(all, token);
   notify(all);
   // Po wygaśnięciu przerysuj — jeśli HA nie potwierdził, przełącznik ma
   // wrócić do prawdy, a nie wisieć w stanie, którego nie ma.
@@ -105,11 +123,31 @@ export function markPower(
 /**
  * Komenda się nie udała — od razu wracamy do stanu z HA. Przyjmuje zbiór
  * zwrócony przez `markPower` (z rozwiniętymi członkami grup).
+ *
+ * Dla takiego zbioru kasujemy tylko wpisy, które to zaznaczenie wciąż
+ * posiada. Odmowa z ZHA potrafi przyjść po kilku sekundach — gdy w
+ * międzyczasie użytkownik tapnął przełącznik (nowe „off"), cofnięcie
+ * starego „on" kasowało jego świeży wpis i przełącznik wracał na „on"
+ * wbrew ostatniej akcji. Zwykła lista id (bez właściciela) kasuje jak dawniej.
+ *
+ * `only` — zawęża cofnięcie do encji komendy, która padła (gest wysyła
+ * kilka komend; jedna nieudana nie cofa świateł, którym komenda doszła).
  */
-export function clearPower(ids: Iterable<string>): void {
+export function clearPower(ids: Iterable<string>, only?: Iterable<string>): void {
+  const token = ids instanceof Set ? owners.get(ids) : undefined;
   const all = new Set(ids);
-  for (const id of all) pending.delete(id);
-  notify(all);
+  if (only) {
+    const keep = new Set(only);
+    for (const id of all) if (!keep.has(id)) all.delete(id);
+  }
+  for (const id of all) {
+    if (token !== undefined && pending.get(id)?.token !== token) {
+      all.delete(id);
+      continue;
+    }
+    pending.delete(id);
+  }
+  if (all.size > 0) notify(all);
 }
 
 /** Oczekiwany stan encji albo `undefined`, gdy nic nie czeka. */
@@ -259,6 +297,9 @@ const TOGGLEABLE = new Set([
 export function tapPower(hass: HomeAssistant | undefined, entityId: string): boolean {
   const domain = entityId.split('.')[0] ?? '';
   if (!hass || !TOGGLEABLE.has(domain)) return false;
+  // Zaległa komenda gestu (suwak kafla puszczony przed chwilą, czeka na
+  // falę w locie) idzie przed tapnięciem — ostatnie słowo ma tapnięcie.
+  flushSwipesTouching([entityId, ...expandLightIds(hass, [entityId])]);
   const on = isOnEffective(hass, entityId);
   const want: PowerWant = on ? 'off' : 'on';
   // Kafel segmentu WLED przy zgaszonym sterowniku: zapalamy też sterownik.
@@ -293,6 +334,12 @@ export function toggleRoomLights(
   const now = Date.now();
   const leaves = expandLightIds(hass, ids);
   const scope = leaves.length > 0 ? leaves : [...ids];
+  // Suwak wiersza puszczony przed chwilą mógł zostawić komendę czekającą
+  // na falę w locie (do 600 ms). Wysyłamy ją TERAZ, przed komendą
+  // przełącznika: przełącznik już pokazuje wynik gestu, więc tapnięcie
+  // znaczy „odwróć to", a spóźniona komenda gestu nie może go przykryć.
+  // Także dla głównego włącznika popupu — ten nie zna suwaka wiersza.
+  flushSwipesTouching(scope);
   // Decyzja tym samym kryterium, co wyświetlany stan przełącznika
   // (`anyLightOn`): inaczej pokój z jedną lampą „unknown" pokazywał
   // „wyłączone", a tapnięcie gasiło zamiast zapalić.
@@ -321,6 +368,32 @@ export function toggleRoomLights(
   void Promise.resolve(
     hass.callService('light', 'turn_on', {}, { entity_id: targets }),
   ).catch(() => clearPower(marked));
+}
+
+/**
+ * Hak `onPower` dla LightSwipe (gest jasności wiersza / kafla). Gest, który
+ * gasi pokój albo zapala go z ciemności, zaznacza stan w toku tak samo jak
+ * tapnięcie przełącznika — przełącznik, licznik i podświetlenie wiersza idą
+ * za wynikiem gestu od razu, a nie za raportami Zigbee 1–3 s później.
+ * Cofnięcie = `clearPower` zaznaczonego zbioru (komenda padła) — tylko
+ * encji nieudanej komendy i tylko wpisów, których nie nadpisało nowsze
+ * tapnięcie albo gest.
+ */
+export function swipePowerHook(
+  hass: () => HomeAssistant | undefined,
+): (ids: string[], want: PowerWant) => SwipePowerUndo {
+  return (ids, want) => {
+    const marked = markPower(hass(), ids, want);
+    return (failed) => {
+      if (!failed) {
+        clearPower(marked);
+        return;
+      }
+      // Grupa w komendzie (na wszelki wypadek) cofa też swoich członków —
+      // `marked` ma ich rozwiniętych.
+      clearPower(marked, [...failed, ...expandLightIds(hass(), failed)]);
+    };
+  };
 }
 
 /** Czy cokolwiek z zestawu świeci — z uwzględnieniem stanu w toku. */

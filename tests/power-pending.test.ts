@@ -3,13 +3,15 @@ import {
   PENDING_TTL_MS,
   anyLightOn,
   effectiveState,
+  isOnEffective,
   pendingWant,
   resetPowerPending,
   subscribePower,
+  swipePowerHook,
   tapPower,
   toggleRoomLights,
 } from '../src/power-pending.js';
-import { resetLightSwipeState } from '../src/light-swipe.js';
+import { LightSwipe, resetLightSwipeState } from '../src/light-swipe.js';
 import type { HassEntity, HomeAssistant } from '../src/types.js';
 import { entity } from './helpers.js';
 
@@ -279,5 +281,152 @@ describe('bramka zasilania tylko dla WLED (przegląd v1.109.0)', () => {
     } as unknown as HomeAssistant;
     tapPower(hass, 'light.b1');
     expect(calls).toEqual([{ service: 'turn_on', ids: ['light.b1'] }]);
+  });
+});
+
+describe('gest jasności a stan w toku (swipePowerHook)', () => {
+  it('suwak do zera: przełącznik wiersza gaśnie od razu, bez czekania na raporty', () => {
+    const { hass } = ha([on('light.a'), on('light.b')]);
+    const sw = new LightSwipe('salon', { hass: () => hass, onPower: swipePowerHook(() => hass) });
+    sw.start(['light.a', 'light.b']);
+    expect(sw.end(0).outcome).toBe('off');
+    // HA jeszcze nic nie odesłał — stany w `hass` dalej „on".
+    expect(hass.states['light.a']!.state).toBe('on');
+    expect(anyLightOn(hass, ['light.a', 'light.b'])).toBe(false);
+  });
+
+  it('suwak z ciemności: przełącznik zapala się od razu', () => {
+    const { hass } = ha([off('light.a'), off('light.b')]);
+    const sw = new LightSwipe('salon', { hass: () => hass, onPower: swipePowerHook(() => hass) });
+    sw.start(['light.a', 'light.b']);
+    sw.move(50);
+    expect(sw.end(50).outcome).toBe('set');
+    expect(isOnEffective(hass, 'light.a')).toBe(true);
+    expect(isOnEffective(hass, 'light.b')).toBe(true);
+  });
+
+  it('cofnięcie haka wraca do stanu z HA', () => {
+    const { hass } = ha([on('light.a')]);
+    const undo = swipePowerHook(() => hass)(['light.a'], 'off');
+    expect(isOnEffective(hass, 'light.a')).toBe(false);
+    undo();
+    expect(isOnEffective(hass, 'light.a')).toBe(true);
+  });
+});
+
+describe('gest a tapnięcie w oknie odroczonej komendy (przegląd #1092)', () => {
+  /** HA, którego komendy wiszą, aż `release()` je zwolni — wolne ZHA. */
+  function slowHa(initial: HassEntity[]) {
+    const base = ha(initial);
+    let hold: Array<() => void> | undefined;
+    const record = base.hass.callService;
+    base.hass.callService = ((...args: Parameters<HomeAssistant['callService']>) => {
+      void record(...args);
+      if (hold) return new Promise<void>((r) => hold!.push(r));
+      return Promise.resolve();
+    }) as HomeAssistant['callService'];
+    return {
+      ...base,
+      stall: () => {
+        hold = [];
+      },
+      release: () => {
+        const h = hold ?? [];
+        hold = undefined;
+        h.forEach((r) => r());
+      },
+    };
+  }
+
+  it('suwak do zera, potem przełącznik wiersza: turn_off gestu idzie PRZED turn_on tapnięcia', async () => {
+    const { hass, calls, stall, release } = slowHa([on('light.a'), on('light.b')]);
+    const ids = ['light.a', 'light.b'];
+    const sw = new LightSwipe('salon', { hass: () => hass, onPower: swipePowerHook(() => hass) });
+    sw.start(ids);
+    stall();
+    sw.move(40);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(sw.end(0).outcome).toBe('off');
+    // turn_off czeka na falę w locie; przełącznik już pokazuje „off".
+    expect(calls.some((c) => c.service === 'turn_off')).toBe(false);
+    expect(anyLightOn(hass, ids)).toBe(false);
+
+    toggleRoomLights(hass, ids, 'salon');
+    const tail = calls.slice(-2).map((c) => `${c.service} ${c.ids.join(',')}`);
+    expect(tail).toEqual(['turn_off light.a,light.b', 'turn_on light.a,light.b']);
+    // Odroczona komenda nie poleci drugi raz — ani po fali, ani po 600 ms.
+    const n = calls.length;
+    release();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls.length).toBe(n);
+    expect(anyLightOn(hass, ids)).toBe(true);
+  });
+
+  it('kafel: tapnięcie (tapPower) wypycha zaległą komendę suwaka tej encji', async () => {
+    const { hass, calls, stall, release } = slowHa([on('light.a')]);
+    const sw = new LightSwipe('tile:light.a', { hass: () => hass, onPower: swipePowerHook(() => hass) });
+    sw.start(['light.a']);
+    stall();
+    sw.move(40);
+    await vi.advanceTimersByTimeAsync(300);
+    sw.end(0);
+    tapPower(hass, 'light.a');
+    expect(calls.slice(-2).map((c) => c.service)).toEqual(['turn_off', 'turn_on']);
+    release();
+  });
+
+  it('tapnięcie innych świateł nie rusza zaległej komendy gestu', async () => {
+    const { hass, calls, stall, release } = slowHa([on('light.a'), on('light.z')]);
+    const sw = new LightSwipe('salon', { hass: () => hass, onPower: swipePowerHook(() => hass) });
+    sw.start(['light.a']);
+    stall();
+    sw.move(40);
+    await vi.advanceTimersByTimeAsync(300);
+    sw.end(0);
+    tapPower(hass, 'light.z');
+    const offA = () => calls.some((c) => c.service === 'turn_off' && c.ids.includes('light.a'));
+    expect(offA()).toBe(false);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(offA()).toBe(true);
+  });
+});
+
+describe('cofnięcie stanu w toku tylko przez właściciela (przegląd #1092)', () => {
+  it('spóźniona porażka gestu nie kasuje nowszego „off" z przełącznika', () => {
+    const { hass } = ha([off('light.a'), off('light.b')]);
+    const ids = ['light.a', 'light.b'];
+    const undo = swipePowerHook(() => hass)(ids, 'on');
+    expect(anyLightOn(hass, ids)).toBe(true);
+    // Użytkownik gasi przełącznikiem, zanim ZHA odrzuci zapalenie.
+    toggleRoomLights(hass, ids);
+    expect(anyLightOn(hass, ids)).toBe(false);
+    undo();
+    expect(anyLightOn(hass, ids)).toBe(false);
+    expect(pendingWant(hass, 'light.a')).toBe('off');
+  });
+
+  it('nieudana jedna komenda gestu cofa tylko jej światła', () => {
+    const { hass } = ha([off('light.a'), off('light.b')]);
+    const undo = swipePowerHook(() => hass)(['light.a', 'light.b'], 'on');
+    undo(['light.b']);
+    expect(pendingWant(hass, 'light.a')).toBe('on');
+    expect(pendingWant(hass, 'light.b')).toBeUndefined();
+  });
+
+  it('nieudane tapnięcie nie kasuje wpisu nowszego tapnięcia', async () => {
+    const { hass } = ha([on('light.a')]);
+    let reject: (e: Error) => void = () => {};
+    const ok = hass.callService;
+    hass.callService = (() =>
+      new Promise((_r, rj) => {
+        reject = rj;
+      })) as HomeAssistant['callService'];
+    tapPower(hass, 'light.a'); // „off", komenda wisi
+    hass.callService = ok;
+    tapPower(hass, 'light.a'); // „on" — ostatnia decyzja
+    reject(new Error('zha timeout'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(pendingWant(hass, 'light.a')).toBe('on');
   });
 });

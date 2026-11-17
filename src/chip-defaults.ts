@@ -162,14 +162,18 @@ function lastChangedValue(
   return { label: ago(newest), active: anyOn };
 }
 
-/** Chip temperatury/wilgotności: wartość + dynamiczna ikona i kolor (skala). */
-function climateChipValue(
+/**
+ * Czujnik, z którego chip temperatury/wilgotności bierze wartość: jawna
+ * encja z configu albo pierwszy pasujący sensor strefy. Eksportowane, bo
+ * tap w chip otwiera more-info TEGO samego czujnika (chip-list-helpers).
+ */
+export function climateChipEntity(
   hass: HomeAssistant,
   entries: readonly HassEntityRegistryEntry[],
   chip: { entity?: string },
   kind: 'temperature' | 'humidity',
-): ChipValue {
-  const id =
+): string | undefined {
+  return (
     chip.entity ??
     entries.find(
       (e) =>
@@ -177,7 +181,18 @@ function climateChipValue(
         // Jak w wierszu (firstAttrSensor): bez temperatury wewnętrznej wtyczek.
         isPrimaryEntity(hass, e) &&
         hass.states?.[e.entity_id]?.attributes?.device_class === kind,
-    )?.entity_id;
+    )?.entity_id
+  );
+}
+
+/** Chip temperatury/wilgotności: wartość + dynamiczna ikona i kolor (skala). */
+function climateChipValue(
+  hass: HomeAssistant,
+  entries: readonly HassEntityRegistryEntry[],
+  chip: { entity?: string },
+  kind: 'temperature' | 'humidity',
+): ChipValue {
+  const id = climateChipEntity(hass, entries, chip, kind);
   const st = id ? hass.states?.[id] : undefined;
   const v = st ? parseFloat(st.state) : NaN;
   if (!st || Number.isNaN(v)) return { label: '—', active: false };

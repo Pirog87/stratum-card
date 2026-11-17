@@ -1,8 +1,11 @@
 // Kafelek pomieszczenia w głównej karcie Stratum (alternatywa do row).
 //
 // Kwadratowy kafel (aspect 1/1): duża ikona area, nazwa, mini-licznik
-// świateł, indicator motion, temperatura. Gradient tła subtelny; gdy
-// pomieszczenie ma aktywne encje (światła/motion) dostaje accent.
+// świateł, indicator motion, temperatura. Gradient tła subtelny; gdy w
+// pomieszczeniu świeci światło, kafel dostaje accent (kolor świateł).
+// Sama obecność (motion) NIE barwi kafla — „żółty = światła"; obecność
+// sygnalizuje zielona ikona w rogu. Alarm (dym/gaz/wyciek/problem) wygrywa
+// ze wszystkim: czerwona ramka, czerwona ikona i odznaka ⚠ N jak w wierszu.
 
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -10,6 +13,7 @@ import type { TileDisplayConfig, TileField } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
+import { ALARM_ICONS, topAlarmField, withoutBadgeFields } from './row-fields.js';
 
 @customElement('stratum-card-room-tile')
 export class StratumCardRoomTile extends LitElement {
@@ -66,6 +70,27 @@ export class StratumCardRoomTile extends LitElement {
   /** Jasność światła (0-1) — wpływa na intensywność accentu z lights. */
   @property({ type: Number, attribute: 'lights-brightness' }) public lightsBrightness?: number;
 
+  /** Liczba aktywnych encji alarmowych — odznaka ⚠ N przy alercie (jak w wierszu). */
+  @property({ type: Number, attribute: 'alarms-count' }) public alarmsCount = 0;
+
+  /** Czy jakikolwiek alarm jest aktywny — to samo kryterium co w wierszu. */
+  private get _alarmActive(): boolean {
+    return (
+      this.smokeActive > 0 ||
+      this.gasActive > 0 ||
+      this.leakActive > 0 ||
+      this.problemActive > 0
+    );
+  }
+
+  private _onAlarmBadge = (ev: Event): void => {
+    // Odznaka ma własną akcję (lista sprawców) — nie otwiera popupu pokoju.
+    ev.stopPropagation();
+    this.dispatchEvent(
+      new CustomEvent('row-alarms', { bubbles: true, composed: true }),
+    );
+  };
+
   private _onClick = (): void => {
     if (!this.clickable) return;
     this.dispatchEvent(
@@ -79,6 +104,9 @@ export class StratumCardRoomTile extends LitElement {
 
   private _onKey = (ev: KeyboardEvent): void => {
     if (!this.clickable) return;
+    // Enter/Spacja na odznace alarmu bąbelkuje tutaj — bez tego warunku
+    // preventDefault kasował kliknięcie odznaki i otwierał popup pokoju.
+    if (ev.target !== ev.currentTarget) return;
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
       this._onClick();
@@ -87,8 +115,13 @@ export class StratumCardRoomTile extends LitElement {
 
   protected render(): TemplateResult {
     const cfg = this.displayConfig ?? {};
-    const active = this.lightsOn > 0 || this.motion;
-    const fields = cfg.fields ?? DEFAULT_FIELDS;
+    // Akcent (kolor świateł) tylko od świateł — patrz komentarz na górze.
+    const active = this.lightsOn > 0;
+    const alarmed = this._alarmActive;
+    const badge = alarmed && this.alarmsCount > 0;
+    // Odznaka niesie ikonę najważniejszego alarmu — pola alarmowe obok
+    // byłyby dublem. Dym i gaz (spoza domyślnych pól) widać dzięki odznace.
+    const fields = withoutBadgeFields(cfg.fields ?? DEFAULT_FIELDS, badge);
     const showIcon = cfg.show_icon !== false;
     const showName = cfg.show_name !== false;
     const ovr = this.conditionOverride;
@@ -102,7 +135,7 @@ export class StratumCardRoomTile extends LitElement {
       resolveColor(ovr?.accent_color) ??
       this.lightsAccent ??
       resolveColor(cfg.accent_color) ??
-      'var(--stratum-chip-lights-color, #ffc107)';
+      'var(--stratum-lights)';
     // Gdy accent pochodzi z lights, używamy brightness jako intensywność
     // ring/underline (klamrzemy do min 0.35 żeby efekt był widoczny).
     const lightsActive = Boolean(this.lightsAccent);
@@ -161,9 +194,14 @@ export class StratumCardRoomTile extends LitElement {
     const tileAnim = ovr?.animation;
     const iconAnim = ovr?.icon_animation;
 
+    const lightsOn = this.lightsOn > 0 || lightsActive;
+    const showMotion = this.motion && fields.includes('motion');
+
     return html`
       <div
-        class="tile ${effectiveActive ? 'active' : ''} ${bgImage ? 'has-bg' : ''} ${tileAnim ? `anim-${tileAnim}` : ''} ${this.offline ? 'offline' : ''}"
+        class="tile ${effectiveActive ? 'active' : ''} ${lightsOn ? 'lights-on' : ''} ${alarmed
+          ? 'alerted'
+          : ''} ${badge ? 'has-badge' : ''} ${bgImage ? 'has-bg' : ''} ${tileAnim ? `anim-${tileAnim}` : ''} ${this.offline ? 'offline' : ''}"
         part="room"
         role=${this.clickable ? 'button' : 'group'}
         tabindex=${this.clickable ? '0' : '-1'}
@@ -179,18 +217,44 @@ export class StratumCardRoomTile extends LitElement {
               <ha-icon .icon=${effectiveIcon}></ha-icon>
             </span>`
           : nothing}
-        ${this.motion && fields.includes('motion')
-          ? html`<ha-icon
-              class="motion-dot"
-              .icon=${'mdi:motion-sensor'}
-              title="Obecność"
-            ></ha-icon>`
+        ${badge || showMotion
+          ? html`<span class="corner">
+              ${badge ? this._renderAlarmBadge() : nothing}
+              ${showMotion
+                ? html`<ha-icon
+                    class="motion-dot"
+                    .icon=${'mdi:motion-sensor'}
+                    title="Obecność"
+                  ></ha-icon>`
+                : nothing}
+            </span>`
           : nothing}
         ${showName ? html`<div class="name">${this.name}</div>` : nothing}
         ${this.offline ? html`<span class="off-pill">offline</span>` : nothing}
         <div class="info">${this._renderFields(fields)}</div>
       </div>
     `;
+  }
+
+  /** Odznaka ⚠ N — ikona najważniejszego alarmu, klik otwiera listę sprawców. */
+  private _renderAlarmBadge(): TemplateResult {
+    const top = topAlarmField({
+      smoke: this.smokeActive,
+      gas: this.gasActive,
+      leak: this.leakActive,
+      problem: this.problemActive,
+    });
+    const icon = (top && ALARM_ICONS[top]) ?? 'mdi:alert';
+    return html`<button
+      class="alarm-badge"
+      part="alarm-badge"
+      title="Pokaż aktywne alarmy"
+      aria-label="Aktywne alarmy: ${this.alarmsCount}. Pokaż listę"
+      @click=${this._onAlarmBadge}
+    >
+      <ha-icon .icon=${icon} aria-hidden="true"></ha-icon>
+      ${this.alarmsCount}
+    </button>`;
   }
 
   private _renderFields(fields: TileField[]): TemplateResult[] {
@@ -274,6 +338,10 @@ export class StratumCardRoomTile extends LitElement {
   static styles = css`
     :host {
       display: block;
+      /* Warstwa tokenów kafla — jedyne miejsce na hex (instalacja bez motywu,
+         bez --error-color). Publicznym pokrętłem jest --stratum-chip-leak-color;
+         alias tylko zbiera łańcuch fallbacku dla reguł alarmu. */
+      --stratum-alarm: var(--stratum-chip-leak-color, var(--error-color, #f44336));
     }
 
     .tile {
@@ -341,14 +409,39 @@ export class StratumCardRoomTile extends LitElement {
         'icon   info  ';
       align-items: center;
     }
-    .tile[data-icon-pos='left'] .motion-dot {
+    .tile[data-icon-pos='left'] .corner {
       position: absolute;
       top: 8px;
       right: 8px;
     }
+    /* Z odznaką alarmu róg dostaje własny rządek nad nazwą. Absolutny róg
+       był dobry dla 18-px kropki obecności, ale odznaka ma ~70 px: na kaflu
+       140 px przykrywała prawie całą nazwę, a jej pole trafienia łapało
+       tapnięcia w górną połowę nazwy (row-alarms zamiast row-tap). Akurat
+       przy alarmie, kiedy najważniejsze jest, KTÓRY to pokój. Własny rządek
+       (a nie kolumna) zostawia nazwie całą szerokość obok ikony. */
+    .tile[data-icon-pos='left'].has-badge {
+      grid-template-rows: auto auto auto;
+      grid-template-areas:
+        'icon   motion'
+        'icon   name  '
+        'icon   info  ';
+    }
+    .tile[data-icon-pos='left'].has-badge .corner {
+      position: static;
+    }
 
     .icon-slot { grid-area: icon; }
-    .motion-dot { grid-area: motion; justify-self: end; align-self: start; }
+    /* Róg kafla: odznaka alarmu + kropka obecności w jednym slocie siatki
+       (dwa elementy w jednym grid-area nakładałyby się na siebie). */
+    .corner {
+      grid-area: motion;
+      justify-self: end;
+      align-self: start;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
     .name { grid-area: name; }
     .info { grid-area: info; }
 
@@ -379,15 +472,15 @@ export class StratumCardRoomTile extends LitElement {
     .tile.active {
       border-color: color-mix(
         in srgb,
-        var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107))
+        var(--stratum-room-tile-active-color, var(--stratum-lights))
           calc(40% * var(--stratum-room-tile-active-intensity, 1)),
         transparent
       );
       background: color-mix(
         in srgb,
-        var(--stratum-room-tile-active-color, var(--stratum-chip-lights-color, #ffc107))
+        var(--stratum-room-tile-active-color, var(--stratum-lights))
           calc(10% * var(--stratum-room-tile-active-intensity, 1)),
-        var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03))
+        var(--stratum-room-tile-bg)
       );
     }
 
@@ -422,15 +515,115 @@ export class StratumCardRoomTile extends LitElement {
       );
       color: var(--stratum-room-tile-icon-color, var(--primary-color, #ff9b42));
     }
-    .tile.active .icon-bubble {
-      background: color-mix(in srgb, var(--stratum-chip-lights-color, #ffc107) 22%, transparent);
-      color: var(--stratum-chip-lights-color, #ffc107);
+    /* Ikona barwi się WYŁĄCZNIE od świateł (jak w wierszu) — i kolorem
+       akcentu, nie sztywnym żółtym: accent_mode: lights i accent_color
+       mają tu działać tak samo jak na ramce. */
+    .tile.lights-on .icon-bubble {
+      background: color-mix(
+        in srgb,
+        var(--stratum-room-tile-active-color, var(--stratum-lights)) 22%,
+        transparent
+      );
+      color: var(--stratum-room-tile-active-color, var(--stratum-lights));
     }
     .icon-flat {
-      color: var(--stratum-room-tile-icon-color, var(--primary-color, #ff9b42));
+      color: var(--stratum-room-tile-icon-color, var(--primary-color));
     }
-    .tile.active .icon-flat {
-      color: var(--stratum-room-tile-icon-color, var(--stratum-chip-lights-color, #ffc107));
+    .tile.lights-on .icon-flat {
+      color: var(
+        --stratum-room-tile-icon-color,
+        var(--stratum-room-tile-active-color, var(--stratum-lights))
+      );
+    }
+
+    /* Alarm wygrywa z akcentem i z accent_color z warunków (te idą przez
+       zmienną, nie inline) — stąd reguły PO .active / .lights-on. */
+    .tile.alerted {
+      border-color: color-mix(
+        in srgb,
+        var(--stratum-alarm) 50%,
+        transparent
+      );
+      background: color-mix(
+        in srgb,
+        var(--stratum-alarm) 10%,
+        var(--stratum-room-tile-bg)
+      );
+    }
+    .tile.alerted .icon-bubble {
+      background: color-mix(
+        in srgb,
+        var(--stratum-alarm) 18%,
+        transparent
+      );
+      color: var(--stratum-alarm);
+    }
+    .tile.alerted .icon-flat {
+      color: var(--stratum-alarm);
+    }
+
+    /* Odznaka ⚠ N — ten sam wzór co w wierszu (stratum-card-room-row). */
+    .alarm-badge {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1.5px solid
+        color-mix(in srgb, var(--stratum-alarm) 65%, transparent);
+      background: color-mix(
+        in srgb,
+        var(--stratum-alarm) 18%,
+        transparent
+      );
+      color: var(--stratum-alarm);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: background 0.12s ease, transform 0.1s ease;
+    }
+    .alarm-badge ha-icon {
+      --mdc-icon-size: 14px;
+    }
+    /* Pole trafienia ~44 px wysokości bez zmiany wyglądu — odznaka leży w
+       rogu kafla, a chybienie otwiera popup pokoju zamiast listy alarmów. */
+    .alarm-badge::after {
+      content: '';
+      position: absolute;
+      inset: -12px -4px;
+      border-radius: 999px;
+    }
+    /* W układzie 'left' pod odznaką jest nazwa (6 px odstępu siatki) —
+       pole trafienia rośnie w górę, do krawędzi kafla, a w dół tylko
+       w obrębie odstępu, żeby nie zabierać tapnięć nazwie. */
+    .tile[data-icon-pos='left'] .alarm-badge::after {
+      inset: -12px -4px -4px;
+    }
+    .alarm-badge:hover:not(:disabled) {
+      background: color-mix(
+        in srgb,
+        var(--stratum-alarm) 28%,
+        transparent
+      );
+    }
+    .alarm-badge:focus-visible {
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline-offset: 2px;
+    }
+    .alarm-badge:active {
+      transform: scale(0.96);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .alarm-badge {
+        transition: none;
+      }
+      .alarm-badge:active {
+        transform: none;
+      }
     }
 
     /* --- Animacje dla tile (z reguł warunkowych) --- */
@@ -609,7 +802,7 @@ export class StratumCardRoomTile extends LitElement {
       display: inline-flex;
       align-items: center;
       gap: 3px;
-      color: var(--stratum-chip-leak-color, #f44336);
+      color: var(--stratum-alarm);
       font-weight: 600;
     }
     .leak ha-icon { --mdc-icon-size: 14px; }

@@ -1152,6 +1152,11 @@ export interface HomeAssistant {
   callWS?: <T>(msg: Record<string, unknown>) => Promise<T>;
   /** Zalogowany użytkownik — do bramkowania funkcji admin-only (intercom). */
   user?: { is_admin?: boolean };
+  /**
+   * Stan encji słowami (HA ≥ 2023.9): tłumaczenia integracji, jednostka,
+   * separator dziesiętny z profilu. Starsze HA — brak, wtedy fallback.
+   */
+  formatEntityState?: (stateObj: HassEntity, state?: string) => string;
   /** Uwierzytelniony fetch do REST API HA — używany do uploadu obrazów. */
   fetchWithAuth?: (path: string, init?: RequestInit) => Promise<Response>;
   /** WebSocket connection — używamy do subskrypcji render_template. */
