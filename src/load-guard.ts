@@ -17,6 +17,8 @@
 // Moduł czysty: rejestr i magazyn wersji są wstrzykiwane, więc Vitest
 // sprawdza go bez DOM-u.
 
+import { localize, type LangSource } from './localize/localize.js';
+
 /** Minimalny kształt CustomElementRegistry, którego potrzebujemy. */
 export interface ElementRegistry {
   get(name: string): unknown;
@@ -89,14 +91,20 @@ export function installLoadGuard(
   };
 }
 
-/** Komunikat do konsoli dla kopii-duplikatu. */
-export function duplicateLoadNotice(activeVersion: string | undefined, thisVersion: string): string {
-  const active = activeVersion ? `v${activeVersion}` : 'starsza kopia bez znacznika wersji';
-  return (
-    `Stratum załadowany dwukrotnie: aktywna jest ${active}, ta kopia (v${thisVersion}) ` +
-    'została pominięta. Usuń zdublowany zasób Lovelace (np. /local/stratum-card.js ' +
-    'obok /hacsfiles/stratum-card/stratum-card.js) i odśwież przeglądarkę.'
-  );
+/**
+ * Komunikat do konsoli dla kopii-duplikatu. Czyta go użytkownik szukający
+ * przyczyny „starej wersji", więc idzie w jego języku (`lang` — zwykle
+ * `<html lang>`, bo przy ładowaniu bundla nie ma jeszcze `hass`).
+ */
+export function duplicateLoadNotice(
+  activeVersion: string | undefined,
+  thisVersion: string,
+  lang?: LangSource,
+): string {
+  const active = activeVersion
+    ? `v${activeVersion}`
+    : localize(lang, 'console.older_copy');
+  return localize(lang, 'console.duplicate_load', { active, version: thisVersion });
 }
 
 /**

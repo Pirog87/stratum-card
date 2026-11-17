@@ -34,6 +34,7 @@ import {
   withoutBadgeFields,
 } from './row-fields.js';
 import { iconActionLabel } from './icon-action-label.js';
+import { localize } from './localize/localize.js';
 
 // Kolejność wyświetlania pól = kolejność listy `fields` w configu
 // (od v1.85 zmienialna strzałkami w edytorze).
@@ -163,6 +164,12 @@ export class StratumCardRoomRow extends LitElement {
 
   /** Całe pomieszczenie niedostępne (wszystkie encje unavailable). */
   @property({ type: Boolean }) public offline = false;
+
+  /**
+   * Język UI (`langOf(hass)` z karty) — wiersz nie dostaje całego `hass`,
+   * a teksty (plakietka, podpisy, aria) muszą iść za profilem użytkownika.
+   */
+  @property({ attribute: false }) public uiLang?: string;
 
   /**
    * Poziom (%) nadpisujący wypełnienie: pozycja palca w trakcie gestu, a po
@@ -826,7 +833,7 @@ export class StratumCardRoomRow extends LitElement {
               role=${this.iconTappable ? 'button' : nothing}
               tabindex=${this.iconTappable ? '0' : nothing}
               aria-label=${this.iconTappable
-                ? iconActionLabel(this.name, this.iconAction)
+                ? iconActionLabel(this.name, this.iconAction, this.uiLang)
                 : nothing}
               @click=${this._onIconClick}
               @keydown=${this._onIconKey}
@@ -864,14 +871,16 @@ export class StratumCardRoomRow extends LitElement {
           : html`<span class="name-spacer"></span>`}
         <div class="info">
           ${this.offline
-            ? html`<span class="off-pill">offline</span>`
+            ? html`<span class="off-pill">${localize(this.uiLang, 'common.offline')}</span>`
             : nothing}
           ${badge ? this._renderAlarmBadge() : nothing}
           ${(twoLine ? split!.right : single!.shown).map((f) => this._renderField(f))}
           ${!hideMore && (twoLine ? split!.hiddenCount : single!.hiddenCount) > 0
             ? html`<span
                 class="field more"
-                title="${twoLine ? split!.hiddenCount : single!.hiddenCount} więcej"
+                title=${localize(this.uiLang, 'row.more_hidden', {
+                  count: twoLine ? split!.hiddenCount : single!.hiddenCount,
+                })}
                 >+${twoLine ? split!.hiddenCount : single!.hiddenCount}</span
               >`
             : nothing}
@@ -896,8 +905,8 @@ export class StratumCardRoomRow extends LitElement {
     return html`<button
       class="alarm-badge"
       part="alarm-badge"
-      title="Pokaż aktywne alarmy"
-      aria-label="Aktywne alarmy: ${this.alarmsCount}. Pokaż listę"
+      title=${localize(this.uiLang, 'common.show_alarms')}
+      aria-label=${localize(this.uiLang, 'common.alarms_aria', { count: this.alarmsCount })}
       @click=${this._onAlarmBadge}
       @pointerdown=${(pev: Event) => pev.stopPropagation()}
     >
@@ -936,7 +945,7 @@ export class StratumCardRoomRow extends LitElement {
         return html`<ha-icon
           class="field motion"
           .icon=${'mdi:motion-sensor'}
-          title="Ktoś jest w pomieszczeniu"
+          title=${localize(this.uiLang, 'row.motion')}
         ></ha-icon>`;
       case 'lights': {
         if (!this.lightsSwitch) {
@@ -956,9 +965,7 @@ export class StratumCardRoomRow extends LitElement {
           style=${glow}
           role="switch"
           aria-checked=${on}
-          title=${on
-            ? 'Wyłącz wszystkie światła w pomieszczeniu'
-            : 'Włącz wszystkie światła w pomieszczeniu'}
+          title=${localize(this.uiLang, on ? 'common.lights_all_off' : 'common.lights_all_on')}
           @click=${this._onLightsSwitch}
           @pointerdown=${(pev: Event) => pev.stopPropagation()}
         >

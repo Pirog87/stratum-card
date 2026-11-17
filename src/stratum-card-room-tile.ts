@@ -14,6 +14,7 @@ import { resolveColor } from './colors.js';
 import { resolveSceneBackground } from './scene-presets.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
 import { ALARM_ICONS, topAlarmField, withoutBadgeFields } from './row-fields.js';
+import { localize } from './localize/localize.js';
 
 @customElement('stratum-card-room-tile')
 export class StratumCardRoomTile extends LitElement {
@@ -33,6 +34,12 @@ export class StratumCardRoomTile extends LitElement {
 
   /** Całe pomieszczenie niedostępne (wszystkie encje unavailable). */
   @property({ type: Boolean }) public offline = false;
+
+  /**
+   * Język UI (`langOf(hass)` z karty) — kafel nie dostaje całego `hass`,
+   * a teksty (plakietka, podpisy, aria) muszą iść za profilem użytkownika.
+   */
+  @property({ attribute: false }) public uiLang?: string;
 
   /** Wilgotność (sformatowana, np. "54.2 %"). */
   @property({ type: String }) public humidity?: string;
@@ -225,13 +232,15 @@ export class StratumCardRoomTile extends LitElement {
                 ? html`<ha-icon
                     class="motion-dot"
                     .icon=${'mdi:motion-sensor'}
-                    title="Obecność"
+                    title=${localize(this.uiLang, 'common.presence')}
                   ></ha-icon>`
                 : nothing}
             </span>`
           : nothing}
         ${showName ? html`<div class="name">${this.name}</div>` : nothing}
-        ${this.offline ? html`<span class="off-pill">offline</span>` : nothing}
+        ${this.offline
+          ? html`<span class="off-pill">${localize(this.uiLang, 'common.offline')}</span>`
+          : nothing}
         <div class="info">${this._renderFields(fields)}</div>
       </div>
     `;
@@ -249,8 +258,8 @@ export class StratumCardRoomTile extends LitElement {
     return html`<button
       class="alarm-badge"
       part="alarm-badge"
-      title="Pokaż aktywne alarmy"
-      aria-label="Aktywne alarmy: ${this.alarmsCount}. Pokaż listę"
+      title=${localize(this.uiLang, 'common.show_alarms')}
+      aria-label=${localize(this.uiLang, 'common.alarms_aria', { count: this.alarmsCount })}
       @click=${this._onAlarmBadge}
     >
       <ha-icon .icon=${icon} aria-hidden="true"></ha-icon>

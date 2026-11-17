@@ -14,46 +14,50 @@ import type {
   SummaryField,
 } from './types.js';
 import { isCoreSectionType } from './room-block-visibility.js';
-import { SECTION_LABEL, SECTION_ICON } from './section-defaults.js';
+import { SECTION_ICON, sectionLabel } from './section-defaults.js';
 import {
   SECTION_PRESETS,
-  CATEGORY_LABELS,
   isCardInstalled,
   type PresetCategory,
   type SectionPreset,
 } from './section-presets.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
-import {
-  MODE_OPTIONS_BY_TYPE,
-  entityDomainsForType,
-  retypeSection,
-} from './section-type-change.js';
+import { entityDomainsForType, retypeSection } from './section-type-change.js';
 import { removeAt, restoreRemoved } from './editor-list-ops.js';
 import { EditorUndoController, renderUndoBar } from './editor-undo.js';
+import {
+  localize,
+  lookup,
+  messages,
+  type LangSource,
+  type MessageKey,
+} from './localize/localize.js';
+import { withCode } from './localize/with-code.js';
 
-const TYPE_OPTIONS = [
-  { value: 'summary', label: 'Podsumowanie' },
-  { value: 'scenes', label: 'Sceny' },
-  { value: 'lights', label: 'Światła' },
-  { value: 'covers', label: 'Rolety' },
-  { value: 'windows', label: 'Okna' },
-  { value: 'doors', label: 'Drzwi' },
-  { value: 'climate', label: 'Klimat' },
-  { value: 'media', label: 'Media' },
-  { value: 'fans', label: 'Wentylacja' },
-  { value: 'switches', label: 'Przełączniki' },
-  { value: 'custom', label: 'Karta custom (HA/HACS)' },
+// Kolejność opcji w dropdownach; etykiety ze słownika (src/localize/).
+const TYPE_ORDER: RoomSectionConfig['type'][] = [
+  'summary',
+  'scenes',
+  'lights',
+  'covers',
+  'windows',
+  'doors',
+  'climate',
+  'media',
+  'fans',
+  'switches',
+  'custom',
 ];
 
-const SUMMARY_FIELD_OPTIONS = [
-  { value: 'motion', label: 'Ruch / obecność' },
-  { value: 'temperature', label: 'Temperatura' },
-  { value: 'humidity', label: 'Wilgotność' },
-  { value: 'lights_on', label: 'Światła włączone' },
-  { value: 'windows_open', label: 'Otwarte okna' },
-  { value: 'doors_open', label: 'Otwarte drzwi' },
-  { value: 'battery_low', label: 'Bateria (ostrzeż)' },
-  { value: 'leak', label: 'Wyciek wody' },
+const SUMMARY_FIELD_ORDER: Array<Exclude<SummaryField, 'occupancy'>> = [
+  'motion',
+  'temperature',
+  'humidity',
+  'lights_on',
+  'windows_open',
+  'doors_open',
+  'battery_low',
+  'leak',
 ];
 
 /**
@@ -61,12 +65,18 @@ const SUMMARY_FIELD_OPTIONS = [
  * `summary` nadal ma dropdown mode w ha-form (cards/chips są specyficzne dla
  * summary i nie trafiają do section-presets).
  */
-function buildSchema(section: RoomSectionConfig) {
+function buildSchema(section: RoomSectionConfig, lang: LangSource) {
+  const m = messages(lang);
   const entityDomains = entityDomainsForType(section.type);
+  const typeOptions = TYPE_ORDER.map((value) => ({
+    value,
+    // „custom" w dropdownie ma dopisek (HA/HACS) — tytuł sekcji go nie ma.
+    label: value === 'custom' ? m.editor.sections.custom_type : m.sections[value],
+  }));
   const common = [
     {
       name: 'type',
-      selector: { select: { mode: 'dropdown', options: TYPE_OPTIONS } },
+      selector: { select: { mode: 'dropdown', options: typeOptions } },
     },
     {
       type: 'grid',
@@ -89,7 +99,10 @@ function buildSchema(section: RoomSectionConfig) {
             selector: {
               select: {
                 mode: 'dropdown',
-                options: MODE_OPTIONS_BY_TYPE.summary,
+                options: (['cards', 'chips'] as const).map((value) => ({
+                  value,
+                  label: m.editor.sections.summary_modes[value],
+                })),
               },
             },
           },
@@ -109,7 +122,14 @@ function buildSchema(section: RoomSectionConfig) {
       {
         name: 'fields',
         selector: {
-          select: { multiple: true, mode: 'list', options: SUMMARY_FIELD_OPTIONS },
+          select: {
+            multiple: true,
+            mode: 'list',
+            options: SUMMARY_FIELD_ORDER.map((value) => ({
+              value,
+              label: m.editor.sections.summary_fields[value],
+            })),
+          },
         },
       },
       ...modeField,
@@ -163,10 +183,11 @@ function buildSchema(section: RoomSectionConfig) {
           select: {
             mode: 'dropdown',
             options: [
-              { value: 'auto', label: 'Auto' },
-              { value: 1, label: '1 kolumna' },
-              { value: 2, label: '2 kolumny' },
-              { value: 3, label: '3 kolumny' },
+              { value: 'auto', label: m.editor.sections.columns_auto },
+              ...[1, 2, 3].map((n) => ({
+                value: n,
+                label: localize(lang, 'editor.sections.columns', { count: n }),
+              })),
             ],
           },
         },
@@ -178,33 +199,17 @@ function buildSchema(section: RoomSectionConfig) {
   return [...common, ...extra];
 }
 
-const LABELS: Record<string, string> = {
-  type: 'Typ sekcji',
-  title: 'Nazwa (override)',
-  icon: 'Ikona (override)',
-  entity: 'Główny odtwarzacz',
-  entities: 'Ograniczenie do encji',
-  columns: 'Liczba kolumn',
-  mode: 'Tryb wyświetlania',
-  fields: 'Co pokazać w podsumowaniu',
-  master: 'Pasek akcji zbiorczych (Otwórz / Stop / Zamknij)',
-  positions: 'Szybkie pozycje (%)',
-};
-
-const HELPERS: Record<string, string> = {
-  entity:
-    'Puste = auto: ten, który aktualnie gra (playing > pauza > włączony). Reszta w zwijanym „Pozostałe".',
-  entities: 'Puste = wszystkie encje tego typu z pomieszczenia. Wybranie kilku ogranicza.',
-  mode: 'Slider działa dla light (brightness) i cover (position).',
-  positions:
-    'Przyciski ustawiające WSZYSTKIE rolety na zadany procent. Własna wartość: wpisz liczbę i Enter. Default: 50, 75.',
-};
+// Etykiety i podpowiedzi pól ha-form: `editor.sections.labels` / `helpers`.
 
 @customElement('stratum-sections-editor')
 export class StratumSectionsEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
   @property({ attribute: false }) public sections: RoomSectionConfig[] = [];
+
+  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
+    return localize(this.hass, key, vars);
+  }
 
   /**
    * Widoczność sekcji rdzeniowych (lights/covers/media/scenes) liczona
@@ -339,7 +344,7 @@ export class StratumSectionsEditor extends LitElement {
     const prevOpen = new Set(this._open);
     // Natychmiast, ale z „Cofnij" — sekcja potrafi nieść tryb, encje
     // i szablon karty, a kosz stoi tuż obok ołówka (patrz editor-undo.ts).
-    this._undo.offer(removed.title ?? SECTION_LABEL[removed.type] ?? removed.type, () => {
+    this._undo.offer(removed.title ?? sectionLabel(removed.type, this.hass), () => {
       const restored = restoreRemoved(this.sections, next, before, index, removed);
       this._emit(restored);
       // Dokładny powrót przywraca rozwinięte formularze; inaczej zwijamy,
@@ -406,7 +411,7 @@ export class StratumSectionsEditor extends LitElement {
       <div class="stratum-list">
         ${this.sections.map((section, idx) => {
           const open = this._open.has(idx);
-          const label = section.title ?? SECTION_LABEL[section.type];
+          const label = section.title ?? sectionLabel(section.type, this.hass);
           const icon = section.icon ?? SECTION_ICON[section.type];
           const visibility = this._visibility(section);
           const hidden = visibility === 'hidden';
@@ -419,16 +424,20 @@ export class StratumSectionsEditor extends LitElement {
                 </span>
                 <span class="stratum-row-title">${label}</span>
                 ${hidden
-                  ? html`<span class="stratum-badge ghost">ukryta</span>`
+                  ? html`<span class="stratum-badge ghost"
+                      >${this._t('editor.sections.hidden_badge')}</span
+                    >`
                   : visibility === 'partial'
-                  ? html`<span class="stratum-badge ghost">częściowo ukryta</span>`
+                  ? html`<span class="stratum-badge ghost"
+                      >${this._t('editor.sections.partial_badge')}</span
+                    >`
                   : nothing}
                 <div class="stratum-row-actions">
                   <button
                     type="button"
                     class="stratum-icon-btn"
-                    title="Przesuń w górę"
-                    aria-label=${`${label}: przesuń w górę`}
+                    title=${this._t('editor.common.move_up')}
+                    aria-label=${this._t('editor.sections.move_up_named', { label })}
                     ?disabled=${idx === 0}
                     @click=${() => this._move(idx, -1)}
                   >
@@ -437,8 +446,8 @@ export class StratumSectionsEditor extends LitElement {
                   <button
                     type="button"
                     class="stratum-icon-btn"
-                    title="Przesuń w dół"
-                    aria-label=${`${label}: przesuń w dół`}
+                    title=${this._t('editor.common.move_down')}
+                    aria-label=${this._t('editor.sections.move_down_named', { label })}
                     ?disabled=${idx === this.sections.length - 1}
                     @click=${() => this._move(idx, 1)}
                   >
@@ -447,12 +456,14 @@ export class StratumSectionsEditor extends LitElement {
                   <button
                     type="button"
                     class="stratum-icon-btn"
-                    title=${hidden
-                      ? 'Pokaż'
-                      : visibility === 'partial'
-                      ? 'Ukryj oba bloki świateł'
-                      : 'Ukryj'}
-                    aria-label=${`${label}: ukryta`}
+                    title=${this._t(
+                      hidden
+                        ? 'editor.common.show'
+                        : visibility === 'partial'
+                        ? 'editor.sections.hide_both'
+                        : 'editor.common.hide',
+                    )}
+                    aria-label=${this._t('editor.sections.hidden_named', { label })}
                     aria-pressed=${hidden ? 'true' : visibility === 'partial' ? 'mixed' : 'false'}
                     @click=${() => this._toggleHidden(idx)}
                   >
@@ -464,8 +475,11 @@ export class StratumSectionsEditor extends LitElement {
                   <button
                     type="button"
                     class="stratum-icon-btn ${open ? 'accent' : ''}"
-                    title=${open ? 'Zwiń' : 'Edytuj'}
-                    aria-label=${`${label}: ${open ? 'zwiń' : 'edytuj'}`}
+                    title=${this._t(open ? 'editor.common.collapse' : 'editor.common.edit')}
+                    aria-label=${this._t(
+                      open ? 'editor.sections.collapse_named' : 'editor.sections.edit_named',
+                      { label },
+                    )}
                     aria-expanded=${open ? 'true' : 'false'}
                     @click=${() => this._toggleEdit(idx)}
                   >
@@ -474,8 +488,8 @@ export class StratumSectionsEditor extends LitElement {
                   <button
                     type="button"
                     class="stratum-icon-btn danger"
-                    title="Usuń"
-                    aria-label=${`Usuń sekcję ${label}`}
+                    title=${this._t('editor.common.remove')}
+                    aria-label=${this._t('editor.sections.remove_named', { label })}
                     @click=${() => this._remove(idx)}
                   >
                     <ha-icon .icon=${'mdi:delete-outline'} aria-hidden="true"></ha-icon>
@@ -488,20 +502,19 @@ export class StratumSectionsEditor extends LitElement {
                     <ha-form
                       .hass=${this.hass}
                       .data=${this._formData(section)}
-                      .schema=${buildSchema(section)}
-                      .computeLabel=${(s: { name: string }) => LABELS[s.name] ?? s.name}
-                      .computeHelper=${(s: { name: string }) => HELPERS[s.name] ?? ''}
+                      .schema=${buildSchema(section, this.hass)}
+                      .computeLabel=${(s: { name: string }) =>
+                        lookup(messages(this.hass).editor.sections.labels, s.name) ?? s.name}
+                      .computeHelper=${(s: { name: string }) =>
+                        lookup(messages(this.hass).editor.sections.helpers, s.name) ?? ''}
                       @value-changed=${(ev: CustomEvent<{ value: Partial<RoomSectionConfig> }>) =>
                         this._onFieldChange(idx, ev)}
                     ></ha-form>
                     ${section.type === 'custom'
                       ? html`<div class="card-yaml">
-                          <label>Konfiguracja karty (YAML)</label>
+                          <label>${this._t('editor.sections.card_yaml')}</label>
                           <p class="card-hint">
-                            Wklej dowolny config karty HA/HACS:
-                            <code>type: media-control</code>,
-                            <code>type: custom:mushroom-light-card</code>,
-                            <code>type: custom:bubble-card</code> itd.
+                            ${withCode(this._t('editor.sections.card_yaml_hint'))}
                           </p>
                           <ha-yaml-editor
                             .defaultValue=${section.card ?? {}}
@@ -515,15 +528,9 @@ export class StratumSectionsEditor extends LitElement {
                     section.type !== 'summary' &&
                     (section.mode ?? '').startsWith('custom:')
                       ? html`<div class="card-yaml">
-                          <label>Template karty (YAML)</label>
+                          <label>${this._t('editor.sections.template_yaml')}</label>
                           <p class="card-hint">
-                            Extra pola merge'owane z auto-configiem per encja.
-                            Np. dla <code>custom:mushroom-light-card</code>:
-                            <code>fill_container: true</code>,
-                            <code>icon_color: amber</code>,
-                            <code>use_light_color: true</code>. Nie wpisuj
-                            <code>type</code> ani <code>entity</code> — wygrywa
-                            auto-config.
+                            ${withCode(this._t('editor.sections.template_yaml_hint'))}
                           </p>
                           <ha-yaml-editor
                             .defaultValue=${section.card_template ?? {}}
@@ -539,7 +546,7 @@ export class StratumSectionsEditor extends LitElement {
           `;
         })}
       </div>
-      ${renderUndoBar(this._undo)}
+      ${renderUndoBar(this._undo, this.hass)}
       ${this._showPresets ? this._renderPresetsPicker() : nothing}
       <div class="add-row">
         <button
@@ -547,15 +554,17 @@ export class StratumSectionsEditor extends LitElement {
           @click=${() => (this._showPresets = !this._showPresets)}
         >
           <ha-icon .icon=${this._showPresets ? 'mdi:close' : 'mdi:playlist-star'}></ha-icon>
-          ${this._showPresets ? 'Ukryj presety' : 'Dodaj sekcję z presetu'}
+          ${this._t(
+            this._showPresets ? 'editor.sections.hide_presets' : 'editor.sections.add_from_preset',
+          )}
         </button>
         <button
           class="stratum-add-btn empty-add"
-          title="Dodaj pustą sekcję Światła"
+          title=${this._t('editor.sections.add_empty_title')}
           @click=${this._add}
         >
           <ha-icon .icon=${'mdi:plus'}></ha-icon>
-          Pusta
+          ${this._t('editor.sections.add_empty')}
         </button>
       </div>
     `;
@@ -583,7 +592,7 @@ export class StratumSectionsEditor extends LitElement {
 
     return html`
       <div class="mode-picker">
-        <label class="mode-picker-label">Tryb wyświetlania</label>
+        <label class="mode-picker-label">${this._t('editor.sections.mode')}</label>
         <div class="presets-grid">
           ${relevant.map((p) => {
             const installed = !p.requires || isCardInstalled(p.requires);
@@ -594,18 +603,20 @@ export class StratumSectionsEditor extends LitElement {
                 : 'unavailable'}"
               ?disabled=${!installed}
               title=${installed
-                ? p.hint
-                : `Wymaga zainstalowanej karty: ${p.requires}`}
+                ? this._presetHint(p)
+                : this._t('editor.sections.requires', { card: p.requires ?? '' })}
               @click=${() => this._applyPresetMode(idx, p)}
             >
               <span class="preset-avatar preset-avatar-${p.category}">
                 <ha-icon .icon=${p.avatar}></ha-icon>
               </span>
               <span class="preset-body">
-                <span class="preset-title">${p.label}</span>
-                <span class="preset-hint">${p.hint}</span>
+                <span class="preset-title">${this._presetLabel(p)}</span>
+                <span class="preset-hint">${this._presetHint(p)}</span>
                 ${!installed
-                  ? html`<span class="preset-missing">Brak: ${p.requires}</span>`
+                  ? html`<span class="preset-missing"
+                      >${this._t('editor.sections.missing', { card: p.requires ?? '' })}</span
+                    >`
                   : nothing}
               </span>
               ${active
@@ -619,8 +630,7 @@ export class StratumSectionsEditor extends LitElement {
         ${!anyActive && currentMode
           ? html`<p class="mode-picker-hint">
               <ha-icon .icon=${'mdi:information-outline'}></ha-icon>
-              Aktualny tryb: <code>${currentMode}</code> — nie pasuje do żadnego
-              presetu. Kliknij dowolny preset żeby podmienić.
+              ${withCode(this._t('editor.sections.current_mode', { mode: currentMode }))}
             </p>`
           : nothing}
       </div>
@@ -636,7 +646,9 @@ export class StratumSectionsEditor extends LitElement {
           if (items.length === 0) return nothing;
           return html`
             <div class="preset-group">
-              <div class="preset-category">${CATEGORY_LABELS[cat]}</div>
+              <div class="preset-category">
+                ${messages(this.hass).editor.sections.categories[cat]}
+              </div>
               <div class="presets-grid">
                 ${items.map((preset) => this._renderPresetCard(preset))}
               </div>
@@ -647,6 +659,14 @@ export class StratumSectionsEditor extends LitElement {
     `;
   }
 
+  private _presetLabel(p: SectionPreset): string {
+    return lookup(messages(this.hass).editor.preset_labels, p.id) ?? p.id;
+  }
+
+  private _presetHint(p: SectionPreset): string {
+    return lookup(messages(this.hass).editor.preset_hints, p.id) ?? '';
+  }
+
   private _renderPresetCard(preset: SectionPreset): TemplateResult {
     const installed = !preset.requires || isCardInstalled(preset.requires);
     return html`
@@ -655,17 +675,19 @@ export class StratumSectionsEditor extends LitElement {
         ?disabled=${!installed}
         @click=${() => this._addPreset(preset)}
         title=${installed
-          ? preset.hint
-          : `Wymaga zainstalowanej karty: ${preset.requires}`}
+          ? this._presetHint(preset)
+          : this._t('editor.sections.requires', { card: preset.requires ?? '' })}
       >
         <span class="preset-avatar preset-avatar-${preset.category}">
           <ha-icon .icon=${preset.avatar}></ha-icon>
         </span>
         <span class="preset-body">
-          <span class="preset-title">${preset.label}</span>
-          <span class="preset-hint">${preset.hint}</span>
+          <span class="preset-title">${this._presetLabel(preset)}</span>
+          <span class="preset-hint">${this._presetHint(preset)}</span>
           ${!installed
-            ? html`<span class="preset-missing">Brak: ${preset.requires}</span>`
+            ? html`<span class="preset-missing"
+                >${this._t('editor.sections.missing', { card: preset.requires ?? '' })}</span
+              >`
             : nothing}
         </span>
       </button>

@@ -19,6 +19,7 @@ import {
   isPrimaryEntity,
 } from './area-entities.js';
 import { SECTION_LABEL } from './section-defaults.js';
+import { docLanguage, localize } from './localize/localize.js';
 /**
  * Auto-wybór chipów dla room card: lights + motion zawsze (nawet gdy 0),
  * windows/doors/leak tylko gdy coś aktywne. Plus entity-chipy temperatury
@@ -92,9 +93,10 @@ export function normalizeSections(
       if (!warnedSectionTypes.has(key)) {
         warnedSectionTypes.add(key);
         console.warn(
-          `[stratum-card] Nieznany typ sekcji „${key}" — pomijam. Dostępne: ${Object.keys(
-            SECTION_LABEL,
-          ).join(', ')}.`,
+          `[stratum-card] ${localize(docLanguage(), 'console.unknown_section', {
+            type: key,
+            known: Object.keys(SECTION_LABEL).join(', '),
+          })}`,
         );
       }
       continue;

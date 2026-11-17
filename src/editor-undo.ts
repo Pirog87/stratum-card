@@ -9,6 +9,7 @@
 // Kontroler trzyma tylko OSTATNIE usunięcie: kolejne zastępuje poprzednie.
 
 import { html, nothing, type ReactiveController, type ReactiveControllerHost, type TemplateResult } from 'lit';
+import { localize, type LangSource } from './localize/localize.js';
 
 /** Czas na cofnięcie — dość długi, żeby zdążyć przeczytać i trafić palcem. */
 const UNDO_TIMEOUT_MS = 8000;
@@ -71,16 +72,18 @@ export class EditorUndoController implements ReactiveController {
  * Fokus zostaje tam, gdzie był. Style: `.stratum-undo-bar` w
  * editor-shared-styles.
  */
-export function renderUndoBar(ctrl: EditorUndoController): TemplateResult {
+export function renderUndoBar(ctrl: EditorUndoController, lang?: LangSource): TemplateResult {
   const p = ctrl.pending;
   return html`<div role="status">
     ${p
       ? html`<div class="stratum-undo-bar">
           <ha-icon .icon=${'mdi:delete-outline'} aria-hidden="true"></ha-icon>
-          <span class="stratum-undo-text">Usunięto: ${p.label}</span>
+          <span class="stratum-undo-text"
+            >${localize(lang, 'undo.removed', { label: p.label })}</span
+          >
           <button type="button" class="stratum-undo-btn" @click=${() => ctrl.run()}>
             <ha-icon .icon=${'mdi:undo'} aria-hidden="true"></ha-icon>
-            Cofnij
+            ${localize(lang, 'undo.undo')}
           </button>
         </div>`
       : nothing}

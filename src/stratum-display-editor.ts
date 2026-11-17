@@ -14,6 +14,7 @@ import type {
 } from './types.js';
 import { SCENE_PRESETS } from './scene-presets.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { localize, lookup, messages, type MessageKey } from './localize/localize.js';
 import { effectiveFields } from './tile-data.js';
 import {
   moveField,
@@ -25,17 +26,18 @@ import {
 /** Typ edytora — zwykły kontrakt wyglądu, bez conditions (te są top-level). */
 export type DisplayEditorMode = 'row' | 'tile';
 
-const FIELD_META: Array<{ key: TileField; icon: string; label: string }> = [
-  { key: 'temperature', icon: 'mdi:thermometer', label: 'Temperatura' },
-  { key: 'humidity', icon: 'mdi:water-percent', label: 'Wilgotność' },
-  { key: 'lights', icon: 'mdi:lightbulb-on', label: 'Światła' },
-  { key: 'motion', icon: 'mdi:motion-sensor', label: 'Obecność' },
-  { key: 'windows', icon: 'mdi:window-open-variant', label: 'Okna' },
-  { key: 'doors', icon: 'mdi:door-open', label: 'Drzwi' },
-  { key: 'leak', icon: 'mdi:water-alert', label: 'Wyciek' },
-  { key: 'smoke', icon: 'mdi:smoke-detector-variant', label: 'Dym' },
-  { key: 'gas', icon: 'mdi:gas-cylinder', label: 'Gaz / CO' },
-  { key: 'problem', icon: 'mdi:alert-circle-outline', label: 'Problem' },
+// `label`/`hint` w tablicach poniżej to klucze słownika (src/localize/).
+const FIELD_META: Array<{ key: TileField; icon: string; label: MessageKey }> = [
+  { key: 'temperature', icon: 'mdi:thermometer', label: 'editor.fields.temperature' },
+  { key: 'humidity', icon: 'mdi:water-percent', label: 'editor.fields.humidity' },
+  { key: 'lights', icon: 'mdi:lightbulb-on', label: 'editor.fields.lights' },
+  { key: 'motion', icon: 'mdi:motion-sensor', label: 'editor.fields.motion' },
+  { key: 'windows', icon: 'mdi:window-open-variant', label: 'editor.fields.windows' },
+  { key: 'doors', icon: 'mdi:door-open', label: 'editor.fields.doors' },
+  { key: 'leak', icon: 'mdi:water-alert', label: 'editor.fields.leak' },
+  { key: 'smoke', icon: 'mdi:smoke-detector-variant', label: 'editor.fields.smoke' },
+  { key: 'gas', icon: 'mdi:gas-cylinder', label: 'editor.fields.gas' },
+  { key: 'problem', icon: 'mdi:alert-circle-outline', label: 'editor.fields.problem' },
 ];
 
 const ASPECT_PRESETS: Array<{ value: string; label: string }> = [
@@ -46,107 +48,117 @@ const ASPECT_PRESETS: Array<{ value: string; label: string }> = [
   { value: '2/1', label: '2:1' },
 ];
 
-const COLOR_SWATCHES: Array<{ key: string; color: string; label: string }> = [
-  { key: 'amber', color: '#ffc107', label: 'Amber' },
-  { key: 'green', color: '#4caf50', label: 'Zielony' },
-  { key: 'blue', color: '#2196f3', label: 'Niebieski' },
-  { key: 'red', color: '#e53935', label: 'Czerwony' },
-  { key: 'purple', color: '#9c27b0', label: 'Fioletowy' },
-  { key: 'orange', color: '#ff9800', label: 'Pomarańcz' },
-  { key: 'teal', color: '#009688', label: 'Morski' },
-  { key: 'pink', color: '#ec407a', label: 'Różowy' },
+const COLOR_SWATCHES: Array<{ key: string; color: string; label: MessageKey }> = [
+  { key: 'amber', color: '#ffc107', label: 'editor.colors.amber' },
+  { key: 'green', color: '#4caf50', label: 'editor.colors.green' },
+  { key: 'blue', color: '#2196f3', label: 'editor.colors.blue' },
+  { key: 'red', color: '#e53935', label: 'editor.colors.red' },
+  { key: 'purple', color: '#9c27b0', label: 'editor.colors.purple' },
+  { key: 'orange', color: '#ff9800', label: 'editor.colors.orange' },
+  { key: 'teal', color: '#009688', label: 'editor.colors.teal' },
+  { key: 'pink', color: '#ec407a', label: 'editor.colors.pink' },
 ];
 
-const ICON_POSITIONS: Array<{ value: IconPosition; label: string; preview: string }> = [
-  { value: 'top-left', label: 'Góra-lewo', preview: '↖' },
-  { value: 'top-right', label: 'Góra-prawo', preview: '↗' },
-  { value: 'center', label: 'Środek', preview: '●' },
-  { value: 'bottom-left', label: 'Dół-lewo', preview: '↙' },
-  { value: 'bottom-right', label: 'Dół-prawo', preview: '↘' },
-  { value: 'left', label: 'Inline', preview: '⇤' },
+const ICON_POSITIONS: Array<{ value: IconPosition; label: MessageKey; preview: string }> = [
+  { value: 'top-left', label: 'editor.display.pos_top_left', preview: '↖' },
+  { value: 'top-right', label: 'editor.display.pos_top_right', preview: '↗' },
+  { value: 'center', label: 'editor.display.pos_center', preview: '●' },
+  { value: 'bottom-left', label: 'editor.display.pos_bottom_left', preview: '↙' },
+  { value: 'bottom-right', label: 'editor.display.pos_bottom_right', preview: '↘' },
+  { value: 'left', label: 'editor.display.pos_left', preview: '⇤' },
 ];
 
 const NARROW_MODES: Array<{
   value: NonNullable<TileDisplayConfig['narrow_mode']>;
-  label: string;
+  label: MessageKey;
   icon: string;
-  hint: string;
+  hint: MessageKey;
 }> = [
   {
     value: 'fields',
-    label: 'Zwijaj pola',
+    label: 'editor.display.narrow_fields',
     icon: 'mdi:arrow-collapse-horizontal',
-    hint: 'Statusy zwijają się w chip „+N" — alarm i włącznik zostają',
+    hint: 'editor.display.narrow_fields_hint',
   },
   {
     value: 'two-line',
-    label: 'Dwie linie',
+    label: 'editor.display.narrow_two_line',
     icon: 'mdi:view-headline',
-    hint: 'Wiersz przechodzi w układ dwuliniowy',
+    hint: 'editor.display.narrow_two_line_hint',
   },
   {
     value: 'compact',
-    label: 'Kompakt',
+    label: 'editor.display.narrow_compact',
     icon: 'mdi:arrow-collapse-all',
-    hint: 'Wszystko proporcjonalnie mniejsze',
+    hint: 'editor.display.narrow_compact_hint',
   },
   {
     value: 'off',
-    label: 'Wył.',
+    label: 'editor.display.narrow_off',
     icon: 'mdi:cancel',
-    hint: 'Bez reakcji na wąskie ekrany',
+    hint: 'editor.display.narrow_off_hint',
   },
 ];
 
-const ICON_STYLES: Array<{ value: IconStyle; label: string; icon: string }> = [
-  { value: 'bubble', label: 'Bubble', icon: 'mdi:circle-slice-8' },
-  { value: 'flat', label: 'Płasko', icon: 'mdi:circle-outline' },
-  { value: 'none', label: 'Brak', icon: 'mdi:eye-off-outline' },
+const ICON_STYLES: Array<{ value: IconStyle; label: MessageKey; icon: string }> = [
+  { value: 'bubble', label: 'editor.display.icon_bubble', icon: 'mdi:circle-slice-8' },
+  { value: 'flat', label: 'editor.display.icon_flat', icon: 'mdi:circle-outline' },
+  { value: 'none', label: 'editor.common.none', icon: 'mdi:eye-off-outline' },
 ];
 
-const HOVER_EFFECTS: Array<{ value: HoverEffect; label: string }> = [
-  { value: 'none', label: 'Brak' },
-  { value: 'subtle', label: 'Subtelny' },
-  { value: 'lift', label: 'Podniesienie' },
-  { value: 'glow', label: 'Poświata' },
+const HOVER_EFFECTS: Array<{ value: HoverEffect; label: MessageKey }> = [
+  { value: 'none', label: 'editor.common.none' },
+  { value: 'subtle', label: 'editor.display.hover_subtle' },
+  { value: 'lift', label: 'editor.display.hover_lift' },
+  { value: 'glow', label: 'editor.display.hover_glow' },
 ];
 
 /** Presety kształtu wiersza — tylko mode 'row'. */
 const ROW_PRESETS: Array<{
   value: RowPreset;
-  label: string;
+  label: MessageKey;
   icon: string;
-  hint: string;
+  hint: MessageKey;
 }> = [
   {
     value: 'fill',
-    label: 'Fill',
+    label: 'editor.display.preset_fill',
     icon: 'mdi:signal',
-    hint: 'Pigułka z wypełnieniem = średnia jasność świateł (domyślny)',
+    hint: 'editor.display.preset_fill_hint',
   },
   {
     value: 'pill',
-    label: 'Pill',
+    label: 'editor.display.preset_pill',
     icon: 'mdi:capsule',
-    hint: 'Pigułka z ringiem aktywności, bez wypełnienia',
+    hint: 'editor.display.preset_pill_hint',
   },
   {
     value: 'rail',
-    label: 'Rail',
+    label: 'editor.display.preset_rail',
     icon: 'mdi:format-list-bulleted',
-    hint: 'Płaska lista z paskiem akcentu — najbardziej zwarta (dawny wygląd)',
+    hint: 'editor.display.preset_rail_hint',
   },
   {
     value: 'cards',
-    label: 'Karty',
+    label: 'editor.display.preset_cards',
     icon: 'mdi:card-outline',
-    hint: 'Miękkie karty z gradient-tintem',
+    hint: 'editor.display.preset_cards_hint',
   },
 ];
 
 @customElement('stratum-display-editor')
 export class StratumDisplayEditor extends LitElement {
   @property({ attribute: false }) public config: TileDisplayConfig = {};
+  /**
+   * Język UI (`langOf(hass)` z edytora karty). Sam kod języka zamiast
+   * `hass`: edytor wyglądu nie czyta encji, a nowe `hass` przy każdej
+   * zmianie stanu w domu przerysowywałoby cały formularz.
+   */
+  @property({ attribute: false }) public uiLang?: string;
+
+  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
+    return localize(this.uiLang, key, vars);
+  }
 
   /** Tryb edytora — `tile` pokazuje wszystkie pola, `row` ukrywa tile-only. */
   @property({ type: String }) public mode: DisplayEditorMode = 'tile';
@@ -387,47 +399,46 @@ export class StratumDisplayEditor extends LitElement {
     return html`
       ${this.mode === 'row'
         ? html`<div class="group">
-            <label class="group-label">Kształt wiersza</label>
+            <label class="group-label">${this._t('editor.display.row_shape')}</label>
             <div class="chip-row">
               ${ROW_PRESETS.map(
                 (p) => html`<button
                   type="button"
                   class="chip ${rowPreset === p.value ? 'on' : ''}"
-                  title=${p.hint}
+                  title=${this._t(p.hint)}
                   @click=${() => this._setRowPreset(p.value)}
                 >
                   <ha-icon .icon=${p.icon}></ha-icon>
-                  <span>${p.label}</span>
+                  <span>${this._t(p.label)}</span>
                 </button>`,
               )}
             </div>
             <p class="group-hint">
-              Fill (domyślny) — wypełnienie pigułki pokazuje średnią jasność
-              świateł w pokoju. Rail to dawny, najbardziej zwarty wygląd.
+              ${this._t('editor.display.row_shape_hint')}
             </p>
-            <label class="group-label sub">Układ statusów</label>
+            <label class="group-label sub">${this._t('editor.display.status_layout')}</label>
             <div class="chip-row">
               <button
                 type="button"
                 class="chip ${statusLayout === 'two-line' ? 'on' : ''}"
-                title="Temp/wilgotność/motion pod nazwą, po prawej liczniki i alarmy"
+                title=${this._t('editor.display.status_two_line_title')}
                 @click=${() => this._setStatusLayout('two-line')}
               >
                 <ha-icon .icon=${'mdi:format-align-left'}></ha-icon>
-                <span>Dwie linie</span>
+                <span>${this._t('editor.display.status_two_line')}</span>
               </button>
               <button
                 type="button"
                 class="chip ${statusLayout === 'right' ? 'on' : ''}"
-                title="Jedna linia — wszystkie statusy po prawej stronie"
+                title=${this._t('editor.display.status_right_title')}
                 @click=${() => this._setStatusLayout('right')}
               >
                 <ha-icon .icon=${'mdi:format-align-right'}></ha-icon>
-                <span>Wszystko po prawej</span>
+                <span>${this._t('editor.display.status_right')}</span>
               </button>
             </div>
             <div style="margin-top:12px">
-              ${this._renderSlider('Wysokość wiersza', 'min_height', minHeight, 40, 120, 2, 'px')}
+              ${this._renderSlider(this._t('editor.display.row_height'), 'min_height', minHeight, 40, 120, 2, 'px')}
             </div>
             <div class="toggles-row" style="margin-top:4px">
               <label class="toggle">
@@ -436,7 +447,7 @@ export class StratumDisplayEditor extends LitElement {
                   .checked=${sliderOn}
                   @change=${this._toggleSlider}
                 />
-                <span>Suwak jasności gestem (przeciągnij po wierszu)</span>
+                <span>${this._t('editor.display.slider')}</span>
               </label>
             </div>
             ${sliderOn
@@ -447,9 +458,7 @@ export class StratumDisplayEditor extends LitElement {
                       .checked=${cfg.slider_from_off !== 'none'}
                       @change=${this._toggleSliderFromOff}
                     />
-                    <span>Przeciągnięcie po ciemnym pokoju zapala światła
-                      (wyłączone: suwak tylko ściemnia i rozjaśnia to, co
-                      świeci)</span>
+                    <span>${this._t('editor.display.slider_from_off')}</span>
                   </label>
                 </div>`
               : nothing}
@@ -460,15 +469,14 @@ export class StratumDisplayEditor extends LitElement {
                   .checked=${cfg.lights_switch === true}
                   @change=${this._toggleLightsSwitch}
                 />
-                <span>Ikona świateł jako włącznik (mini-switch, tap =
-                  wł/wył wszystkich świateł)</span>
+                <span>${this._t('editor.display.lights_switch')}</span>
               </label>
             </div>
             ${cfg.lights_switch === true
               ? html`
                   <div style="margin-top:6px">
-                    ${this._renderSlider('Poświata — włączony', 'lights_switch_glow_on', cfg.lights_switch_glow_on ?? 100, 0, 100, 5, '%')}
-                    ${this._renderSlider('Poświata — wyłączony', 'lights_switch_glow_off', cfg.lights_switch_glow_off ?? 30, 0, 100, 5, '%')}
+                    ${this._renderSlider(this._t('editor.display.glow_on'), 'lights_switch_glow_on', cfg.lights_switch_glow_on ?? 100, 0, 100, 5, '%')}
+                    ${this._renderSlider(this._t('editor.display.glow_off'), 'lights_switch_glow_off', cfg.lights_switch_glow_off ?? 30, 0, 100, 5, '%')}
                   </div>
                   <div class="toggles-row" style="margin-top:4px">
                     <label class="toggle">
@@ -477,7 +485,7 @@ export class StratumDisplayEditor extends LitElement {
                         .checked=${cfg.lights_switch_show_off !== false}
                         @change=${this._toggleLightsSwitchShowOff}
                       />
-                      <span>Pokazuj przełącznik też gdy wszystko zgaszone</span>
+                      <span>${this._t('editor.display.switch_show_off')}</span>
                     </label>
                   </div>
                 `
@@ -488,10 +496,10 @@ export class StratumDisplayEditor extends LitElement {
       <details class="stratum-collapsible">
         <summary>
           <ha-icon .icon=${'mdi:format-list-bulleted-type'}></ha-icon>
-          <span>Pola sekcji info — wybór, kolejność, kolory</span>
+          <span>${this._t('editor.display.fields_section')}</span>
         </summary>
         <div class="group">
-          <label class="group-label">Pola w sekcji info</label>
+          <label class="group-label">${this._t('editor.display.fields')}</label>
           <div class="chip-row">
             ${FIELD_META.map((f) => {
               const on = fields.includes(f.key);
@@ -501,34 +509,35 @@ export class StratumDisplayEditor extends LitElement {
                 @click=${() => this._toggleField(f.key)}
               >
                 <ha-icon .icon=${f.icon}></ha-icon>
-                <span>${f.label}</span>
+                <span>${this._t(f.label)}</span>
               </button>`;
             })}
           </div>
           <p class="group-hint">
-            Wybrane wartości pokazuje zarówno kafel jak i wiersz. Kliknij żeby
-            włączyć/wyłączyć.
+            ${this._t('editor.display.fields_hint')}
           </p>
           ${fields.length > 1
             ? html`
-                <label class="group-label" style="margin-top:10px;">Kolejność pól</label>
+                <label class="group-label" style="margin-top:10px;"
+                  >${this._t('editor.display.fields_order')}</label
+                >
                 <div class="chip-row">
                   ${fields.map((key, i) => {
                     const meta = FIELD_META.find((m) => m.key === key);
                     return html`<span class="chip order-chip">
                       <button
                         class="ord"
-                        title="Wcześniej"
+                        title=${this._t('editor.display.earlier')}
                         ?disabled=${i === 0}
                         @click=${() => this._moveField(key, -1)}
                       >
                         <ha-icon .icon=${'mdi:chevron-left'}></ha-icon>
                       </button>
                       <ha-icon .icon=${meta?.icon ?? 'mdi:help'}></ha-icon>
-                      <span>${meta?.label ?? key}</span>
+                      <span>${meta ? this._t(meta.label) : key}</span>
                       <button
                         class="ord"
-                        title="Później"
+                        title=${this._t('editor.display.later')}
                         ?disabled=${i === fields.length - 1}
                         @click=${() => this._moveField(key, 1)}
                       >
@@ -538,38 +547,38 @@ export class StratumDisplayEditor extends LitElement {
                   })}
                 </div>
                 <p class="group-hint">
-                  Strzałki zmieniają kolejność wyświetlania (lewo = wcześniej).
-                  Kolejność obowiązuje na wierszu i kaflu.
+                  ${this._t('editor.display.order_hint')}
                 </p>
               `
             : nothing}
-          <label class="group-label" style="margin-top:10px;">Kolory pól</label>
+          <label class="group-label" style="margin-top:10px;"
+            >${this._t('editor.display.field_colors')}</label
+          >
           ${fields.map((key) => {
             const meta = FIELD_META.find((m) => m.key === key);
             return html`<div class="fc-row">
               <span class="fc-label">
                 <ha-icon .icon=${meta?.icon ?? 'mdi:help'}></ha-icon>
-                ${meta?.label ?? key}
+                ${meta ? this._t(meta.label) : key}
               </span>
               <input
                 type="text"
                 class="custom-input grow"
-                placeholder="domyślny (#hex, nazwa, var(--...))"
+                placeholder=${this._t('editor.display.field_color_placeholder')}
                 .value=${cfg.field_colors?.[key] ?? ''}
                 @change=${(ev: Event) => this._onFieldColor(key, ev)}
               />
             </div>`;
           })}
           <p class="group-hint">
-            Puste = kolor domyślny. Koloruje ikonę i wartość pola; dla
-            świateł także mini-switch i akcenty wiersza.
+            ${this._t('editor.display.field_colors_hint')}
           </p>
         </div>
       </details>
 
       ${this.mode === 'tile'
         ? html`<div class="group">
-            <label class="group-label">Proporcje kafla</label>
+            <label class="group-label">${this._t('editor.display.aspect')}</label>
             <div class="chip-row">
               ${ASPECT_PRESETS.map(
                 (p) => html`<button
@@ -587,7 +596,7 @@ export class StratumDisplayEditor extends LitElement {
               <input
                 type="text"
                 class="custom-input"
-                placeholder="np. 270/150"
+                placeholder=${this._t('editor.display.aspect_placeholder')}
                 .value=${customAspect}
                 @change=${this._onCustomAspect}
               />
@@ -596,23 +605,23 @@ export class StratumDisplayEditor extends LitElement {
         : nothing}
 
       <div class="group">
-        <label class="group-label">Kolor akcentu</label>
+        <label class="group-label">${this._t('editor.display.accent')}</label>
         <div class="chip-row">
           <button
             type="button"
             class="chip accent-lights ${accentFromLights ? 'on' : ''}"
-            title="Kolor i jasność akcentu z aktywnych świateł w pomieszczeniu"
+            title=${this._t('editor.display.accent_lights_title')}
             @click=${this._toggleAccentFromLights}
           >
             <ha-icon .icon=${'mdi:lightbulb-on-outline'}></ha-icon>
-            <span>Z świateł</span>
+            <span>${this._t('editor.display.accent_lights')}</span>
           </button>
           ${COLOR_SWATCHES.map(
             (s) => html`<button
               type="button"
               class="swatch ${!accentFromLights && color === s.key ? 'on' : ''}"
               style="--swatch:${s.color};"
-              title=${s.label}
+              title=${this._t(s.label)}
               ?disabled=${accentFromLights}
               @click=${() => this._setColor(s.key)}
             ></button>`,
@@ -620,7 +629,7 @@ export class StratumDisplayEditor extends LitElement {
           <input
             type="text"
             class="custom-input"
-            placeholder="#ffc107 lub var(--color)"
+            placeholder=${this._t('editor.display.accent_placeholder')}
             .value=${customColor}
             ?disabled=${accentFromLights}
             @change=${this._onCustomColor}
@@ -637,30 +646,28 @@ export class StratumDisplayEditor extends LitElement {
         </div>
         ${accentFromLights
           ? html`<p class="group-hint">
-              Akcent dynamiczny — bierze kolor z pierwszego świecącego
-              światła (rgb_color) i jasność z brightness. Kafel zmienia
-              się live gdy zmieniasz barwę żarówki.
+              ${this._t('editor.display.accent_lights_hint')}
             </p>`
           : nothing}
       </div>
 
       ${this.mode === 'tile'
         ? html`<div class="group">
-            <label class="group-label">Obrazek tła kafla</label>
+            <label class="group-label">${this._t('editor.display.bg_image')}</label>
             <div class="bg-row">
               <select
                 class="native-select"
                 .value=${bgIsPreset ? bg : customBgUrl ? '__custom__' : ''}
                 @change=${this._onBgPreset}
               >
-                <option value="">— Brak —</option>
-                <optgroup label="Presety Stratum">
+                <option value="">${this._t('editor.display.bg_none')}</option>
+                <optgroup label=${this._t('editor.display.bg_presets')}>
                   ${SCENE_PRESETS.map(
                     (p) => html`<option
                       value=${`stratum:${p.id}`}
                       ?selected=${bg === `stratum:${p.id}`}
                     >
-                      ${p.label}
+                      ${lookup(messages(this.uiLang).editor.scene_presets, p.id) ?? p.id}
                     </option>`,
                   )}
                 </optgroup>
@@ -668,14 +675,14 @@ export class StratumDisplayEditor extends LitElement {
                   value="__custom__"
                   ?selected=${!bgIsPreset && Boolean(customBgUrl)}
                 >
-                  Custom URL…
+                  ${this._t('editor.display.bg_custom')}
                 </option>
               </select>
               ${!bgIsPreset
                 ? html`<input
                     type="text"
                     class="custom-input grow"
-                    placeholder="/local/img/salon.jpg lub https://..."
+                    placeholder=${this._t('editor.display.bg_url_placeholder')}
                     .value=${customBgUrl}
                     @change=${this._onCustomBgUrl}
                   />`
@@ -691,7 +698,7 @@ export class StratumDisplayEditor extends LitElement {
             .checked=${cfg.show_icon !== false}
             @change=${(ev: Event) => this._onToggle('show_icon', ev)}
           />
-          <span>Pokaż ikonę</span>
+          <span>${this._t('editor.display.show_icon')}</span>
         </label>
         <label class="toggle">
           <input
@@ -699,18 +706,18 @@ export class StratumDisplayEditor extends LitElement {
             .checked=${cfg.show_name !== false}
             @change=${(ev: Event) => this._onToggle('show_name', ev)}
           />
-          <span>Pokaż nazwę</span>
+          <span>${this._t('editor.display.show_name')}</span>
         </label>
       </div>
 
       <details class="stratum-collapsible" open>
         <summary>
           <ha-icon .icon=${'mdi:ruler-square'}></ha-icon>
-          <span>Wymiary i zaokrąglenia</span>
+          <span>${this._t('editor.display.dimensions')}</span>
         </summary>
         <div class="stratum-collapsible-body">
           ${this._renderSlider(
-            'Zaokrąglenie rogów',
+            this._t('editor.display.radius'),
             'border_radius',
             radius,
             0,
@@ -719,15 +726,15 @@ export class StratumDisplayEditor extends LitElement {
             'px',
             // 999 px (pigułka) nie mieści się na skali 0–40 — zamiast
             // udawać 40 px mówimy wprost, co karta rysuje.
-            radius > 40 ? 'pigułka' : undefined,
+            radius > 40 ? this._t('editor.display.radius_pill') : undefined,
           )}
-          ${this._renderSlider('Wewnętrzny padding', 'padding', padding, 0, 40, 1, 'px')}
+          ${this._renderSlider(this._t('editor.display.padding'), 'padding', padding, 0, 40, 1, 'px')}
           ${this.mode === 'tile'
-            ? this._renderSlider('Min. wysokość kafla', 'min_height', minHeight, 40, 260, 2, 'px')
+            ? this._renderSlider(this._t('editor.display.tile_min_height'), 'min_height', minHeight, 40, 260, 2, 'px')
             : nothing}
           ${this.mode === 'row'
             ? html`
-                <label class="group-label sub">Wąskie ekrany (≤360 px)</label>
+                <label class="group-label sub">${this._t('editor.display.narrow')}</label>
                 <div class="chip-row">
                   ${NARROW_MODES.map(
                     (m) => html`<button
@@ -735,11 +742,11 @@ export class StratumDisplayEditor extends LitElement {
                       class="chip ${(cfg.narrow_mode ?? 'fields') === m.value
                         ? 'on'
                         : ''}"
-                      title=${m.hint}
+                      title=${this._t(m.hint)}
                       @click=${() => this._patch({ narrow_mode: m.value })}
                     >
                       <ha-icon .icon=${m.icon}></ha-icon>
-                      <span>${m.label}</span>
+                      <span>${this._t(m.label)}</span>
                     </button>`,
                   )}
                 </div>
@@ -751,14 +758,14 @@ export class StratumDisplayEditor extends LitElement {
       <details class="stratum-collapsible" open>
         <summary>
           <ha-icon .icon=${'mdi:image-outline'}></ha-icon>
-          <span>Ikona</span>
+          <span>${this._t('editor.display.icon')}</span>
         </summary>
         <div class="stratum-collapsible-body">
-          ${this._renderSlider('Rozmiar ikony', 'icon_size', iconSize, 12, 64, 1, 'px')}
+          ${this._renderSlider(this._t('editor.display.icon_size'), 'icon_size', iconSize, 12, 64, 1, 'px')}
           ${this.mode === 'row'
             ? html`
                 ${this._renderSlider(
-                  'Przesunięcie ikonki ↔',
+                  this._t('editor.display.icon_offset'),
                   'icon_offset_x',
                   cfg.icon_offset_x ?? 0,
                   -40,
@@ -767,7 +774,7 @@ export class StratumDisplayEditor extends LitElement {
                   'px',
                 )}
                 ${this._renderSlider(
-                  'Przesunięcie tła ikonki ↔',
+                  this._t('editor.display.icon_bg_offset'),
                   'icon_bg_offset_x',
                   cfg.icon_bg_offset_x ?? 0,
                   -40,
@@ -776,7 +783,7 @@ export class StratumDisplayEditor extends LitElement {
                   'px',
                 )}
                 ${this._renderSlider(
-                  'Rozmiar tła ikonki',
+                  this._t('editor.display.icon_bg_scale'),
                   'icon_bg_scale',
                   cfg.icon_bg_scale ?? 100,
                   50,
@@ -786,7 +793,7 @@ export class StratumDisplayEditor extends LitElement {
                 )}
               `
             : nothing}
-          <label class="group-label sub">Styl ikony</label>
+          <label class="group-label sub">${this._t('editor.display.icon_style')}</label>
           <div class="chip-row">
             ${ICON_STYLES.map(
               (s) => html`<button
@@ -795,23 +802,23 @@ export class StratumDisplayEditor extends LitElement {
                 @click=${() => this._setIconStyle(s.value)}
               >
                 <ha-icon .icon=${s.icon}></ha-icon>
-                <span>${s.label}</span>
+                <span>${this._t(s.label)}</span>
               </button>`,
             )}
           </div>
           ${this.mode === 'tile'
             ? html`
-                <label class="group-label sub">Pozycja ikony na kaflu</label>
+                <label class="group-label sub">${this._t('editor.display.icon_position')}</label>
                 <div class="icon-position-grid">
                   ${ICON_POSITIONS.map(
                     (p) => html`<button
                       type="button"
                       class="pos-cell ${iconPos === p.value ? 'on' : ''}"
-                      title=${p.label}
+                      title=${this._t(p.label)}
                       @click=${() => this._setIconPosition(p.value)}
                     >
                       <span class="pos-glyph">${p.preview}</span>
-                      <span class="pos-label">${p.label}</span>
+                      <span class="pos-label">${this._t(p.label)}</span>
                     </button>`,
                   )}
                 </div>
@@ -823,10 +830,10 @@ export class StratumDisplayEditor extends LitElement {
       <details class="stratum-collapsible" open>
         <summary>
           <ha-icon .icon=${'mdi:gesture-tap'}></ha-icon>
-          <span>Reakcje na dotyk</span>
+          <span>${this._t('editor.display.touch')}</span>
         </summary>
         <div class="stratum-collapsible-body">
-          <label class="group-label sub">Efekt hover</label>
+          <label class="group-label sub">${this._t('editor.display.hover')}</label>
           <div class="chip-row">
             ${HOVER_EFFECTS.map(
               (h) => html`<button
@@ -834,11 +841,11 @@ export class StratumDisplayEditor extends LitElement {
                 class="chip ${hover === h.value ? 'on' : ''}"
                 @click=${() => this._setHoverEffect(h.value)}
               >
-                ${h.label}
+                ${this._t(h.label)}
               </button>`,
             )}
           </div>
-          ${this._renderSlider('Skala przy tapnięciu', 'press_scale', press, 0.9, 1, 0.01, '×')}
+          ${this._renderSlider(this._t('editor.display.press_scale'), 'press_scale', press, 0.9, 1, 0.01, '×')}
         </div>
       </details>
     `;
@@ -860,15 +867,15 @@ export class StratumDisplayEditor extends LitElement {
       <div class="slider-row">
         <label class="slider-label">${label}</label>
         <div class="slider-value">
-          ${isSet ? nothing : html`<span class="slider-default">domyślnie</span>`}
+          ${isSet ? nothing : html`<span class="slider-default">${this._t('editor.display.default')}</span>`}
           <!-- Przycisk zostaje w DOM-ie (wyłączony, gdy nie ma czego
                przywracać): usunięty po kliknięciu zabierał ze sobą fokus
                klawiatury i trzeba było przechodzić Tabem przez cały edytor. -->
           <button
             type="button"
             class="slider-reset"
-            title="Przywróć domyślne"
-            aria-label=${`${label}: przywróć domyślne`}
+            title=${this._t('editor.display.reset')}
+            aria-label=${this._t('editor.display.reset_named', { label })}
             ?disabled=${!isSet}
             @click=${() => this._resetKey(key)}
           >

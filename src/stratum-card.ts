@@ -41,13 +41,14 @@ import {
 import { resolveTapAction, runTapAction } from './tap-action.js';
 import {
   CHIP_LIST_COLORS,
-  CHIP_LIST_LABELS,
   alarmEntityIds,
+  chipListTitle,
   chipEntityIds,
   chipMoreInfoEntity,
   chipSupportsList,
 } from './chip-list-helpers.js';
 import { TemplateRenderer } from './template-renderer.js';
+import { docLanguage, langOf, localize } from './localize/localize.js';
 import {
   addGroupMembers,
   collectEntityIds,
@@ -456,10 +457,10 @@ export class StratumCard extends LitElement {
   /** HA wymaga żeby karta miała metodę `setConfig` — rzuci tu przy błędnej konfiguracji. */
   public setConfig(config: StratumCardConfig): void {
     if (!config) {
-      throw new Error('Konfiguracja jest wymagana.');
+      throw new Error(localize(this.hass ?? docLanguage(), 'common.config_required'));
     }
     if (!config.floor_id && !config.area_id && !config.name) {
-      throw new Error('Podaj `floor_id`, `area_id` lub `name`.');
+      throw new Error(localize(this.hass ?? docLanguage(), 'card.need_target'));
     }
     // W edytorze każda zmiana formularza woła setConfig ponownie — gdybyśmy
     // za każdym razem resetowali `_expanded` do `config.expanded`, podgląd
@@ -681,7 +682,7 @@ export class StratumCard extends LitElement {
     this._showChipList({
       chip,
       entityIds,
-      label: CHIP_LIST_LABELS[chip.type] ?? 'Lista',
+      label: chipListTitle(this.hass, chip.type),
       icon: resolveChipIcon(chip) ?? 'mdi:label-outline',
       color:
         resolveChipColor(chip) ??
@@ -1449,7 +1450,7 @@ export class StratumCard extends LitElement {
             class="stratum-popup-grab"
             role="button"
             tabindex="0"
-            aria-label="Zamknij — przeciągnij w dół"
+            aria-label=${localize(this.hass, 'card.close_drag')}
             @pointerdown=${this._onGrabDown}
             @pointermove=${this._onGrabMove}
             @pointerup=${this._onGrabUp}
@@ -1458,7 +1459,7 @@ export class StratumCard extends LitElement {
           ></div>
           <button
             class="stratum-popup-close"
-            title="Zamknij"
+            title=${localize(this.hass, 'common.close')}
             @click=${this._closeRoomPopup}
           >
             <ha-icon .icon=${'mdi:close'}></ha-icon>
@@ -1485,7 +1486,7 @@ export class StratumCard extends LitElement {
     this._showChipList({
       chip: { type: 'problem' } as import('./types.js').ChipConfig,
       entityIds: [],
-      label: 'Aktywne alarmy',
+      label: localize(this.hass, 'common.active_alarms'),
       icon: 'mdi:alert',
       color: 'var(--stratum-chip-leak-color, #f44336)',
       alarmAreaIds: areaIds,
@@ -1511,8 +1512,8 @@ export class StratumCard extends LitElement {
       class="header-alarm-badge"
       role="button"
       tabindex="0"
-      title="Pokaż aktywne alarmy"
-      aria-label="Aktywne alarmy: ${ids.length}. Pokaż listę"
+      title=${localize(this.hass, 'common.show_alarms')}
+      aria-label=${localize(this.hass, 'common.alarms_aria', { count: ids.length })}
       @click=${(ev: Event) => {
         ev.stopPropagation();
         this._openAlarmList(areaIds);
@@ -1548,7 +1549,7 @@ export class StratumCard extends LitElement {
     this._showChipList({
       chip: { type: 'filter' } as import('./types.js').ChipConfig,
       entityIds: [],
-      label: 'Urządzenia niedostępne',
+      label: localize(this.hass, 'card.unavailable_devices'),
       icon: 'mdi:lan-disconnect',
       color: 'var(--stratum-chip-unavailable-color, #9e9e9e)',
       unavailableAreaIds: areaIds,
@@ -1589,8 +1590,8 @@ export class StratumCard extends LitElement {
       class="header-unav-badge"
       role="button"
       tabindex="0"
-      title="Pokaż niedostępne urządzenia"
-      aria-label="Niedostępne urządzenia: ${ids.length}. Pokaż listę"
+      title=${localize(this.hass, 'card.show_unavailable')}
+      aria-label=${localize(this.hass, 'card.unavailable_aria', { count: ids.length })}
       @click=${(ev: Event) => {
         ev.stopPropagation();
         this._openUnavailableList(areaIds);
@@ -1731,8 +1732,8 @@ export class StratumCard extends LitElement {
       const areas = getAreasInFloor(this.hass, this._config.floor_id);
       if (areas.length === 0) {
         return html`<div class="placeholder">
-          Brak stref przypisanych do tego piętra.<br />
-          Przypisz area do floor w Settings → Areas & Zones.
+          ${localize(this.hass, 'card.no_areas')}<br />
+          ${localize(this.hass, 'card.no_areas_hint')}
         </div>`;
       }
       const globalDisplay = this._config.rooms_display ?? 'row';
@@ -1922,6 +1923,7 @@ export class StratumCard extends LitElement {
         .styleOverride=${tileStyleOverride}
         .clickable=${clickable}
         .offline=${roomOffline}
+        .uiLang=${langOf(this.hass)}
         .alarmsCount=${alarmEntityIds(this.hass!, entries).length}
         @row-alarms=${() => this._openAlarmList(areaIds)}
         @row-tap=${(ev: CustomEvent<{ area_id: string; area_name: string }>) =>
@@ -1953,6 +1955,7 @@ export class StratumCard extends LitElement {
       .lightsSwitch=${rowConfig?.lights_switch === true}
       .alarmsCount=${alarmEntityIds(this.hass!, entries).length}
       .offline=${roomOffline}
+      .uiLang=${langOf(this.hass)}
       @row-alarms=${() => this._openAlarmList(areaIds)}
       .lightsGlowOn=${rowConfig?.lights_switch_glow_on ?? 100}
       .lightsGlowOff=${rowConfig?.lights_switch_glow_off ?? 30}
@@ -2328,8 +2331,9 @@ if (!w.customCards.some((c) => c.type === 'stratum-card')) {
   w.customCards.push({
     type: 'stratum-card',
     name: 'Stratum',
-    description:
-      'Podsumowanie strefy z rozwijaną listą pomieszczeń (świata, obecność, okna).',
+    // Katalog kart rejestruje się przy ładowaniu bundla, przed `hass` —
+    // język bierzemy z `<html lang>`, który HA ustawia z profilu.
+    description: localize(docLanguage(), 'card.catalog_description'),
     preview: false,
   });
 }
@@ -2343,7 +2347,7 @@ loadGuard.release();
 // Kopia-duplikat zamiast banera mówi wprost, która wersja naprawdę działa.
 if (loadGuard.duplicate) {
   // eslint-disable-next-line no-console
-  console.warn(duplicateLoadNotice(loadGuard.activeVersion, VERSION));
+  console.warn(duplicateLoadNotice(loadGuard.activeVersion, VERSION, docLanguage()));
 } else {
   // eslint-disable-next-line no-console
   console.info(...consoleBanner(VERSION));

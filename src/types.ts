@@ -1140,6 +1140,11 @@ export interface HomeAssistant {
   entities: Record<string, HassEntityRegistryEntry>;
   devices: Record<string, HassDevice>;
   language: string;
+  /**
+   * Ustawienia regionalne profilu (HA ≥ 2022.x). `locale.language` to
+   * język wybrany w profilu — wygrywa nad `language` przy wyborze słownika.
+   */
+  locale?: { language?: string };
   themes: { darkMode: boolean };
   callService: (
     domain: string,

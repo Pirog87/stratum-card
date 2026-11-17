@@ -12,15 +12,15 @@
 
 import type { HassEntity, HomeAssistant } from './types.js';
 import { tileEn, tilePl, type TileStrings } from './localize/tile.js';
+import { langOf, type LangSource } from './localize/localize.js';
 
 /**
  * Słownik dla języka HA. Polski ma pierwszeństwo (CLAUDE.md): brak
  * `language` = PL. Inny język niż polski dostaje angielski — niemiecki
  * użytkownik lepiej zrozumie „idle" niż „bezczynny".
  */
-export function tileStrings(language: string | undefined): TileStrings {
-  if (!language) return tilePl;
-  return language.toLowerCase().startsWith('pl') ? tilePl : tileEn;
+export function tileStrings(language: LangSource): TileStrings {
+  return langOf(language) === 'pl' ? tilePl : tileEn;
 }
 
 /** Podstawia `{klucz}` w tekście ze słownika. */
@@ -95,7 +95,7 @@ export function entityStateText(
   hass: Pick<HomeAssistant, 'language' | 'formatEntityState'> | undefined,
   state: HassEntity,
 ): string {
-  const s = tileStrings(hass?.language);
+  const s = tileStrings(hass);
   const fmt = hass?.formatEntityState;
   if (typeof fmt === 'function') {
     try {
@@ -129,7 +129,7 @@ export function binaryStateText(
   hass: Pick<HomeAssistant, 'language' | 'formatEntityState'> | undefined,
   state: HassEntity,
 ): string {
-  const s = tileStrings(hass?.language);
+  const s = tileStrings(hass);
   const raw = state.state;
   const dc = state.attributes?.device_class as string | undefined;
   if (dc && (raw === 'on' || raw === 'off')) {

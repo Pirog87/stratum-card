@@ -32,7 +32,8 @@ import {
   subscribePower,
   tapPower,
 } from './power-pending.js';
-import { ALARM_CLASS_LABELS } from './chip-list-helpers.js';
+import { alarmClassLabel } from './chip-list-helpers.js';
+import { localize } from './localize/localize.js';
 import { flushSwipesTouching } from './light-swipe.js';
 import { lightColorOf } from './tile-data.js';
 import { pushEscapeLayer } from './escape-stack.js';
@@ -166,7 +167,7 @@ export class StratumChipList extends LitElement {
     if (!areaId && entry?.device_id) {
       areaId = this.hass?.devices?.[entry.device_id]?.area_id ?? undefined;
     }
-    if (!areaId) return { key: '__none__', name: 'Bez pomieszczenia' };
+    if (!areaId) return { key: '__none__', name: localize(this.hass, 'chip_list.no_room') };
     return { key: areaId, name: this.hass?.areas?.[areaId]?.name ?? areaId };
   }
 
@@ -417,11 +418,15 @@ export class StratumChipList extends LitElement {
             <div class="head-body">
               <div class="head-title">${this.label}</div>
               <div class="head-count">
-                ${total} ${total === 1 ? 'pozycja' : 'pozycji'} ·
-                ${groups.length} ${groups.length === 1 ? 'pokój' : 'pokoi'}
+                ${localize(this.hass, 'chip_list.items', { count: total })} ·
+                ${localize(this.hass, 'chip_list.rooms', { count: groups.length })}
               </div>
             </div>
-            <button class="close" title="Zamknij" @click=${this._close}>
+            <button
+              class="close"
+              title=${localize(this.hass, 'common.close')}
+              @click=${this._close}
+            >
               <ha-icon .icon=${'mdi:close'}></ha-icon>
             </button>
           </div>
@@ -432,7 +437,7 @@ export class StratumChipList extends LitElement {
                   class="tab ${filter === null ? 'on' : ''}"
                   @click=${() => (this._areaFilter = null)}
                 >
-                  Wszystkie · ${total}
+                  ${localize(this.hass, 'chip_list.all', { count: total })}
                 </button>
                 ${groups.map(
                   (g) => html`<button
@@ -448,7 +453,7 @@ export class StratumChipList extends LitElement {
           ${this._shown.length === 0
             ? html`<div class="empty">
                 <ha-icon .icon=${'mdi:check-circle-outline'}></ha-icon>
-                <span>Nic aktywnego — wszystko pod kontrolą.</span>
+                <span>${localize(this.hass, 'chip_list.empty')}</span>
               </div>`
             : html`<div class="list">
                 ${repeat(visible, (id) => id, (id) => this._renderRow(id))}
@@ -460,7 +465,7 @@ export class StratumChipList extends LitElement {
                   @click=${() => this._masterOffAll(visible)}
                 >
                   <ha-icon .icon=${'mdi:power'}></ha-icon>
-                  <span>Wyłącz wszystkie (${offCount})</span>
+                  <span>${localize(this.hass, 'chip_list.off_all', { count: offCount })}</span>
                 </button>
               </div>`
             : nothing}
@@ -495,7 +500,7 @@ export class StratumChipList extends LitElement {
       <button
         class="prow offline"
         @click=${() => this._moreInfo(entity_id)}
-        title="Więcej info"
+        title=${localize(this.hass, 'common.more_info')}
       >
         <span class="bub unav-icon" aria-hidden="true">
           <ha-icon .icon=${icon}></ha-icon>
@@ -504,7 +509,7 @@ export class StratumChipList extends LitElement {
           <span class="nm">${this._areaOf(entity_id).name}</span>
           <span class="sub">${this._friendlyName(entity_id)}</span>
         </span>
-        <span class="off-pill">offline</span>
+        <span class="off-pill">${localize(this.hass, 'common.offline')}</span>
       </button>
     `;
   }
@@ -562,7 +567,7 @@ export class StratumChipList extends LitElement {
           <button
             class="bub"
             @click=${() => this._moreInfo(entity_id)}
-            title="Więcej info"
+            title=${localize(this.hass, 'common.more_info')}
           >
             <ha-icon .icon=${icon}></ha-icon>
           </button>
@@ -575,7 +580,7 @@ export class StratumChipList extends LitElement {
             @click=${() => this._toggle(entity_id)}
             role="switch"
             aria-checked=${isOn}
-            title=${isOn ? 'Wyłącz' : 'Włącz'}
+            title=${localize(this.hass, isOn ? 'common.turn_off' : 'common.turn_on')}
           >
             <span class="toggle-knob"></span>
           </button>
@@ -643,7 +648,7 @@ export class StratumChipList extends LitElement {
       <button
         class="prow ${isOn ? 'active' : ''}"
         @click=${() => this._moreInfo(entity_id)}
-        title="Więcej info"
+        title=${localize(this.hass, 'common.more_info')}
       >
         <span class="bub">
           <ha-icon .icon=${icon}></ha-icon>
@@ -655,7 +660,7 @@ export class StratumChipList extends LitElement {
         ${this.showClassBadge
           ? (() => {
               const cls = state?.attributes?.device_class as string | undefined;
-              const label = cls ? ALARM_CLASS_LABELS[cls] ?? cls : undefined;
+              const label = cls ? alarmClassLabel(this.hass, cls) : undefined;
               return label
                 ? html`<span class="cls">${label}</span>`
                 : nothing;

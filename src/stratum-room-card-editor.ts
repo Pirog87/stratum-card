@@ -8,12 +8,14 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type {
   HomeAssistant,
   RoomSectionConfig,
+  RoomSectionType,
   SceneBarConfig,
   StratumRoomCardConfig,
 } from './types.js';
 import './stratum-scene-editor.js';
 import './stratum-sections-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { langOf, localize, lookup, messages, type Lang } from './localize/localize.js';
 
 interface FormSchemaItem {
   name: string;
@@ -25,7 +27,32 @@ interface FormSchemaItem {
   icon?: string;
 }
 
-const SCHEMA: readonly FormSchemaItem[] = [
+// Schemat zależy od języka (tytuły sekcji formularza, nazwy typów sekcji).
+// Budujemy go raz na język — ha-form przebudowuje się przy nowej tożsamości
+// schematu, więc świeża tablica przy każdym renderze gubiłaby fokus pola.
+const SCHEMA_CACHE = new Map<Lang, readonly FormSchemaItem[]>();
+const SECTION_OPTIONS: RoomSectionType[] = [
+  'scenes',
+  'lights',
+  'covers',
+  'windows',
+  'doors',
+  'climate',
+  'media',
+  'fans',
+  'switches',
+];
+
+function schemaFor(lang: Lang): readonly FormSchemaItem[] {
+  let schema = SCHEMA_CACHE.get(lang);
+  if (!schema) {
+    schema = buildSchema(lang);
+    SCHEMA_CACHE.set(lang, schema);
+  }
+  return schema;
+}
+
+const buildSchema = (lang: Lang): readonly FormSchemaItem[] => [
   { name: 'area_id', required: true, selector: { area: {} } },
   {
     type: 'grid',
@@ -38,7 +65,7 @@ const SCHEMA: readonly FormSchemaItem[] = [
   {
     type: 'expandable',
     name: '',
-    title: 'Scal z innymi pomieszczeniami',
+    title: localize(lang, 'editor.room_card.merge'),
     icon: 'mdi:link-variant',
     schema: [
       {
@@ -50,7 +77,7 @@ const SCHEMA: readonly FormSchemaItem[] = [
   {
     type: 'expandable',
     name: '',
-    title: 'Sekcje (auto-wykrycie gdy puste)',
+    title: localize(lang, 'editor.room_card.sections_auto'),
     icon: 'mdi:view-dashboard-outline',
     schema: [
       {
@@ -59,17 +86,10 @@ const SCHEMA: readonly FormSchemaItem[] = [
           select: {
             multiple: true,
             mode: 'list',
-            options: [
-              { value: 'scenes', label: 'Sceny' },
-              { value: 'lights', label: 'Światła' },
-              { value: 'covers', label: 'Rolety' },
-              { value: 'windows', label: 'Okna' },
-              { value: 'doors', label: 'Drzwi' },
-              { value: 'climate', label: 'Klimat' },
-              { value: 'media', label: 'Media' },
-              { value: 'fans', label: 'Wentylacja' },
-              { value: 'switches', label: 'Przełączniki' },
-            ],
+            options: SECTION_OPTIONS.map((value) => ({
+              value,
+              label: messages(lang).sections[value],
+            })),
           },
         },
       },
@@ -78,23 +98,9 @@ const SCHEMA: readonly FormSchemaItem[] = [
   { name: 'debug', selector: { boolean: {} } },
 ];
 
-const LABELS: Record<string, string> = {
-  area_id: 'Pomieszczenie (area)',
-  name: 'Nazwa (override)',
-  icon: 'Ikona (override)',
-  merge_with: 'Dodatkowe pomieszczenia scalane do tego widoku',
-  sections: 'Sekcje do wyświetlenia',
-  debug: 'Debug log w konsoli',
-};
 
-const HELPERS: Record<string, string> = {
-  area_id: 'Primary area — źródło encji, nazwy i ikony.',
-  merge_with:
-    'Encje z tych area dolicza się do sekcji (np. Garderoba + Łazienka do Sypialni).',
-  sections:
-    'Zostaw pusto aby sekcje wybierały się same na podstawie encji w pomieszczeniu.',
-  debug: 'console.log listy encji przy każdym renderze.',
-};
+
+
 
 @customElement('stratum-room-card-editor')
 export class StratumRoomCardEditor extends LitElement {
@@ -107,10 +113,10 @@ export class StratumRoomCardEditor extends LitElement {
   }
 
   private _computeLabel = (schema: FormSchemaItem): string =>
-    LABELS[schema.name] ?? schema.name;
+    lookup(messages(this.hass).editor.room_card.labels, schema.name) ?? schema.name;
 
   private _computeHelper = (schema: FormSchemaItem): string =>
-    HELPERS[schema.name] ?? '';
+    lookup(messages(this.hass).editor.room_card.helpers, schema.name) ?? '';
 
   private _valueChanged(ev: CustomEvent<{ value: StratumRoomCardConfig }>): void {
     ev.stopPropagation();
@@ -169,9 +175,9 @@ export class StratumRoomCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:floor-plan'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Pokój</h3>
+            <h3>${localize(this.hass, 'editor.room_card.room')}</h3>
             <p class="stratum-panel-hint">
-              Area, nazwa, ikona i opcjonalne scalanie z innymi pomieszczeniami.
+              ${localize(this.hass, 'editor.room_card.room_hint')}
             </p>
           </div>
         </div>
@@ -179,7 +185,7 @@ export class StratumRoomCardEditor extends LitElement {
           <ha-form
             .hass=${this.hass}
             .data=${this._config}
-            .schema=${SCHEMA}
+            .schema=${schemaFor(langOf(this.hass))}
             .computeLabel=${this._computeLabel}
             .computeHelper=${this._computeHelper}
             @value-changed=${this._valueChanged}
@@ -193,9 +199,9 @@ export class StratumRoomCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:view-dashboard-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Sekcje</h3>
+            <h3>${localize(this.hass, 'editor.room_card.sections')}</h3>
             <p class="stratum-panel-hint">
-              Kolejność i zawartość sekcji w widoku pokoju. Pusta lista = auto-discover po encjach.
+              ${localize(this.hass, 'editor.room_card.sections_hint')}
             </p>
           </div>
         </div>
@@ -214,9 +220,9 @@ export class StratumRoomCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>Sceny</h3>
+            <h3>${localize(this.hass, 'editor.room_card.scenes')}</h3>
             <p class="stratum-panel-hint">
-              Pasek scen w widoku pokoju. Zastępuje auto-sekcję „Sceny" gdy coś wybrane.
+              ${localize(this.hass, 'editor.room_card.scenes_hint')}
             </p>
           </div>
         </div>

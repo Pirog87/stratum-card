@@ -34,10 +34,10 @@ import {
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import {
   ALARM_CLASS_ICONS,
-  ALARM_CLASS_LABELS,
   CHIP_LIST_COLORS,
-  CHIP_LIST_LABELS,
+  alarmClassLabel,
   alarmEntityIds,
+  chipListTitle,
   chipDefaultTap,
   chipEntityIds,
 } from './chip-list-helpers.js';
@@ -66,7 +66,8 @@ import {
   summaryMeasurement,
 } from './room-sections.js';
 import { roomCardStyles } from './stratum-room-card-styles.js';
-import { SECTION_ICON, SECTION_LABEL, SECTION_LAYOUT } from './section-defaults.js';
+import { SECTION_ICON, SECTION_LAYOUT, sectionLabel } from './section-defaults.js';
+import { docLanguage, localize } from './localize/localize.js';
 import './stratum-card-chip.js';
 import './stratum-chip-list.js';
 import './stratum-room-card-editor.js';
@@ -103,8 +104,8 @@ export class StratumRoomCard extends LitElement {
   private _templates = new TemplateRenderer(() => this.requestUpdate());
 
   public setConfig(config: StratumRoomCardConfig): void {
-    if (!config) throw new Error('Konfiguracja jest wymagana.');
-    if (!config.area_id) throw new Error('Podaj `area_id`.');
+    if (!config) throw new Error(localize(this.hass ?? docLanguage(), 'common.config_required'));
+    if (!config.area_id) throw new Error(localize(this.hass ?? docLanguage(), 'room_card.need_area'));
     this._config = config;
   }
 
@@ -264,7 +265,7 @@ export class StratumRoomCard extends LitElement {
     if (this._config?.area_id && this.hass?.areas) {
       return this.hass.areas[this._config.area_id]?.name ?? this._config.area_id;
     }
-    return 'Pomieszczenie';
+    return localize(this.hass, 'room_card.fallback_name');
   }
 
   private _resolveIcon(): string {
@@ -299,7 +300,7 @@ export class StratumRoomCard extends LitElement {
     const wasOpen = Boolean(this._popupChip);
     this._popupChip = {
       chip,
-      label: CHIP_LIST_LABELS[chip.type] ?? 'Lista',
+      label: chipListTitle(this.hass, chip.type),
       icon: resolveChipIcon(chip) ?? 'mdi:label-outline',
       color:
         resolveChipColor(chip) ??
@@ -410,7 +411,7 @@ export class StratumRoomCard extends LitElement {
           ${this._renderAlarmsBlock(entries)}
           ${blocks.length === 0
             ? html`<div class="placeholder">
-                Brak encji do wyświetlenia — sprawdź przypisanie area.
+                ${localize(this.hass, 'room_card.no_entities')}
               </div>`
             : blocks}
         </div>
@@ -550,7 +551,7 @@ export class StratumRoomCard extends LitElement {
       <div class="alarms-block" part="alarms">
         <div class="alarms-head">
           <ha-icon .icon=${'mdi:alert'}></ha-icon>
-          <span>Aktywne alarmy</span>
+          <span>${localize(this.hass, 'common.active_alarms')}</span>
           <span class="alarms-count">${ids.length}</span>
         </div>
         ${ids.map((id) => {
@@ -569,7 +570,7 @@ export class StratumRoomCard extends LitElement {
             : '';
           return html`<button
             class="alarm-row"
-            title="Więcej info"
+            title=${localize(this.hass, 'common.more_info')}
             @click=${() =>
               this.dispatchEvent(
                 new CustomEvent('hass-more-info', {
@@ -589,7 +590,7 @@ export class StratumRoomCard extends LitElement {
               ${areaName ? html`<span>${areaName}</span>` : nothing}
             </span>
             ${cls
-              ? html`<span class="ab-cls">${ALARM_CLASS_LABELS[cls] ?? cls}</span>`
+              ? html`<span class="ab-cls">${alarmClassLabel(this.hass, cls)}</span>`
               : nothing}
             ${st?.last_changed
               ? html`<span class="ab-tm">${ago(st.last_changed)}</span>`
@@ -777,9 +778,7 @@ export class StratumRoomCard extends LitElement {
         class="hdr-switch auto ${on ? 'on' : ''}"
         role="switch"
         aria-checked=${on}
-        title=${on
-          ? 'Automatyka świateł włączona — kliknij aby przejść na sterowanie ręczne'
-          : 'Automatyka świateł wyłączona (sterowanie ręczne) — kliknij aby włączyć'}
+        title=${localize(this.hass, on ? 'room_card.auto_on' : 'room_card.auto_off')}
         @click=${(ev: Event) => {
           ev.stopPropagation();
           void this.hass?.callService('homeassistant', 'toggle', { entity_id: id });
@@ -831,9 +830,7 @@ export class StratumRoomCard extends LitElement {
         class="hdr-switch lights ${anyOn ? 'on' : ''}"
         role="switch"
         aria-checked=${anyOn}
-        title=${anyOn
-          ? 'Wyłącz wszystkie światła w pomieszczeniu'
-          : 'Włącz wszystkie światła w pomieszczeniu'}
+        title=${localize(this.hass, anyOn ? 'common.lights_all_off' : 'common.lights_all_on')}
         @click=${(ev: Event) => {
           ev.stopPropagation();
           // Gasi tylko świecące; pamięć dla suwaka wiersza pod tym samym
@@ -959,7 +956,7 @@ export class StratumRoomCard extends LitElement {
     section: RoomSectionConfig,
     entries: HassEntityRegistryEntry[],
   ): TemplateResult {
-    const title = section.title ?? 'Grupy świateł';
+    const title = section.title ?? localize(this.hass, 'room_card.light_groups');
     const iconName = section.icon ?? 'mdi:lightbulb-group';
     // Podział na strefy — osobne nagłówki per area z przełącznikami.
     // PRZED ścieżką jawnej listy: edytor materializuje listę przy każdej
@@ -1027,7 +1024,7 @@ export class StratumRoomCard extends LitElement {
         <div class="section" part="section">
           <div class="section-header" part="section-header">
             <ha-icon .icon=${'mdi:lightbulb-outline'}></ha-icon>
-            <span>Encje światła</span>
+            <span>${localize(this.hass, 'room_card.light_entities')}</span>
             ${groupsShown
               ? html`<span class="count">${count}</span>`
               : html`<span class="count inline">${count}</span>
@@ -1063,7 +1060,7 @@ export class StratumRoomCard extends LitElement {
         <div class="section" part="section">
           <div class="section-header" part="section-header">
             <ha-icon .icon=${'mdi:lightbulb-outline'}></ha-icon>
-            <span>Encje światła</span>
+            <span>${localize(this.hass, 'room_card.light_entities')}</span>
             <span class="count inline">${singles.length}</span>
             ${this._renderHeaderSwitches()}
           </div>
@@ -1078,7 +1075,7 @@ export class StratumRoomCard extends LitElement {
       <div class="section" part="section">
         <button class="rest-toggle" @click=${() => this._toggleRest(restKey)}>
           <ha-icon .icon=${restOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}></ha-icon>
-          <span>Encje światła</span>
+          <span>${localize(this.hass, 'room_card.light_entities')}</span>
           <span class="rest-count">${singles.length}</span>
         </button>
         ${restOpen ? tiles : nothing}
@@ -1108,7 +1105,7 @@ export class StratumRoomCard extends LitElement {
     extraIds?: string[],
   ): TemplateResult {
     const type = section.type;
-    const title = section.title ?? SECTION_LABEL[type];
+    const title = section.title ?? sectionLabel(type, this.hass);
     const iconName = section.icon ?? SECTION_ICON[type];
 
     if (type === 'summary') return this._renderSummary(section, entries, title, iconName);
@@ -1305,20 +1302,20 @@ export class StratumRoomCard extends LitElement {
       <div class="cover-master" part="cover-master">
         <button class="cm-btn cm-open" @click=${() => call('open_cover')}>
           <ha-icon .icon=${'mdi:arrow-up'}></ha-icon>
-          Otwórz
+          ${localize(this.hass, 'common.open')}
         </button>
         <button class="cm-btn cm-stop" @click=${() => call('stop_cover')}>
           <ha-icon .icon=${'mdi:square'}></ha-icon>
-          Stop
+          ${localize(this.hass, 'common.stop')}
         </button>
         <button class="cm-btn cm-close" @click=${() => call('close_cover')}>
           <ha-icon .icon=${'mdi:arrow-down'}></ha-icon>
-          Zamknij
+          ${localize(this.hass, 'common.close')}
         </button>
         ${positions.map(
           (p) => html`<button
             class="cm-btn cm-pct"
-            title="Ustaw wszystkie na ${p}%"
+            title=${localize(this.hass, 'room_card.set_all', { pct: p })}
             @click=${() => call('set_cover_position', { position: p })}
           >
             <ha-icon .icon=${'mdi:percent-outline'}></ha-icon>
@@ -1427,7 +1424,7 @@ export class StratumRoomCard extends LitElement {
       <div class="section" part="section">
         <div class="section-header" part="section-header">
           <ha-icon .icon=${section.icon ?? SECTION_ICON['covers']}></ha-icon>
-          <span>${section.title ?? SECTION_LABEL['covers']}</span>
+          <span>${section.title ?? sectionLabel('covers', this.hass)}</span>
           <span class="count">${entityItems.length}</span>
         </div>
         ${this._renderCoversMaster(section, entries)}
@@ -1445,7 +1442,7 @@ export class StratumRoomCard extends LitElement {
    * renderują listę 1:1 z separatorami — tam separator ma sens.
    */
   private _renderMediaFromList(section: RoomSectionConfig): TemplateResult {
-    const title = section.title ?? SECTION_LABEL['media'];
+    const title = section.title ?? sectionLabel('media', this.hass);
     const iconName = section.icon ?? SECTION_ICON['media'];
     const mMode = section.mode ?? 'player';
     if (mMode !== 'player') {
@@ -1530,7 +1527,7 @@ export class StratumRoomCard extends LitElement {
         @click=${() => this._toggleMediaSrc(key)}
       >
         <ha-icon .icon=${'mdi:video-input-hdmi'}></ha-icon>
-        <span>Źródło</span>
+        <span>${localize(this.hass, 'room_card.source')}</span>
         ${curSrc ? html`<span class="ms-cur">${curSrc}</span>` : nothing}
         <ha-icon
           class="mg-chev"
@@ -1548,7 +1545,7 @@ export class StratumRoomCard extends LitElement {
               ),
             )}
             ${modes.length > 0
-              ? html`<div class="ms-sub">TRYB DŹWIĘKU</div>
+              ? html`<div class="ms-sub">${localize(this.hass, 'room_card.sound_mode')}</div>
                   ${modes.map((m) =>
                     row(m, m === curMode, () =>
                       hass.callService('media_player', 'select_sound_mode', {
@@ -1650,7 +1647,7 @@ export class StratumRoomCard extends LitElement {
         @click=${() => this._toggleMediaGroup(key)}
       >
         <ha-icon .icon=${'mdi:link-variant'}></ha-icon>
-        <span>Grupuj</span>
+        <span>${localize(this.hass, 'room_card.group')}</span>
         ${memberIds.length > 1
           ? html`<span class="mg-count">${memberIds.length}</span>`
           : nothing}
@@ -1673,11 +1670,14 @@ export class StratumRoomCard extends LitElement {
                 <button
                   class="mg-cb ${isMember ? 'on' : ''}"
                   ?disabled=${isSel}
-                  title=${isSel
-                    ? 'Wybrany odtwarzacz'
-                    : isMember
-                    ? 'Odłącz od grupy'
-                    : 'Dołącz do grupy'}
+                  title=${localize(
+                    this.hass,
+                    isSel
+                      ? 'room_card.selected_player'
+                      : isMember
+                      ? 'room_card.leave_group'
+                      : 'room_card.join_group',
+                  )}
                   @click=${() => toggleMember(id, isMember)}
                 >
                   ${isMember ? html`<ha-icon .icon=${'mdi:check'}></ha-icon>` : nothing}
@@ -1702,7 +1702,7 @@ export class StratumRoomCard extends LitElement {
             })}
             ${memberIds.length > 1
               ? html`<div class="mg-row mg-master">
-                  <span class="mg-name">Razem</span>
+                  <span class="mg-name">${localize(this.hass, 'room_card.together')}</span>
                   <input
                     type="range"
                     class="mg-vol"
@@ -1910,7 +1910,7 @@ export class StratumRoomCard extends LitElement {
                 <ha-icon
                   .icon=${restOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
                 ></ha-icon>
-                <span>Pozostałe odtwarzacze</span>
+                <span>${localize(this.hass, 'room_card.other_players')}</span>
                 <span class="rest-count">${rest.length}</span>
               </button>
               ${restOpen
@@ -2050,7 +2050,13 @@ export class StratumRoomCard extends LitElement {
         const on = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), field).some(
           (e) => hass.states?.[e.entity_id]?.state === 'on',
         );
-        return mk('Obecność', 'mdi:motion-sensor', on ? 'aktywna' : 'brak', on, resolveChipColor({ type: field }));
+        return mk(
+          localize(hass, 'common.presence'),
+          'mdi:motion-sensor',
+          localize(hass, on ? 'summary.presence_on' : 'summary.presence_off'),
+          on,
+          resolveChipColor({ type: field }),
+        );
       }
       case 'temperature':
       case 'humidity': {
@@ -2060,7 +2066,7 @@ export class StratumRoomCard extends LitElement {
         // offline nie może dać „unavailable °C" (patrz summaryMeasurement).
         const m = summaryMeasurement(hass, entries, cls);
         if (!m) return null;
-        const label = cls === 'temperature' ? 'Temperatura' : 'Wilgotność';
+        const label = localize(hass, cls === 'temperature' ? 'summary.temperature' : 'summary.humidity');
         const icon = cls === 'temperature' ? 'mdi:thermometer' : 'mdi:water-percent';
         // Kolory z tokenów chipów nagłówka — jedno znaczenie koloru w karcie.
         return mk(label, icon, m.value, m.available, resolveChipColor({ type: cls }));
@@ -2072,21 +2078,45 @@ export class StratumRoomCard extends LitElement {
         const n = countableLights(hass, entries).filter((e) =>
           lightOnInHass(hass, e.entity_id),
         ).length;
-        return mk('Światła', 'mdi:lightbulb-on', n > 0 ? `${n} włącz.` : 'wszystkie wył.', n > 0, resolveChipColor({ type: 'lights' }));
+        return mk(
+          localize(hass, 'summary.lights'),
+          'mdi:lightbulb-on',
+          n > 0
+            ? localize(hass, 'summary.lights_on', { count: n })
+            : localize(hass, 'summary.lights_all_off'),
+          n > 0,
+          resolveChipColor({ type: 'lights' }),
+        );
       }
       case 'windows_open': {
         const n = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'window').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
-        return mk('Okna', 'mdi:window-open-variant', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, resolveChipColor({ type: 'windows' }));
+        return mk(
+          localize(hass, 'summary.windows'),
+          'mdi:window-open-variant',
+          n > 0
+            ? localize(hass, 'summary.open_count', { count: n })
+            : localize(hass, 'summary.closed'),
+          n > 0,
+          resolveChipColor({ type: 'windows' }),
+        );
       }
       case 'doors_open': {
         const n = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'door').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
-        return mk('Drzwi', 'mdi:door-open', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, resolveChipColor({ type: 'doors' }));
+        return mk(
+          localize(hass, 'summary.doors'),
+          'mdi:door-open',
+          n > 0
+            ? localize(hass, 'summary.open_count', { count: n })
+            : localize(hass, 'summary.closed'),
+          n > 0,
+          resolveChipColor({ type: 'doors' }),
+        );
       }
       case 'battery_low': {
         const low = entries.some((e) => {
@@ -2096,14 +2126,26 @@ export class StratumRoomCard extends LitElement {
           return !Number.isNaN(v) && v < 20;
         });
         if (!low) return null;
-        return mk('Bateria', 'mdi:battery-alert', 'niski poziom', true, resolveChipColor({ type: 'battery_low' }));
+        return mk(
+          localize(hass, 'summary.battery'),
+          'mdi:battery-alert',
+          localize(hass, 'summary.battery_low'),
+          true,
+          resolveChipColor({ type: 'battery_low' }),
+        );
       }
       case 'leak': {
         const active = filterBinarySensorDeviceClass(hass, entries, 'moisture').some(
           (e) => hass.states?.[e.entity_id]?.state === 'on',
         );
         if (!active) return null;
-        return mk('Wyciek', 'mdi:water-alert', 'wykryty', true, resolveChipColor({ type: 'leak' }));
+        return mk(
+          localize(hass, 'summary.leak'),
+          'mdi:water-alert',
+          localize(hass, 'summary.leak_detected'),
+          true,
+          resolveChipColor({ type: 'leak' }),
+        );
       }
       default:
         return null;
@@ -2146,9 +2188,9 @@ w.customCards = w.customCards ?? [];
 if (!w.customCards.some((c) => c.type === 'stratum-room-card')) {
   w.customCards.push({
     type: 'stratum-room-card',
-    name: 'Stratum — Pokój',
-    description:
-      'Widok pojedynczego pomieszczenia z auto-generowanymi sekcjami (Światła, Rolety, Okna, Klimat).',
+    // Rejestracja przy ładowaniu bundla, przed `hass` — język z `<html lang>`.
+    name: localize(docLanguage(), 'room_card.catalog_name'),
+    description: localize(docLanguage(), 'room_card.catalog_description'),
     preview: false,
   });
 }

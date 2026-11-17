@@ -60,6 +60,7 @@ import {
   mediaStateText,
   tileStrings,
 } from './tile-state-text.js';
+import { localize } from './localize/localize.js';
 import type { TileStrings } from './localize/tile.js';
 
 /** Stany z podmienionym `state` (w toku) — ta sama tożsamość między renderami. */
@@ -151,7 +152,7 @@ export class StratumRoomTile extends LitElement {
 
   /** Słownik tekstów kafla w języku HA (PL domyślnie). */
   private get _s(): TileStrings {
-    return tileStrings(this.hass?.language);
+    return tileStrings(this.hass);
   }
 
   /** Dekoduje nagranie i przepisuje do WAV 24 kHz mono. null = nie wyszło. */
@@ -1279,7 +1280,7 @@ export class StratumRoomTile extends LitElement {
     // bierze żółty --stratum-lights, czyli jasny — ciemny atrament.
     const ink = stripeInk(color);
     const name = this._displayName(state);
-    const stateLine = on || overridden ? `${pct}%` : 'wyłączono';
+    const stateLine = on || overridden ? `${pct}%` : this._s.group_off;
 
     return html`
       <div
@@ -1322,7 +1323,7 @@ export class StratumRoomTile extends LitElement {
         <span class="glight-row">
           <span
             class="glight-bubble"
-            title="Szczegóły encji"
+            title=${localize(this.hass, 'common.entity_details')}
             @click=${this._onIconMoreInfo}
             ><ha-icon .icon=${icon}></ha-icon
           ></span>
@@ -1591,7 +1592,7 @@ export class StratumRoomTile extends LitElement {
           @click=${(ev: Event) =>
             this._customTap(ev) || this._callService(ev, 'light', 'toggle')}
           @contextmenu=${this._openMoreInfo}
-          title=${on ? 'Wyłącz' : 'Włącz'}
+          title=${localize(this.hass, on ? 'common.turn_off' : 'common.turn_on')}
         >
           <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         </button>
@@ -1775,7 +1776,11 @@ export class StratumRoomTile extends LitElement {
         @click=${(ev: Event) => this._customTap(ev) || this._callService(ev, domain, 'toggle')}
         @contextmenu=${this._openMoreInfo}
       >
-        <span class="tile-icon-wrap" title="Szczegóły encji" @click=${this._onIconMoreInfo}>
+        <span
+          class="tile-icon-wrap"
+          title=${localize(this.hass, 'common.entity_details')}
+          @click=${this._onIconMoreInfo}
+        >
           <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         </span>
         <span class="tile-name">${this._displayName(state)}</span>
@@ -1810,8 +1815,10 @@ export class StratumRoomTile extends LitElement {
           class="tile-icon-wrap"
           role="button"
           tabindex="0"
-          title="Szczegóły encji"
-          aria-label=${`Szczegóły encji: ${this._displayName(state)}`}
+          title=${localize(this.hass, 'common.entity_details')}
+          aria-label=${localize(this.hass, 'common.entity_details_named', {
+            name: this._displayName(state),
+          })}
           @click=${this._onIconMoreInfo}
           @keydown=${this._onMoreInfoKey}
         >
@@ -1826,21 +1833,21 @@ export class StratumRoomTile extends LitElement {
         <span class="cover-ctrl">
           <button
             class="cover-btn"
-            title="Otwórz"
+            title=${localize(this.hass, 'common.open')}
             @click=${(ev: Event) => this._callService(ev, 'cover', 'open_cover')}
           >
             <ha-icon .icon=${'mdi:arrow-up'}></ha-icon>
           </button>
           <button
             class="cover-btn"
-            title="Stop"
+            title=${localize(this.hass, 'common.stop')}
             @click=${(ev: Event) => this._callService(ev, 'cover', 'stop_cover')}
           >
             <ha-icon .icon=${'mdi:square'}></ha-icon>
           </button>
           <button
             class="cover-btn"
-            title="Zamknij"
+            title=${localize(this.hass, 'common.close')}
             @click=${(ev: Event) => this._callService(ev, 'cover', 'close_cover')}
           >
             <ha-icon .icon=${'mdi:arrow-down'}></ha-icon>
@@ -1990,7 +1997,7 @@ export class StratumRoomTile extends LitElement {
           class="player-tag"
           role="button"
           tabindex="0"
-          title="Szczegóły encji"
+          title=${localize(this.hass, 'common.entity_details')}
           @keydown=${(ev: KeyboardEvent) => {
             // To samo co klik w kafel: override akcji z listy, potem more-info.
             if (ev.key !== 'Enter' && ev.key !== ' ') return;

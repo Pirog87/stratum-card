@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ICON_ACTION_FALLBACK_PL,
-  iconActionLabel,
-} from '../src/icon-action-label.js';
+import { iconActionLabel } from '../src/icon-action-label.js';
+import { pl } from '../src/localize/pl.js';
+
+const FALLBACK_PL = pl.icon_action.fallback;
 
 describe('iconActionLabel', () => {
   it('opisuje akcję z typu, nie ogólnikiem', () => {
@@ -19,13 +19,13 @@ describe('iconActionLabel', () => {
   });
 
   it('nieznany typ i brak typu → deterministyczny default', () => {
-    expect(iconActionLabel('Salon', 'assist')).toBe(`Salon: ${ICON_ACTION_FALLBACK_PL}`);
-    expect(iconActionLabel('Salon', undefined)).toBe(`Salon: ${ICON_ACTION_FALLBACK_PL}`);
+    expect(iconActionLabel('Salon', 'assist')).toBe(`Salon: ${FALLBACK_PL}`);
+    expect(iconActionLabel('Salon', undefined)).toBe(`Salon: ${FALLBACK_PL}`);
   });
 
   it('klucz z prototypu nie wycieka jako opis', () => {
-    expect(iconActionLabel('Salon', 'constructor')).toBe(`Salon: ${ICON_ACTION_FALLBACK_PL}`);
-    expect(iconActionLabel('Salon', 'toString')).toBe(`Salon: ${ICON_ACTION_FALLBACK_PL}`);
+    expect(iconActionLabel('Salon', 'constructor')).toBe(`Salon: ${FALLBACK_PL}`);
+    expect(iconActionLabel('Salon', 'toString')).toBe(`Salon: ${FALLBACK_PL}`);
   });
 
   it('bez nazwy pokoju zostaje sam czasownik', () => {
@@ -33,12 +33,9 @@ describe('iconActionLabel', () => {
     expect(iconActionLabel('  ', 'url')).toBe('otwórz link');
   });
 
-  it('przyjmuje własny słownik (pod lokalizację)', () => {
-    expect(iconActionLabel('Kitchen', 'url', { url: 'open link' }, 'icon action')).toBe(
-      'Kitchen: open link',
-    );
-    expect(iconActionLabel('Kitchen', 'navigate', { url: 'open link' }, 'icon action')).toBe(
-      'Kitchen: icon action',
-    );
+  it('język z hass: angielski dla EN i innych języków', () => {
+    expect(iconActionLabel('Kitchen', 'url', { language: 'en' })).toBe('Kitchen: open link');
+    expect(iconActionLabel('Küche', 'navigate', 'de')).toBe('Küche: go to view');
+    expect(iconActionLabel('Kitchen', 'assist', 'en')).toBe('Kitchen: icon action');
   });
 });
