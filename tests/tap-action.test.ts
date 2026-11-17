@@ -4,6 +4,7 @@ import {
   ROW_UI_ACTIONS,
   resolveTapAction,
   runTapAction,
+  tapMayChangeState,
 } from '../src/tap-action.js';
 import { registerGuardSource } from '../src/back-guard.js';
 import { mergeCustomTileConfig } from '../src/custom-cards.js';
@@ -247,6 +248,33 @@ describe('runTapAction', () => {
     expect(runTapAction(hass, act({ action: 'toggle' }), { source, entity_id: 'light.a' })).toBe(true);
     await new Promise((r) => setTimeout(r, 0));
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('tapMayChangeState', () => {
+  // Kafel grupy świateł porzuca trzymaną jasność tylko przed akcją, która
+  // może przełączyć światło — inaczej pasek kłamie do 6 s nad zgaszonym.
+  it('toggle i usługi zmieniają stan', () => {
+    expect(tapMayChangeState({ action: 'toggle' })).toBe(true);
+    expect(tapMayChangeState({ action: 'toggle', entity: 'light.x' })).toBe(true);
+    expect(
+      tapMayChangeState({ action: 'perform-action', perform_action: 'light.turn_off' }),
+    ).toBe(true);
+    expect(
+      tapMayChangeState({ action: 'call-service', service: 'light.toggle' } as TapActionConfig),
+    ).toBe(true);
+  });
+
+  it('akcje tylko patrzące i none zostawiają trzymaną wartość', () => {
+    expect(tapMayChangeState(undefined)).toBe(false);
+    expect(tapMayChangeState({ action: 'none' })).toBe(false);
+    expect(tapMayChangeState({ action: 'more-info' })).toBe(false);
+    expect(tapMayChangeState({ action: 'navigate', navigation_path: '/x' })).toBe(false);
+    expect(tapMayChangeState({ action: 'url', url_path: 'https://x' })).toBe(false);
+  });
+
+  it('nieznany typ liczony jako zmiana', () => {
+    expect(tapMayChangeState({ action: 'assist' } as unknown as TapActionConfig)).toBe(true);
   });
 });
 
