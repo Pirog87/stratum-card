@@ -138,6 +138,11 @@ export class StratumRoomCard extends LitElement {
   public connectedCallback(): void {
     super.connectedCallback();
     this._unsubPower = subscribePower(() => this.requestUpdate());
+    // Powrót z pamięci widoków HA: odpięcie skasowało subskrypcje szablonów,
+    // a odnawia je dopiero render, który bramka `shouldUpdate` przepuszcza
+    // tylko przy zmianie obserwowanej encji. Gołe requestUpdate() (pusta
+    // mapa zmian) przechodzi zawsze — jak w karcie piętra.
+    if (this.hasUpdated) this.requestUpdate();
   }
 
   private _unsubPower?: () => void;
