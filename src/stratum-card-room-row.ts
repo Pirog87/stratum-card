@@ -1071,7 +1071,7 @@ export class StratumCardRoomRow extends LitElement {
     /* Obrys do środka: wiersz ma overflow: hidden, a stadion ikony stoi
        przy jego krawędzi — obrys na zewnątrz byłby ucięty. */
     :host([icon-tappable]) .iconwrap:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: -2px;
     }
 
@@ -1080,7 +1080,7 @@ export class StratumCardRoomRow extends LitElement {
     }
 
     :host([clickable]) .row:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: -2px;
     }
 
@@ -1624,7 +1624,7 @@ export class StratumCardRoomRow extends LitElement {
       }
     }
     .alarm-badge:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: 2px;
     }
     .alarm-badge:active {
@@ -1699,7 +1699,7 @@ export class StratumCardRoomRow extends LitElement {
       }
     }
     .lights-toggle:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: 2px;
     }
     .lights-toggle:active {

@@ -483,7 +483,7 @@ export class StratumCardRoomTile extends LitElement {
     }
 
     :host([clickable]) .tile:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: 2px;
     }
 
@@ -632,7 +632,7 @@ export class StratumCardRoomTile extends LitElement {
       }
     }
     .alarm-badge:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: 2px;
     }
     .alarm-badge:active {

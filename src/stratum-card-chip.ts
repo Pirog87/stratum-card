@@ -129,8 +129,13 @@ export class StratumCardChip extends LitElement {
       }
     }
 
+    /* Obrys z --stratum-focus-ring (surface-tokens.ts, :host i ha-card karty),
+       tak jak kafle i przyciski popupu. Dawniej karta piętra brała tylko
+       --stratum-card-focus-color, a popup --stratum-focus — motyw ustawiający
+       --stratum-focus przemalowywał pół karty. Łańcuch po przecinkach to
+       fallback dla chipa osadzonego poza kartą Stratum. */
     :host([clickable]) .chip:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--stratum-focus, var(--stratum-card-focus-color, var(--primary-color))));
       outline-offset: 2px;
     }
 

@@ -72,7 +72,7 @@ card_mod:
 | `--stratum-card-border-radius` | `--ha-card-border-radius` (12px); w stylu belki „Smugi" domyślnie 24px | zaokrąglenie rogów |
 | `--stratum-card-color` | `--primary-text-color` | kolor domyślnego tekstu |
 | `--stratum-card-divider-color` | `--divider-color` | pozioma linia pod headerem / nad body |
-| `--stratum-card-focus-color` | `--primary-color` (#ff9b42) | obrys fokus (klawiatura) |
+| `--stratum-card-focus-color` | `--primary-color` (#ff9b42) | starsza nazwa obrysu fokusu (klawiatura); działa, gdy `--stratum-focus` nie jest ustawione |
 | `--stratum-popup-backdrop-filter` | `blur(6px)`; na telefonie (≤ 600 px) `none` | rozmycie dashboardu pod popupem pokoju i listą chipa. Na telefonie arkusz pokoju zakrywa cały ekran, więc rozmycie jest wyłączone (kosztowało płynność przewijania); `blur(6px)` przywraca je wszędzie, `none` wyłącza także na desktopie |
 
 ### Header główny (floor card)
@@ -143,7 +143,7 @@ card_mod:
 | `--stratum-tile-accent` | `--primary-color` | akcent border/ikony tile aktywnego |
 | `--stratum-player-accent` | `--primary-color` | akcent playera: przycisk ⏯, pasek postępu, suwak głośności, stan „wysyłanie" krótkofalówki |
 | `--stratum-player-min-height` | `168px` | minimalna wysokość kafla playera (`mode: player`) |
-| `--stratum-focus` | `--primary-color` | obrys fokusu klawiatury przycisków playera i ikony kafla ambient |
+| `--stratum-focus` | `--stratum-card-focus-color` → `--primary-color` | obrys fokusu klawiatury we wszystkich elementach obu kart: nagłówek i paski belki, wiersze, kafle, chipy, lista chipa, popup pokoju (×, uchwyt, kafle, player, sceny) i przyciski karty pokoju. Działa z motywu i z card-moda na `ha-card` |
 
 Rząd sterowania playera zawija się w dwa rzędy (transport / głośność), gdy
 kafel ma poniżej ~430 px szerokości — to container query na kaflu

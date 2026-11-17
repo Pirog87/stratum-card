@@ -90,7 +90,7 @@ export const cardStyles = css`
     }
 
     .header-toggle:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring);
       outline-offset: 2px;
     }
 
@@ -195,7 +195,7 @@ export const cardStyles = css`
     }
     .header-alarm-badge:focus-visible,
     .header-unav-badge:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring);
       outline-offset: 2px;
     }
     .header-alarm-badge:active,
@@ -379,7 +379,7 @@ export const cardStyles = css`
     }
 
     .hs-title:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring);
       outline-offset: 2px;
     }
 
@@ -449,7 +449,7 @@ export const cardStyles = css`
     }
 
     button.hs-stripe:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring);
       outline-offset: -4px;
     }
 
@@ -659,7 +659,7 @@ export const cardStyles = css`
       }
 
       .stratum-popup-grab:focus-visible {
-        outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+        outline: 2px solid var(--stratum-focus-ring);
         outline-offset: -2px;
         border-radius: 6px;
       }
