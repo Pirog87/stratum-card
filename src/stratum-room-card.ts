@@ -26,9 +26,10 @@ import type {
 import { DEFAULT_POPUP_ORDER } from './types.js';
 import {
   getEntitiesInArea,
-  filterByDomain,
   filterBinarySensorDeviceClass,
   groupMemberIds,
+  countableLights,
+  filterPrimary,
 } from './area-entities.js';
 import { evaluateChip, resolveChipColor, resolveChipIcon } from './chip-defaults.js';
 import {
@@ -50,6 +51,7 @@ import {
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
 import { anyLightOn, subscribePower, toggleRoomLights } from './power-pending.js';
+import { lightOnInHass } from './light-dimming.js';
 import { runTapAction } from './tap-action.js';
 import {
   autoRoomChips,
@@ -1961,21 +1963,23 @@ export class StratumRoomCard extends LitElement {
         return mk(label, icon, `${state.state} ${unit}`, true, color);
       }
       case 'lights_on': {
-        const n = filterByDomain(entries, 'light').reduce(
-          (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
-          0,
-        );
+        // Ten sam zbiór co licznik wiersza i chip nagłówka: bez diod statusu
+        // (config/diagnostic), bez ukrytych, grupa tylko gdy jej członków
+        // nie ma w puli — dawniej świecąca grupa liczyła się drugi raz.
+        const n = countableLights(hass, entries).filter((e) =>
+          lightOnInHass(hass, e.entity_id),
+        ).length;
         return mk('Światła', 'mdi:lightbulb-on', n > 0 ? `${n} włącz.` : 'wszystkie wył.', n > 0, '#ffc107');
       }
       case 'windows_open': {
-        const n = filterBinarySensorDeviceClass(hass, entries, 'window').reduce(
+        const n = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'window').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
         return mk('Okna', 'mdi:window-open-variant', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, '#42a5f5');
       }
       case 'doors_open': {
-        const n = filterBinarySensorDeviceClass(hass, entries, 'door').reduce(
+        const n = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'door').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );

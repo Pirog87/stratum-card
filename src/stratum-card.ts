@@ -1037,15 +1037,7 @@ export class StratumCard extends LitElement {
       name: string,
       room?: import('./types.js').RoomConfig,
     ): StripeRoom & { room?: import('./types.js').RoomConfig } => {
-      const seen = new Set<string>();
-      const entries: HassEntityRegistryEntry[] = [];
-      for (const id of areaIds) {
-        for (const e of getEntitiesInArea(hass, id)) {
-          if (seen.has(e.entity_id)) continue;
-          seen.add(e.entity_id);
-          entries.push(e);
-        }
-      }
+      const entries = this._roomEntries(areaIds);
       const data = computeTileData(hass, entries, room?.field_entities);
       return {
         area_id: areaIds[0]!,
@@ -1595,6 +1587,43 @@ export class StratumCard extends LitElement {
     return nothing;
   }
 
+  /**
+   * Wpisy rejestru dla zestawu stref wiersza — ta sama tablica, dopóki nie
+   * zmieni się indeks stref (rejestr). Stała tożsamość pozwala modułom
+   * pomocniczym zapamiętywać wyniki zależne tylko od rejestru (np.
+   * `filterPrimary`); dawniej każdy render budował nową tablicę.
+   */
+  private _roomEntriesMemo = new Map<
+    string,
+    { sources: readonly (readonly HassEntityRegistryEntry[])[]; entries: readonly HassEntityRegistryEntry[] }
+  >();
+
+  private _roomEntries(areaIds: readonly string[]): readonly HassEntityRegistryEntry[] {
+    const sources = areaIds.map((id) => getEntitiesInArea(this.hass!, id));
+    const key = areaIds.join('+');
+    const hit = this._roomEntriesMemo.get(key);
+    if (hit && hit.sources.length === sources.length && hit.sources.every((s, i) => s === sources[i])) {
+      return hit.entries;
+    }
+    let entries: readonly HassEntityRegistryEntry[];
+    if (sources.length === 1) {
+      entries = sources[0]!;
+    } else {
+      const seen = new Set<string>();
+      const out: HassEntityRegistryEntry[] = [];
+      for (const list of sources) {
+        for (const e of list) {
+          if (seen.has(e.entity_id)) continue;
+          seen.add(e.entity_id);
+          out.push(e);
+        }
+      }
+      entries = out;
+    }
+    this._roomEntriesMemo.set(key, { sources, entries });
+    return entries;
+  }
+
   private _renderRoomRow(
     areaIds: string[],
     name: string,
@@ -1629,16 +1658,8 @@ export class StratumCard extends LitElement {
       areaIds.join('+'),
       ...(fieldEntities?.lights?.length ? [[...fieldEntities.lights].sort().join(',')] : []),
     ].join('|');
-    // Zbieramy encje z wszystkich area (primary + merge_with), deduplikując.
-    const seen = new Set<string>();
-    const entries: HassEntityRegistryEntry[] = [];
-    for (const id of areaIds) {
-      for (const e of getEntitiesInArea(this.hass!, id)) {
-        if (seen.has(e.entity_id)) continue;
-        seen.add(e.entity_id);
-        entries.push(e);
-      }
-    }
+    // Encje wszystkich stref wiersza (primary + merge_with), bez duplikatów.
+    const entries = this._roomEntries(areaIds);
 
     // Jedno wyliczenie dla obu form (row/tile). Override per-pole przez
     // fieldEntities; bez override → auto-discovery z encji area.

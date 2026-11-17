@@ -142,13 +142,30 @@ export function filterByDomain(
  * zmianie rejestru, w tej samej kolejce co pierwsze tapnięcia użytkownika.
  * Nie wnosił niczego, czego nie ma w (1), więc go usunęliśmy.
  */
+/**
+ * Podzbiór `binary_sensor.*` danej listy wpisów. Filtr klas woła się
+ * kilkanaście razy na wiersz (ruch, obecność, okna, drzwi, alarmy…) i za
+ * każdym razem przeglądał całą strefę — w kuchni kilkaset encji, z czego
+ * czujników binarnych jest kilkanaście. Lista wpisów ma stałą tożsamość
+ * do zmiany rejestru, więc podzbiór liczymy raz.
+ */
+const binarySubset = new WeakMap<EntityEntries, readonly HassEntityRegistryEntry[]>();
+
+function binarySensorsOf(entries: EntityEntries): readonly HassEntityRegistryEntry[] {
+  let sub = binarySubset.get(entries);
+  if (!sub) {
+    sub = entries.filter((e) => e.entity_id.startsWith('binary_sensor.'));
+    binarySubset.set(entries, sub);
+  }
+  return sub;
+}
+
 export function filterBinarySensorDeviceClass(
   hass: HomeAssistant,
   entries: EntityEntries,
   deviceClass: string,
 ): HassEntityRegistryEntry[] {
-  return entries.filter((entry) => {
-    if (!entry.entity_id.startsWith('binary_sensor.')) return false;
+  return binarySensorsOf(entries).filter((entry) => {
     const state: HassEntity | undefined = hass.states?.[entry.entity_id];
     return state?.attributes?.device_class === deviceClass;
   });
@@ -187,12 +204,28 @@ export function isPrimaryEntity(
   return !(e.entity_category ?? reg?.entity_category);
 }
 
+/**
+ * Wynik `filterPrimary` zależy tylko od rejestru, nie od stanów — a wołamy
+ * go kilka razy na wiersz przy każdym renderze (ruch, okna, drzwi,
+ * temperatura, światła). Bez pamięci podręcznej przeglądanie kilkuset encji
+ * kuchni co raport lampy kosztowało ok. 2–3 ms na render. Klucz: tożsamość
+ * tablicy wpisów (z indeksu stref — stała do zmiany rejestru) i rejestru.
+ */
+const primaryCache = new WeakMap<
+  EntityEntries,
+  { entities: HomeAssistant['entities']; result: readonly HassEntityRegistryEntry[] }
+>();
+
 /** Tylko encje pierwszoplanowe (patrz `isPrimaryEntity`). */
 export function filterPrimary(
   hass: HomeAssistant,
   entries: EntityEntries,
-): HassEntityRegistryEntry[] {
-  return entries.filter((e) => isPrimaryEntity(hass, e));
+): readonly HassEntityRegistryEntry[] {
+  const hit = primaryCache.get(entries);
+  if (hit && hit.entities === hass.entities) return hit.result;
+  const result = entries.filter((e) => isPrimaryEntity(hass, e));
+  primaryCache.set(entries, { entities: hass.entities, result });
+  return result;
 }
 
 /**
@@ -274,7 +307,7 @@ export function countableLights(
   hass: HomeAssistant,
   entries: EntityEntries,
 ): HassEntityRegistryEntry[] {
-  const pool = filterByDomain(entries, 'light').filter((e) => isPrimaryEntity(hass, e));
+  const pool = filterByDomain(filterPrimary(hass, entries), 'light');
   const inPool = new Set(pool.map((e) => e.entity_id));
   return pool.filter((e) => {
     const members = groupMemberIds(hass.states?.[e.entity_id]);
