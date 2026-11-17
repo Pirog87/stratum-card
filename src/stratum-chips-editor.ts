@@ -13,6 +13,14 @@ import type {
 } from './types.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ENTITY_UI_ACTIONS, ROW_UI_ACTIONS } from './tap-action.js';
+import { DEFAULT_CHIPS } from './chip-defaults.js';
+import {
+  LAST_CHANGED_CHIP_TYPES,
+  SENSOR_CHIP_TYPES,
+  chipFromForm,
+} from './chip-editor-ops.js';
+import { removeAt, restoreRemoved } from './editor-list-ops.js';
+import { EditorUndoController, renderUndoBar } from './editor-undo.js';
 
 interface ChipQuickPick {
   type: ChipConfig['type'];
@@ -41,19 +49,6 @@ const QUICK_PICKS: ChipQuickPick[] = [
   { type: 'template', label: 'Template', icon: 'mdi:code-braces' },
 ];
 
-/**
- * Domyślny set chipów gdy user nic nie skonfigurował — lustrzane odbicie
- * `DEFAULT_CHIPS` z `chip-defaults.ts`. Pokazujemy je w edytorze żeby user
- * widział co jest i mógł dostosować bez szukania w runtime.
- */
-const DEFAULT_CHIPS_PREVIEW: ChipConfig[] = [
-  { type: 'lights' },
-  { type: 'motion' },
-  { type: 'windows', show_when_zero: false },
-  { type: 'doors', show_when_zero: false },
-  { type: 'leak', show_when_zero: false },
-];
-
 const CHIP_LABELS: Record<string, string> = {
   lights: 'Światła',
   motion: 'Obecność (motion)',
@@ -66,6 +61,8 @@ const CHIP_LABELS: Record<string, string> = {
   co: 'Tlenek węgla (CO)',
   problem: 'Problemy (problem + safety + tamper)',
   battery_low: 'Słabe baterie',
+  temperature: 'Temperatura',
+  humidity: 'Wilgotność',
   entity: 'Encja',
   filter: 'Filtr',
   template: 'Template',
@@ -83,6 +80,8 @@ const CHIP_ICONS: Record<string, string> = {
   co: 'mdi:molecule-co',
   problem: 'mdi:alert-circle-outline',
   battery_low: 'mdi:battery-alert-variant-outline',
+  temperature: 'mdi:thermometer',
+  humidity: 'mdi:water-percent',
   entity: 'mdi:label-outline',
   filter: 'mdi:filter-variant',
   template: 'mdi:code-braces',
@@ -94,8 +93,19 @@ export class StratumChipsEditor extends LitElement {
 
   @property({ attribute: false }) public chips: ChipConfig[] = [];
 
+  /**
+   * Zestaw, który karta NAPRAWDĘ pokaże przy pustym `chips` — podgląd
+   * w edytorze i baza pierwszej edycji. Belka piętra: `DEFAULT_CHIPS`;
+   * popup pokoju podaje swoje `autoRoomChips` (obecność jako „x min temu",
+   * temperatura/wilgotność). Wspólny podgląd dla obu sprawiał, że pierwszy
+   * dodany w popupie chip kasował mu temperaturę i wilgotność.
+   */
+  @property({ attribute: false }) public defaults: ChipConfig[] = DEFAULT_CHIPS;
+
   @state() private _openRow = -1;
   @state() private _showAddMenu = false;
+
+  private _undo = new EditorUndoController(this);
 
   private _emit(next: ChipConfig[]): void {
     this.dispatchEvent(
@@ -110,7 +120,9 @@ export class StratumChipsEditor extends LitElement {
   /** Zwraca effective chips — rzeczywiste albo domyślne gdy user nic nie ustawił. */
   private _effective(): ChipConfig[] {
     if (this.chips && this.chips.length > 0) return [...this.chips];
-    return [...DEFAULT_CHIPS_PREVIEW];
+    // Kopie obiektów — zmaterializowany default nie może dzielić
+    // referencji ze stałą DEFAULT_CHIPS.
+    return this.defaults.map((c) => ({ ...c }));
   }
 
   private get _isShowingDefaults(): boolean {
@@ -155,9 +167,17 @@ export class StratumChipsEditor extends LitElement {
   }
 
   private _remove(index: number): void {
-    const base = this._effective();
-    this._emit(base.filter((_, i) => i !== index));
+    const before = [...(this.chips ?? [])];
+    const { next, removed } = removeAt(this._effective(), index);
+    if (!removed) return;
+    this._emit(next);
     if (this._openRow === index) this._openRow = -1;
+    else if (this._openRow > index) this._openRow -= 1;
+    // Usunięcie dalej jest natychmiastowe, ale odwracalne — dlaczego nie
+    // dialog potwierdzenia: patrz editor-undo.ts.
+    this._undo.offer(CHIP_LABELS[removed.type] ?? removed.type, () =>
+      this._emit(restoreRemoved(this._effective(), next, before, index, removed)),
+    );
   }
 
   private _move(index: number, delta: -1 | 1): void {
@@ -166,6 +186,9 @@ export class StratumChipsEditor extends LitElement {
     if (target < 0 || target >= base.length) return;
     const next = [...base];
     [next[index], next[target]] = [next[target]!, next[index]!];
+    // Rozwinięty formularz jedzie razem ze swoim chipem.
+    if (this._openRow === index) this._openRow = target;
+    else if (this._openRow === target) this._openRow = index;
     this._emit(next);
   }
 
@@ -173,44 +196,15 @@ export class StratumChipsEditor extends LitElement {
     this._openRow = this._openRow === index ? -1 : index;
   }
 
-  private _patch(index: number, patch: Partial<ChipConfig>): void {
-    const base = this._effective();
-    const next = base.map((c, i) => {
-      if (i !== index) return c;
-      const merged = { ...c, ...patch } as Record<string, unknown>;
-      // Klucze z wartością undefined usuwamy z obiektu (YAML-friendly).
-      for (const key of Object.keys(merged)) {
-        if (merged[key] === undefined) delete merged[key];
-      }
-      return merged as unknown as ChipConfig;
-    });
-    this._emit(next);
-  }
-
   private _onChange(index: number, ev: CustomEvent<{ value: Partial<ChipConfig> }>): void {
     ev.stopPropagation();
-    const value = ev.detail.value ?? {};
-    const cleaned: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) {
-      if (v === '' || v == null) continue;
-      // Domyślne wartości `true` — nie zapisujemy do YAML (szum).
-      if (k === 'show_list' && v === true) continue;
-      if (k === 'show_when_zero' && v === true) continue;
-      cleaned[k] = v;
-    }
-    // Gdy user z powrotem włącza toggle (value === true, a obecnie zapisane
-    // jest false) — pola zostają w configu jako `false`. Musimy jawnie
-    // skasować, żeby powrócić do stanu „default true".
-    const existing = this.chips[index];
-    if (existing) {
-      if ('show_list' in existing && value.show_list !== false) {
-        (cleaned as { show_list?: undefined }).show_list = undefined;
-      }
-      if ('show_when_zero' in existing && value.show_when_zero !== false) {
-        (cleaned as { show_when_zero?: undefined }).show_when_zero = undefined;
-      }
-    }
-    this._patch(index, cleaned as Partial<ChipConfig>);
+    const base = this._effective();
+    const existing = base[index];
+    if (!existing) return;
+    // Reguły „puste pole = usuń klucz" i defaultów toggle'i siedzą
+    // w chipFromForm (testy: tests/chip-editor-ops.test.ts).
+    const value = (ev.detail.value ?? {}) as Record<string, unknown>;
+    this._emit(base.map((c, i) => (i === index ? chipFromForm(existing, value) : c)));
   }
 
   /** Dane dla ha-form — wypełnia defaulty żeby toggle odzwierciedlał realny stan. */
@@ -244,6 +238,12 @@ export class StratumChipsEditor extends LitElement {
         ],
       },
       { name: 'show_when_zero', selector: { boolean: {} } },
+      // „x min temu" zamiast licznika — popup pokoju ma to domyślnie dla
+      // obecności; bez przełącznika nie dało się tego ani zobaczyć, ani
+      // przywrócić po edycji.
+      ...(LAST_CHANGED_CHIP_TYPES.has(chip.type)
+        ? [{ name: 'show_last_changed', selector: { boolean: {} } }]
+        : []),
       ...(listSupported ? [{ name: 'show_list', selector: { boolean: {} } }] : []),
       {
         name: 'tap_action',
@@ -297,18 +297,38 @@ export class StratumChipsEditor extends LitElement {
         ...common,
       ];
     }
+    if (SENSOR_CHIP_TYPES.has(chip.type)) {
+      // Jawny sensor (`entity`) — typ go wspierał, ale bez pola w UI
+      // dało się go ustawić tylko w YAML-u.
+      return [
+        {
+          name: 'entity',
+          selector: {
+            entity: { filter: [{ domain: 'sensor', device_class: chip.type }] },
+          },
+        },
+        ...common,
+      ];
+    }
     // built-in
     return common;
   }
 
-  private _labelFor = (schema: { name: string }): string => {
+  private _labelFor = (
+    schema: { name: string },
+    data?: { type?: ChipConfig['type'] },
+  ): string => {
     const map: Record<string, string> = {
       icon: 'Ikona (override)',
       color: 'Kolor',
       show_when_zero: 'Pokazuj też gdy wartość 0',
+      show_last_changed: 'Czas od ostatniego wykrycia („5 min temu") zamiast licznika',
       show_list: 'Popup z listą po kliknięciu (default ON)',
       tap_action: 'Akcja po kliknięciu (nadpisuje listę)',
-      entity: 'Encja',
+      entity:
+        data?.type && SENSOR_CHIP_TYPES.has(data.type)
+          ? 'Sensor (puste = automatycznie z pomieszczenia)'
+          : 'Encja',
       format: 'Format',
       attribute: 'Atrybut',
       suffix: 'Sufiks (np. °C)',
@@ -327,17 +347,18 @@ export class StratumChipsEditor extends LitElement {
     return html`
       ${showingDefaults
         ? html`<div class="defaults-hint">
-            <ha-icon .icon=${'mdi:information-outline'}></ha-icon>
+            <ha-icon .icon=${'mdi:information-outline'} aria-hidden="true"></ha-icon>
             <span>
-              Pokazujemy domyślny zestaw. Kliknij <strong>Edytuj</strong>,
-              <strong>Usuń</strong> albo <strong>Dodaj chip</strong> żeby
-              dostosować — po pierwszej zmianie konfiguracja się
-              „materializuje" i zapisze do YAML-a.
+              Pokazujemy domyślny zestaw. Rozwiń chip, usuń go albo
+              <strong>Dodaj chip</strong> żeby dostosować — po pierwszej
+              zmianie konfiguracja się „materializuje" i zapisze do YAML-a.
             </span>
           </div>`
         : nothing}
 
-      <div class="stratum-list">${effective.map((c, i) => this._renderChipRow(c, i))}</div>
+      <div class="stratum-list">${effective.map((c, i) => this._renderChipRow(c, i, effective.length))}</div>
+
+      ${renderUndoBar(this._undo)}
 
       ${this._showAddMenu
         ? html`<div class="add-menu">
@@ -347,7 +368,7 @@ export class StratumChipsEditor extends LitElement {
                 class="add-menu-item"
                 @click=${() => this._add(p)}
               >
-                <ha-icon .icon=${p.icon}></ha-icon>
+                <ha-icon .icon=${p.icon} aria-hidden="true"></ha-icon>
                 <span>${p.label}</span>
               </button>`,
             )}
@@ -356,7 +377,7 @@ export class StratumChipsEditor extends LitElement {
               class="add-menu-close"
               @click=${() => (this._showAddMenu = false)}
             >
-              <ha-icon .icon=${'mdi:close'}></ha-icon>
+              <ha-icon .icon=${'mdi:close'} aria-hidden="true"></ha-icon>
               Anuluj
             </button>
           </div>`
@@ -365,7 +386,7 @@ export class StratumChipsEditor extends LitElement {
             class="stratum-add-btn"
             @click=${() => (this._showAddMenu = true)}
           >
-            <ha-icon .icon=${'mdi:plus-circle-outline'}></ha-icon>
+            <ha-icon .icon=${'mdi:plus-circle-outline'} aria-hidden="true"></ha-icon>
             Dodaj chip
           </button>`}
 
@@ -376,21 +397,20 @@ export class StratumChipsEditor extends LitElement {
             @click=${() => this._emit([])}
             title="Przywróć domyślny zestaw"
           >
-            <ha-icon .icon=${'mdi:restore'}></ha-icon>
+            <ha-icon .icon=${'mdi:restore'} aria-hidden="true"></ha-icon>
             Przywróć domyślne
           </button>`
         : nothing}
     `;
   }
 
-  private _renderChipRow(chip: ChipConfig, idx: number): TemplateResult {
+  private _renderChipRow(chip: ChipConfig, idx: number, total: number): TemplateResult {
     const isOpen = this._openRow === idx;
-    const total = this._effective().length;
     const label = CHIP_LABELS[chip.type] ?? chip.type;
     const icon = chip.icon ?? CHIP_ICONS[chip.type] ?? 'mdi:label-outline';
     const summary =
       chip.type === 'entity'
-        ? (chip as { entity?: string }).entity ?? '—'
+        ? (chip as { entity?: string }).entity || '—'
         : chip.type === 'filter'
         ? `${(chip as { domain?: string }).domain ?? '*'}${
             (chip as { device_class?: string }).device_class
@@ -400,55 +420,67 @@ export class StratumChipsEditor extends LitElement {
         : chip.type === 'template'
         ? 'Jinja2'
         : 'built-in';
+    const subId = `chip-sub-${idx}`;
+    // Nagłówek wiersza to prawdziwy <button> (klawiatura, czytnik ekranu,
+    // aria-expanded) zamiast klikalnego diva — i dlatego osobny ołówek
+    // „Edytuj" zniknął z akcji: mniej ikon obok kosza = mniej chybień.
     return html`
       <div class="stratum-row">
-        <div class="stratum-row-head" @click=${() => this._toggleOpen(idx)}>
-          <span class="stratum-row-avatar">
-            <ha-icon .icon=${icon}></ha-icon>
-          </span>
-          <div class="chip-summary">
-            <span class="stratum-row-title">${label}</span>
-            <span class="chip-sub">${summary}</span>
-          </div>
-          <div class="stratum-row-actions" @click=${(e: Event) => e.stopPropagation()}>
+        <div class="stratum-row-head">
+          <button
+            type="button"
+            class="stratum-row-toggle"
+            aria-expanded=${isOpen ? 'true' : 'false'}
+            aria-controls=${subId}
+            @click=${() => this._toggleOpen(idx)}
+          >
+            <span class="stratum-row-avatar">
+              <ha-icon .icon=${icon} aria-hidden="true"></ha-icon>
+            </span>
+            <span class="chip-summary">
+              <span class="stratum-row-title">${label}</span>
+              <span class="chip-sub">${summary}</span>
+            </span>
+            <ha-icon
+              class="stratum-row-chevron"
+              .icon=${isOpen ? 'mdi:chevron-up' : 'mdi:pencil-outline'}
+              aria-hidden="true"
+            ></ha-icon>
+          </button>
+          <div class="stratum-row-actions">
             <button
               type="button"
               class="stratum-icon-btn"
               title="W górę"
+              aria-label=${`${label}: w górę`}
               ?disabled=${idx === 0}
               @click=${() => this._move(idx, -1)}
             >
-              <ha-icon .icon=${'mdi:chevron-up'}></ha-icon>
+              <ha-icon .icon=${'mdi:chevron-up'} aria-hidden="true"></ha-icon>
             </button>
             <button
               type="button"
               class="stratum-icon-btn"
               title="W dół"
+              aria-label=${`${label}: w dół`}
               ?disabled=${idx >= total - 1}
               @click=${() => this._move(idx, 1)}
             >
-              <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
-            </button>
-            <button
-              type="button"
-              class="stratum-icon-btn ${isOpen ? 'accent' : ''}"
-              title=${isOpen ? 'Zwiń' : 'Edytuj'}
-              @click=${() => this._toggleOpen(idx)}
-            >
-              <ha-icon .icon=${isOpen ? 'mdi:chevron-up' : 'mdi:pencil'}></ha-icon>
+              <ha-icon .icon=${'mdi:chevron-down'} aria-hidden="true"></ha-icon>
             </button>
             <button
               type="button"
               class="stratum-icon-btn danger"
               title="Usuń"
+              aria-label=${`Usuń chip ${label}`}
               @click=${() => this._remove(idx)}
             >
-              <ha-icon .icon=${'mdi:delete-outline'}></ha-icon>
+              <ha-icon .icon=${'mdi:delete-outline'} aria-hidden="true"></ha-icon>
             </button>
           </div>
         </div>
         ${isOpen
-          ? html`<div class="stratum-row-sub">
+          ? html`<div class="stratum-row-sub" id=${subId}>
               <ha-form
                 .hass=${this.hass}
                 .data=${this._formDataFor(chip)}
@@ -470,10 +502,6 @@ export class StratumChipsEditor extends LitElement {
         display: block;
       }
 
-      .stratum-row-head {
-        cursor: pointer;
-      }
-
       .chip-summary {
         display: flex;
         flex-direction: column;
@@ -486,21 +514,20 @@ export class StratumChipsEditor extends LitElement {
         color: var(--secondary-text-color);
         margin-top: 2px;
         font-variant-numeric: tabular-nums;
-      }
-
-      .stratum-icon-btn.danger:hover {
-        color: var(--error-color, #e53935);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .add-menu {
         margin-top: 10px;
         padding: 10px;
-        border: 1.5px dashed var(--primary-color, #ff9b42);
+        border: 1.5px dashed var(--primary-color);
         border-radius: 10px;
-        background: color-mix(in srgb, var(--primary-color, #ff9b42) 5%, transparent);
+        background: color-mix(in srgb, var(--primary-color) 5%, transparent);
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
+        gap: 8px;
         align-items: center;
       }
 
@@ -508,14 +535,16 @@ export class StratumChipsEditor extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 6px 10px;
+        min-height: 40px;
+        padding: 6px 12px;
         border-radius: 999px;
         border: 1px solid var(--divider-color);
-        background: var(--card-background-color, rgba(255, 255, 255, 0.02));
+        background: var(--card-background-color);
         color: var(--primary-text-color);
         font-size: 12px;
         cursor: pointer;
-        transition: background 0.12s ease, border-color 0.12s ease;
+        transition: background 0.12s ease, border-color 0.12s ease,
+          transform 0.1s ease;
       }
 
       .add-menu-item ha-icon {
@@ -523,9 +552,9 @@ export class StratumChipsEditor extends LitElement {
       }
 
       .add-menu-item:hover {
-        background: color-mix(in srgb, var(--primary-color, #ff9b42) 10%, transparent);
-        border-color: var(--primary-color, #ff9b42);
-        color: var(--primary-color, #ff9b42);
+        background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+        border-color: var(--primary-color);
+        color: var(--primary-color);
       }
 
       .add-menu-close {
@@ -533,12 +562,32 @@ export class StratumChipsEditor extends LitElement {
         align-items: center;
         gap: 4px;
         margin-left: auto;
-        padding: 6px 10px;
+        min-height: 40px;
+        padding: 6px 12px;
         border: 0;
+        border-radius: 999px;
         background: transparent;
         color: var(--secondary-text-color);
-        font-size: 11px;
+        font-size: 12px;
         cursor: pointer;
+        transition: background 0.12s ease, transform 0.1s ease;
+      }
+
+      .add-menu-close:hover {
+        background: var(--secondary-background-color);
+      }
+
+      .add-menu-item:active,
+      .add-menu-close:active,
+      .reset-btn:active {
+        transform: scale(0.97);
+      }
+
+      .add-menu-item:focus-visible,
+      .add-menu-close:focus-visible,
+      .reset-btn:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 2px;
       }
 
       .defaults-hint {
@@ -548,8 +597,8 @@ export class StratumChipsEditor extends LitElement {
         padding: 10px 12px;
         margin-bottom: 10px;
         border-radius: 8px;
-        background: color-mix(in srgb, var(--primary-color, #ff9b42) 8%, transparent);
-        border: 1px solid color-mix(in srgb, var(--primary-color, #ff9b42) 30%, transparent);
+        background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
         color: var(--primary-text-color);
         font-size: 12px;
         line-height: 1.5;
@@ -557,7 +606,7 @@ export class StratumChipsEditor extends LitElement {
 
       .defaults-hint ha-icon {
         --mdc-icon-size: 18px;
-        color: var(--primary-color, #ff9b42);
+        color: var(--primary-color);
         flex-shrink: 0;
       }
 
@@ -566,14 +615,15 @@ export class StratumChipsEditor extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 6px 12px;
+        min-height: 40px;
+        padding: 6px 14px;
         border: 1px solid var(--divider-color);
         background: transparent;
         color: var(--secondary-text-color);
         border-radius: 999px;
         font-size: 12px;
         cursor: pointer;
-        transition: border-color 0.15s, color 0.15s;
+        transition: border-color 0.15s, color 0.15s, transform 0.1s ease;
       }
 
       .reset-btn:hover {
@@ -583,6 +633,19 @@ export class StratumChipsEditor extends LitElement {
 
       .reset-btn ha-icon {
         --mdc-icon-size: 16px;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .add-menu-item,
+        .add-menu-close,
+        .reset-btn {
+          transition: none;
+        }
+        .add-menu-item:active,
+        .add-menu-close:active,
+        .reset-btn:active {
+          transform: none;
+        }
       }
     `,
   ];

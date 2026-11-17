@@ -96,13 +96,23 @@ export const editorSharedStyles = css`
     font-weight: 500;
     color: var(--primary-text-color);
     cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+      transform 0.1s ease;
   }
 
-  .stratum-pill-btn:hover {
-    background: var(--secondary-background-color, rgba(255, 255, 255, 0.05));
+  .stratum-pill-btn:hover:not(:disabled) {
+    background: var(--secondary-background-color);
     border-color: var(--primary-color);
     color: var(--primary-color);
+  }
+
+  .stratum-pill-btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .stratum-pill-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   .stratum-pill-btn ha-icon {
@@ -135,11 +145,56 @@ export const editorSharedStyles = css`
     background: color-mix(in srgb, var(--primary-color, #ff9b42) 4%, var(--card-background-color, transparent));
   }
 
+  /*
+   * flex-wrap + podstawa tytułu 96 px: na wąskim telefonie akcje (4–5
+   * przycisków po 40 px) schodzą do drugiej linii, zamiast ściskać tytuł
+   * do „…" albo wypychać kosz poza wiersz. Na szerokim ekranie nic się
+   * nie zawija.
+   */
   .stratum-row-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    min-height: 40px;
+  }
+
+  .stratum-row-head > .stratum-row-title {
+    flex: 1 1 96px;
+  }
+
+  /*
+   * Nagłówek wiersza jako przycisk rozwijania (chip editor) — wygląda jak
+   * zwykły wiersz, ale dostaje klawiaturę, fokus i aria-expanded.
+   */
+  .stratum-row-toggle {
+    flex: 1 1 140px;
+    min-width: 0;
+    min-height: 40px;
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 32px;
+    margin: 0;
+    padding: 0 4px 0 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+
+  .stratum-row-toggle:hover {
+    background: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
+  }
+
+  .stratum-row-chevron {
+    --mdc-icon-size: 18px;
+    margin-left: auto;
+    flex-shrink: 0;
+    color: var(--secondary-text-color);
   }
 
   .stratum-row-avatar {
@@ -174,10 +229,11 @@ export const editorSharedStyles = css`
     white-space: nowrap;
   }
 
+  /* gap 4 px (było 2) — sąsiednie cele dotyku muszą mieć oddech. */
   .stratum-row-actions {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     margin-left: auto;
     flex-shrink: 0;
   }
@@ -219,27 +275,37 @@ export const editorSharedStyles = css`
 
   /* === Icon buttons (right actions) === */
 
+  /*
+   * Cel dotyku 40×40 (było 28×28 przy ikonie 18 px) — na telefonie
+   * celowanie w ołówek kończyło się trafieniem w kosz obok.
+   */
   .stratum-icon-btn {
     background: transparent;
     border: 0;
-    padding: 5px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px;
     cursor: pointer;
     color: var(--secondary-text-color);
-    border-radius: 8px;
+    border-radius: 10px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.12s ease, color 0.12s ease;
+    transition: background 0.12s ease, color 0.12s ease, transform 0.1s ease;
   }
 
   .stratum-icon-btn:hover:not(:disabled) {
-    background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+    background: var(--secondary-background-color);
     color: var(--primary-text-color);
   }
 
+  .stratum-icon-btn:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
   .stratum-icon-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
+    opacity: 0.5;
+    cursor: default;
   }
 
   .stratum-icon-btn.accent {
@@ -252,12 +318,88 @@ export const editorSharedStyles = css`
   }
 
   .stratum-icon-btn.danger:hover:not(:disabled) {
-    background: rgba(244, 67, 54, 0.15);
-    color: #f44336;
+    background: color-mix(in srgb, var(--error-color) 15%, transparent);
+    color: var(--error-color);
   }
 
   .stratum-icon-btn ha-icon {
     --mdc-icon-size: 18px;
+  }
+
+  /*
+   * Fokus z klawiatury / switch access — wcześniej żaden przycisk edytora
+   * nie miał widocznego obrysu (focus-visible był tylko na polach tekstu).
+   * Jedna reguła dla wszystkich wspólnych klas przycisków.
+   */
+  .stratum-icon-btn:focus-visible,
+  .stratum-pill-btn:focus-visible,
+  .stratum-chip:focus-visible,
+  .stratum-add-btn:focus-visible,
+  .stratum-row-toggle:focus-visible,
+  .stratum-undo-btn:focus-visible,
+  .stratum-collapsible summary:focus-visible,
+  details.stratum-panel > summary.stratum-panel-header:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  /* === Cofnij po usunięciu (editor-undo.ts) === */
+
+  .stratum-undo-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 4px 4px 4px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--divider-color);
+    background: color-mix(in srgb, var(--card-background-color) 92%, var(--primary-text-color));
+    color: var(--primary-text-color);
+    font-size: 12px;
+    animation: stratum-sub-in 0.18s ease-out;
+  }
+
+  .stratum-undo-bar > ha-icon {
+    --mdc-icon-size: 16px;
+    color: var(--secondary-text-color);
+    flex-shrink: 0;
+  }
+
+  .stratum-undo-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stratum-undo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.12s ease, transform 0.1s ease;
+  }
+
+  .stratum-undo-btn:hover {
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  }
+
+  .stratum-undo-btn:active {
+    transform: scale(0.96);
+  }
+
+  .stratum-undo-btn ha-icon {
+    --mdc-icon-size: 16px;
   }
 
   /* === Sub-form (po rozwinięciu row) === */
@@ -359,13 +501,18 @@ export const editorSharedStyles = css`
     gap: 6px;
     font-size: 13px;
     font-weight: 500;
-    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease,
+      transform 0.1s ease;
   }
 
   .stratum-add-btn:hover {
     border-color: var(--primary-color);
     color: var(--primary-color);
     background: color-mix(in srgb, var(--primary-color, #ff9b42) 5%, transparent);
+  }
+
+  .stratum-add-btn:active {
+    transform: scale(0.98);
   }
 
   .stratum-add-btn ha-icon {
@@ -551,5 +698,35 @@ export const editorSharedStyles = css`
     padding: 4px 16px 16px;
     margin-top: 0;
     border-top: 1px solid var(--divider-color);
+  }
+
+  /*
+   * Furtka reduced motion dla wszystkiego, co wyżej się rusza: wjazd
+   * rozwiniętego formularza i paska „Cofnij", tranzycje oraz skalowanie
+   * pod palcem — edytor nie ma skakać użytkownikowi, który ruchu nie chce.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .stratum-row-sub,
+    .stratum-undo-bar {
+      animation: none;
+    }
+    .stratum-row,
+    .stratum-pill-btn,
+    .stratum-icon-btn,
+    .stratum-row-toggle,
+    .stratum-chip,
+    .stratum-add-btn,
+    .stratum-undo-btn,
+    .stratum-collapsible summary::after,
+    details.stratum-panel > summary.stratum-panel-header::after {
+      transition: none;
+    }
+    .stratum-pill-btn:active:not(:disabled),
+    .stratum-icon-btn:active:not(:disabled),
+    .stratum-chip:active,
+    .stratum-add-btn:active,
+    .stratum-undo-btn:active {
+      transform: none;
+    }
   }
 `;

@@ -9,10 +9,12 @@
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { getAreasInFloor } from './area-entities.js';
+import { getAreasInFloor, getEntitiesInArea } from './area-entities.js';
+import { autoRoomChips } from './room-sections.js';
 import type {
   ChipConfig,
   CoreSectionType,
+  HassEntityRegistryEntry,
   HomeAssistant,
   RoomConfig,
   RoomLightsConfig,
@@ -227,6 +229,27 @@ export class StratumCardRoomsEditor extends LitElement {
   ): void {
     ev.stopPropagation();
     this._updateRoom(areaId, { scenes: ev.detail.scenes });
+  }
+
+  /**
+   * Chipy, które popup pokoju pokaże przy pustym `chips` — dokładnie to,
+   * co liczy stratum-room-card (autoRoomChips na encjach area +
+   * merge_with). Edytor chipów materializuje TEN zestaw przy pierwszej
+   * zmianie; wcześniej brał zestaw belki piętra i gubił temperaturę,
+   * wilgotność oraz „x min temu" przy obecności.
+   */
+  private _autoRoomChips(areaId: string, room: RoomConfig | undefined): ChipConfig[] {
+    if (!this.hass) return [];
+    const seen = new Set<string>();
+    const entries: HassEntityRegistryEntry[] = [];
+    for (const id of [areaId, ...(room?.merge_with ?? [])]) {
+      for (const e of getEntitiesInArea(this.hass, id)) {
+        if (seen.has(e.entity_id)) continue;
+        seen.add(e.entity_id);
+        entries.push(e);
+      }
+    }
+    return autoRoomChips(this.hass, entries);
   }
 
   private _onChipsChanged(
@@ -884,6 +907,7 @@ export class StratumCardRoomsEditor extends LitElement {
             <stratum-chips-editor
               .hass=${this.hass}
               .chips=${room?.chips ?? []}
+              .defaults=${this._autoRoomChips(areaId, room)}
               @chips-changed=${(ev: CustomEvent<{ chips: ChipConfig[] }>) =>
                 this._onChipsChanged(areaId, ev)}
             ></stratum-chips-editor>
