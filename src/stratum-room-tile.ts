@@ -301,6 +301,27 @@ export class StratumRoomTile extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues): void {
+    // Inna encja = inna roleta: cel poprzedniej nie może na nią przejść.
+    if (changed.has('entity') && changed.get('entity') !== undefined) {
+      this._coverTarget = undefined;
+    }
+    // Cel suwaka rolety znika, gdy roleta dojechała albo stoi (po 3 s
+    // „rozruchu") — następna jazda (np. z automatyzacji) pokazuje prawdę.
+    const ct = this._coverTarget;
+    if (ct?.sent) {
+      const st = this.hass?.states?.[this.entity];
+      const pos = st?.attributes?.current_position as number | undefined;
+      const moving = st?.state === 'opening' || st?.state === 'closing';
+      const age = Date.now() - ct.at;
+      if (
+        changed.has('entity') ||
+        (typeof pos === 'number' && Math.abs(pos - ct.pos) <= 1) ||
+        (!moving && age >= 3000) ||
+        age >= 90_000
+      ) {
+        this._coverTarget = undefined;
+      }
+    }
     // Ten sam element kafla potrafi dostać inną encję (zakładki odtwarzaczy
     // w sekcji mediów renderują JEDEN kafel i podmieniają mu `entity`).
     // Stan głośności z poprzedniego głośnika nie może przejść na nowy —
@@ -870,8 +891,7 @@ export class StratumRoomTile extends LitElement {
 
   private _renderAmbientLight(state: HassEntity): TemplateResult {
     const on = state.state === 'on';
-    const bright = (state.attributes?.brightness as number | undefined) ?? 0;
-    const pct = on ? Math.round((bright / 255) * 100) : 0;
+    const pct = this._sliderPct(state);
     const color = lightColorOf(state) ?? '#ffc107';
     const bgIntensity = on ? 0.15 + (pct / 100) * 0.55 : 0;
     const bgStyle = on
@@ -1138,8 +1158,7 @@ export class StratumRoomTile extends LitElement {
 
   private _renderLightSlider(state: HassEntity): TemplateResult {
     const on = state.state === 'on';
-    const bright = (state.attributes?.brightness as number | undefined) ?? 0;
-    const pct = on ? Math.round((bright / 255) * 100) : 0;
+    const pct = this._sliderPct(state);
     const icon = on ? 'mdi:lightbulb-on' : 'mdi:lightbulb';
     return html`
       <div class="tile slider ${on ? 'on' : 'off'}" part="tile">
@@ -1169,8 +1188,43 @@ export class StratumRoomTile extends LitElement {
     `;
   }
 
+  /**
+   * Grupa świateł HA (pomocnik z atrybutem `entity_id`) — tylko dla niej
+   * suwak skaluje członków. Sterownik WLED (`group_entities`) ma własną
+   * jasność mnożoną przez segmenty: sterujemy nim bezpośrednio, jak dotąd.
+   */
+  private _isHaLightGroup(state: HassEntity | undefined): boolean {
+    return Array.isArray(state?.attributes?.entity_id);
+  }
+
+  /** Pozycja suwaka: dla grupy HA średnia świecących członków (baza skalowania). */
+  private _sliderPct(state: HassEntity): number {
+    if (state.state !== 'on') return 0;
+    if (this._isHaLightGroup(state)) return Math.round(this._lightRestPct());
+    const bright = (state.attributes?.brightness as number | undefined) ?? 0;
+    return Math.round((bright / 255) * 100);
+  }
+
   private _onBrightnessChange(ev: Event): void {
-    const pct = Number((ev.target as HTMLInputElement).value);
+    const input = ev.target as HTMLInputElement;
+    const pct = Number(input.value);
+    // Grupa świateł HA: `turn_on` z jasnością na grupie zapala WSZYSTKICH
+    // członków na jednym poziomie (także celowo zgaszonych). Świecącą grupę
+    // skalujemy więc przez kontroler gestu (tylko świecący członkowie,
+    // proporcjonalnie). Suwak to decyzja dyskretna, nie gest — progi
+    // uzbrojenia i „poniżej 2% gaś" z przeciągania tu nie obowiązują.
+    const state = this._state();
+    if (this.hass && this._isHaLightGroup(state) && state?.state === 'on' && pct > 0) {
+      const swipe = this._swipeCtl();
+      const started = swipe.start([this.entity], 'none');
+      const res = started.active ? swipe.end(Math.max(3, pct)) : undefined;
+      if (!res || res.outcome === 'noop') {
+        // Nic nie poszło (np. świecą same przekaźniki) — kciuk wraca na
+        // pozycję faktyczną; Lit nie przepisze niezmienionego `.value` sam.
+        input.value = String(this._sliderPct(state));
+      }
+      return;
+    }
     const brightness = Math.round((pct / 100) * 255);
     if (brightness <= 0) {
       void this.hass?.callService('light', 'turn_off', { entity_id: this.entity });
@@ -1182,8 +1236,43 @@ export class StratumRoomTile extends LitElement {
     }
   }
 
-  private _renderCoverSlider(state: HassEntity): TemplateResult {
+  /**
+   * Pozycja zadana suwakiem rolety, trzymana do dojechania. Roleta raportuje
+   * pozycję w trakcie jazdy (4%, 9%, 15%…), a suwak był związany z bieżącą
+   * pozycją — kciuk skakał z 70% na 4% i pełzł przez 20–60 s, więc wyglądało
+   * to jak nieprzyjęte polecenie i użytkownik przeciągał drugi raz.
+   */
+  @state() private _coverTarget?: { pos: number; at: number; sent: boolean };
+
+  /**
+   * Koniec przeciągania bez zatwierdzenia (palec wrócił na start — wtedy
+   * `change` nie przychodzi — albo gest przerwany). Niewysłany cel znika po
+   * ewentualnym `change`, inaczej suwak zamarzałby na stałe.
+   */
+  private _endCoverDrag = (): void => {
+    const t = this._coverTarget;
+    if (!t || t.sent) return;
+    window.setTimeout(() => {
+      if (this._coverTarget === t) this._coverTarget = undefined;
+    }, 0);
+  };
+
+  private _coverShownPos(state: HassEntity): number {
     const pos = (state.attributes?.current_position as number | undefined) ?? 0;
+    const t = this._coverTarget;
+    if (!t) return pos;
+    const moving = state.state === 'opening' || state.state === 'closing';
+    const age = Date.now() - t.at;
+    // Trzymamy cel: w trakcie przeciągania, w trakcie jazdy (maks. 90 s) i
+    // przez pierwsze 3 s po wysłaniu, zanim roleta w ogóle ruszy.
+    if (!t.sent || (Math.abs(pos - t.pos) > 1 && (moving || age < 3000) && age < 90_000)) {
+      return t.pos;
+    }
+    return pos;
+  }
+
+  private _renderCoverSlider(state: HassEntity): TemplateResult {
+    const pos = this._coverShownPos(state);
     const isOpen = state.state === 'open' || pos > 0;
     return html`
       <div class="tile slider ${isOpen ? 'on' : 'off'}" part="tile">
@@ -1198,12 +1287,25 @@ export class StratumRoomTile extends LitElement {
             step="1"
             .value=${String(pos)}
             @click=${(ev: Event) => ev.stopPropagation()}
+            @input=${(ev: Event) => {
+              // W trakcie przeciągania kciuk należy do palca — render z
+              // raportem pozycji nie może go przestawić.
+              const v = Number((ev.target as HTMLInputElement).value);
+              this._coverTarget = { pos: v, at: Date.now(), sent: false };
+            }}
+            @pointerup=${this._endCoverDrag}
+            @pointercancel=${this._endCoverDrag}
+            @touchcancel=${this._endCoverDrag}
+            @blur=${this._endCoverDrag}
             @change=${(ev: Event) => {
               const v = Number((ev.target as HTMLInputElement).value);
+              this._coverTarget = { pos: v, at: Date.now(), sent: true };
               void this.hass?.callService('cover', 'set_cover_position', {
                 entity_id: this.entity,
                 position: v,
               });
+              // Gdy roleta w ogóle nie ruszy, po 3 s wracamy do jej pozycji.
+              window.setTimeout(() => this.requestUpdate(), 3100);
             }}
           />
         </div>

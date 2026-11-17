@@ -10,7 +10,6 @@ import type {
   HassEntityRegistryEntry,
   HomeAssistant,
 } from './types.js';
-import { registryDeviceClass } from './entity-registry-cache.js';
 
 /** Lista wpisów rejestru, której NIE wolno mutować (współdzielona z cache). */
 export type EntityEntries = readonly HassEntityRegistryEntry[];
@@ -123,12 +122,17 @@ export function filterByDomain(
 
 /**
  * Filtruje encje binary_sensor po `device_class`. Sprawdza w kolejności:
- * 1. `hass.states[id].attributes.device_class` — efektywna klasa (z override)
- * 2. `hass.entities[id].device_class` — user override z Entity Options
- * 3. `hass.entities[id].original_device_class` — native z integracji
+ * 1. `hass.states[id].attributes.device_class` — efektywna klasa. HA core
+ *    sam wpisuje tu nadpisanie z „Pokaż jako" (registry entry ma
+ *    pierwszeństwo przed klasą integracji), więc to źródło wystarcza także
+ *    dla SATEL — sprawdzone na żywej instancji (okna/drzwi SATEL mają klasę
+ *    w atrybutach stanu).
+ * 2. `hass.entities[id]` — wpis wyświetlania, gdy stanu jeszcze nie ma.
  *
- * Niektóre integracje (np. SATEL Integra) nie propagują user override
- * do state.attributes, stąd fallback przez registry.
+ * Dawniej był tu trzeci poziom: pełny rejestr encji pobierany przez
+ * WebSocket (~3 MB przy 5 tys. encji) przy każdym starcie i po każdej
+ * zmianie rejestru, w tej samej kolejce co pierwsze tapnięcia użytkownika.
+ * Nie wnosił niczego, czego nie ma w (1), więc go usunęliśmy.
  */
 export function filterBinarySensorDeviceClass(
   hass: HomeAssistant,
@@ -144,10 +148,7 @@ export function filterBinarySensorDeviceClass(
     const registryEntry = hass.entities?.[entry.entity_id] ?? entry;
     const regClass =
       registryEntry.device_class ?? registryEntry.original_device_class ?? null;
-    if (regClass === deviceClass) return true;
-    // Fallback #2: globalny cache pobrany przez WebSocket — jedyne pewne
-    // źródło user override (np. SATEL + „Pokaż jako klasę urządzenia").
-    return registryDeviceClass(entry.entity_id) === deviceClass;
+    return regClass === deviceClass;
   });
 }
 

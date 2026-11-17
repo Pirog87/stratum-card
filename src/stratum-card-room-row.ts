@@ -1491,6 +1491,19 @@ export class StratumCardRoomRow extends LitElement {
       font-weight: 800;
       cursor: pointer;
       flex-shrink: 0;
+    }
+    /* Poświata pulsu na osobnej warstwie — animujemy tylko opacity
+       (kompozytor), nie box-shadow (przerysowanie w każdej klatce przez cały
+       czas trwania alarmu). Patrz też odznaka na belce piętra. */
+    .alarm-badge::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: 0 0 8px 3px
+        color-mix(in srgb, var(--stratum-chip-leak-color, var(--error-color)) 25%, transparent);
+      opacity: 0;
       animation: stratum-alarm-pulse 1.6s ease-in-out infinite;
     }
     .alarm-badge ha-icon {
@@ -1507,16 +1520,14 @@ export class StratumCardRoomRow extends LitElement {
     @keyframes stratum-alarm-pulse {
       0%,
       100% {
-        box-shadow: 0 0 0 0
-          color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 40%, transparent);
+        opacity: 0;
       }
       50% {
-        box-shadow: 0 0 8px 3px
-          color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 25%, transparent);
+        opacity: 1;
       }
     }
     @media (prefers-reduced-motion: reduce) {
-      .alarm-badge {
+      .alarm-badge::before {
         animation: none;
       }
     }

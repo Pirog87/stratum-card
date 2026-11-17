@@ -41,7 +41,6 @@ import {
 } from './chip-list-helpers.js';
 import { ago } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
-import { subscribeRegistry } from './entity-registry-cache.js';
 import {
   addGroupMembers,
   collectEntityIds,
@@ -128,14 +127,9 @@ export class StratumRoomCard extends LitElement {
   /** Odświeża etykiety „5min temu" (chip ruchu, wiersze alarmów). */
   protected readonly _agoTicker = new AgoTicker(this);
 
-  private _unsubRegistry?: () => void;
 
   public connectedCallback(): void {
     super.connectedCallback();
-    // Nadpisania device_class przychodzą z osobnego cache'u rejestru. Dotąd
-    // popup dowiadywał się o nich przy okazji — bo karta piętra i tak
-    // renderowała go bez przerwy. Z bramką musi nasłuchiwać sam.
-    this._unsubRegistry = subscribeRegistry(() => this.requestUpdate());
     this._unsubPower = subscribePower(() => this.requestUpdate());
   }
 
@@ -144,8 +138,6 @@ export class StratumRoomCard extends LitElement {
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     this._templates.destroy();
-    this._unsubRegistry?.();
-    this._unsubRegistry = undefined;
     this._unsubPower?.();
     this._unsubPower = undefined;
   }
