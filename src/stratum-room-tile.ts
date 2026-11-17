@@ -301,6 +301,18 @@ export class StratumRoomTile extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues): void {
+    // Ten sam element kafla potrafi dostać inną encję (zakładki odtwarzaczy
+    // w sekcji mediów renderują JEDEN kafel i podmieniają mu `entity`).
+    // Stan głośności z poprzedniego głośnika nie może przejść na nowy —
+    // dawniej „+" po zmianie zakładki wysyłał telewizorowi głośność Sonosa.
+    if (changed.has('entity') && changed.get('entity') !== undefined) {
+      this._volReset();
+    }
+    // Głośność trzymana po puszczeniu ± — oddajemy ją stanowi z HA, gdy ten
+    // dogonił (i nic już nie leci), zamiast po sztywnych 1,5 s.
+    if (this._volPending !== undefined && !this._volPressing && changed.has('hass')) {
+      this._volMaybeRelease();
+    }
     // Po puszczeniu palca trzymamy wartość docelową, dopóki stany z HA do
     // niej nie dojdą (członkowie grupy raportują po kolei).
     if (this._hold && !this._dragging && changed.has('hass')) {
@@ -323,6 +335,91 @@ export class StratumRoomTile extends LitElement {
   private _volClearTimer?: number;
 
   private _volTicks = 0;
+
+  /** Przycisk ± wciśnięty (między pointerdown a pierwszym zakończeniem). */
+  private _volPressing = false;
+
+  /**
+   * Wysyłka latest-wins: jedna komenda `volume_set` w locie, a kolejne
+   * kroki nadpisują tylko wartość czekającą. Przytrzymanie na wolnym
+   * urządzeniu (TV, Sonos po Wi-Fi) wysyłało ~34 komendy w 5 s, które
+   * urządzenie odrabiało jeszcze długo po puszczeniu.
+   */
+  private _volInflight = false;
+
+  /**
+   * Pokolenie regulacji — rośnie przy zmianie odtwarzacza / odłączeniu.
+   * Odpowiedź na komendę z poprzedniego pokolenia niczego już nie rusza:
+   * dawniej zmiana zakładki w trakcie lecącej komendy zostawiała „w locie"
+   * stary głośnik, a pierwszy krok na nowym ginął w kolejce.
+   */
+  private _volGen = 0;
+
+  private _volQueued?: number;
+
+  private _volLastSent?: number;
+
+  private _volSend(level: number): void {
+    if (!this.hass) return;
+    if (this._volInflight) {
+      this._volQueued = level;
+      return;
+    }
+    this._volInflight = true;
+    this._volLastSent = level;
+    const entity = this.entity;
+    const gen = this._volGen;
+    const done = (): void => {
+      // Kafel dostał w międzyczasie inny głośnik albo został odłączony —
+      // stan kolejki należy już do nowego pokolenia, nie ruszamy go.
+      if (gen !== this._volGen) return;
+      this._volInflight = false;
+      const queued = this._volQueued;
+      this._volQueued = undefined;
+      if (queued !== undefined && queued !== this._volLastSent) {
+        this._volSend(queued);
+        return;
+      }
+      if (!this._volPressing) this._volMaybeRelease();
+    };
+    void Promise.resolve(
+      this.hass.callService('media_player', 'volume_set', { volume_level: level }, { entity_id: entity }),
+    ).then(done, done);
+  }
+
+  /** Oddaje suwak stanowi z HA, gdy ten dogonił wartość optymistyczną. */
+  private _volMaybeRelease(): void {
+    if (this._volPending === undefined || this._volInflight || this._volQueued !== undefined) return;
+    // Tylko zgodność wartości — nie „pierwszy raport po potwierdzeniu":
+    // urządzenia odsyłają raporty ze spóźnieniem, a stara wartość przyjęta
+    // za prawdę cofała głośność przy następnym tapnięciu. Urządzenia
+    // zaokrąglające (kroki 5%) puszcza bezpiecznik 4 s.
+    const actual = this.hass?.states?.[this.entity]?.attributes?.volume_level;
+    const step = (this.volumeStep ?? 2) / 100;
+    if (typeof actual === 'number' && Math.abs(actual - this._volPending) <= Math.max(0.015, step / 2)) {
+      this._volPending = undefined;
+      if (this._volClearTimer !== undefined) {
+        window.clearTimeout(this._volClearTimer);
+        this._volClearTimer = undefined;
+      }
+    }
+  }
+
+  /** Czyści cały stan regulacji głośności (zmiana encji, odłączenie). */
+  private _volReset(): void {
+    this._volGen += 1;
+    // Komenda poprzedniego głośnika niech leci sama — nowy wysyła od razu.
+    this._volInflight = false;
+    this._volStopHold();
+    this._volPressing = false;
+    if (this._volClearTimer !== undefined) {
+      window.clearTimeout(this._volClearTimer);
+      this._volClearTimer = undefined;
+    }
+    this._volQueued = undefined;
+    this._volLastSent = undefined;
+    this._volPending = undefined;
+  }
 
   /**
    * Bramka renderu. Popup pokoju ma 20–50 kafli i każdy dostaje nowy `hass`
@@ -403,11 +500,9 @@ export class StratumRoomTile extends LitElement {
     this._drag = undefined;
     this._dragging = false;
     this._dragPct = undefined;
-    this._volStopHold();
-    if (this._volClearTimer !== undefined) {
-      window.clearTimeout(this._volClearTimer);
-      this._volClearTimer = undefined;
-    }
+    // Pełny reset regulacji głośności — przytrzymanie przerwane odłączeniem
+    // nie może zostawić zawieszonej wartości po ponownym podpięciu kafla.
+    this._volReset();
     // Krótkofalówka: zwolnij mikrofon, gdy kafel wypada z DOM.
     this._recWanted = false;
     if (this._recMaxTimer !== undefined) {
@@ -431,12 +526,11 @@ export class StratumRoomTile extends LitElement {
       this._volPending ??
       ((st?.attributes?.volume_level as number | undefined) ?? 0);
     const step = (this.volumeStep ?? 2) / 100;
-    const next = Math.max(0, Math.min(1, cur + dir * step));
+    // Zaokrąglenie do 0,1% — bez tego sumowanie kroków dawało ogony typu
+    // 0.30000000000000004, a porównania „to samo co wysłane" zawodziły.
+    const next = Math.round(Math.max(0, Math.min(1, cur + dir * step)) * 1000) / 1000;
     this._volPending = next;
-    void this.hass?.callService('media_player', 'volume_set', {
-      entity_id: this.entity,
-      volume_level: next,
-    });
+    this._volSend(next);
   }
 
   /**
@@ -453,6 +547,7 @@ export class StratumRoomTile extends LitElement {
       window.clearTimeout(this._volClearTimer);
       this._volClearTimer = undefined;
     }
+    this._volPressing = true;
     this._volTicks = 0;
     this._volStep(dir);
     const tick = (): void => {
@@ -467,11 +562,20 @@ export class StratumRoomTile extends LitElement {
   private _volHoldEnd = (ev?: Event): void => {
     ev?.stopPropagation();
     this._volStopHold();
-    // Po puszczeniu trzymamy wartość optymistyczną chwilę, aż hass dogoni.
+    // Na dotyku przychodzą po sobie pointerup, pointerleave i pointercancel —
+    // liczy się tylko pierwsze. Dawniej każde planowało własny timer, a
+    // osierocony timer zerował wartość optymistyczną w środku kolejnych
+    // tapnięć i głośność cofała się o kilka procent.
+    if (!this._volPressing) return;
+    this._volPressing = false;
+    if (this._volClearTimer !== undefined) window.clearTimeout(this._volClearTimer);
+    // Wartość trzymamy, aż HA ją potwierdzi (willUpdate / _volMaybeRelease);
+    // bezpiecznik na wypadek urządzenia, które nie raportuje głośności.
     this._volClearTimer = window.setTimeout(() => {
-      this._volPending = undefined;
       this._volClearTimer = undefined;
-    }, 1500);
+      this._volPending = undefined;
+    }, 4000);
+    this._volMaybeRelease();
   };
 
   private _volStopHold(): void {
@@ -1437,11 +1541,20 @@ export class StratumRoomTile extends LitElement {
                     Math.round((this._volPending ?? volume) * 100),
                   )}
                   @change=${(ev: Event) => {
-                    const v = Number((ev.target as HTMLInputElement).value);
-                    void this.hass?.callService('media_player', 'volume_set', {
-                      entity_id: this.entity,
-                      volume_level: v / 100,
-                    });
+                    // Suwak idzie tą samą kolejką co ± — ostatnia akcja
+                    // użytkownika wygrywa. Dawniej czekające „+" leciało
+                    // po suwaku i nadpisywało jego wartość.
+                    const v = Math.round(Number((ev.target as HTMLInputElement).value)) / 100;
+                    this._volStopHold();
+                    this._volPressing = false;
+                    this._volPending = v;
+                    if (this._volClearTimer !== undefined) window.clearTimeout(this._volClearTimer);
+                    this._volClearTimer = window.setTimeout(() => {
+                      this._volClearTimer = undefined;
+                      this._volPending = undefined;
+                    }, 4000);
+                    this._volSend(v);
+                    this._volMaybeRelease();
                   }}
                 />
                 <button
