@@ -14,6 +14,7 @@ import type {
 } from './types.js';
 import { filterBinarySensorDeviceClass, filterByDomain, isLightGroupEntity } from './area-entities.js';
 import { roomLevelFromHass } from './light-dimming.js';
+import { effectiveView, isOnEffective, pendingWant } from './power-pending.js';
 
 // Domyślny zestaw pól row/tile — wszystkie „informatywne" metryki.
 // Każde pole renderuje się tylko gdy ma sensowną wartość (> 0 / truthy),
@@ -249,7 +250,7 @@ export function computeTileData(
     temperatureValue: temp?.value,
     humidity: hum?.formatted,
     humidityValue: hum?.value,
-    lightsOn: countOn(hass, lightsIds),
+    lightsOn: lightsIds.filter((id) => isOnEffective(hass, id)).length,
     motion: anyOn(hass, motionIds),
     windowsOpen: countOn(hass, windowsIds),
     doorsOpen: countOn(hass, doorsIds),
@@ -277,7 +278,9 @@ function avgBrightness(
   hass: HomeAssistant,
   entityIds: string[],
 ): number | undefined {
-  const level = roomLevelFromHass(hass, entityIds);
+  // Stan „w toku" (tapnięty włącznik, zanim HA potwierdzi) wlicza się od
+  // razu — wypełnienie i licznik reagują na tapnięcie, nie na ostatni raport.
+  const level = roomLevelFromHass(hass, entityIds, (id) => effectiveView(hass, id));
   return level === undefined ? undefined : level / 100;
 }
 
@@ -323,6 +326,8 @@ function readLightsColor(
   for (const id of entityIds) {
     const state = hass.states?.[id];
     if (!state || state.state !== 'on') continue;
+    // Tapnięte „zgaś", zanim HA potwierdził — nie barwi już akcentu.
+    if (pendingWant(hass, id) === 'off') continue;
     const brightnessRaw = state.attributes?.brightness as number | undefined;
     const brightness =
       typeof brightnessRaw === 'number'

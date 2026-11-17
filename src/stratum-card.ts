@@ -53,7 +53,8 @@ import {
   watchedStateChanged,
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
-import { LightSwipe, markOff, rememberBeforeOff } from './light-swipe.js';
+import { LightSwipe } from './light-swipe.js';
+import { subscribePower, toggleRoomLights } from './power-pending.js';
 import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
 import './stratum-card-editor.js';
@@ -72,7 +73,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.107.2';
+const VERSION = '1.108.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -563,6 +564,8 @@ export class StratumCard extends LitElement {
     this._closeChipListNow();
   };
 
+  private _unsubPower?: () => void;
+
   /** Unsubscribe dla entity registry — wywołujemy w disconnect. */
   private _unsubRegistry?: () => void;
 
@@ -577,6 +580,8 @@ export class StratumCard extends LitElement {
     // Subskrybuj globalny entity registry cache — gdy fetch się zakończy,
     // chipy / row / popup liczą device_class z overridem (np. SATEL).
     this._unsubRegistry = subscribeRegistry(() => this.requestUpdate());
+    // Tapnięty włącznik ma się przestawić od razu, a nie po raporcie z HA.
+    this._unsubPower = subscribePower(() => this.requestUpdate());
     if (this.hass) void ensureRegistry(this.hass);
     document.addEventListener('visibilitychange', this._onVisibilityChange);
   }
@@ -591,6 +596,8 @@ export class StratumCard extends LitElement {
     window.removeEventListener('popstate', this._onPopState);
     this._historyDepth = 0;
     this._unsubRegistry?.();
+    this._unsubPower?.();
+    this._unsubPower = undefined;
     this._unsubRegistry = undefined;
     // Żadnych spóźnionych komend jasności po zniknięciu karty z widoku.
     for (const swipe of this._swipes.values()) swipe.dispose();
@@ -1711,15 +1718,9 @@ export class StratumCard extends LitElement {
   ): void {
     if (!this.hass) return;
     const ids = resolveFieldEntityIds(this.hass, entries, 'lights', fieldEntities);
-    if (ids.length === 0) return;
-    const anyOn = ids.some((id) => this.hass!.states[id]?.state === 'on');
-    // Gasimy włącznikiem → zapamiętaj, co świeciło i jak jasno. Przeciągnięcie
-    // po ciemnym wierszu przywróci wtedy ten zestaw, a nie cały pokój.
-    if (anyOn && swipeKey) rememberBeforeOff(swipeKey, this.hass, ids);
-    if (anyOn) markOff(this.hass, ids);
-    void this.hass.callService('light', anyOn ? 'turn_off' : 'turn_on', {
-      entity_id: ids,
-    });
+    // Natychmiastowy stan na przełączniku, gaszenie tylko świecących,
+    // pamięć zestawu dla suwaka — wszystko w power-pending.ts.
+    toggleRoomLights(this.hass, ids, swipeKey);
   }
 
   private _openRoomPopup(

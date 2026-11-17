@@ -10,6 +10,7 @@ import type { HomeAssistant, SceneBarConfig, SceneConfig } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
 import { runTapAction } from './tap-action.js';
+import { sceneSettled, startScenePending, type ScenePending } from './scene-pending.js';
 import { lightColorOf } from './tile-data.js';
 import {
   buildGradient,
@@ -123,11 +124,44 @@ export class StratumSceneBar extends LitElement {
 
   private _ackTimer?: number;
 
+  /**
+   * Sceny „w toku": od tapnięcia, aż światła przestaną się zmieniać
+   * (scene-pending.ts). W tym czasie obwódka stoi, a powtórny tap nie
+   * wysyła sceny drugi raz — każde powtórzenie to kolejne komendy w kolejce
+   * Zigbee i lampy, które jeszcze nie zdążyły, reagowały przez to później.
+   */
+  @state() private _pending = new Map<string, ScenePending>();
+
+  private _pendingTimer?: number;
+
   public disconnectedCallback(): void {
     if (this._ackTimer !== undefined) window.clearTimeout(this._ackTimer);
     this._ackTimer = undefined;
+    if (this._pendingTimer !== undefined) window.clearInterval(this._pendingTimer);
+    this._pendingTimer = undefined;
+    this._pending = new Map();
     super.disconnectedCallback();
   }
+
+  /** Sprawdza postęp scen w toku (co 200 ms, tylko gdy jakaś trwa). */
+  private _checkPending = (): void => {
+    const now = Date.now();
+    let changed = false;
+    const next = new Map(this._pending);
+    for (const [entity, p] of next) {
+      if (sceneSettled(p, this.hass, now)) {
+        next.delete(entity);
+        changed = true;
+        // Zakończenie: ta sama obwódka gaśnie płynnie (dawny błysk).
+        this._flashAck(entity);
+      }
+    }
+    if (changed) this._pending = next;
+    if (next.size === 0 && this._pendingTimer !== undefined) {
+      window.clearInterval(this._pendingTimer);
+      this._pendingTimer = undefined;
+    }
+  };
 
   private _flashAck(entity?: string): void {
     if (!entity) return;
@@ -150,10 +184,21 @@ export class StratumSceneBar extends LitElement {
   }
 
   private _onTap(scene: SceneConfig): void {
-    this._flashAck(scene.entity);
     if (scene.tap_action) {
+      this._flashAck(scene.entity);
       void runTapAction(this.hass, scene.tap_action, { source: this });
       return;
+    }
+    const entity = scene.entity;
+    // Scena już się wykonuje — drugi tap tylko potwierdza, nie wysyła.
+    if (entity && this._pending.has(entity)) return;
+    if (entity && entity.startsWith('scene.')) {
+      const next = new Map(this._pending);
+      next.set(entity, startScenePending(this.hass, entity, Date.now()));
+      this._pending = next;
+      this._pendingTimer ??= window.setInterval(this._checkPending, 200);
+    } else {
+      this._flashAck(entity);
     }
     this._defaultActivate(scene);
   }
@@ -223,9 +268,12 @@ export class StratumSceneBar extends LitElement {
     return html`
       <button
         class="tile ${hasBackdrop ? 'has-image' : 'no-image'} ${scene.entity &&
-        this._ack === scene.entity
+        this._pending.has(scene.entity)
+          ? 'ack pending'
+          : scene.entity && this._ack === scene.entity
           ? 'ack'
           : ''}"
+        aria-busy=${scene.entity && this._pending.has(scene.entity) ? 'true' : 'false'}
         part="scene"
         style=${style}
         title=${name}
@@ -368,6 +416,19 @@ export class StratumSceneBar extends LitElement {
       animation: stratum-scene-ack 0.9s ease-out forwards;
     }
 
+    /* Scena w toku: obwódka stoi bez gaśnięcia, dopóki lampy się zmieniają
+       (bez pulsowania — puls w tej karcie znaczy alarm). Po dojechaniu klasa
+       pending znika i obwódka gaśnie zwykłą animacją potwierdzenia. */
+    .tile.ack.pending::before {
+      animation: none;
+      opacity: 1;
+    }
+
+    .tile:active {
+      transform: scale(0.97);
+      transition-duration: 80ms;
+    }
+
     @keyframes stratum-scene-ack {
       from {
         opacity: 1;
@@ -383,7 +444,8 @@ export class StratumSceneBar extends LitElement {
       .tile.ack::before {
         animation: none;
       }
-      .tile:hover {
+      .tile:hover,
+      .tile:active {
         transform: none;
       }
     }

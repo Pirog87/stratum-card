@@ -4,6 +4,29 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.108.0] — 2026-11-17
+
+### Changed (natychmiastowa reakcja na tapnięcie)
+- **Przełączniki przestawiają się od razu**, a nie po raporcie ostatniej
+  lampy: mini-włącznik wiersza, główny włącznik świateł w popupie, kafle
+  (włącz/wyłącz, grupy świateł), przełączniki w liście „Włączone światła".
+  Stan „w toku" trzyma się, aż HA potwierdzi, najdłużej 5 s — jeśli
+  komenda się nie udała, przełącznik wraca do prawdy. W teście (echo HA
+  150–700 ms na lampę) czas od tapnięcia do przestawienia: ok. 670 ms → 5 ms.
+- **Drugi tap nie odwraca akcji.** Zamiast `toggle` karta wysyła jawne
+  „włącz"/„wyłącz" wyliczone z tego, co widać na ekranie.
+- **Gaszenie pokoju wysyła komendę tylko do świecących lamp** (kuchnia: 15
+  zamiast 48 encji) — „pykanie" po kolei kończy się wyraźnie szybciej.
+  Główny włącznik popupu zapamiętuje też zestaw dla suwaka wiersza.
+- **Scena „w toku":** obwódka kafla stoi, dopóki lampy się zmieniają
+  (koniec po 0,7 s ciszy, najdłużej 4 s), a powtórny tap w tym czasie nie
+  wysyła sceny drugi raz — dokładał komend do kolejki Zigbee i spóźniał
+  lampy, które jeszcze nie zdążyły. Kafel sceny ma też efekt wciśnięcia.
+- **Lista „Włączone światła" nie ucieka spod palca.** Zgaszona lampa
+  zostaje w liście (z przełącznikiem „wyłączone") do jej zamknięcia — dawniej
+  wiersz znikał, reszta podjeżdżała i drugi tap trafiał w inną lampę.
+  „Wyłącz wszystkie" gasi tylko to, co świeci.
+
 ## [1.107.2] — 2026-11-17
 
 ### Fixed
