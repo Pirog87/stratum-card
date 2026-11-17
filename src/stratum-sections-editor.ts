@@ -7,11 +7,13 @@
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
+  CoreSectionType,
   HomeAssistant,
   RoomSectionConfig,
-  RoomSectionType,
+  SectionVisibility,
   SummaryField,
 } from './types.js';
+import { isCoreSectionType } from './room-block-visibility.js';
 import { SECTION_LABEL, SECTION_ICON } from './section-defaults.js';
 import {
   SECTION_PRESETS,
@@ -21,6 +23,13 @@ import {
   type SectionPreset,
 } from './section-presets.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import {
+  MODE_OPTIONS_BY_TYPE,
+  entityDomainsForType,
+  retypeSection,
+} from './section-type-change.js';
+import { removeAt, restoreRemoved } from './editor-list-ops.js';
+import { EditorUndoController, renderUndoBar } from './editor-undo.js';
 
 const TYPE_OPTIONS = [
   { value: 'summary', label: 'Podsumowanie' },
@@ -46,66 +55,6 @@ const SUMMARY_FIELD_OPTIONS = [
   { value: 'battery_low', label: 'Bateria (ostrzeż)' },
   { value: 'leak', label: 'Wyciek wody' },
 ];
-
-/** Opcje trybu wyświetlania dostępne per typ sekcji. */
-const MODE_OPTIONS_BY_TYPE: Partial<Record<RoomSectionType, Array<{ value: string; label: string }>>> = {
-  lights: [
-    { value: 'rail', label: 'Rail (pasek jasności z lewej + swipe)' },
-    { value: 'tint', label: 'Tint (tło w kolorze światła + swipe)' },
-    { value: 'tile', label: 'Tile (kafel z toggle)' },
-    { value: 'slider', label: 'Slider (brightness)' },
-    { value: 'ambient', label: 'Ambient (kolor + jasność w tle)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  covers: [
-    { value: 'tile', label: 'Tile (kafel z przyciskami)' },
-    { value: 'slider', label: 'Slider (pozycja)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (open/close)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  switches: [
-    { value: 'tile', label: 'Tile (kafel z toggle)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  fans: [
-    { value: 'tile', label: 'Tile (kafel z toggle)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  media: [
-    { value: 'player', label: 'Player (okładka + sterowanie, reszta zwinięta)' },
-    { value: 'tile', label: 'Tile (play/pause)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (play/pause)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  windows: [
-    { value: 'tile', label: 'Tile (kafel ze statusem)' },
-    { value: 'chips', label: 'Chips (status readonly)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  doors: [
-    { value: 'tile', label: 'Tile (kafel ze statusem)' },
-    { value: 'chips', label: 'Chips (status readonly)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  scenes: [
-    { value: 'tile', label: 'Tile (przycisk aktywuj)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (przycisk aktywuj)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  summary: [
-    { value: 'cards', label: 'Cards (kafle z labelem + value)' },
-    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
-  ],
-};
 
 /**
  * Schema dla ha-form BEZ `mode` — mode renderujemy osobno jako wizualny picker.
@@ -229,31 +178,6 @@ function buildSchema(section: RoomSectionConfig) {
   return [...common, ...extra];
 }
 
-function entityDomainsForType(type: RoomSectionType): string[] {
-  switch (type) {
-    case 'lights':
-      return ['light'];
-    case 'covers':
-      return ['cover'];
-    case 'windows':
-    case 'doors':
-      return ['binary_sensor'];
-    case 'climate':
-      return ['climate'];
-    case 'media':
-      return ['media_player'];
-    case 'fans':
-      return ['fan'];
-    case 'switches':
-      return ['switch'];
-    case 'scenes':
-      return ['scene', 'script'];
-    case 'summary':
-    case 'custom':
-      return [];
-  }
-}
-
 const LABELS: Record<string, string> = {
   type: 'Typ sekcji',
   title: 'Nazwa (override)',
@@ -282,9 +206,23 @@ export class StratumSectionsEditor extends LitElement {
 
   @property({ attribute: false }) public sections: RoomSectionConfig[] = [];
 
+  /**
+   * Widoczność sekcji rdzeniowych (lights/covers/media/scenes) liczona
+   * przez rodzica z bloków popupu. Gdy podana, oko tych sekcji pokazuje
+   * ten stan i zamiast pisać `section.hidden` emituje `core-section-toggle`
+   * — rodzic zapisuje to do `popup_order`, tego samego miejsca co oko
+   * na nagłówku bloku. Bez tego były dwa niezależne przełączniki jednego
+   * bloku, które się rozjeżdżały. Brak (edytor samodzielnej room-card,
+   * bez nagłówków bloków) = dotychczasowe `section.hidden`.
+   */
+  @property({ attribute: false })
+  public coreVisibility?: Partial<Record<CoreSectionType, SectionVisibility>>;
+
   @state() private _open = new Set<number>();
 
   @state() private _showPresets = false;
+
+  private _undo = new EditorUndoController(this);
 
   private _emit(next: RoomSectionConfig[]): void {
     this.dispatchEvent(
@@ -309,7 +247,12 @@ export class StratumSectionsEditor extends LitElement {
   private _updateAt(index: number, patch: Partial<RoomSectionConfig>): void {
     const next = [...this.sections];
     const prev = next[index]!;
-    const merged: RoomSectionConfig = { ...prev, ...patch };
+    // Zmiana typu buduje sekcję od nowa (retypeSection) — merge zostawiłby
+    // tryb i encje starego typu, np. lampy jako kafle rolet.
+    const merged: RoomSectionConfig =
+      patch.type && patch.type !== prev.type
+        ? retypeSection(prev, patch.type)
+        : { ...prev, ...patch };
     if (!merged.title) delete merged.title;
     if (!merged.icon) delete merged.icon;
     if (!merged.entity) delete merged.entity;
@@ -389,8 +332,20 @@ export class StratumSectionsEditor extends LitElement {
   }
 
   private _remove(index: number): void {
-    const next = this.sections.filter((_, i) => i !== index);
+    const before = [...this.sections];
+    const { next, removed } = removeAt(before, index);
+    if (!removed) return;
     this._emit(next);
+    const prevOpen = new Set(this._open);
+    // Natychmiast, ale z „Cofnij" — sekcja potrafi nieść tryb, encje
+    // i szablon karty, a kosz stoi tuż obok ołówka (patrz editor-undo.ts).
+    this._undo.offer(removed.title ?? SECTION_LABEL[removed.type] ?? removed.type, () => {
+      const restored = restoreRemoved(this.sections, next, before, index, removed);
+      this._emit(restored);
+      // Dokładny powrót przywraca rozwinięte formularze; inaczej zwijamy,
+      // żeby po cofnięciu nie otworzył się formularz innej sekcji.
+      this._open = JSON.stringify(restored) === JSON.stringify(before) ? prevOpen : new Set();
+    });
     const open = new Set<number>();
     for (const i of this._open) {
       if (i === index) continue;
@@ -414,8 +369,29 @@ export class StratumSectionsEditor extends LitElement {
     this._open = open;
   }
 
+  /** Stan oka sekcji: z rodzica dla rdzeniowych (gdy podany), inaczej section.hidden. */
+  private _visibility(section: RoomSectionConfig): SectionVisibility {
+    const managed = this.coreVisibility && isCoreSectionType(section.type)
+      ? this.coreVisibility[section.type]
+      : undefined;
+    if (managed) return managed;
+    return section.hidden ? 'hidden' : 'visible';
+  }
+
   private _toggleHidden(index: number): void {
-    this._updateAt(index, { hidden: !this.sections[index]?.hidden });
+    const section = this.sections[index];
+    if (!section) return;
+    if (this.coreVisibility && isCoreSectionType(section.type)) {
+      this.dispatchEvent(
+        new CustomEvent('core-section-toggle', {
+          detail: { type: section.type },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      return;
+    }
+    this._updateAt(index, { hidden: !section.hidden });
   }
 
   private _toggleEdit(index: number): void {
@@ -432,56 +408,77 @@ export class StratumSectionsEditor extends LitElement {
           const open = this._open.has(idx);
           const label = section.title ?? SECTION_LABEL[section.type];
           const icon = section.icon ?? SECTION_ICON[section.type];
-          const rowClass = `stratum-row ${!section.hidden ? 'active' : ''} ${section.hidden ? 'section-hidden' : ''}`;
+          const visibility = this._visibility(section);
+          const hidden = visibility === 'hidden';
+          const rowClass = `stratum-row ${!hidden ? 'active' : ''} ${hidden ? 'section-hidden' : ''}`;
           return html`
             <div class=${rowClass}>
               <div class="stratum-row-head">
                 <span class="stratum-row-avatar">
-                  <ha-icon .icon=${icon}></ha-icon>
+                  <ha-icon .icon=${icon} aria-hidden="true"></ha-icon>
                 </span>
                 <span class="stratum-row-title">${label}</span>
-                ${section.hidden
+                ${hidden
                   ? html`<span class="stratum-badge ghost">ukryta</span>`
+                  : visibility === 'partial'
+                  ? html`<span class="stratum-badge ghost">częściowo ukryta</span>`
                   : nothing}
                 <div class="stratum-row-actions">
                   <button
+                    type="button"
                     class="stratum-icon-btn"
                     title="Przesuń w górę"
+                    aria-label=${`${label}: przesuń w górę`}
                     ?disabled=${idx === 0}
                     @click=${() => this._move(idx, -1)}
                   >
-                    <ha-icon .icon=${'mdi:chevron-up'}></ha-icon>
+                    <ha-icon .icon=${'mdi:chevron-up'} aria-hidden="true"></ha-icon>
                   </button>
                   <button
+                    type="button"
                     class="stratum-icon-btn"
                     title="Przesuń w dół"
+                    aria-label=${`${label}: przesuń w dół`}
                     ?disabled=${idx === this.sections.length - 1}
                     @click=${() => this._move(idx, 1)}
                   >
-                    <ha-icon .icon=${'mdi:chevron-down'}></ha-icon>
+                    <ha-icon .icon=${'mdi:chevron-down'} aria-hidden="true"></ha-icon>
                   </button>
                   <button
+                    type="button"
                     class="stratum-icon-btn"
-                    title=${section.hidden ? 'Pokaż' : 'Ukryj'}
+                    title=${hidden
+                      ? 'Pokaż'
+                      : visibility === 'partial'
+                      ? 'Ukryj oba bloki świateł'
+                      : 'Ukryj'}
+                    aria-label=${`${label}: ukryta`}
+                    aria-pressed=${hidden ? 'true' : visibility === 'partial' ? 'mixed' : 'false'}
                     @click=${() => this._toggleHidden(idx)}
                   >
                     <ha-icon
-                      .icon=${section.hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}
+                      .icon=${hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}
+                      aria-hidden="true"
                     ></ha-icon>
                   </button>
                   <button
+                    type="button"
                     class="stratum-icon-btn ${open ? 'accent' : ''}"
                     title=${open ? 'Zwiń' : 'Edytuj'}
+                    aria-label=${`${label}: ${open ? 'zwiń' : 'edytuj'}`}
+                    aria-expanded=${open ? 'true' : 'false'}
                     @click=${() => this._toggleEdit(idx)}
                   >
-                    <ha-icon .icon=${open ? 'mdi:chevron-up' : 'mdi:pencil'}></ha-icon>
+                    <ha-icon .icon=${open ? 'mdi:chevron-up' : 'mdi:pencil'} aria-hidden="true"></ha-icon>
                   </button>
                   <button
+                    type="button"
                     class="stratum-icon-btn danger"
                     title="Usuń"
+                    aria-label=${`Usuń sekcję ${label}`}
                     @click=${() => this._remove(idx)}
                   >
-                    <ha-icon .icon=${'mdi:delete-outline'}></ha-icon>
+                    <ha-icon .icon=${'mdi:delete-outline'} aria-hidden="true"></ha-icon>
                   </button>
                 </div>
               </div>
@@ -542,6 +539,7 @@ export class StratumSectionsEditor extends LitElement {
           `;
         })}
       </div>
+      ${renderUndoBar(this._undo)}
       ${this._showPresets ? this._renderPresetsPicker() : nothing}
       <div class="add-row">
         <button

@@ -116,6 +116,12 @@ export class StratumHeaderEditor extends LitElement {
    * Przełączniki, których stan domyślny to „włączone” — w configu zapisujemy
    * tylko odstępstwo, żeby YAML zostawał czysty.
    */
+  private _onIconFrameToggle(ev: Event): void {
+    const checked = (ev.target as HTMLInputElement).checked;
+    // Domyślnie bez ramki — zapisujemy tylko włączenie.
+    this._patch({ icon_frame: checked ? true : undefined });
+  }
+
   private _onDefaultOnToggle(key: 'icon_glow' | 'stripes_tap', ev: Event): void {
     const checked = (ev.target as HTMLInputElement).checked;
     if (key === 'icon_glow') {
@@ -166,6 +172,14 @@ export class StratumHeaderEditor extends LitElement {
             @change=${(ev: Event) => this._onDefaultOnToggle('icon_glow', ev)}
           />
           <span>Poświata wokół ikony</span>
+        </label>
+        <label class="stratum-toggle">
+          <input
+            type="checkbox"
+            .checked=${cfg.icon_frame === true}
+            @change=${this._onIconFrameToggle}
+          />
+          <span>Ikona w kwadracie z ramką</span>
         </label>
         <label class="stratum-toggle">
           <input

@@ -194,7 +194,7 @@ export interface HeaderConfig {
   /** Kolor akcentowego paska (tylko gdy `accent_bar: true`). */
   accent_bar_color?: string;
   /**
-   * Wygląd belki: `classic` (default) albo `stripes` — ikona w kwadracie,
+   * Wygląd belki: `classic` (default) albo `stripes` — duża ikona piętra,
    * chipy pod nazwą, a z prawej skośne paski z nazwami pokoi, w których
    * świeci się światło. `stripes` nie rysuje chevronu ani akcentowego paska.
    */
@@ -210,6 +210,11 @@ export interface HeaderConfig {
   stripes_tap?: 'popup' | 'none';
   /** `stripes`: poświata wokół ikony, gdy coś świeci. Default true. */
   icon_glow?: boolean;
+  /**
+   * `stripes`: ikona w kwadracie z ramką (wygląd sprzed v1.109.1). Default
+   * false — sama ikona 36 px na tle karty.
+   */
+  icon_frame?: boolean;
   /**
    * `stripes`: kolor poświaty i ikony, gdy coś świeci (hex/var). Default:
    * kolor świateł z motywu (`--stratum-lights`).
@@ -391,6 +396,16 @@ export interface RoomPopupOrderItem {
   section: RoomPopupSectionKey;
   hidden?: boolean;
 }
+
+/**
+ * Widoczność sekcji rdzeniowej (lights/covers/media/scenes) w edytorze,
+ * liczona z bloków popupu. `partial` — tylko dla świateł, gdy ukryty jest
+ * jeden z dwóch bloków (grupy albo pojedyncze encje).
+ */
+export type SectionVisibility = 'visible' | 'partial' | 'hidden';
+
+/** Typy sekcji, których `hidden` karta stosuje do bloków popupu (nie do „extra"). */
+export type CoreSectionType = 'scenes' | 'lights' | 'covers' | 'media';
 
 /**
  * Dodatkowe encje (spoza obszaru) doliczane do auto-list bloków popupu.
@@ -924,7 +939,8 @@ export interface TileDisplayConfig {
   aspect?: string;
   /**
    * Lista pól w sekcji info (kolejność znaczy).
-   * Default `[temperature, lights, motion]`.
+   * Default: `DEFAULT_FIELDS` z tile-data.ts (temperatura, światła, obecność,
+   * okna, drzwi, wyciek, problem); pusta lista = żadnych pól.
    */
   fields?: TileField[];
   /** Kolor akcentu gdy aktywny (lights on / motion). Default amber. */
@@ -962,13 +978,19 @@ export interface TileDisplayConfig {
   show_name?: boolean;
 
   // --- prymitywy stylu (v1.18) ---
-  /** Zaokrąglenie rogów (px). Default 14 dla kafla, 6 dla wiersza w hover. */
+  /**
+   * Prymitywy wymiarów. Domyślne zależą od presetu wiersza — jedno źródło
+   * to `rowStyleDefaults` w display-config-clean.ts (pilnowane testem
+   * zgodności z CSS): fill/pill — pigułka, padding 14, wysokość 85, ikona
+   * 0,4 × wysokość; rail — 8 / 6 / 48 / 20; karty — 14 / 8 / 54 / 20.
+   */
+  /** Zaokrąglenie rogów (px). */
   border_radius?: number;
-  /** Minimalna wysokość kafla (px). Wiersz ignoruje. Default 110. */
+  /** Minimalna wysokość wiersza/kafla (px). */
   min_height?: number;
-  /** Wewnętrzny padding pozycji (px). Default 12 dla kafla, „10 4" dla wiersza. */
+  /** Wewnętrzny padding (px). */
   padding?: number;
-  /** Rozmiar ikony area (px). Default 22 (kafel) / 20 (wiersz). */
+  /** Rozmiar ikony area (px). */
   icon_size?: number;
   /**
    * Przesunięcie samej ikonki w poziomie względem jej tła (px,

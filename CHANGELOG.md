@@ -4,6 +4,46 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.109.1] — 2026-11-17
+
+Poprawki edytora z pełnego audytu karty — edytor nie gubi już konfiguracji.
+
+### Changed
+- **Belka „Smugi": ikona piętra bez ramki.** Zamiast kwadratu z ramką sama
+  ikona 36 px na tle karty; gdy coś świeci, ma delikatną poświatę na
+  kształcie. Dawny wygląd: `header.icon_frame: true` (w edytorze „Ikona
+  w kwadracie z ramką").
+
+### Fixed (edytor)
+- **Edycja jednego pokoju nie usuwa pozostałych.** W trybie
+  automatycznego wykrywania pokoi (bez listy `rooms`) zmiana nazwy, akcji
+  czy chipów jednego pokoju kasowała z karty wszystkie inne. Strzałki
+  kolejności działają też w tym trybie. Akcja „Nic" dla pokoju się zapisuje.
+  Doszło pole „Akcja po kliknięciu w ikonę" pokoju.
+- **Odznaczenie pokoju i „Zaznacz wszystkie" nie kasują konfiguracji
+  popupu ani własnej kolejności.** Odznaczony pokój jest ukryty, a nie
+  usuwany. „Zaznacz wszystkie" nie ożywia pokoi z innego piętra.
+- **Jedno oko widoczności bloku.** Oko w „Dodatkowych sekcjach" i oko przy
+  bloku popupu pokazują i zmieniają to samo.
+- **Pola sekcji info startują z 7 pól, które karta faktycznie pokazuje.**
+  Włączenie np. wilgotności nie chowa już okien, drzwi, wycieku ani
+  problemu. Odznaczenie wszystkich pól zostaje zapisane.
+- **Wymiary wiersza się zapisują:** zaokrąglenie 6 px nie zamienia wiersza
+  w pigułkę, ikona 22 px nie wraca do domyślnej, wysokość kafla 110 px
+  zostaje. Suwaki pokazują domyślne wartości wybranego presetu i mają
+  przycisk przywrócenia domyślnej.
+- **„Przeciągnięcie po ciemnym pokoju zapala światła"** — odznaczenie się
+  zapisuje.
+- **Chipy:** wyczyszczenie pola (kolor, ikona, sufiks, stan, akcja) usuwa
+  je z konfiguracji. Chipy popupu startują z jego własnych domyślnych
+  (temperatura, wilgotność, „x min temu" nie znikają po pierwszej edycji).
+- **Zmiana typu sekcji** buduje ją od nowa — sekcja „Światła" zmieniona na
+  „Rolety" nie pokazuje już lamp z przyciskami rolet.
+- **Cofnij po usunięciu** chipa albo sekcji (8 s), większe przyciski
+  edytora (40 px), widoczny fokus, opisy dla czytników ekranu.
+- Scena z akcją „Nic" zapisuje ją.
+- Popup z ukrytymi wszystkimi blokami pokazuje komunikat zamiast pustki.
+
 ## [1.109.0] — 2026-11-17
 
 Poprawki z pełnego audytu karty — poprawność działania.

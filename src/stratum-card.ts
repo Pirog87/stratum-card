@@ -79,7 +79,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.109.0';
+const VERSION = '1.109.1';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -1142,6 +1142,7 @@ export class StratumCard extends LitElement {
       'stripes',
       lit ? 'lit' : '',
       header.icon_glow === false ? 'no-glow' : '',
+      header.icon_frame === true ? 'framed' : '',
     ]
       .filter(Boolean)
       .join(' ');

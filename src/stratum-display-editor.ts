@@ -14,6 +14,13 @@ import type {
 } from './types.js';
 import { SCENE_PRESETS } from './scene-presets.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { effectiveFields } from './tile-data.js';
+import {
+  moveField,
+  rowStyleDefaults,
+  TILE_STYLE_DEFAULTS,
+  toggleField,
+} from './display-config-clean.js';
 
 /** Typ edytora — zwykły kontrakt wyglądu, bez conditions (te są top-level). */
 export type DisplayEditorMode = 'row' | 'tile';
@@ -104,8 +111,6 @@ const HOVER_EFFECTS: Array<{ value: HoverEffect; label: string }> = [
   { value: 'glow', label: 'Poświata' },
 ];
 
-const DEFAULT_FIELDS: TileField[] = ['temperature', 'lights', 'motion'];
-
 /** Presety kształtu wiersza — tylko mode 'row'. */
 const ROW_PRESETS: Array<{
   value: RowPreset;
@@ -171,21 +176,16 @@ export class StratumDisplayEditor extends LitElement {
     this._emit(next);
   }
 
+  // Lista startowa pól = DEFAULT_FIELDS karty (tile-data.ts), nie
+  // osobna kopia — edytor ma pokazywać i edytować dokładnie to, co karta
+  // renderuje przy braku `fields`.
   private _moveField(field: TileField, dir: -1 | 1): void {
-    const current = [...(this.config.fields ?? DEFAULT_FIELDS)];
-    const i = current.indexOf(field);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= current.length) return;
-    [current[i], current[j]] = [current[j]!, current[i]!];
-    this._emit({ ...this.config, fields: current });
+    const next = moveField(this.config.fields, field, dir);
+    if (next) this._emit({ ...this.config, fields: next });
   }
 
   private _toggleField(field: TileField): void {
-    const current = this.config.fields ?? DEFAULT_FIELDS;
-    const next = current.includes(field)
-      ? current.filter((f) => f !== field)
-      : [...current, field];
-    this._patch({ fields: next });
+    this._patch({ fields: toggleField(this.config.fields, field) });
   }
 
   private _setAspect(value: string): void {
@@ -324,6 +324,17 @@ export class StratumDisplayEditor extends LitElement {
     this._patch({ [key]: value } as Partial<TileDisplayConfig>);
   }
 
+  /**
+   * Powrót do wartości domyślnej = usunięcie klucza. Wymiary wiersza nie
+   * są już wycinane przy zapisie (domyślne zależą od presetu), więc to
+   * jedyna droga, żeby wiersz znów szedł za presetem.
+   */
+  private _resetKey(key: keyof TileDisplayConfig): void {
+    const next = { ...this.config };
+    delete next[key];
+    this._emit(next);
+  }
+
   private _setIconStyle(value: IconStyle): void {
     this._patch({ icon_style: value });
   }
@@ -338,7 +349,7 @@ export class StratumDisplayEditor extends LitElement {
 
   protected render(): TemplateResult {
     const cfg = this.config;
-    const fields = cfg.fields ?? DEFAULT_FIELDS;
+    const fields = effectiveFields(cfg);
     const aspect = cfg.aspect ?? '1/1';
     const aspectIsPreset = ASPECT_PRESETS.some((p) => p.value === aspect);
     const customAspect = aspectIsPreset ? '' : aspect;
@@ -360,11 +371,17 @@ export class StratumDisplayEditor extends LitElement {
     const iconPos = cfg.icon_position ?? 'top-left';
     const hover = cfg.hover_effect ?? 'subtle';
 
-    const radius = cfg.border_radius ?? 14;
-    // Wiersz (fill/pill): padding = prawy odstęp, CSS-owy default 14.
-    const padding = cfg.padding ?? (this.mode === 'row' ? 14 : 12);
-    const minHeight = cfg.min_height ?? (this.mode === 'tile' ? 110 : 85);
-    const iconSize = cfg.icon_size ?? 22;
+    // Wartość suwaka bez ustawionego klucza = to, co karta faktycznie
+    // rysuje (fallback w CSS danego presetu), a nie jedna liczba dla
+    // wszystkich — Fill to pigułka 999 px, Rail ma 48 px wysokości.
+    const defaults =
+      this.mode === 'row'
+        ? rowStyleDefaults(rowPreset, cfg.min_height)
+        : TILE_STYLE_DEFAULTS;
+    const radius = cfg.border_radius ?? defaults.border_radius;
+    const padding = cfg.padding ?? defaults.padding;
+    const minHeight = cfg.min_height ?? defaults.min_height;
+    const iconSize = cfg.icon_size ?? defaults.icon_size;
     const press = cfg.press_scale ?? 0.98;
 
     return html`
@@ -692,7 +709,18 @@ export class StratumDisplayEditor extends LitElement {
           <span>Wymiary i zaokrąglenia</span>
         </summary>
         <div class="stratum-collapsible-body">
-          ${this._renderSlider('Zaokrąglenie rogów', 'border_radius', radius, 0, 40, 1, 'px')}
+          ${this._renderSlider(
+            'Zaokrąglenie rogów',
+            'border_radius',
+            radius,
+            0,
+            40,
+            1,
+            'px',
+            // 999 px (pigułka) nie mieści się na skali 0–40 — zamiast
+            // udawać 40 px mówimy wprost, co karta rysuje.
+            radius > 40 ? 'pigułka' : undefined,
+          )}
           ${this._renderSlider('Wewnętrzny padding', 'padding', padding, 0, 40, 1, 'px')}
           ${this.mode === 'tile'
             ? this._renderSlider('Min. wysokość kafla', 'min_height', minHeight, 40, 260, 2, 'px')
@@ -824,18 +852,38 @@ export class StratumDisplayEditor extends LitElement {
     max: number,
     step: number,
     unit: string,
+    displayText?: string,
   ): TemplateResult {
+    const isSet = this.config[key] !== undefined;
+    const shown = displayText ?? this._formatValue(value, unit);
     return html`
       <div class="slider-row">
         <label class="slider-label">${label}</label>
-        <div class="slider-value">${this._formatValue(value, unit)}</div>
+        <div class="slider-value">
+          ${isSet ? nothing : html`<span class="slider-default">domyślnie</span>`}
+          <!-- Przycisk zostaje w DOM-ie (wyłączony, gdy nie ma czego
+               przywracać): usunięty po kliknięciu zabierał ze sobą fokus
+               klawiatury i trzeba było przechodzić Tabem przez cały edytor. -->
+          <button
+            type="button"
+            class="slider-reset"
+            title="Przywróć domyślne"
+            aria-label=${`${label}: przywróć domyślne`}
+            ?disabled=${!isSet}
+            @click=${() => this._resetKey(key)}
+          >
+            <ha-icon .icon=${'mdi:restore'} aria-hidden="true"></ha-icon>
+          </button>
+          <span>${shown}</span>
+        </div>
         <input
           type="range"
           class="slider"
           min=${min}
           max=${max}
           step=${step}
-          .value=${String(value)}
+          aria-label=${label}
+          .value=${String(Math.min(max, Math.max(min, value)))}
           @input=${(ev: Event) => this._onSlider(key, ev)}
         />
       </div>
@@ -1103,6 +1151,72 @@ export class StratumDisplayEditor extends LitElement {
         font-variant-numeric: tabular-nums;
         color: var(--primary-text-color);
         font-weight: 600;
+      }
+
+      .slider-value {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .slider-default {
+        font-weight: 400;
+        font-size: 11px;
+        color: var(--secondary-text-color);
+      }
+
+      /* Reset wartości suwaka — pełny komplet stanów (hover/focus/active),
+         bo to jedyna droga powrotu do domyślnych presetu. */
+      .slider-reset {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border: 1px solid var(--divider-color);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--secondary-text-color);
+        cursor: pointer;
+        transition: background 0.12s ease, color 0.12s ease,
+          transform 0.08s ease;
+      }
+
+      .slider-reset ha-icon {
+        --mdc-icon-size: 14px;
+      }
+
+      .slider-reset:hover:not(:disabled) {
+        background: color-mix(
+          in srgb,
+          var(--card-background-color) 90%,
+          var(--primary-text-color)
+        );
+        color: var(--primary-text-color);
+      }
+
+      .slider-reset:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 2px;
+      }
+
+      .slider-reset:active:not(:disabled) {
+        transform: scale(0.96);
+      }
+
+      .slider-reset:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .slider-reset {
+          transition: none;
+        }
+        .slider-reset:active:not(:disabled) {
+          transform: none;
+        }
       }
 
       .slider {

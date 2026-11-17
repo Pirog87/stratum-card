@@ -27,6 +27,7 @@ import './stratum-header-editor.js';
 import './stratum-chips-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ROW_UI_ACTIONS } from './tap-action.js';
+import { cleanDisplayStyle } from './display-config-clean.js';
 
 interface FormSchemaItem {
   name: string;
@@ -155,108 +156,6 @@ export class StratumCardEditor extends LitElement {
     this._emitConfig(next);
   }
 
-  /** Oczyszcza raw z defaults. Wspólna logika dla row/tile. */
-  private _cleanStyle(raw: TileDisplayConfig, isTile: boolean): TileDisplayConfig {
-    const out: TileDisplayConfig = {};
-    if (raw.fields && raw.fields.length > 0) out.fields = raw.fields;
-    if (raw.accent_color && raw.accent_color.trim() !== '') {
-      out.accent_color = raw.accent_color;
-    }
-    // accent_mode: default = 'lights' (bez koloru) / 'static' (z kolorem).
-    // Zapisujemy tylko odstępstwa od tej reguły.
-    if (raw.accent_mode === 'static' && !raw.accent_color) {
-      out.accent_mode = 'static';
-    } else if (raw.accent_mode === 'lights' && raw.accent_color) {
-      out.accent_mode = 'lights';
-    }
-    // Preset wiersza — 'fill' jest defaultem, zapisujemy tylko inne.
-    if (!isTile && raw.preset && raw.preset !== 'fill') out.preset = raw.preset;
-    // Suwak gestem — default true, zapisujemy tylko wyłączenie.
-    if (!isTile && raw.slider === false) out.slider = false;
-    // Mini-switch świateł (H4) — default false, zapisujemy tylko włączenie.
-    if (!isTile && raw.lights_switch === true) out.lights_switch = true;
-    if (
-      !isTile &&
-      typeof raw.lights_switch_glow_on === 'number' &&
-      raw.lights_switch_glow_on !== 100
-    ) {
-      out.lights_switch_glow_on = raw.lights_switch_glow_on;
-    }
-    if (
-      !isTile &&
-      typeof raw.lights_switch_glow_off === 'number' &&
-      raw.lights_switch_glow_off !== 30
-    ) {
-      out.lights_switch_glow_off = raw.lights_switch_glow_off;
-    }
-    if (!isTile && raw.lights_switch_show_off === false) {
-      out.lights_switch_show_off = false;
-    }
-    // Kolory pól sekcji info — zapisujemy niepustą mapę (row i tile).
-    if (raw.field_colors && Object.keys(raw.field_colors).length > 0) {
-      out.field_colors = raw.field_colors;
-    }
-    // Układ statusów — default 'right', zapisujemy tylko 'two-line'.
-    if (!isTile && raw.status_layout === 'two-line') {
-      out.status_layout = 'two-line';
-    }
-    // Wąskie ekrany — default 'fields', zapisujemy tylko inne tryby.
-    if (!isTile && raw.narrow_mode && raw.narrow_mode !== 'fields') {
-      out.narrow_mode = raw.narrow_mode;
-    }
-    if (raw.show_icon === false) out.show_icon = false;
-    if (raw.show_name === false) out.show_name = false;
-    const defaultRadius = isTile ? 14 : 6;
-    // Wiersz fill/pill: padding = prawy odstęp, CSS-owy default 14.
-    const defaultPadding = isTile ? 12 : 14;
-    const defaultMinH = isTile ? 110 : 85;
-    if (typeof raw.border_radius === 'number' && raw.border_radius !== defaultRadius) {
-      out.border_radius = raw.border_radius;
-    }
-    if (typeof raw.padding === 'number' && raw.padding !== defaultPadding) {
-      out.padding = raw.padding;
-    }
-    if (typeof raw.min_height === 'number' && raw.min_height !== defaultMinH) {
-      out.min_height = raw.min_height;
-    }
-    if (typeof raw.icon_size === 'number' && raw.icon_size !== 22) {
-      out.icon_size = raw.icon_size;
-    }
-    // Przesunięcia/skala ikonki wiersza — zapisujemy tylko odstępstwa od 0/100.
-    if (!isTile && typeof raw.icon_offset_x === 'number' && raw.icon_offset_x !== 0) {
-      out.icon_offset_x = raw.icon_offset_x;
-    }
-    if (!isTile && typeof raw.icon_bg_offset_x === 'number' && raw.icon_bg_offset_x !== 0) {
-      out.icon_bg_offset_x = raw.icon_bg_offset_x;
-    }
-    if (!isTile && typeof raw.icon_bg_scale === 'number' && raw.icon_bg_scale !== 100) {
-      out.icon_bg_scale = raw.icon_bg_scale;
-    }
-    if (raw.icon_style && raw.icon_style !== 'bubble') {
-      out.icon_style = raw.icon_style;
-    }
-    const defaultHover = isTile ? 'lift' : 'subtle';
-    if (raw.hover_effect && raw.hover_effect !== defaultHover) {
-      out.hover_effect = raw.hover_effect;
-    }
-    if (typeof raw.press_scale === 'number' && raw.press_scale !== 0.98) {
-      out.press_scale = raw.press_scale;
-    }
-    // Tile-only fields
-    if (isTile) {
-      if (raw.aspect && raw.aspect.trim() !== '' && raw.aspect !== '1/1') {
-        out.aspect = raw.aspect;
-      }
-      if (raw.background_image && raw.background_image.trim() !== '') {
-        out.background_image = raw.background_image;
-      }
-      if (raw.icon_position && raw.icon_position !== 'top-left') {
-        out.icon_position = raw.icon_position;
-      }
-    }
-    return out;
-  }
-
   // ===== Belka popupu pomieszczenia (popup_header) =====
   // Panel wydzielony do komponentu stratum-popup-header-editor;
   // tu zostaje tylko budowa configu podglądu i odbiór zmian.
@@ -305,7 +204,9 @@ export class StratumCardEditor extends LitElement {
   private _rowConfigChanged(ev: CustomEvent<{ config: RowDisplayConfig }>): void {
     ev.stopPropagation();
     if (!this._config) return;
-    const cleaned = this._cleanStyle(ev.detail.config ?? {}, false);
+    // Sprzątanie defaults w czystym module (display-config-clean.ts) —
+    // testy pilnują, że żaden klucz czytany przez kartę nie ginie.
+    const cleaned = cleanDisplayStyle(ev.detail.config ?? {}, false);
     const next: StratumCardConfig = { ...this._config };
     // Po pierwszym saveuj migracja display_config → row/tile_config
     delete next.display_config;
@@ -317,7 +218,7 @@ export class StratumCardEditor extends LitElement {
   private _tileConfigChanged(ev: CustomEvent<{ config: TileDisplayConfig }>): void {
     ev.stopPropagation();
     if (!this._config) return;
-    const cleaned = this._cleanStyle(ev.detail.config ?? {}, true);
+    const cleaned = cleanDisplayStyle(ev.detail.config ?? {}, true);
     const next: StratumCardConfig = { ...this._config };
     delete next.display_config;
     if (Object.keys(cleaned).length === 0) delete next.tile_config;

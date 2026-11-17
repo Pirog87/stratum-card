@@ -188,11 +188,30 @@ export const cardStyles = css`
       );
     }
 
+    /* Domyślnie (od v1.109.1) sama ikona na tle karty, bez kwadratu i ramki
+       — belka jest lżejsza, a nazwa piętra wybija się mocniej. Ikona jest
+       większa (36 px), żeby bez tła dalej trzymała lewą krawędź belki.
+       Wygląd z ramką: header.icon_frame: true (klasa .framed). */
     .hs-icon {
       display: grid;
       place-items: center;
       flex: none;
       box-sizing: border-box;
+      width: 40px;
+    }
+
+    .header.stripes:not(.framed) .area-icon {
+      --mdc-icon-size: var(--stratum-card-icon-size, 36px);
+    }
+
+    /* Świeci: poświata na samym kształcie ikony, nie na tle. */
+    .header.stripes.lit:not(.no-glow):not(.framed) .area-icon {
+      filter: drop-shadow(
+        0 0 8px color-mix(in srgb, var(--stratum-header-glow) 55%, transparent)
+      );
+    }
+
+    .header.stripes.framed .hs-icon {
       width: 44px;
       height: 44px;
       border-radius: var(--stratum-header-icon-radius, 12px);
@@ -202,12 +221,12 @@ export const cardStyles = css`
         box-shadow 0.2s ease;
     }
 
-    .header.stripes.lit .hs-icon {
+    .header.stripes.framed.lit .hs-icon {
       background: color-mix(in srgb, var(--stratum-header-glow) 18%, transparent);
       border-color: color-mix(in srgb, var(--stratum-header-glow) 45%, transparent);
     }
 
-    .header.stripes.lit:not(.no-glow) .hs-icon {
+    .header.stripes.framed.lit:not(.no-glow) .hs-icon {
       box-shadow: 0 0 20px
         color-mix(in srgb, var(--stratum-header-glow) 32%, transparent);
     }
