@@ -71,6 +71,18 @@ export const surfaceTokens = css`
     --stratum-ink-shade: #000;
     --stratum-ink-tint: #fff;
 
+    /* Znaczenia stanów — jedno źródło na kartę, delegowane do motywu HA
+       (Mushroom/Catppuccin przemalowują je bez card-moda). Dawniej kafle
+       binarne miały wpisane #f44336/#4caf50 i ignorowały motyw. */
+    --stratum-alarm: var(--error-color, #f44336);
+    --stratum-ok: var(--success-color, #4caf50);
+    --stratum-warn: var(--warning-color, #ffa600);
+
+    /* Obrys fokusa klawiatury. Starsza nazwa (--stratum-card-focus-color)
+       dalej działa — nowa tylko ją zbiera, żeby każdy element miał ten sam
+       kolor obrysu. */
+    --stratum-focus: var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+
     /* Mapowanie na tokeny, których używa reszta kodu. Nadpisanie
        któregokolwiek z nich z zewnątrz dalej wygrywa. */
     --stratum-tile-background: var(--stratum-surface-1);
