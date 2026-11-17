@@ -31,7 +31,15 @@ import {
  */
 
 const sceneColorsCache = new Map<string, SceneColors | null>();
-const sceneColorsPending = new Set<string>();
+/**
+ * Pobrania w toku: obietnica, nie sam znacznik. Pasek ma własną bramkę
+ * shouldUpdate, więc drugi pasek z tą samą sceną nie przerysuje się „przy
+ * okazji" następnego ticka hass (temperatura itp.) — odrzucony tick nie
+ * dociągnie gradientu z cache. Każda instancja, która zastała pobranie
+ * w toku, musi sama poczekać na jego koniec i poprosić o render; inaczej
+ * jej kafel zostaje płaski do zmiany sceny albo tapnięcia.
+ */
+const sceneColorsPending = new Map<string, Promise<SceneColors | null>>();
 
 async function fetchSceneColors(
   hass: HomeAssistant,
@@ -135,6 +143,12 @@ export class StratumSceneBar extends LitElement {
   @state() private _pending = new Map<string, ScenePending>();
 
   private _pendingTimer?: number;
+
+  /**
+   * Sceny, na których kolory ta instancja już czeka — render w trakcie
+   * pobrania wołany jest wielokrotnie, a jedno `.then` na scenę wystarczy.
+   */
+  private _colorWaits = new Set<string>();
 
   public disconnectedCallback(): void {
     for (const t of this._ackTimers.values()) window.clearTimeout(t);
@@ -253,13 +267,26 @@ export class StratumSceneBar extends LitElement {
       const style = (this.config?.gradient ?? 'mesh') as SceneGradientStyle;
       return buildGradient(style, data, entityId);
     }
-    if (!this.hass || sceneColorsPending.has(entityId)) return undefined;
-    sceneColorsPending.add(entityId);
-    void fetchSceneColors(this.hass, entityId).then((data) => {
-      sceneColorsCache.set(entityId, data);
-      sceneColorsPending.delete(entityId);
-      if (data) this.requestUpdate();
-    });
+    if (!this.hass) return undefined;
+    let pending = sceneColorsPending.get(entityId);
+    if (!pending) {
+      pending = fetchSceneColors(this.hass, entityId).then((data) => {
+        sceneColorsCache.set(entityId, data);
+        sceneColorsPending.delete(entityId);
+        return data;
+      });
+      sceneColorsPending.set(entityId, pending);
+    }
+    // Czeka każda instancja, nie tylko ta, która zaczęła pobranie (patrz
+    // komentarz przy sceneColorsPending). null = scena bez kolorów, kafel
+    // i tak zostaje płaski — wtedy renderu nie zamawiamy.
+    if (!this._colorWaits.has(entityId)) {
+      this._colorWaits.add(entityId);
+      void pending.then((data) => {
+        this._colorWaits.delete(entityId);
+        if (data) this.requestUpdate();
+      });
+    }
     return undefined;
   }
 
