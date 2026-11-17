@@ -93,6 +93,11 @@ od najprostszego do najbardziej zaawansowanego:
 - Power user (sam autor repo) będzie chciał warstwy 2–3
 - Trzy warstwy pozwalają na proporcjonalną inwestycję złożoności
 
+> Status: zmienne mają prefix `--stratum-` (nazwy `--area-*` nie istnieją).
+> Party zagnieżdżonych elementów (`chip`, `room`, `tile`, `scene`) nie są
+> eksportowane przez `exportparts` — co jest osiągalne skąd, opisuje
+> `docs/styling.md`.
+
 ---
 
 ## ADR-005: Bundling — single file, ES module
@@ -107,6 +112,9 @@ wszystkie zależności bundlowane.
 
 **Alternatywa odrzucona:** Multi-chunk z lazy loadingiem — overkill dla
 komponentu tej wielkości. Dodatkowe HTTP requesty spowolnią ładowanie.
+
+> Status: JS dalej jest jednym plikiem; release ma jednak więcej assetów
+> (zdjęcia scen, `.gz`) — patrz ADR-010.
 
 ---
 
@@ -153,6 +161,9 @@ z deterministyczną regułą awaryjną. Fragmenty kodu w podpowiedziach edytora
 zapisujemy jako `<…>` — komponent renderuje je jako `<code>` bez innerHTML.
 Nowy język = nowy plik typu `Messages` + wpis w `DICTS` i `langOf`.
 
+> Status: obowiązuje — mechanizm. Decyzję, który język widzi użytkownik,
+> opisuje ADR-009.
+
 ---
 
 ## ADR-008: Testowanie — odłożone do v0.7
@@ -170,6 +181,64 @@ Nowy język = nowy plik typu `Messages` + wpis w `DICTS` i `langOf`.
 - Rezolucję nazwy area / ikony z HA
 - Logikę agregacji chipów (policz lights on w area)
 - **NIE** testujemy renderingu wizualnego — to robi manual / screenshot testing
+
+> Status: zastąpione przez ADR-011.
+
+---
+
+## ADR-009: Język interfejsu — za językiem użytkownika HA
+
+**Decyzja:** Interfejs karty idzie za językiem użytkownika Home Assistanta:
+polski, dla pozostałych języków angielski. Uzupełnia ADR-007, który
+opisuje mechanizm (słowniki `pl.ts`/`en.ts`, `localize()`, `.uiLang`).
+
+**Dlaczego:**
+- Główny użytkownik ma HA po polsku, a karta trafia też do HACS — angielski
+  jest rozsądnym wspólnym mianownikiem dla reszty świata
+- Dwa języki to mało tekstów do utrzymania; kolejny język to tłumaczenie,
+  nie zmiana logiki
+
+**Konsekwencja:** teksty user-facing nie są wpisywane w komponenty
+(CLAUDE.md, „Zasady kodu").
+
+---
+
+## ADR-010: Release — bundle JS + zdjęcia scen jako osobne assety
+
+**Decyzja:** Kod dalej jest jednym plikiem `stratum-card.js` (ADR-005),
+ale release niesie też `stratum-card.js.gz` i zdjęcia wbudowanych scen
+`sceny-<id>.webp`. HACS pobiera wszystkie assety płasko do jednego
+katalogu, a karta szuka zdjęć obok bundla (adres liczony z
+`import.meta.url`), potem pod `/hacsfiles/stratum-card/`, na końcu rysuje
+wersję SVG, jeśli scena ją ma.
+
+**Dlaczego:**
+- Zdjęcia w bundlu (base64) rozdęłyby JS, który telefon pobiera i parsuje
+  przy każdym starcie — a zdjęcie potrzebne jest tylko scenie, która je
+  pokazuje
+- `.gz` nadpisuje pozostałość po starszej instalacji (HA potrafi serwować
+  `.gz` zamiast `.js`)
+
+**Konsekwencja:** instalacja ręczna i dev-loop bez HACS muszą skopiować
+zdjęcia obok bundla z prefiksem `sceny-` (`docs/development.md`).
+Workflow `validate.yml` pilnuje, że `dist/` to wciąż jeden plik JS.
+
+---
+
+## ADR-011: Testowanie — czyste funkcje w Vitest
+
+**Decyzja:** Vitest w środowisku `node`, bez DOM-u i bez Lita. Testujemy
+czyste funkcje w `tests/`; logikę, która wymaga testów, wydzielamy
+z komponentów do osobnych modułów. Zastępuje ADR-008.
+
+**Dlaczego:**
+- Logika, która się psuje (agregacja świateł i alarmów, historia „wstecz",
+  kolejka Escape, gest jasności, kolory scen, ładowanie bundla), da się
+  wyrazić jako funkcje na danych `hass` — test jest szybki i deterministyczny
+- Rendering i stany interaktywne sprawdzamy ręcznie na żywej instancji HA
+
+**CI:** `validate.yml` odpala typecheck, testy i build na każdym PR i pushu
+do `main`; `release.yml` powtarza je przed utworzeniem releasu.
 
 ---
 
