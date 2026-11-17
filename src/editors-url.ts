@@ -9,8 +9,13 @@
 //     customElements.define (wyjątek) i drugi obserwator hass. Dlatego plik
 //     edytorów jest osobnym, samodzielnym buildem bez żadnych importów;
 //   - query karty (`hacstag`) przepisujemy do adresu edytorów, a do tego
-//     `sv=<wersja>`. Po aktualizacji przez HACS zmienia się adres, więc
-//     przeglądarka nigdy nie sparuje nowej karty ze starymi edytorami z cache.
+//     `sv=<id builda>` (wersja + skrót źródeł, version.ts). Po aktualizacji
+//     przez HACS — i po każdym przebudowaniu ze zmienionym kodem, także przy
+//     tej samej wersji — zmienia się adres, więc przeglądarka nigdy nie
+//     sparuje nowej karty ze starymi edytorami z cache. Sama wersja nie
+//     wystarczała: HA serwuje /local/ z max-age 31 dni, a Ctrl+Shift+R
+//     omija cache tylko dla żądań w trakcie ładowania strony — import()
+//     edytorów idzie później, przy „Edytuj", i brał stary plik z cache.
 // Łańcuch fallbacków jak w scene-photo-url.ts: katalog bundla (http/https)
 // → /hacsfiles/stratum-card/ (file:, blob:, data:, śmieci).
 
@@ -77,12 +82,45 @@ export function mayRetry(failedAt: number | undefined, now: number): boolean {
   return failedAt === undefined || now - failedAt >= RETRY_COOLDOWN_MS;
 }
 
+/**
+ * Stan bieżącej próby importu: `none` — jeszcze żadnej; `loading` — trwa
+ * i nie przekroczyła LOAD_TIMEOUT_MS; `loaded` — plik się wykonał;
+ * `failed` — błąd albo timeout.
+ */
+export type AttemptStatus = 'none' | 'loading' | 'loaded' | 'failed';
+
+/** Co zrobić przy wywołaniu getConfigElement(), gdy edytora jeszcze nie ma. */
+export type LoadStep = 'await' | 'start' | 'skip';
+
+/**
+ * Decyzja loadera. Próba po timeoucie liczy się jako nieudana, mimo że
+ * import() dalej wisi (przerwać go nie umiemy): gdybyśmy na nią dalej
+ * czekali, KAŻDE kolejne „Edytuj" i każdy klawisz w YAML-u stałby 20 s
+ * na szkielecie, a nowej próby nie byłoby do przeładowania strony (np.
+ * WebView aplikacji mobilnej uśpiony w trakcie pobierania). Jeśli wiszący
+ * import jednak dojdzie, edytory się zarejestrują i loader ich użyje bez
+ * pytania o stan próby.
+ */
+export function loadStep(
+  status: AttemptStatus,
+  failedAt: number | undefined,
+  now: number,
+): LoadStep {
+  if (status === 'loading') return 'await';
+  // Plik się wykonał, a edytora brak (cudzy plik pod tą nazwą) — ponowny
+  // import tego samego adresu nic nie zmieni.
+  if (status === 'loaded') return 'skip';
+  return mayRetry(failedAt, now) ? 'start' : 'skip';
+}
+
 export type EditorsVerdict = 'ok' | 'missing' | 'mismatch';
 
 /**
- * Czy wolno użyć zarejestrowanego edytora. Edytor innej wersji niż karta
+ * Czy wolno użyć zarejestrowanego edytora. Edytor z innego builda niż karta
  * (stary plik obok nowej karty, druga kopia zasobu) mógłby zapisać config
  * w kształcie, którego ta karta nie zna — wtedy uczciwiej oddać YAML.
+ * Porównujemy id builda (BUILD_ID), nie samą wersję: dwa buildy tej samej
+ * wersji z innym kodem też są niezgodne.
  */
 export function editorsVerdict(
   defined: boolean,

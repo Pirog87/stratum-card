@@ -3,20 +3,21 @@
 // filtr na `define` musi stać, zanim dekoratory @customElement edytorów
 // zawołają define. Gdy edytory są już zarejestrowane (druga ewaluacja pliku
 // pod innym adresem), ta kopia niczego nie definiuje i nie rzuca.
-// Pierwsza ewaluacja zapisuje swoją wersję pod EDITORS_VERSION_KEY — po niej
-// loader karty poznaje, czy edytory pasują do karty (editors-url.ts).
+// Pierwsza ewaluacja zapisuje id swojego builda (BUILD_ID, nie samą wersję)
+// pod EDITORS_VERSION_KEY — po nim loader karty poznaje, czy edytory
+// pochodzą z tego samego builda co karta (editors-url.ts).
 
 import {
   EDITORS_SENTINEL_TAG,
   EDITORS_VERSION_KEY,
   installLoadGuard,
 } from './load-guard.js';
-import { VERSION } from './version.js';
+import { BUILD_ID } from './version.js';
 
 export const editorsGuard = installLoadGuard(
   customElements,
   window as unknown as Record<symbol, unknown>,
-  VERSION,
+  BUILD_ID,
   { sentinel: EDITORS_SENTINEL_TAG, versionKey: EDITORS_VERSION_KEY },
 );
 

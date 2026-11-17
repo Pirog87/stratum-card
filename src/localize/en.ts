@@ -134,10 +134,6 @@ export const en: Messages = {
     leak: 'Leak',
     leak_detected: 'detected',
   },
-  undo: {
-    removed: 'Removed: {label}',
-    undo: 'Undo',
-  },
   tile: {
     on: 'on',
     off: 'off',
@@ -202,10 +198,10 @@ export const en: Messages = {
     unknown_section: 'Unknown section type "{type}" — skipping. Available: {known}.',
     editors_unavailable:
       'Stratum: visual editor unavailable ({reason}). The card works normally — ' +
-      'edit it in YAML or copy {file} into the same directory as stratum-card.js ' +
-      'and reload the browser (Ctrl+Shift+R).',
+      'edit it in YAML or copy {file} into the same directory as stratum-card.js, ' +
+      'change ?v= in the Lovelace resource URL (e.g. ?v=1 → ?v=2) and reload the browser.',
     editors_reason_missing: 'the file could not be loaded',
-    editors_reason_mismatch: 'the editors file is from a different version than the card',
+    editors_reason_mismatch: 'the editors file comes from a different build than the card',
     editors_reason_timeout: 'the file is taking too long to load',
   },
 };

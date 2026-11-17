@@ -65,7 +65,7 @@ import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
 // Edytory NIE są importowane (PKG-3, v1.110.0). Leżą w osobnym pliku
 // stratum-card-editors.js, który loadEditor() dociąga dopiero przy „Edytuj"
-// — telefon przy zimnym starcie nie pobiera ani nie parsuje ~40% kodu,
+// — telefon przy zimnym starcie nie pobiera ani nie parsuje ~41% kodu,
 // którego dashboard nie pokazuje. Osobny samodzielny build, a nie chunk
 // rollupa: chunk importowałby `./stratum-card.js` bez `?hacstag=…` z adresu
 // zasobu HACS, przeglądarka uznałaby to za inny moduł i ewaluowała kartę

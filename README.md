@@ -118,7 +118,15 @@ i zdjęcia scen. Zasobem Lovelace jest tylko `stratum-card.js`.
 Bez `stratum-card-editors.js` karta działa normalnie, ale edycja jest tylko
 w YAML-u: HA pokaże „Edytor wizualny nie jest obsługiwany", a konsola
 przeglądarki jedno ostrzeżenie `Stratum: edytor wizualny niedostępny…`.
-Przy aktualizacji podmień oba pliki naraz.
+
+**Aktualizacja:** podmień oba pliki naraz **i** zmień numer w adresie
+zasobu (`/local/stratum-card.js?v=1` → `?v=2`, przy następnej aktualizacji
+`?v=3` itd.), potem odśwież przeglądarkę. HA każe przeglądarce trzymać
+pliki z `/local/` w cache przez 31 dni, a plik edytorów jest pobierany
+dopiero przy „Edytuj" — Ctrl+Shift+R go nie odświeża. Bez zmiany `?v=`
+przeglądarka zostaje przy starej karcie albo paruje nową kartę ze starymi
+edytorami, a wtedy karta odmawia edytora wizualnego (ostrzeżenie *„plik
+edytorów pochodzi z innego builda niż karta"*) i zostaje YAML.
 
 ## Przykłady
 

@@ -12,14 +12,15 @@
 // oznaczać „edycja w YAML-u", nie zepsuty dialog.
 
 import { EDITORS_VERSION_KEY } from './load-guard.js';
-import { DEV_BUILD, VERSION } from './version.js';
+import { BUILD_ID, DEV_BUILD } from './version.js';
 import { docLanguage, localize } from './localize/localize.js';
 import {
   EDITORS_FILE,
   LOAD_TIMEOUT_MS,
   editorsUrl,
   editorsVerdict,
-  mayRetry,
+  loadStep,
+  type AttemptStatus,
 } from './editors-url.js';
 
 export type EditorTag = 'stratum-card-editor' | 'stratum-room-card-editor';
@@ -28,13 +29,21 @@ type FailReason = 'missing' | 'mismatch' | 'timeout';
 
 const MODULE_URL: string = import.meta.url;
 
-// W dev-loopie wersja stoi w miejscu między przebudowaniami — znacznik
-// czasu ładowania strony sprawia, że po Ctrl+Shift+R edytory też są świeże.
-// W produkcji sama wersja: ten sam adres = trafienie w cache przeglądarki.
-const TOKEN = DEV_BUILD ? `${VERSION}-${Date.now().toString(36)}` : VERSION;
+// Produkcja: id builda (wersja + skrót źródeł, version.ts) — ten sam kod =
+// ten sam adres = trafienie w cache, zmieniony kod = nowy adres, także przy
+// tej samej wersji. Dev-loop (`npm run watch`): id stoi w miejscu przez całą
+// sesję watchera, więc dokładamy znacznik czasu ładowania strony — po
+// odświeżeniu edytory też są świeże.
+const TOKEN = DEV_BUILD ? `${BUILD_ID}-${Date.now().toString(36)}` : BUILD_ID;
 
-/** Jeden import na stronę, wspólny dla obu kart i równoległych wywołań. */
-let pending: Promise<unknown> | undefined;
+interface Attempt {
+  status: AttemptStatus;
+  /** Rozstrzyga się po imporcie, błędzie albo timeoucie — nigdy nie odrzuca. */
+  settled: Promise<void>;
+}
+
+/** Bieżąca próba — wspólna dla obu kart i równoległych wywołań (jedno żądanie). */
+let current: Attempt | undefined;
 let attempt = 0;
 let failedAt: number | undefined;
 let warned = false;
@@ -52,47 +61,49 @@ function warnOnce(reason: FailReason, err?: unknown): void {
   );
 }
 
-/** Czeka na `p`, ale najwyżej LOAD_TIMEOUT_MS; true = zdążyło. */
-async function within(p: Promise<unknown>): Promise<boolean> {
+function startAttempt(): Attempt {
+  const entry: Attempt = { status: 'loading', settled: Promise.resolve() };
+  const url = editorsUrl(MODULE_URL, TOKEN, attempt);
+  // Pierwsze rozstrzygnięcie wygrywa. Timeout zamyka próbę jako nieudaną,
+  // choć import() dalej wisi (przerwać go nie umiemy): następne wywołania
+  // nie czekają na niego drugi raz (loadStep), a po odstępie idzie nowa
+  // próba pod nowym adresem (retry=n). Jeśli wiszący import jednak dojdzie,
+  // edytory się zarejestrują i loadEditor użyje ich bez pytania o stan.
+  const fail = (reason: FailReason, err?: unknown): void => {
+    if (entry.status !== 'loading') return;
+    entry.status = 'failed';
+    attempt += 1;
+    failedAt = Date.now();
+    warnOnce(reason, err);
+  };
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<false>((resolve) => {
-    timer = setTimeout(() => resolve(false), LOAD_TIMEOUT_MS);
+  const imported = import(/* @vite-ignore */ url).then(
+    () => {
+      if (entry.status === 'loading') entry.status = 'loaded';
+    },
+    (err: unknown) => fail('missing', err),
+  );
+  const timedOut = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      fail('timeout');
+      resolve();
+    }, LOAD_TIMEOUT_MS);
   });
-  try {
-    return await Promise.race([p.then(() => true as const), timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
+  entry.settled = Promise.race([imported, timedOut]).finally(() => clearTimeout(timer));
+  return entry;
 }
 
 /** Element edytora albo `undefined` (HA przejdzie wtedy na YAML). */
 export async function loadEditor(tag: EditorTag): Promise<HTMLElement | undefined> {
   if (!customElements.get(tag)) {
-    if (!pending && !mayRetry(failedAt, Date.now())) return undefined;
-    const current = (pending ??= import(
-      /* @vite-ignore */ editorsUrl(MODULE_URL, TOKEN, attempt)
-    ));
-    try {
-      if (!(await within(current))) {
-        // Import dalej trwa — nie przerywamy go. Gdy dojdzie, następne
-        // wywołanie (HA woła przy każdej zmianie configu) dostanie edytor.
-        warnOnce('timeout');
-        return undefined;
-      }
-    } catch (err) {
-      if (pending === current) {
-        pending = undefined;
-        attempt += 1;
-        failedAt = Date.now();
-      }
-      warnOnce('missing', err);
-      return undefined;
-    }
+    const step = loadStep(current?.status ?? 'none', failedAt, Date.now());
+    if (step === 'start') current = startAttempt();
+    if (step !== 'skip' && current) await current.settled;
   }
   const verdict = editorsVerdict(
     !!customElements.get(tag),
     (window as unknown as Record<symbol, unknown>)[EDITORS_VERSION_KEY],
-    VERSION,
+    BUILD_ID,
   );
   if (verdict !== 'ok') {
     warnOnce(verdict);

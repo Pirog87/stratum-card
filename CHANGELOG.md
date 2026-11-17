@@ -7,9 +7,9 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 ## [1.110.0] — 2026-11-17
 
 Edytory wizualne w osobnym pliku ładowanym na żądanie (PKG-3). Dashboard
-pobiera i parsuje o 41% mniej kodu: `stratum-card.js` 573 094 → 339 299 B
-(gzip −9: 142 059 → 89 007 B). Edytory i ich słowniki
-(`stratum-card-editors.js`, 278 102 B / 69 532 B gzip) przychodzą dopiero,
+pobiera i parsuje o 41% mniej kodu: `stratum-card.js` 573 094 → 339 545 B
+(gzip −9: 142 059 → 89 113 B). Edytory i ich słowniki
+(`stratum-card-editors.js`, 278 217 B / 69 584 B gzip) przychodzą dopiero,
 gdy otworzysz edycję karty.
 
 ### Changed (uwaga przy instalacji ręcznej)
@@ -21,9 +21,20 @@ gdy otworzysz edycję karty.
   tylko w YAML-u („Edytor wizualny nie jest obsługiwany", „Zapisz" działa)
   i w konsoli pojawia się jedno ostrzeżenie z powodem.
 - Adres edytorów to katalog karty + jej query (`?hacstag=…` z HACS,
-  `?v=…` z instalacji ręcznej) + `sv=<wersja>` — po aktualizacji
-  przeglądarka nie łączy nowej karty ze starymi edytorami z cache.
-  Edytory z innej wersji niż karta nie są używane (YAML + ostrzeżenie).
+  `?v=…` z instalacji ręcznej) + `sv=<id builda>` (wersja + skrót źródeł).
+  Po aktualizacji i po każdym przebudowaniu ze zmienionym kodem — także bez
+  podbicia wersji — adres jest nowy, więc przeglądarka nie łączy nowej
+  karty ze starymi edytorami z cache. Edytory z innego builda niż karta nie
+  są używane (YAML + ostrzeżenie).
+- **Instalacja ręczna — aktualizacja:** podmień oba pliki **i** zmień `?v=`
+  w adresie zasobu (`?v=1` → `?v=2`). HA trzyma `/local/` w cache 31 dni,
+  a plik edytorów pobierany przy „Edytuj" nie jest odświeżany przez
+  Ctrl+Shift+R.
+- Gdy plik edytorów nie odpowiada przez 20 s, karta oddaje YAML i nie
+  czeka na tę próbę ponownie — kolejne „Edytuj" nie stoi 20 s na
+  szkielecie, a po 30 s karta pyta o plik jeszcze raz.
+- Napisy paska „Cofnij" (`undo.*`) przeniesione do słownika edytorów
+  (`editor.undo.*`) — w pliku dashboardu nie zostaje żaden tekst edytorów.
 - `npm run build` czyści `dist/` przed buildem; buduje dwa niezależne pliki
   i zatrzymuje się, gdy edytory trafiłyby do pliku dashboardu albo runtime
   karty do pliku edytorów (plugin `stratum-boundary`).
@@ -38,8 +49,9 @@ gdy otworzysz edycję karty.
 - ADR-005 przepisany: dwa samodzielne pliki ES zamiast jednego, z
   uzasadnieniem i odrzuconymi wariantami (chunk rollupa = druga instancja
   karty bez `?hacstag=`). ADR-007 i ADR-010 zaktualizowane.
-- README: sekcja „Instalacja ręczna (bez HACS)". `docs/development.md`:
-  kopiowanie/symlink/rsync obu plików, nowy wpis w „Częstych problemach".
+- README: sekcja „Instalacja ręczna (bez HACS)" z aktualizacją przez `?v=`.
+  `docs/development.md`: kopiowanie/symlink/rsync obu plików, id builda
+  i cache `/local/`, nowy wpis w „Częstych problemach".
 
 ## [1.109.3] — 2026-11-17
 

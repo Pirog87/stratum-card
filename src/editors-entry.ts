@@ -1,6 +1,6 @@
 // Wejście pliku dist/stratum-card-editors.js (PKG-3, v1.110.0).
 //
-// Edytory i ich słowniki to ~40% kodu, którego dashboard nie pokazuje —
+// Edytory i ich słowniki to ~41% kodu, którego dashboard nie pokazuje —
 // ładuje je dopiero editor-loader.ts z getConfigElement() obu kart.
 // Ten plik nie importuje i nie może importować niczego z runtime karty
 // (stratum-card.ts, hass-watch, boot-guard…): to osobny build bez

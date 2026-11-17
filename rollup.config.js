@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
 import typescript from '@rollup/plugin-typescript';
 import resolve from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
@@ -26,6 +27,49 @@ function minifyLiteralsPlugin() {
 }
 
 /**
+ * Id builda: wersja + 8 znaków sha256 ze źródeł, które wpływają na oba
+ * pliki dist (src/, package.json, package-lock.json, rollup.config.js,
+ * tsconfig.json). Liczone RAZ przy wczytaniu configu, więc oba buildy
+ * z jednego `npm run build` dostają to samo id. Loader edytorów wkłada je
+ * w adres (`sv=`) i porównuje z id zapisanym przez plik edytorów — przy
+ * samej wersji przebudowanie z poprawką bez podbicia wersji parowało świeżą
+ * kartę ze starymi edytorami z cache przeglądarki (src/version.ts).
+ * Skrót, nie znacznik czasu: build w CI i lokalny z tych samych źródeł dają
+ * identyczny plik. W watch-mode config wczytuje się raz, więc id stoi
+ * w miejscu przez całą sesję — dlatego dev-build dokłada w loaderze
+ * znacznik czasu ładowania strony, a samo id oznaczamy `-dev`, żeby nie
+ * dało się go pomylić z buildem produkcyjnym.
+ */
+function sourceFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = `${dir}/${e.name}`;
+    return e.isDirectory() ? sourceFiles(p) : [p];
+  });
+}
+function computeBuildId() {
+  const files = [
+    'package.json',
+    'package-lock.json',
+    'rollup.config.js',
+    'tsconfig.json',
+    ...sourceFiles('src'),
+  ].sort();
+  const h = createHash('sha256');
+  for (const f of files) {
+    let body;
+    try {
+      body = readFileSync(new URL(`./${f}`, import.meta.url));
+    } catch {
+      continue; // brak lockfile'a itp. — liczymy z tego, co jest
+    }
+    // Ścieżka w skrócie: przeniesienie kodu między plikami to też inny build.
+    h.update(f).update('\0').update(body).update('\0');
+  }
+  return `${pkg.version}.${h.digest('hex').slice(0, 8)}`;
+}
+const buildId = dev ? `${pkg.version}-dev` : computeBuildId();
+
+/**
  * Wersja z package.json (i flaga dev-buildu) wstrzykiwana w src/version.ts. Wcześniej każda
  * karta miała własną stałą VERSION utrzymywaną ręcznie — popup potrafił
  * logować v1.24.0 obok v1.108.2 i wyglądało to jak stary cache. Jedno
@@ -41,7 +85,8 @@ function versionPlugin() {
       return {
         code: code
           .replace(/\b__STRATUM_VERSION__\b/g, JSON.stringify(pkg.version))
-          .replace(/\b__STRATUM_DEV__\b/g, JSON.stringify(dev)),
+          .replace(/\b__STRATUM_DEV__\b/g, JSON.stringify(dev))
+          .replace(/\b__STRATUM_BUILD__\b/g, JSON.stringify(buildId)),
         map: null,
       };
     },
@@ -108,19 +153,23 @@ const CARD_RUNTIME = new Set([
   'scene-pending',
   'editor-loader',
 ]);
-const DEFINE_RE = /customElement\(\s*['"`](stratum-[a-z0-9-]+)['"`]/g;
+// Definicja elementu: dekorator albo bezpośrednie customElements.define.
+const DEFINE_RE = /(?:\bcustomElement|\.define)\(\s*['"`](stratum-[a-z0-9-]+)['"`]/g;
+// Dekorator pod inną nazwą (`customElement as ce`) wymknąłby się DEFINE_RE —
+// zamiast zgadywać aliasy, zabraniamy ich w src/.
+const ALIAS_RE = /\bcustomElement\s+as\s+[A-Za-z_$]/;
+
+/** Czy moduł definiuje nie-edytorowy element `stratum-*`. */
+function definesCardElement(code) {
+  for (const m of code.matchAll(DEFINE_RE)) {
+    if (!m[1].endsWith('-editor')) return true;
+  }
+  return false;
+}
 
 function stratumBoundary(kind) {
-  const definesCardElement = new Set();
   return {
     name: 'stratum-boundary',
-    transform(code, id) {
-      if (!srcRel(id)) return null;
-      for (const m of code.matchAll(DEFINE_RE)) {
-        if (!m[1].endsWith('-editor')) definesCardElement.add(id);
-      }
-      return null;
-    },
     generateBundle(_opts, bundle) {
       const chunks = Object.values(bundle).filter((c) => c.type === 'chunk');
       if (chunks.length !== 1) {
@@ -132,6 +181,16 @@ function stratumBoundary(kind) {
       const rendered = Object.entries(chunk.modules)
         .filter(([, m]) => m.renderedLength > 0)
         .map(([id]) => id);
+      // Kod modułów czytamy z getModuleInfo przy KAŻDYM generateBundle, a nie
+      // zbieramy w transform: w `npm run watch` niezmienione moduły nie
+      // przechodzą transformu ponownie, więc zbiór trzymany między buildami
+      // pamiętał błąd także po cofnięciu zmiany — aż do restartu watchera.
+      // getModuleInfo().code jest dostępne również dla modułów z cache.
+      const codeOf = (id) => this.getModuleInfo(id)?.code ?? '';
+      const aliased = rendered.filter((id) => srcRel(id) && ALIAS_RE.test(codeOf(id)));
+      if (aliased.length) {
+        this.error(`${kind}: alias dekoratora customElement: ${aliased.map(srcRel).join(', ')}`);
+      }
       if (kind === 'main') {
         const bad = rendered.filter((id) => {
           const rel = srcRel(id);
@@ -142,7 +201,7 @@ function stratumBoundary(kind) {
       } else {
         const bad = rendered.filter((id) => {
           const rel = srcRel(id);
-          return !!rel && (CARD_RUNTIME.has(rel) || definesCardElement.has(id));
+          return !!rel && (CARD_RUNTIME.has(rel) || definesCardElement(codeOf(id)));
         });
         if (bad.length) {
           this.error(`edytory zawierają runtime karty: ${bad.map(srcRel).join(', ')}`);

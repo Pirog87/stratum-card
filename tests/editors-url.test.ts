@@ -5,6 +5,7 @@ import {
   RETRY_COOLDOWN_MS,
   editorsUrl,
   editorsVerdict,
+  loadStep,
   mayRetry,
 } from '../src/editors-url.js';
 import { HACS_PHOTO_BASE } from '../src/scene-photo-url.js';
@@ -99,6 +100,26 @@ describe('mayRetry', () => {
   });
 });
 
+describe('loadStep', () => {
+  it('pierwsze wywołanie startuje import', () => {
+    expect(loadStep('none', undefined, 0)).toBe('start');
+  });
+  it('import w toku — czekamy na tę samą próbę (jedno żądanie)', () => {
+    expect(loadStep('loading', undefined, 5)).toBe('await');
+  });
+  it('po timeoucie nie czekamy drugi raz na wiszący import', () => {
+    // Timeout zapisuje failedAt — kolejne wywołanie w odstępie wraca od razu.
+    const failedAt = 20_000;
+    expect(loadStep('failed', failedAt, failedAt + 3_000)).toBe('skip');
+  });
+  it('po odstępie od timeoutu albo błędu — nowa próba', () => {
+    expect(loadStep('failed', 20_000, 20_000 + RETRY_COOLDOWN_MS)).toBe('start');
+  });
+  it('plik wykonany, a edytora brak — nie ponawiamy', () => {
+    expect(loadStep('loaded', undefined, 1e9)).toBe('skip');
+  });
+});
+
 describe('editorsVerdict', () => {
   it('ok, gdy edytor zdefiniowany i wersja zgodna', () => {
     expect(editorsVerdict(true, '1.110.0', '1.110.0')).toBe('ok');
@@ -108,6 +129,9 @@ describe('editorsVerdict', () => {
   });
   it('mismatch, gdy edytory z innej wersji', () => {
     expect(editorsVerdict(true, '1.109.3', '1.110.0')).toBe('mismatch');
+  });
+  it('mismatch, gdy ta sama wersja, ale inny build', () => {
+    expect(editorsVerdict(true, '1.110.0.aaaaaaaa', '1.110.0.bbbbbbbb')).toBe('mismatch');
   });
   it('mismatch, gdy brak znacznika albo nie-string', () => {
     expect(editorsVerdict(true, undefined, '1.110.0')).toBe('mismatch');

@@ -785,5 +785,11 @@ export const editorPl = {
     custom_badge: 'custom',
     open_room: 'Otwórz ustawienia pokoju',
   },
+  // Pasek „Cofnij” po usunięciu chipa/sekcji (editor-undo.ts) — do
+  // v1.110.0 w pl.ts, ale używają go tylko edytory, więc jedzie z nimi.
+  undo: {
+    removed: 'Usunięto: {label}',
+    undo: 'Cofnij',
+  },
   // EDITOR_GROUPS
 };
