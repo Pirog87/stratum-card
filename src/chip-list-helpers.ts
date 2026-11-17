@@ -54,6 +54,29 @@ export function chipMoreInfoEntity(
   return id && hass.states?.[id] ? id : undefined;
 }
 
+/** Co robi domyślny tap chipa (bez jawnego `tap_action`). */
+export type ChipDefaultTap =
+  | { kind: 'list' }
+  | { kind: 'more-info'; entityId: string };
+
+/**
+ * Domyślny tap chipa: lista aktywnych encji albo more-info czujnika.
+ * Jedna reguła dla `clickable` i dla samego tapu — karta pokoju liczyła
+ * klikalność tylko z `chipSupportsList`, więc gdy temperatura i wilgotność
+ * przestały otwierać pustą listę, ich chip w nagłówku popupu po prostu
+ * przestał reagować, choć w stratum-card otwierał more-info. `undefined` =
+ * chip nieklikalny.
+ */
+export function chipDefaultTap(
+  hass: HomeAssistant,
+  entries: readonly HassEntityRegistryEntry[],
+  chip: ChipConfig,
+): ChipDefaultTap | undefined {
+  if (chipSupportsList(chip)) return { kind: 'list' };
+  const entityId = chipMoreInfoEntity(hass, entries, chip);
+  return entityId ? { kind: 'more-info', entityId } : undefined;
+}
+
 /** Aktywne encje pasujące do chipa (scope = przekazane entries). */
 export function chipEntityIds(
   hass: HomeAssistant,

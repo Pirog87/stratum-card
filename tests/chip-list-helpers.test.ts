@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   alarmEntityIds,
+  chipDefaultTap,
   chipEntityIds,
   chipMoreInfoEntity,
   chipSupportsList,
@@ -75,6 +76,43 @@ describe('chipMoreInfoEntity', () => {
       chipMoreInfoEntity(hass, entries, { type: 'entity', entity: 'switch.ekspres' } as ChipConfig),
     ).toBe('switch.ekspres');
     expect(chipMoreInfoEntity(hass, entries, { type: 'lights' } as ChipConfig)).toBeUndefined();
+  });
+});
+
+describe('chipDefaultTap', () => {
+  const hass = makeHass({
+    'sensor.t': entity('sensor.t', '21.5', { device_class: 'temperature' }),
+    'sensor.h': entity('sensor.h', '45', { device_class: 'humidity' }),
+    'switch.ekspres': entity('switch.ekspres', 'off'),
+  });
+  const entries = [entry('sensor.t'), entry('sensor.h')];
+
+  it('temperatura/wilgotność w karcie pokoju: more-info czujnika, nie martwy chip', () => {
+    expect(chipDefaultTap(hass, entries, { type: 'temperature' } as ChipConfig)).toEqual({
+      kind: 'more-info',
+      entityId: 'sensor.t',
+    });
+    expect(chipDefaultTap(hass, entries, { type: 'humidity' } as ChipConfig)).toEqual({
+      kind: 'more-info',
+      entityId: 'sensor.h',
+    });
+    expect(
+      chipDefaultTap(hass, entries, { type: 'entity', entity: 'switch.ekspres' } as ChipConfig),
+    ).toEqual({ kind: 'more-info', entityId: 'switch.ekspres' });
+  });
+
+  it('chipy zbiorcze: lista', () => {
+    expect(chipDefaultTap(hass, entries, { type: 'lights' } as ChipConfig)).toEqual({
+      kind: 'list',
+    });
+  });
+
+  it('brak listy i brak czujnika = nieklikalny', () => {
+    expect(chipDefaultTap(hass, [], { type: 'temperature' } as ChipConfig)).toBeUndefined();
+    expect(chipDefaultTap(hass, entries, { type: 'template' } as ChipConfig)).toBeUndefined();
+    expect(
+      chipDefaultTap(hass, entries, { type: 'lights', show_list: false } as ChipConfig),
+    ).toBeUndefined();
   });
 });
 

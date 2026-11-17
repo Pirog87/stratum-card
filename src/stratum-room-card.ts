@@ -38,8 +38,8 @@ import {
   CHIP_LIST_COLORS,
   CHIP_LIST_LABELS,
   alarmEntityIds,
+  chipDefaultTap,
   chipEntityIds,
-  chipSupportsList,
 } from './chip-list-helpers.js';
 import { ago } from './chip-defaults.js';
 import { TemplateRenderer } from './template-renderer.js';
@@ -269,8 +269,18 @@ export class StratumRoomCard extends LitElement {
     color: string;
   };
 
-  private _onChipTap(chip: ChipConfig): void {
-    if (!chipSupportsList(chip)) return;
+  private _onChipTap(chip: ChipConfig, entries: HassEntityRegistryEntry[]): void {
+    if (!this.hass) return;
+    // Te same `entries` co w renderze — tap otwiera dokładnie ten czujnik,
+    // którego wartość chip pokazuje, i tylko wtedy, gdy chip był klikalny.
+    const tap = chipDefaultTap(this.hass, entries, chip);
+    if (!tap) return;
+    if (tap.kind === 'more-info') {
+      // Chip jednego czujnika (temperatura, wilgotność, encja): more-info
+      // czujnika, jak w stratum-card — zamiast pustej listy albo niczego.
+      runTapAction(this.hass, { action: 'more-info' }, { source: this, entity_id: tap.entityId });
+      return;
+    }
     this._popupChip = {
       chip,
       label: CHIP_LIST_LABELS[chip.type] ?? 'Lista',
@@ -308,7 +318,7 @@ export class StratumRoomCard extends LitElement {
       const value = evaluateChip(this.hass!, entries, chip, this._templates);
       const showWhenZero = chip.show_when_zero !== false;
       if (!value.active && !showWhenZero) continue;
-      const clickable = chipSupportsList(chip);
+      const clickable = chipDefaultTap(this.hass, entries, chip) !== undefined;
       rendered.push(html`<stratum-card-chip
         .icon=${chip.icon ?? value.icon ?? resolveChipIcon(chip)}
         .label=${value.label}
@@ -316,7 +326,7 @@ export class StratumRoomCard extends LitElement {
         .color=${chip.color ?? value.color ?? resolveChipColor(chip)}
         .showWhenZero=${showWhenZero}
         .clickable=${clickable}
-        @chip-tap=${() => this._onChipTap(chip)}
+        @chip-tap=${() => this._onChipTap(chip, entries)}
       ></stratum-card-chip>`);
     }
     return rendered;

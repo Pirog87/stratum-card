@@ -18,7 +18,9 @@ import {
   type TemplateResult,
   nothing,
 } from 'lit';
+import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { ChipConfig, HomeAssistant } from './types.js';
 import { ago } from './chip-defaults.js';
@@ -592,15 +594,20 @@ export class StratumChipList extends LitElement {
             />`
           : nothing}
         ${coverPos !== undefined
-          ? html`<input
+          ? // live() i styleMap porównują z DOM-em / zapisują przy każdym
+            // renderze, a nie z ostatnią wartością zatwierdzoną przez Lita.
+            // Przeciąganie zmienia suwak poza Litem (`_onCoverInput`), więc
+            // zwykłe wiązanie widziało „50 → 50" i pomijało zapis: gdy roleta
+            // nie ruszyła albo gest przerwano, suwak zostawał na 80% na stałe.
+            html`<input
               type="range"
               class="bri-slider"
               min="0"
               max="100"
               step="1"
               aria-label=${name}
-              style="--pct:${coverPos}%;"
-              .value=${String(coverPos)}
+              style=${styleMap({ '--pct': `${coverPos}%` })}
+              .value=${live(String(coverPos))}
               @input=${(ev: Event) => this._onCoverInput(entity_id, ev)}
               @pointerup=${() => this._endCoverDrag(entity_id)}
               @pointercancel=${() => this._endCoverDrag(entity_id)}
