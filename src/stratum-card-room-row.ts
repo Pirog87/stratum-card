@@ -32,6 +32,7 @@ import {
   topAlarmField,
   withoutBadgeFields,
 } from './row-fields.js';
+import { iconActionLabel } from './icon-action-label.js';
 
 // Kolejność wyświetlania pól = kolejność listy `fields` w configu
 // (od v1.85 zmienialna strzałkami w edytorze).
@@ -152,6 +153,12 @@ export class StratumCardRoomRow extends LitElement {
    */
   @property({ type: Boolean, attribute: 'icon-tappable', reflect: true })
   public iconTappable = false;
+
+  /**
+   * Typ akcji ikony (`action` z room_icon_tap_action) — tylko do nazwy
+   * dostępnej stadionu, żeby czytnik mówił, co zrobi Enter.
+   */
+  @property({ attribute: false }) public iconAction?: string;
 
   /** Całe pomieszczenie niedostępne (wszystkie encje unavailable). */
   @property({ type: Boolean }) public offline = false;
@@ -817,7 +824,9 @@ export class StratumCardRoomRow extends LitElement {
               class="iconwrap"
               role=${this.iconTappable ? 'button' : nothing}
               tabindex=${this.iconTappable ? '0' : nothing}
-              aria-label=${this.iconTappable ? `${this.name}: akcja ikony` : nothing}
+              aria-label=${this.iconTappable
+                ? iconActionLabel(this.name, this.iconAction)
+                : nothing}
               @click=${this._onIconClick}
               @keydown=${this._onIconKey}
             >
@@ -1468,7 +1477,10 @@ export class StratumCardRoomRow extends LitElement {
       }
       :host([clickable]) .row[data-hover='lift']:hover {
         transform: translateY(-1px);
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
+        /* Cień z tokenu „w stronę czerni" (jak stadion i chipy listy),
+           nie z literału — motyw może go przemalować. Wiersz żyje zawsze
+           w stratum-card albo stratum-room-card, które token definiują. */
+        box-shadow: 0 3px 10px color-mix(in srgb, var(--stratum-ink-shade) 14%, transparent);
       }
       :host([clickable]) .row[data-hover='glow']:hover {
         box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 50%, transparent);

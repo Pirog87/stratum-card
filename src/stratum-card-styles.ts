@@ -78,6 +78,8 @@ export const cardStyles = css`
       margin: 0;
       padding: 0;
       border: 0;
+      /* Ten sam promień co .hs-title — jego odpowiednik w belce „stripes"
+         (obrys fokusa na tekście). Nie nowa wartość, tylko ten sam stopień. */
       border-radius: 4px;
       background: transparent;
       color: inherit;

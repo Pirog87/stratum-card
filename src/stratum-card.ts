@@ -371,7 +371,13 @@ export class StratumCard extends LitElement {
   private _resetExpanded(): void {
     if (this._isEditorPreview()) return;
     this._clearAutoCollapse();
-    this._expanded = Boolean(this._config?.expanded);
+    const next = Boolean(this._config?.expanded);
+    // Ta sama ścieżka zwinięcia co przycisk i auto-collapse, więc ten sam
+    // ratunek fokusa: zejście do tła (inna karta, wygaszony ekran) z fokusem
+    // w wierszu zwijało body z `inert`, przeglądarka zdejmowała fokus na
+    // <body>, a po powrocie Tab przeskakiwał całą kartę.
+    if (this._expanded && !next) this._rescueFocusFromBody();
+    this._expanded = next;
   }
 
   private _onVisibilityChange = (): void => {
@@ -460,6 +466,7 @@ export class StratumCard extends LitElement {
     }
 
     if (isFirst || expandedFlagChanged) {
+      if (this._expanded && !config.expanded) this._rescueFocusFromBody();
       this._expanded = Boolean(config.expanded);
       if (this._expanded) this._scheduleAutoCollapse();
     }
@@ -1887,6 +1894,7 @@ export class StratumCard extends LitElement {
       .styleOverride=${rowStyleOverride}
       .clickable=${clickable}
       .iconTappable=${iconTappable}
+      .iconAction=${effectiveIconTap?.action}
       @row-lights-toggle=${() =>
         this._toggleRoomLights(entries, fieldEntities, swipeKey)}
       @row-brightness=${(ev: CustomEvent<RowBrightnessDetail>) =>

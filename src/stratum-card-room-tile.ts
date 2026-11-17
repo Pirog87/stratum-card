@@ -458,7 +458,8 @@ export class StratumCardRoomTile extends LitElement {
       }
       :host([clickable]) .tile[data-hover='lift']:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+        /* Cień z tokenu --stratum-ink-shade, nie z literału (jak wiersz). */
+        box-shadow: 0 4px 14px color-mix(in srgb, var(--stratum-ink-shade) 15%, transparent);
       }
       :host([clickable]) .tile[data-hover='glow']:hover {
         box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 55%, transparent),
