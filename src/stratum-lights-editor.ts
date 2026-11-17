@@ -16,6 +16,7 @@ import type {
 } from './types.js';
 import { getEntitiesInArea, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { ENTITY_UI_ACTIONS } from './tap-action.js';
 
 const SEPARATOR_FIELDS_SCHEMA = [{ name: 'label', selector: { text: {} } }];
 
@@ -110,7 +111,9 @@ export class StratumLightsEditor extends LitElement {
           { name: 'icon', selector: { icon: {} } },
         ],
       },
-      { name: 'tap_action', selector: { ui_action: {} } },
+      // Bez `assist` — karta go nie obsługuje; kafel ma encję, więc
+      // `more-info` / `toggle` działają na niej.
+      { name: 'tap_action', selector: { ui_action: { actions: ENTITY_UI_ACTIONS } } },
     ];
   }
 

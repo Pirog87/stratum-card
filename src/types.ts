@@ -1090,11 +1090,23 @@ export type TapActionConfig =
   /** Przełącz światła pokoju: jeśli cokolwiek świeci → zgaś wszystkie, inaczej zapal. */
   | { action: 'toggle-lights' }
   | { action: 'navigate'; navigation_path: string }
+  /** Bez `entity` — encja kontekstu (kafel, chip encji, scena). */
   | { action: 'more-info'; entity?: string }
+  /** Przełącz encję; bez `entity` — encja kontekstu. */
+  | { action: 'toggle'; entity?: string }
   | { action: 'url'; url_path: string; new_tab?: boolean }
+  /** Zapis edytora akcji HA od 2024.8. */
+  | {
+      action: 'perform-action';
+      perform_action: string;
+      data?: Record<string, unknown>;
+      target?: Record<string, unknown>;
+    }
+  /** Starszy zapis — `data` (edytor HA) albo `service_data` (YAML). */
   | {
       action: 'call-service';
       service: string;
+      data?: Record<string, unknown>;
       service_data?: Record<string, unknown>;
       target?: Record<string, unknown>;
     };

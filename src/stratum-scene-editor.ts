@@ -19,6 +19,7 @@ import {
 } from './scene-presets.js';
 import { getEntitiesInArea, getAreasInFloor, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { ENTITY_UI_ACTIONS } from './tap-action.js';
 
 const GLOBAL_SCHEMA = [
   {
@@ -103,7 +104,8 @@ const SCENE_FIELDS_SCHEMA = [
     ],
   },
   { name: 'color', selector: { text: {} } },
-  { name: 'tap_action', selector: { ui_action: {} } },
+  // Bez `assist` — karta go nie obsługuje; `toggle` sceny = aktywacja.
+  { name: 'tap_action', selector: { ui_action: { actions: ENTITY_UI_ACTIONS } } },
 ];
 
 const SCENE_LABELS: Record<string, string> = {

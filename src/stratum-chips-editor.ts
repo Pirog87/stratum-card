@@ -12,6 +12,7 @@ import type {
   HomeAssistant,
 } from './types.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { ENTITY_UI_ACTIONS, ROW_UI_ACTIONS } from './tap-action.js';
 
 interface ChipQuickPick {
   type: ChipConfig['type'];
@@ -228,6 +229,11 @@ export class StratumChipsEditor extends LitElement {
   private _schemaFor(chip: ChipConfig) {
     const listSupported =
       chip.type !== 'entity' && chip.type !== 'template';
+    // `more-info` / `toggle` tylko gdy chip ma encję (chip encji albo
+    // temperatura/wilgotność z jawnym sensorem) — chip licznika nie ma
+    // czego otworzyć. `assist` pomijamy zawsze: karta go nie obsługuje.
+    const hasEntity =
+      chip.type === 'entity' || Boolean((chip as { entity?: string }).entity);
     const common = [
       {
         type: 'grid',
@@ -239,7 +245,10 @@ export class StratumChipsEditor extends LitElement {
       },
       { name: 'show_when_zero', selector: { boolean: {} } },
       ...(listSupported ? [{ name: 'show_list', selector: { boolean: {} } }] : []),
-      { name: 'tap_action', selector: { ui_action: {} } },
+      {
+        name: 'tap_action',
+        selector: { ui_action: { actions: hasEntity ? ENTITY_UI_ACTIONS : ROW_UI_ACTIONS } },
+      },
     ];
     if (chip.type === 'entity') {
       return [

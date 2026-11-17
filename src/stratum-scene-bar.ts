@@ -193,9 +193,21 @@ export class StratumSceneBar extends LitElement {
 
   private _onTap(scene: SceneConfig): void {
     if (scene.tap_action) {
-      this._flashAck(scene.entity);
-      void runTapAction(this.hass, scene.tap_action, { source: this });
-      return;
+      // `none` = świadomie wyłączony kafel: ani akcji, ani potwierdzenia.
+      if (scene.tap_action.action === 'none') return;
+      // Pierścień potwierdzenia dopiero PO obsłużeniu — wcześniej błyskał
+      // także dla akcji, których nie umiemy wykonać (np. `assist`), więc
+      // user widział „zrobione", choć nic się nie stało. Nieobsłużona akcja
+      // wraca do domyślnej aktywacji sceny poniżej, jak klik kafla.
+      if (
+        runTapAction(this.hass, scene.tap_action, {
+          source: this,
+          entity_id: scene.entity,
+        })
+      ) {
+        this._flashAck(scene.entity);
+        return;
+      }
     }
     const entity = scene.entity;
     // Scena już się wykonuje — drugi tap tylko potwierdza, nie wysyła.
