@@ -112,12 +112,33 @@ describe('karta w dialogu-gospodarzu: faza capture (przegląd v1.109.3)', () => 
     expect(escapePhase(['div', 'stratum-card', 'body'])).toBe('bubble');
   });
 
-  it('fokus poza popupem, na elemencie dialogu-gospodarza: capture z flagi gospodarza', () => {
+  it('fokus poza popupem, na elemencie dialogu-gospodarza: bubble na gospodarzu', () => {
     // Gospodarz wycięty ze ścieżki (to przodek karty, nie dialog nad nią).
     const path = ['button', 'body', 'html'];
     expect(escapePhase(path)).toBe('bubble');
-    expect(escapePhase(path, true)).toBe('capture');
+    expect(escapePhase(path, true)).toBe('host');
     expect(isFromForeignDialog(path)).toBe(false);
+  });
+
+  it('pole gospodarza z własnym Escape (combo-box, edytor kodu) nie traci klawisza (przegląd v1.109.3 r2)', () => {
+    // Capture na document zabierał Escape polu, zanim je osiągnął. Faza
+    // „host" słucha w bubble — pole jest pierwsze.
+    expect(escapePhase(['input', 'ha-combo-box', 'hui-card-element-editor', 'body', 'html'], true)).toBe('host');
+    expect(escapePhase(['div', 'ha-code-editor', 'body', 'html'], true)).toBe('host');
+    // Pole samo obsłużyło Escape (preventDefault) — warstwa zostaje.
+    const layers = new EscapeLayers();
+    let closed = 0;
+    layers.push(() => closed++);
+    expect(layers.handle({ key: 'Escape', defaultPrevented: true, pathNames: ['input', 'body'] })).toBe(false);
+    expect(closed).toBe(0);
+  });
+
+  it('fokus w warstwie Stratum albo nigdzie (body): capture, jak dotąd', () => {
+    expect(escapePhase(['button', 'stratum-room-card', 'div', 'stratum-card', 'body'], true)).toBe('capture');
+    expect(escapePhase(['body', 'html'], true)).toBe('capture');
+    expect(escapePhase([], true)).toBe('capture');
+    // Bez gospodarza body to zwykły dashboard.
+    expect(escapePhase(['body', 'html'])).toBe('bubble');
   });
 
   it('dialog nad warstwą (głębiej niż Stratum) to nie gospodarz', () => {

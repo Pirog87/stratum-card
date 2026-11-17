@@ -49,21 +49,42 @@ export function isHostedInDialog(pathNames: readonly string[]): boolean {
 }
 
 /**
- * Faza, w której łapiemy Escape. Karta w dialogu-gospodarzu: CAPTURE na
- * document. Dialog HA łapie Escape sam — mwc ha-dialog słuchaczem keydown
- * na document (zarejestrowanym wcześniej niż nasz, więc w bubble byłby
- * pierwszy), a dialogi na natywnym <dialog> (ha-md-dialog, ha-wa-dialog)
- * domyślną akcją klawisza. W bubble Escape zamykał nasz popup ORAZ cały
- * dialog-gospodarz (podgląd edytora znikał razem z popupem). W capture
- * jesteśmy przed nimi, a stopPropagation + preventDefault zatrzymują oba
- * mechanizmy. Poza dialogiem zostaje bubble: pole tekstowe, które samo
- * obsłużyło Escape (defaultPrevented), dalej ma pierwszeństwo.
+ * Gdzie łapiemy Escape.
+ *
+ * - `capture` (na document): karta w dialogu-gospodarzu i fokus w warstwie
+ *   Stratum. Dialog HA łapie Escape sam — mwc ha-dialog słuchaczem keydown
+ *   na document (zarejestrowanym wcześniej niż nasz, więc w bubble byłby
+ *   pierwszy), a dialogi na natywnym <dialog> (ha-md-dialog, ha-wa-dialog)
+ *   domyślną akcją klawisza. W bubble Escape zamykał nasz popup ORAZ cały
+ *   dialog-gospodarz. W capture jesteśmy przed nimi, a stopPropagation +
+ *   preventDefault zatrzymują oba mechanizmy. Capture wolno tu, bo fokus
+ *   jest w NASZYM drzewie — nie zabieramy klawisza cudzemu polu.
+ *   To samo, gdy fokus jest „nigdzie" (body): nie ma pola, które mogłoby
+ *   chcieć Escape, a popup Stratum jest najwyższą warstwą.
+ * - `host` (bubble na samym elemencie dialogu-gospodarza): karta w dialogu,
+ *   fokus poza Stratum, na innym elemencie gospodarza (popup nie ma pułapki
+ *   fokusu, Tab wychodzi do formularza edytora). Capture zabierałby Escape
+ *   combo-boxowi, pickerowi czy wyszukiwarce edytora kodu — zamykał się
+ *   popup zamiast ich listy. W bubble na gospodarzu pole dostaje klawisz
+ *   pierwsze (stopPropagation albo defaultPrevented = obsłużone, nie
+ *   ruszamy), a my nadal jesteśmy przed słuchaczem mwc na document
+ *   i przed domyślną akcją natywnego <dialog>.
+ * - `bubble` (na document): zwykły dashboard, jak dotąd.
+ *
+ * `pathNames` to ścieżka z wyciętymi gospodarzami, `hosted` — czy karta
+ * najwyższej warstwy ma dialog-gospodarza.
  */
 export function escapePhase(
   pathNames: readonly string[],
   hosted = false,
-): 'capture' | 'bubble' {
-  return hosted || isHostedInDialog(pathNames) ? 'capture' : 'bubble';
+): 'capture' | 'host' | 'bubble' {
+  if (pathNames.some((n) => n.startsWith('stratum-'))) {
+    return hosted || isHostedInDialog(pathNames) ? 'capture' : 'bubble';
+  }
+  if (!hosted) return 'bubble';
+  return pathNames.length === 0 || pathNames[0] === 'body' || pathNames[0] === 'html'
+    ? 'capture'
+    : 'host';
 }
 
 /** Nazwa tagu dialogu (HA, mwc, natywny <dialog>). */
@@ -131,7 +152,7 @@ function hostDialogsOf(el: Element | undefined): Set<EventTarget> {
 }
 
 const makeKeydown =
-  (phase: 'capture' | 'bubble') =>
+  (phase: 'capture' | 'host' | 'bubble') =>
   (ev: KeyboardEvent): void => {
     if (ev.key !== 'Escape') return;
     // Fokus mógł wyjść z popupu na inny element dialogu-gospodarza (przycisk
@@ -147,6 +168,9 @@ const makeKeydown =
       .map((n) => (n as Element).localName)
       .filter((n): n is string => typeof n === 'string');
     if (escapePhase(pathNames, hosts.size > 0) !== phase) return;
+    // Słuchacz gospodarza mógł zostać po warstwie spod spodu z innej karty —
+    // reagujemy tylko na gospodarzach karty najwyższej warstwy.
+    if (phase === 'host' && (!ev.currentTarget || !hosts.has(ev.currentTarget))) return;
     if (layers.handle({ key: ev.key, defaultPrevented: ev.defaultPrevented, pathNames })) {
       ev.stopPropagation();
       // Natywny <dialog> nad kartą nie dostaje wtedy „cancel".
@@ -154,23 +178,54 @@ const makeKeydown =
     }
   };
 const onKeydownCapture = makeKeydown('capture');
+const onKeydownHost = makeKeydown('host');
 const onKeydown = makeKeydown('bubble');
+
+// Słuchacze bubble na dialogach-gospodarzach, liczone referencjami — dwie
+// warstwy z tej samej karty (popup + lista chipa) dzielą gospodarza.
+const hostListeners = new Map<EventTarget, number>();
+
+function retainHosts(dialogs: Set<EventTarget>): void {
+  for (const d of dialogs) {
+    const n = hostListeners.get(d) ?? 0;
+    if (n === 0) d.addEventListener('keydown', onKeydownHost as EventListener);
+    hostListeners.set(d, n + 1);
+  }
+}
+
+function releaseHosts(dialogs: Set<EventTarget>): void {
+  for (const d of dialogs) {
+    const n = hostListeners.get(d) ?? 0;
+    if (n <= 1) {
+      d.removeEventListener('keydown', onKeydownHost as EventListener);
+      hostListeners.delete(d);
+    } else {
+      hostListeners.set(d, n - 1);
+    }
+  }
+}
 
 /**
  * Rejestruje warstwę Stratum dla Escape. Słuchacze na `document` istnieją
- * tylko, gdy jest co najmniej jedna warstwa.
+ * tylko, gdy jest co najmniej jedna warstwa; słuchacze na dialogach-
+ * gospodarzach — tylko, gdy warstwę otworzyła karta siedząca w dialogu.
  */
 export function pushEscapeLayer(handler: EscapeHandler, host?: Element): () => void {
   if (layers.size === 0) {
     document.addEventListener('keydown', onKeydownCapture, true);
     document.addEventListener('keydown', onKeydown);
   }
+  // Gospodarzy liczymy raz, przy otwarciu: karta nie przenosi się między
+  // dialogami przy otwartym popupie, a disconnect i tak zdejmuje warstwę.
+  const dialogs = hostDialogsOf(host);
+  retainHosts(dialogs);
   const release = layers.push(handler, host);
   let released = false;
   return () => {
     if (released) return;
     released = true;
     release();
+    releaseHosts(dialogs);
     if (layers.size === 0) {
       document.removeEventListener('keydown', onKeydownCapture, true);
       document.removeEventListener('keydown', onKeydown);
