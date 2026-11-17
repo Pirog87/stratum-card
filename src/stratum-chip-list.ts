@@ -33,6 +33,7 @@ import {
   tapPower,
 } from './power-pending.js';
 import { ALARM_CLASS_LABELS } from './chip-list-helpers.js';
+import { flushSwipesTouching } from './light-swipe.js';
 import { lightColorOf } from './tile-data.js';
 import { pushEscapeLayer } from './escape-stack.js';
 import { isDimmable } from './light-dimming.js';
@@ -258,10 +259,14 @@ export class StratumChipList extends LitElement {
         ).catch(() => this._forgetCovers(targets));
         continue;
       }
-      markPower(this.hass, targets, 'off');
+      // Odroczona komenda gestu na tych światłach idzie pierwsza — inaczej
+      // przyszłaby po naszym turn_off i go nadpisała. Cofnięcie przez zbiór
+      // z markPower: nieudana komenda nie kasuje nowszego tapnięcia.
+      flushSwipesTouching(targets);
+      const marked = markPower(this.hass, targets, 'off');
       void Promise.resolve(
         this.hass.callService(domain, 'turn_off', {}, { entity_id: targets }),
-      ).catch(() => clearPower(targets));
+      ).catch(() => clearPower(marked));
     }
   }
 

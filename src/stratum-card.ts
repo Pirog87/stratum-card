@@ -80,7 +80,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.109.1';
+const VERSION = '1.109.2';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
