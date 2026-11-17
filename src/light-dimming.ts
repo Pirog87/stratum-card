@@ -60,6 +60,15 @@ export interface OnLights {
    * jasności). Gest ich nie rusza; gasną razem z resztą przy zjechaniu do zera.
    */
   switchOnly: string[];
+  /**
+   * Ile dostępnych świateł ściemnialnych ma zbiór — także zgaszonych.
+   * Pokój, który ma ściemnialne światła, oceniamy wyłącznie po nich:
+   * świecący przekaźnik albo dioda statusu (np. LED punktu dostępowego
+   * UniFi, który HA pokazuje jako światło) nie robi z ciemnego pokoju
+   * „pokoju na 100%". Dawniej pasek stał wtedy na 100%, a przeciągnięcie
+   * nie miało czego ściemnić i odskakiwało z powrotem.
+   */
+  dimmableTotal: number;
 }
 
 /** Jedno wywołanie usługi: wspólna jasność dla listy świateł. */
@@ -146,8 +155,10 @@ export function onLights(
 ): OnLights {
   const scaled: DimLight[] = [];
   const switchOnly: string[] = [];
+  let dimmableTotal = 0;
   for (const id of leafIds) {
     const v = view(id);
+    if (v.dimmable && v.available) dimmableTotal += 1;
     if (!v.on) continue;
     if (v.dimmable && typeof v.brightness === 'number') {
       scaled.push({ id, base: v.brightness });
@@ -155,7 +166,7 @@ export function onLights(
       switchOnly.push(id);
     }
   }
-  return { scaled, switchOnly };
+  return { scaled, switchOnly, dimmableTotal };
 }
 
 /** Średnia jasność zbioru w % (0..100). Pusty zbiór → 0. */
@@ -170,7 +181,9 @@ export function meanLevel(bases: readonly number[]): number {
  * Poziom pokazywany na wypełnieniu wiersza i będący punktem startu suwaka.
  *
  *  - świecą jakieś ściemnialne → ich średnia jasność,
- *  - świecą tylko przekaźniki → 100 (pokój jest oświetlony, nie ma czego ściemniać),
+ *  - pokój NIE MA ściemnialnych, świecą przekaźniki → 100 (włącznik),
+ *  - pokój ma ściemnialne, ale wszystkie zgaszone → `undefined` (ciemno),
+ *    nawet jeśli świeci przekaźnik albo dioda statusu,
  *  - nic nie świeci → `undefined`.
  *
  * Przekaźniki NIE wchodzą do średniej, gdy świeci choć jedno światło
@@ -179,7 +192,7 @@ export function meanLevel(bases: readonly number[]): number {
  */
 export function roomLevel(lights: OnLights): number | undefined {
   if (lights.scaled.length > 0) return meanLevel(lights.scaled.map((l) => l.base));
-  if (lights.switchOnly.length > 0) return 100;
+  if (lights.switchOnly.length > 0 && lights.dimmableTotal === 0) return 100;
   return undefined;
 }
 

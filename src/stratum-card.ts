@@ -48,7 +48,7 @@ import { TemplateRenderer } from './template-renderer.js';
 import {
   addGroupMembers,
   collectEntityIds,
-  statesEmpty,
+  statesReadyLatch,
   structureChanged,
   watchedStateChanged,
 } from './hass-watch.js';
@@ -72,7 +72,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.107.1';
+const VERSION = '1.107.2';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -176,6 +176,9 @@ export class StratumCard extends LitElement {
    * tożsamość stanu jest przechodnia, żadna zmiana obserwowanej encji nie
    * przemknie między odrzuconymi cyklami.
    */
+  /** „HA dosłał stany" — liczone raz, potem zapamiętane (hass-watch.ts). */
+  private readonly _statesReady = statesReadyLatch();
+
   protected shouldUpdate(changed: PropertyValues): boolean {
     // Pusta mapa = gołe requestUpdate() (szablony, rejestr, zegar etykiet,
     // podgląd edytora); każdy inny klucz to realna zmiana stanu karty.
@@ -187,7 +190,7 @@ export class StratumCard extends LitElement {
     // dopływu. Debug loguje każdy render z założenia.
     if (this._popupRoom || this._popupChip || this._config.debug) return true;
     // Dopóki widać skeleton (HA nie dosłał stanów), czekamy na pierwszy stan.
-    if (statesEmpty(prev.states)) return true;
+    if (!this._statesReady(prev.states)) return true;
     if (structureChanged(prev, next)) return true;
     return watchedStateChanged(prev, next, this._watchedIds(next));
   }
@@ -719,7 +722,7 @@ export class StratumCard extends LitElement {
     // WebSocket) - migoczace placeholdery zamiast pustki i przeskokow.
     if (
       this._config.skeleton !== false &&
-      (!this.hass || statesEmpty(this.hass.states))
+      (!this.hass || !this._statesReady(this.hass.states))
     ) {
       return this._renderSkeleton();
     }
