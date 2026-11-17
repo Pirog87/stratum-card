@@ -104,6 +104,7 @@ card_mod:
 | `--stratum-card-room-divider` | `--divider-color` | separator między wierszami |
 | `--stratum-card-room-icon-color` | `--secondary-text-color` | kolor ikony pokoju |
 | `--stratum-card-room-hover` | `rgba(255,255,255,0.04)` | tło wiersza przy hover (tylko gdy klikalny) |
+| `--stratum-chip-leak-color` | `--error-color` | kolor alarmu wiersza i kafla pomieszczenia: czerwona ramka, ikona i odznaka ⚠ N (dym, gaz, wyciek, problem). Wewnętrzny alias `--stratum-alarm` liczy się z tej zmiennej — ustawiaj tę, nie alias |
 
 ### Chipy headera (`stratum-card-chip`)
 
@@ -168,6 +169,7 @@ Używaj z zewnątrz przez `card-mod` (`style: | ... ::part(X) { ... }`) lub bezp
 | `stripe` | pojedynczy pasek (pokój albo „+N") |
 | `body` | sekcja pod expanderem (scrolluje się rozwija) |
 | `room` | pojedynczy wiersz pomieszczenia |
+| `alarm-badge` | odznaka ⚠ N przy aktywnym alarmie — w wierszu i w kafelku pomieszczenia (shadow root `stratum-card-room-row` / `stratum-card-room-tile`, jak `room`); ikona = najważniejszy aktywny alarm, klik otwiera listę czujników |
 | `chip` | chip w `stratum-card-chip` |
 | `popup` | `<dialog>` popup (room-card jako overlay) |
 

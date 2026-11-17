@@ -31,6 +31,7 @@ import {
   effectiveView,
   pendingWant,
   subscribePower,
+  swipePowerHook,
   tapPower,
   touches,
 } from './power-pending.js';
@@ -301,6 +302,8 @@ export class StratumRoomTile extends LitElement {
   private _swipeCtl(): LightSwipe {
     this._swipe ??= new LightSwipe(`tile:${this.entity}`, {
       hass: () => this.hass,
+      // Stan kafla (on/off) idzie za wynikiem gestu od razu, jak po tapnięciu.
+      onPower: swipePowerHook(() => this.hass),
     });
     return this._swipe;
   }

@@ -3,13 +3,15 @@ import {
   PENDING_TTL_MS,
   anyLightOn,
   effectiveState,
+  isOnEffective,
   pendingWant,
   resetPowerPending,
   subscribePower,
+  swipePowerHook,
   tapPower,
   toggleRoomLights,
 } from '../src/power-pending.js';
-import { resetLightSwipeState } from '../src/light-swipe.js';
+import { LightSwipe, resetLightSwipeState } from '../src/light-swipe.js';
 import type { HassEntity, HomeAssistant } from '../src/types.js';
 import { entity } from './helpers.js';
 
@@ -279,5 +281,35 @@ describe('bramka zasilania tylko dla WLED (przegląd v1.109.0)', () => {
     } as unknown as HomeAssistant;
     tapPower(hass, 'light.b1');
     expect(calls).toEqual([{ service: 'turn_on', ids: ['light.b1'] }]);
+  });
+});
+
+describe('gest jasności a stan w toku (swipePowerHook)', () => {
+  it('suwak do zera: przełącznik wiersza gaśnie od razu, bez czekania na raporty', () => {
+    const { hass } = ha([on('light.a'), on('light.b')]);
+    const sw = new LightSwipe('salon', { hass: () => hass, onPower: swipePowerHook(() => hass) });
+    sw.start(['light.a', 'light.b']);
+    expect(sw.end(0).outcome).toBe('off');
+    // HA jeszcze nic nie odesłał — stany w `hass` dalej „on".
+    expect(hass.states['light.a']!.state).toBe('on');
+    expect(anyLightOn(hass, ['light.a', 'light.b'])).toBe(false);
+  });
+
+  it('suwak z ciemności: przełącznik zapala się od razu', () => {
+    const { hass } = ha([off('light.a'), off('light.b')]);
+    const sw = new LightSwipe('salon', { hass: () => hass, onPower: swipePowerHook(() => hass) });
+    sw.start(['light.a', 'light.b']);
+    sw.move(50);
+    expect(sw.end(50).outcome).toBe('set');
+    expect(isOnEffective(hass, 'light.a')).toBe(true);
+    expect(isOnEffective(hass, 'light.b')).toBe(true);
+  });
+
+  it('cofnięcie haka wraca do stanu z HA', () => {
+    const { hass } = ha([on('light.a')]);
+    const undo = swipePowerHook(() => hass)(['light.a'], 'off');
+    expect(isOnEffective(hass, 'light.a')).toBe(false);
+    undo();
+    expect(isOnEffective(hass, 'light.a')).toBe(true);
   });
 });

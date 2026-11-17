@@ -45,11 +45,26 @@ export interface SwipeResult {
   level: number;
 }
 
+/**
+ * Zgłoszenie „te światła zaraz będą włączone / zgaszone" — stan w toku
+ * przełączników (power-pending.ts). Zwraca funkcję cofającą, wołaną, gdy
+ * komenda do HA się nie uda.
+ */
+export type SwipePowerHook = (ids: string[], want: 'on' | 'off') => (() => void) | void;
+
 export interface SwipeEnv {
   hass: () => HomeAssistant | undefined;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  /**
+   * Wstrzyknięte, a nie importowane: power-pending.ts sam importuje ten
+   * moduł (markOff, rememberBeforeOff), więc import w drugą stronę dałby
+   * cykl. Bez tego zgłoszenia przełącznik i licznik wiersza czekały 1–3 s
+   * na raporty Zigbee, choć wypełnienie było już u celu — a tapnięcie tego
+   * samego przełącznika reagowało natychmiast.
+   */
+  onPower?: SwipePowerHook;
 }
 
 /** Pokój bez ściemnialnych świateł: puszczenie poniżej tej pozycji gasi. */
@@ -402,12 +417,17 @@ export class LightSwipe {
         [...g.scaled.map((l) => l.id), ...g.switchOnly],
         controllerStateAt(hass, now),
       );
+      // Zapalamy dokładnie ten zestaw (przywracany albo „wszystko") — nie
+      // cały pokój. Przełącznik i licznik wiersza mają od razu pokazać wynik
+      // gestu; inaczej tapnięcie „wyłączonego" przełącznika w oknie echa
+      // zapalało cały pokój zamiast zgasić to, co właśnie zapaliliśmy.
+      const undo = this._markPower([...g.scaled.map((l) => l.id), ...g.switchOnly], 'on');
       if (controllers.length > 0) {
         markControllersOn(hass, controllers, now);
-        this._turnOn(controllers);
+        this._turnOn(controllers, undo);
       }
-      void this._send(g, calls, FINAL_TRANSITION_S);
-      if (g.switchOnly.length > 0) this._turnOn(g.switchOnly);
+      void this._send(g, calls, FINAL_TRANSITION_S, undo);
+      if (g.switchOnly.length > 0) this._turnOn(g.switchOnly, undo);
       memory.delete(this._key);
       // Same przekaźniki = pokój po prostu świeci; inaczej średnia celów,
       // czyli pozycja palca.
@@ -430,7 +450,11 @@ export class LightSwipe {
         switchOnly: g.switchOnly.filter((id) => ids.includes(id)),
         at: now,
       });
-      this._afterInflight(g, () => this._turnOff(ids));
+      // Stan w toku zgłaszamy TERAZ, nie w odroczonym `_turnOff`: ten potrafi
+      // czekać do 600 ms na falę w locie, a przełącznik ma się przestawić
+      // razem z wypełnieniem, w chwili puszczenia palca.
+      const undo = this._markPower(ids, 'off');
+      this._afterInflight(g, () => this._turnOff(ids, undo));
       return { outcome: 'off', level: 0 };
     }
 
@@ -575,7 +599,22 @@ export class LightSwipe {
     void pending.then(entry.run);
   }
 
-  private _send(g: Gesture, calls: WaveCall[], transition: number): Promise<unknown> {
+  /** Zgłasza stan w toku (jeśli wołający go słucha); zwraca cofnięcie. */
+  private _markPower(ids: string[], want: 'on' | 'off'): (() => void) | undefined {
+    if (ids.length === 0) return undefined;
+    return this._env.onPower?.(ids, want) ?? undefined;
+  }
+
+  /**
+   * @param onFail cofnięcie stanu w toku — komenda, która nie doszła, nie
+   *   może zostawić przełącznika w położeniu, którego nie ma (jak tapPower).
+   */
+  private _send(
+    g: Gesture,
+    calls: WaveCall[],
+    transition: number,
+    onFail?: () => void,
+  ): Promise<unknown> {
     const hass = this._env.hass();
     if (!hass || calls.length === 0) return Promise.resolve();
     const now = this._now();
@@ -596,21 +635,21 @@ export class LightSwipe {
             { entity_id: call.ids },
           ),
           // Błąd pojedynczej komendy nie może wywrócić gestu; HA pokaże toast.
-        ).catch(() => undefined),
+        ).catch(() => onFail?.()),
       );
     }
     return Promise.all(promises);
   }
 
-  private _turnOn(ids: string[]): void {
+  private _turnOn(ids: string[], onFail?: () => void): void {
     const hass = this._env.hass();
     if (!hass || ids.length === 0) return;
     void Promise.resolve(
       hass.callService('light', 'turn_on', {}, { entity_id: ids }),
-    ).catch(() => undefined);
+    ).catch(() => onFail?.());
   }
 
-  private _turnOff(ids: string[]): void {
+  private _turnOff(ids: string[], onFail?: () => void): void {
     const hass = this._env.hass();
     if (!hass || ids.length === 0) return;
     const now = this._now();
@@ -619,6 +658,6 @@ export class LightSwipe {
     }
     void Promise.resolve(
       hass.callService('light', 'turn_off', {}, { entity_id: ids }),
-    ).catch(() => undefined);
+    ).catch(() => onFail?.());
   }
 }

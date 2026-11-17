@@ -323,6 +323,22 @@ export function toggleRoomLights(
   ).catch(() => clearPower(marked));
 }
 
+/**
+ * Hak `onPower` dla LightSwipe (gest jasności wiersza / kafla). Gest, który
+ * gasi pokój albo zapala go z ciemności, zaznacza stan w toku tak samo jak
+ * tapnięcie przełącznika — przełącznik, licznik i podświetlenie wiersza idą
+ * za wynikiem gestu od razu, a nie za raportami Zigbee 1–3 s później.
+ * Cofnięcie = `clearPower` dokładnie zaznaczonego zbioru (komenda padła).
+ */
+export function swipePowerHook(
+  hass: () => HomeAssistant | undefined,
+): (ids: string[], want: PowerWant) => () => void {
+  return (ids, want) => {
+    const marked = markPower(hass(), ids, want);
+    return () => clearPower(marked);
+  };
+}
+
 /** Czy cokolwiek z zestawu świeci — z uwzględnieniem stanu w toku. */
 export function anyLightOn(
   hass: HomeAssistant | undefined,

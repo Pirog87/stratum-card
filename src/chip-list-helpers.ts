@@ -15,6 +15,7 @@ import {
   filterPrimary,
 } from './area-entities.js';
 import { lightOnInHass } from './light-dimming.js';
+import { climateChipEntity } from './chip-defaults.js';
 
 /** Czy chip otwiera listę encji po kliku (bez jawnego tap_action). */
 export function chipSupportsList(chip: ChipConfig): boolean {
@@ -22,7 +23,35 @@ export function chipSupportsList(chip: ChipConfig): boolean {
   // pokazania. show_list: false jawnie wyłącza.
   if (chip.show_list === false) return false;
   if (chip.type === 'entity' || chip.type === 'template') return false;
+  // Temperatura i wilgotność to odczyt jednego czujnika, nie zbiór
+  // „aktywnych" encji — lista była zawsze pusta („Nic aktywnego — wszystko
+  // pod kontrolą"), pod tytułem „Lista". Tap otwiera more-info czujnika
+  // (patrz `chipMoreInfoEntity`).
+  if (chip.type === 'temperature' || chip.type === 'humidity') return false;
   return true;
+}
+
+/**
+ * Encja, której more-info otwiera tap w chip bez działającego `tap_action`
+ * i bez listy: czujnik chipa temperatury/wilgotności (jawny albo wykryty —
+ * ten sam, z którego chip bierze wartość) i encja chipa `entity` (domyślna
+ * akcja HA dla encji). `undefined` = chip nie jest klikalny. Jawne
+ * `tap_action: none` wyłącza też ten domyślny tap.
+ */
+export function chipMoreInfoEntity(
+  hass: HomeAssistant,
+  entries: readonly HassEntityRegistryEntry[],
+  chip: ChipConfig,
+): string | undefined {
+  if (chip.tap_action?.action === 'none') return undefined;
+  let id: string | undefined;
+  if (chip.type === 'temperature' || chip.type === 'humidity') {
+    id = climateChipEntity(hass, entries, chip, chip.type);
+  } else if (chip.type === 'entity') {
+    id = chip.entity || undefined;
+  }
+  // Encja, której HA nie zna (literówka w YAML), dałaby pusty dialog.
+  return id && hass.states?.[id] ? id : undefined;
 }
 
 /** Aktywne encje pasujące do chipa (scope = przekazane entries). */

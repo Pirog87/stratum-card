@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   alarmEntityIds,
   chipEntityIds,
+  chipMoreInfoEntity,
   chipSupportsList,
 } from '../src/chip-list-helpers.js';
 import type { ChipConfig, HomeAssistant } from '../src/types.js';
@@ -21,6 +22,59 @@ describe('chipSupportsList', () => {
     expect(
       chipSupportsList({ type: 'lights', show_list: false } as ChipConfig),
     ).toBe(false);
+  });
+
+  it('temperatura i wilgotność nie otwierają (zawsze pustej) listy', () => {
+    expect(chipSupportsList({ type: 'temperature' } as ChipConfig)).toBe(false);
+    expect(chipSupportsList({ type: 'humidity' } as ChipConfig)).toBe(false);
+  });
+});
+
+describe('chipMoreInfoEntity', () => {
+  const hass = makeHass({
+    'sensor.salon_temp': entity('sensor.salon_temp', '21.5', { device_class: 'temperature' }),
+    'sensor.salon_hum': entity('sensor.salon_hum', '48', { device_class: 'humidity' }),
+    'sensor.kuchnia_temp': entity('sensor.kuchnia_temp', '23', { device_class: 'temperature' }),
+    'switch.ekspres': entity('switch.ekspres', 'off'),
+  });
+  const entries = [entry('sensor.salon_hum'), entry('sensor.salon_temp')];
+
+  it('temperatura/wilgotność: wykryty czujnik strefy — ten sam, z którego chip bierze wartość', () => {
+    expect(chipMoreInfoEntity(hass, entries, { type: 'temperature' } as ChipConfig)).toBe(
+      'sensor.salon_temp',
+    );
+    expect(chipMoreInfoEntity(hass, entries, { type: 'humidity' } as ChipConfig)).toBe(
+      'sensor.salon_hum',
+    );
+  });
+
+  it('jawna encja z configu wygrywa nad wykrytą', () => {
+    expect(
+      chipMoreInfoEntity(hass, entries, {
+        type: 'temperature',
+        entity: 'sensor.kuchnia_temp',
+      } as ChipConfig),
+    ).toBe('sensor.kuchnia_temp');
+  });
+
+  it('brak czujnika, nieznana encja albo tap_action: none = chip nieklikalny', () => {
+    expect(chipMoreInfoEntity(hass, [], { type: 'temperature' } as ChipConfig)).toBeUndefined();
+    expect(
+      chipMoreInfoEntity(hass, entries, { type: 'entity', entity: 'switch.literowka' } as ChipConfig),
+    ).toBeUndefined();
+    expect(
+      chipMoreInfoEntity(hass, entries, {
+        type: 'temperature',
+        tap_action: { action: 'none' },
+      } as ChipConfig),
+    ).toBeUndefined();
+  });
+
+  it('chip encji: more-info swojej encji; chipy zbiorcze: nic (mają listę)', () => {
+    expect(
+      chipMoreInfoEntity(hass, entries, { type: 'entity', entity: 'switch.ekspres' } as ChipConfig),
+    ).toBe('switch.ekspres');
+    expect(chipMoreInfoEntity(hass, entries, { type: 'lights' } as ChipConfig)).toBeUndefined();
   });
 });
 

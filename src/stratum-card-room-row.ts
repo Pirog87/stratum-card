@@ -8,7 +8,8 @@
 //
 // Statusy: stały porządek (temp → wilgotność → światła → ruch → okna →
 // drzwi → alarmy), limit 4 widocznych + „+n". Alarmy mają najwyższy
-// priorytet i nie są ucinane przed zwykłymi polami.
+// priorytet i nie są ucinane przed zwykłymi polami; gdy stoi odznaka ⚠ N,
+// to ona je zastępuje i zajmuje slot limitu (reguły w row-fields.ts).
 
 import {
   LitElement,
@@ -22,20 +23,13 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { RowDisplayConfig, RowPreset, TileField } from './types.js';
 import { resolveColor } from './colors.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
-
-/** Priorytet pola przy ucinaniu do 4 — wyższy wygrywa. */
-const FIELD_PRIORITY: Record<TileField, number> = {
-  smoke: 10,
-  gas: 9,
-  leak: 8,
-  problem: 7,
-  lights: 6,
-  motion: 5,
-  temperature: 4,
-  windows: 3,
-  doors: 2,
-  humidity: 1,
-};
+import {
+  ALARM_ICONS,
+  badgeCap,
+  capByPriority,
+  topAlarmField,
+  withoutBadgeFields,
+} from './row-fields.js';
 
 // Kolejność wyświetlania pól = kolejność listy `fields` w configu
 // (od v1.85 zmienialna strzałkami w edytorze).
@@ -534,6 +528,10 @@ export class StratumCardRoomRow extends LitElement {
 
   private _onKey = (ev: KeyboardEvent): void => {
     if (!this.clickable) return;
+    // Enter/Spacja na odznace alarmu albo przełączniku świateł bąbelkuje
+    // tutaj; preventDefault kasował wtedy kliknięcie przycisku, a wiersz
+    // otwierał popup zamiast listy alarmów / przełączenia świateł.
+    if (ev.target !== ev.currentTarget) return;
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
       this._onClick();
@@ -579,27 +577,18 @@ export class StratumCardRoomRow extends LitElement {
   private _visibleFields(
     configured: TileField[],
     cap: number = MAX_VISIBLE_FIELDS,
+    badge = false,
   ): {
     shown: TileField[];
     hiddenCount: number;
   } {
-    const withValue = configured.filter((f) => this._fieldHasValue(f));
-    if (withValue.length <= cap) {
-      return { shown: withValue, hiddenCount: 0 };
-    }
-    const byPriority = [...withValue].sort(
-      (a, b) => (FIELD_PRIORITY[b] ?? 0) - (FIELD_PRIORITY[a] ?? 0),
+    // Odznaka ⚠ N zastępuje pola alarmowe i liczy się jako jeden slot
+    // limitu (uzasadnienie w row-fields.ts).
+    const withValue = withoutBadgeFields(
+      configured.filter((f) => this._fieldHasValue(f)),
+      badge,
     );
-    const top = new Set(byPriority.slice(0, cap));
-    // Na wąskich ekranach (cap obniżony) włącznik świateł nie znika nigdy
-    // — to jedyny interaktywny element wiersza poza samym tapnięciem.
-    if (cap < MAX_VISIBLE_FIELDS && withValue.includes('lights')) {
-      top.add('lights');
-    }
-    return {
-      shown: withValue.filter((f) => top.has(f)),
-      hiddenCount: withValue.length - top.size,
-    };
+    return capByPriority(withValue, badgeCap(cap, badge), MAX_VISIBLE_FIELDS);
   }
 
   /**
@@ -609,6 +598,7 @@ export class StratumCardRoomRow extends LitElement {
   private _splitFields(
     configured: TileField[],
     rightCap: number = MAX_RIGHT_FIELDS,
+    badge = false,
   ): {
     sub: TileField[];
     right: TileField[];
@@ -617,22 +607,14 @@ export class StratumCardRoomRow extends LitElement {
     const withValue = configured.filter((f) => this._fieldHasValue(f));
     // Kolejność wewnątrz obu grup = kolejność listy `fields` z configu.
     const sub = withValue.filter((f) => SUB_FIELDS.includes(f));
-    const rightCandidates = withValue.filter((f) => !SUB_FIELDS.includes(f));
-    if (rightCandidates.length <= rightCap) {
-      return { sub, right: rightCandidates, hiddenCount: 0 };
-    }
-    const byPriority = [...rightCandidates].sort(
-      (a, b) => (FIELD_PRIORITY[b] ?? 0) - (FIELD_PRIORITY[a] ?? 0),
+    // Odznaka stoi po prawej razem z tymi polami — ta sama reguła co w
+    // jednej linii: zastępuje pola alarmowe i zajmuje slot.
+    const rightCandidates = withoutBadgeFields(
+      withValue.filter((f) => !SUB_FIELDS.includes(f)),
+      badge,
     );
-    const top = new Set(byPriority.slice(0, rightCap));
-    if (rightCap < MAX_RIGHT_FIELDS && rightCandidates.includes('lights')) {
-      top.add('lights');
-    }
-    return {
-      sub,
-      right: rightCandidates.filter((f) => top.has(f)),
-      hiddenCount: rightCandidates.length - top.size,
-    };
+    const right = capByPriority(rightCandidates, badgeCap(rightCap, badge), MAX_RIGHT_FIELDS);
+    return { sub, right: right.shown, hiddenCount: right.hiddenCount };
   }
 
   /** Czy jakikolwiek alarm jest aktywny (smoke/gas/leak/problem). */
@@ -739,20 +721,34 @@ export class StratumCardRoomRow extends LitElement {
       (preset === 'fill' || preset === 'pill') &&
       (cfg.status_layout === 'two-line' ||
         (narrowMode === 'two-line' && nl > 0));
-    let cap: number | undefined;
-    if (nl > 0 && narrowMode === 'fields') cap = nl === 2 ? 1 : 2;
-    if (nl === 2 && narrowMode === 'compact') cap = 3;
-    const rightCap = nl === 2 && narrowMode === 'two-line' ? 2 : undefined;
-    const single = twoLine ? undefined : this._visibleFields(fields, cap);
-    let split = twoLine ? this._splitFields(fields, rightCap) : undefined;
     // Wąski dwuliniowy: nazwa duża u góry, pod nią JEDEN rządek wszystkich
     // statusów w kolejności z configu — CSS ucina naturalnie te z końca,
     // które się nie mieszczą. Po prawej zostaje tylko włącznik świateł.
     const narrowTwo = twoLine && nl > 0;
+    // Odznaka ⚠ N w rządku po prawej (w wąskim dwuliniowym siedzi pod nazwą).
+    const badge = alarmed && this.alarmsCount > 0 && !narrowTwo;
+    // Przy alarmie zwijamy pola o poziom wcześniej: odznaka + 3 pola przy
+    // 361–412 px zostawiały nazwie 54–86 px („Łazienka parter" potrzebuje
+    // 124). Temperatura poczeka w „+n" — w czasie alarmu liczy się, KTÓRY
+    // to pokój. Pomiar (412 px): nazwa 47 → 128 px, cała.
+    const nlCap = badge && narrowMode === 'fields' ? Math.min(2, nl + 1) : nl;
+    let cap: number | undefined;
+    if (nlCap > 0 && narrowMode === 'fields') cap = nlCap === 2 ? 1 : 2;
+    if (nl === 2 && narrowMode === 'compact') cap = 3;
+    const rightCap = nl === 2 && narrowMode === 'two-line' ? 2 : undefined;
+    // Najciaśniej (≤310 px) z odznaką: „+n" ustępuje nazwie. To czysta
+    // informacja (pełna lista jest w popupie), a włącznik i odznaka działają.
+    const hideMore = badge && nl === 2;
+    const single = twoLine ? undefined : this._visibleFields(fields, cap, badge);
+    let split = twoLine ? this._splitFields(fields, rightCap, badge) : undefined;
     if (narrowTwo) {
       const withValue = fields.filter((f) => this._fieldHasValue(f));
       split = {
-        sub: withValue.filter((f) => f !== 'lights'),
+        // Odznaka prowadzi rządek — pola alarmowe za nią byłyby dublem.
+        sub: withoutBadgeFields(
+          withValue.filter((f) => f !== 'lights'),
+          alarmed && this.alarmsCount > 0,
+        ),
         right: withValue.filter((f) => f === 'lights'),
         hiddenCount: 0,
       };
@@ -825,11 +821,9 @@ export class StratumCardRoomRow extends LitElement {
           ${this.offline
             ? html`<span class="off-pill">offline</span>`
             : nothing}
-          ${alarmed && this.alarmsCount > 0 && !narrowTwo
-            ? this._renderAlarmBadge()
-            : nothing}
+          ${badge ? this._renderAlarmBadge() : nothing}
           ${(twoLine ? split!.right : single!.shown).map((f) => this._renderField(f))}
-          ${(twoLine ? split!.hiddenCount : single!.hiddenCount) > 0
+          ${!hideMore && (twoLine ? split!.hiddenCount : single!.hiddenCount) > 0
             ? html`<span
                 class="field more"
                 title="${twoLine ? split!.hiddenCount : single!.hiddenCount} więcej"
@@ -841,18 +835,33 @@ export class StratumCardRoomRow extends LitElement {
     `;
   }
 
-  /** Pola sublinii — kompaktowe, wyciszone (temp/wilgotność tekstem, motion ikoną). */
+  /**
+   * Odznaka ⚠ N — klik otwiera listę sprawców. Ikona = najważniejszy aktywny
+   * alarm (woda, dym…): pola alarmowe znikają z rządka, gdy odznaka stoi,
+   * więc rodzaj alarmu musi nieść sama odznaka.
+   */
   private _renderAlarmBadge(): TemplateResult {
+    const top = topAlarmField({
+      smoke: this.smokeActive,
+      gas: this.gasActive,
+      leak: this.leakActive,
+      problem: this.problemActive,
+    });
+    const icon = (top && ALARM_ICONS[top]) ?? 'mdi:alert';
     return html`<button
       class="alarm-badge"
+      part="alarm-badge"
       title="Pokaż aktywne alarmy"
+      aria-label="Aktywne alarmy: ${this.alarmsCount}. Pokaż listę"
       @click=${this._onAlarmBadge}
       @pointerdown=${(pev: Event) => pev.stopPropagation()}
     >
-      <ha-icon .icon=${'mdi:alert'}></ha-icon>
+      <ha-icon .icon=${icon} aria-hidden="true"></ha-icon>
       ${this.alarmsCount}
     </button>`;
   }
+
+  /** Pola sublinii — kompaktowe, wyciszone (temp/wilgotność tekstem, motion ikoną). */
 
   private _renderSubField(f: TileField): TemplateResult | typeof nothing {
     switch (f) {
@@ -957,6 +966,11 @@ export class StratumCardRoomRow extends LitElement {
   static styles = css`
     :host {
       display: block;
+      /* Warstwa tokenów wiersza — jedyne miejsce na hex (instalacja bez
+         motywu, bez --error-color). Publiczny pokrętłem pozostaje
+         --stratum-chip-leak-color; ten alias tylko zbiera łańcuch fallbacku,
+         żeby reguły alarmu nie powtarzały go (i hexa) w każdym miejscu. */
+      --stratum-alarm: var(--stratum-chip-leak-color, var(--error-color, #f44336));
     }
 
     /* ====== BAZA wspólna dla presetów ====== */
@@ -1155,11 +1169,11 @@ export class StratumCardRoomRow extends LitElement {
 
     .row[data-preset='fill'].alerted .iconwrap,
     .row[data-preset='pill'].alerted .iconwrap {
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
+      background: color-mix(in srgb, var(--stratum-alarm) 18%, transparent);
     }
     .row[data-preset='fill'].alerted .icon,
     .row[data-preset='pill'].alerted .icon {
-      color: var(--stratum-chip-leak-color, #f44336);
+      color: var(--stratum-alarm);
     }
 
     /* fill: warstwa wypełnienia = średnia jasność świateł.
@@ -1213,7 +1227,7 @@ export class StratumCardRoomRow extends LitElement {
     .row[data-preset='fill'].alerted,
     .row[data-preset='pill'].alerted {
       box-shadow: inset 0 0 0 1.5px
-        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 50%, transparent);
+        color-mix(in srgb, var(--stratum-alarm) 50%, transparent);
     }
 
     /* ====== PRESET: rail (dawny wygląd, zwarty) ====== */
@@ -1239,7 +1253,7 @@ export class StratumCardRoomRow extends LitElement {
       background: var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107));
     }
     .row[data-preset='rail'].alerted .bar {
-      background: var(--stratum-chip-leak-color, #f44336);
+      background: var(--stratum-alarm);
     }
 
     .row[data-preset='rail'] .iconwrap {
@@ -1252,7 +1266,7 @@ export class StratumCardRoomRow extends LitElement {
       color: var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107));
     }
     .row[data-preset='rail'].alerted .icon {
-      color: var(--stratum-chip-leak-color, #f44336);
+      color: var(--stratum-alarm);
     }
 
     /* ====== PRESET: cards ====== */
@@ -1278,7 +1292,7 @@ export class StratumCardRoomRow extends LitElement {
       );
     }
     .row[data-preset='cards'].alerted {
-      border-color: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 40%, transparent);
+      border-color: color-mix(in srgb, var(--stratum-alarm) 40%, transparent);
     }
 
     .row[data-preset='cards'] .iconwrap {
@@ -1298,7 +1312,7 @@ export class StratumCardRoomRow extends LitElement {
       color: var(--stratum-room-row-active-color, var(--stratum-chip-lights-color, #ffc107));
     }
     .row[data-preset='cards'].alerted .icon {
-      color: var(--stratum-chip-leak-color, #f44336);
+      color: var(--stratum-alarm);
     }
 
     /* ====== Wąski dwuliniowy: nazwa u góry, rządek statusów pod nią.
@@ -1483,14 +1497,26 @@ export class StratumCardRoomRow extends LitElement {
       padding: 4px 10px;
       border-radius: 999px;
       border: 1.5px solid
-        color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 65%, transparent);
-      background: color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 18%, transparent);
-      color: var(--stratum-chip-leak-color, #f44336);
+        color-mix(in srgb, var(--stratum-alarm) 65%, transparent);
+      background: color-mix(in srgb, var(--stratum-alarm) 18%, transparent);
+      color: var(--stratum-alarm);
       font: inherit;
       font-size: 12.5px;
       font-weight: 800;
+      font-variant-numeric: tabular-nums;
       cursor: pointer;
       flex-shrink: 0;
+      transition: background 0.12s ease, transform 0.1s ease;
+    }
+    .alarm-badge:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--stratum-alarm) 28%, transparent);
+    }
+    .alarm-badge:focus-visible {
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline-offset: 2px;
+    }
+    .alarm-badge:active {
+      transform: scale(0.96);
     }
     /* Poświata pulsu na osobnej warstwie — animujemy tylko opacity
        (kompozytor), nie box-shadow (przerysowanie w każdej klatce przez cały
@@ -1502,7 +1528,7 @@ export class StratumCardRoomRow extends LitElement {
       border-radius: inherit;
       pointer-events: none;
       box-shadow: 0 0 8px 3px
-        color-mix(in srgb, var(--stratum-chip-leak-color, var(--error-color)) 25%, transparent);
+        color-mix(in srgb, var(--stratum-alarm) 25%, transparent);
       opacity: 0;
       animation: stratum-alarm-pulse 1.6s ease-in-out infinite;
     }
@@ -1529,6 +1555,12 @@ export class StratumCardRoomRow extends LitElement {
     @media (prefers-reduced-motion: reduce) {
       .alarm-badge::before {
         animation: none;
+      }
+      .alarm-badge {
+        transition: none;
+      }
+      .alarm-badge:active {
+        transform: none;
       }
     }
 
@@ -1606,7 +1638,7 @@ export class StratumCardRoomRow extends LitElement {
     .lights { color: var(--stratum-chip-lights-color, #ffc107); font-weight: 600; }
     .windows { color: var(--stratum-chip-windows-color, #42a5f5); font-weight: 600; }
     .doors { color: var(--stratum-chip-doors-color, #ba68c8); font-weight: 600; }
-    .leak { color: var(--stratum-chip-leak-color, #f44336); font-weight: 600; }
+    .leak { color: var(--stratum-alarm); font-weight: 600; }
     .smoke { color: var(--stratum-chip-smoke-color, #e53935); font-weight: 600; }
     .gas { color: var(--stratum-chip-gas-color, #ff5722); font-weight: 600; }
     .problem { color: var(--stratum-chip-problem-color, #ff9800); font-weight: 600; }

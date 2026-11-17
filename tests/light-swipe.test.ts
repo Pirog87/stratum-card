@@ -670,3 +670,80 @@ describe('LightSwipe — poprawki z przeglądu', () => {
     expect(ha.calls.length).toBe(n + 2);
   });
 });
+
+describe('LightSwipe — stan w toku przełączników (onPower)', () => {
+  /** Rejestruje zgłoszenia i cofnięcia haka `onPower`. */
+  const powerSpy = () => {
+    const marks: Array<{ ids: string[]; want: 'on' | 'off' }> = [];
+    let undone = 0;
+    const onPower = (ids: string[], want: 'on' | 'off') => {
+      marks.push({ ids: [...ids], want });
+      return () => {
+        undone += 1;
+      };
+    };
+    return { marks, onPower, undone: () => undone };
+  };
+
+  it('zgaszenie suwakiem zgłasza „off" od razu — także gdy komenda czeka na falę w locie', async () => {
+    const ha = room();
+    const spy = powerSpy();
+    const sw = new LightSwipe('k', { hass: () => ha.hass, onPower: spy.onPower });
+    sw.start(ROOM);
+    ha.stall();
+    sw.move(40);
+    await vi.advanceTimersByTimeAsync(300);
+    const callsBefore = ha.calls.length;
+    expect(sw.end(0).outcome).toBe('off');
+    // turn_off czeka na falę, ale przełącznik już wie, co się stanie.
+    expect(ha.calls.length).toBe(callsBefore);
+    expect(spy.marks).toEqual([{ ids: ['light.a', 'light.b'], want: 'off' }]);
+    ha.release();
+  });
+
+  it('przywrócenie z ciemności zgłasza „on" dokładnie dla przywracanego zestawu', () => {
+    const ha = fakeHa([dim('light.a', 255), dim('light.b', 51), relay('light.r'), dark('light.c')]);
+    const ids = ['light.a', 'light.b', 'light.r', 'light.c'];
+    const spy = powerSpy();
+    const sw = new LightSwipe('k', { hass: () => ha.hass, onPower: spy.onPower });
+    sw.start(ids);
+    sw.end(0);
+    ha.echo();
+    spy.marks.length = 0;
+    sw.start(ids);
+    sw.move(60);
+    expect(sw.end(60).outcome).toBe('set');
+    expect(spy.marks).toEqual([{ ids: ['light.a', 'light.b', 'light.r'], want: 'on' }]);
+  });
+
+  it('ściemnianie bez zgaszenia, drgnięcie z ciemności i przerwanie nie zgłaszają niczego', async () => {
+    const ha = room();
+    const spy = powerSpy();
+    const sw = new LightSwipe('k', { hass: () => ha.hass, onPower: spy.onPower });
+    sw.start(ROOM);
+    sw.move(30);
+    expect(sw.end(30).outcome).toBe('set');
+    sw.start(ROOM);
+    sw.move(50);
+    await vi.advanceTimersByTimeAsync(300);
+    sw.cancel();
+    const darkRoom = fakeHa([dark('light.c'), dark('light.d')]);
+    const sw2 = new LightSwipe('d', { hass: () => darkRoom.hass, onPower: spy.onPower });
+    sw2.start(['light.c', 'light.d']);
+    sw2.move(5);
+    expect(sw2.end(5).outcome).toBe('noop');
+    expect(spy.marks).toEqual([]);
+  });
+
+  it('nieudana komenda cofa stan w toku', async () => {
+    const ha = room();
+    ha.hass.callService = (() => Promise.reject(new Error('boom'))) as HomeAssistant['callService'];
+    const spy = powerSpy();
+    const sw = new LightSwipe('k', { hass: () => ha.hass, onPower: spy.onPower });
+    sw.start(ROOM);
+    sw.end(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(spy.marks).toHaveLength(1);
+    expect(spy.undone()).toBeGreaterThan(0);
+  });
+});
