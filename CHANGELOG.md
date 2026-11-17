@@ -4,6 +4,26 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.108.1] — 2026-11-17
+
+### Fixed (media)
+- **Zła głośność po zmianie zakładki odtwarzacza.** Sekcja mediów pokazuje
+  jeden kafel i podmienia mu odtwarzacz; przez 1,5 s po regulacji stan
+  głośności poprzedniego głośnika przechodził na nowy — „+" po przełączeniu
+  z Sonosa (80%) na telewizor (20%) ustawiał telewizor na 84%. Teraz stan
+  głośności czyści się przy każdej zmianie odtwarzacza.
+- **„+/−" nie cofa się przy szybkim stukaniu.** Na dotyku po sobie
+  przychodzą trzy zdarzenia puszczenia przycisku i każde planowało własny
+  timer — osierocony timer zerował wartość w środku kolejnych tapnięć i
+  głośność spadała o kilka procent. W teście 12 tapnięć: dawniej
+  32…44, 40, 42, 42, 44…; teraz równo 32 → 54.
+- **Przytrzymanie „+/−" bez zalewania urządzenia.** Jedna komenda
+  `volume_set` w locie, kolejne kroki nadpisują tylko wartość czekającą
+  (latest-wins). Suwak trzyma wartość, aż urządzenie ją potwierdzi
+  (bezpiecznik 4 s), zamiast odskakiwać po sztywnych 1,5 s. Suwak
+  głośności idzie tą samą kolejką — ostatnia akcja wygrywa, czekające „+"
+  nie nadpisuje już wartości ustawionej suwakiem.
+
 ## [1.108.0] — 2026-11-17
 
 ### Changed (natychmiastowa reakcja na tapnięcie)
