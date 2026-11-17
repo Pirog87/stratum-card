@@ -3,7 +3,14 @@
 Od szkieletu do publikacji w HACS. Każdy milestone jest osobnym commitem
 (lub serią) z tagiem `v0.X.0`. Nie wyprzedzaj — iterujemy w kolejności.
 
-Legenda: ✅ zrobione · 🚧 w trakcie · ⬜ nie zaczęte
+Legenda: ✅ zrobione · 🚧 w trakcie / częściowo · ⬜ nie zaczęte
+
+**Stan na v1.109.3:** milestone'y v0.1–v1.3 są dostarczone (v0.6 i v0.11
+w okrojonej formie); otwarty zostaje v2.0. Plan niżej to historyczny zapis
+kolejności — tam, gdzie wykonanie odeszło od planu, milestone ma dopisek
+„Stan". Co zmienia się z wersji na wersję, mówi
+[`CHANGELOG.md`](../CHANGELOG.md) — nowe prace idą przez CHANGELOG, nie
+przez ten plik.
 
 ---
 
@@ -23,7 +30,7 @@ klik w header toggluje body z placeholderem.
 
 ---
 
-## v0.2 — czytanie encji area ⬜
+## v0.2 — czytanie encji area ✅
 
 - Helper `getEntitiesInArea(hass, area_id): HassEntity[]` — resolve przez
   `hass.entities` → filter po `area_id`, dodatkowo po `hass.devices[].area_id`
@@ -37,7 +44,7 @@ klik w header toggluje body z placeholderem.
 
 ---
 
-## v0.3 — rendering chipów ⬜
+## v0.3 — rendering chipów ✅
 
 - Typ `ChipConfig` w `types.ts`
 - Domyślne chipy jeśli `config.chips` nie podane:
@@ -51,11 +58,14 @@ klik w header toggluje body z placeholderem.
 **Test:** Parter z kilkoma włączonymi światłami pokazuje chip „💡 3"
 w kolorze pomarańczowym.
 
+**Stan:** zmienne kolorów mają prefix `--stratum-chip-*`
+(`--stratum-chip-lights-color` itd.), komponent to `src/stratum-card-chip.ts`.
+
 **Commit:** `feat(chips): default chip set for area summary`
 
 ---
 
-## v0.4 — animacja expandera ⬜
+## v0.4 — animacja expandera ✅
 
 - Zamiast `this._expanded ? html`<body>` : nothing`, body zawsze w DOM-ie,
   z `max-height` transition
@@ -68,9 +78,12 @@ w kolorze pomarańczowym.
 
 **Commit:** `feat: animated expander with reduced-motion support`
 
+**Stan:** zamiast `max-height` z magiczną liczbą body rozwija się przez
+`grid-template-rows: 0fr → 1fr` (280 ms); zwinięte body jest `inert`.
+
 ---
 
-## v0.5 — lista pomieszczeń ⬜
+## v0.5 — lista pomieszczeń ✅
 
 - Jeśli `config.rooms` podane → render z configu
 - Jeśli brak → auto-inferencja: dla każdego unikalnego `device.area_id`
@@ -87,7 +100,7 @@ ich listę w body.
 
 ---
 
-## v0.6 — tap actions ⬜
+## v0.6 — tap actions 🚧
 
 - Row jest klikalny (button)
 - `tap_action` config: `{ action: 'navigate', navigation_path: '/dashboard/salon' }`
@@ -98,9 +111,12 @@ ich listę w body.
 
 **Commit:** `feat: tap/hold/double-tap actions on room rows`
 
+**Stan:** `tap_action` (pokój, ikona pokoju, chipy, sceny) jest; long
+press i double tap nie są zaimplementowane.
+
 ---
 
-## v0.7 — visual editor ⬜
+## v0.7 — visual editor ✅
 
 - Komponent `stratum-card-editor` (`src/editor.ts`) wykorzystujący HA form
 - User w UI dashboardu klika „edytuj kartę" → formularz
@@ -112,9 +128,12 @@ ich listę w body.
 
 **Od tego momentu:** Vitest + unit testy dla `setConfig` i helperów.
 
+**Stan:** testy obejmują czyste funkcje wydzielone z komponentów (ADR-011),
+nie `setConfig`.
+
 ---
 
-## v0.8 — customowe chipy ⬜
+## v0.8 — customowe chipy ✅
 
 - User definiuje własny chip w YAML:
   ```yaml
@@ -132,7 +151,7 @@ ich listę w body.
 
 ---
 
-## v0.9 — stylizacja finalna ⬜
+## v0.9 — stylizacja finalna ✅
 
 - Pełna lista CSS variables w docs (README + docs/styling.md)
 - Wszystkie szczegóły: radiusy, paddingi, rozmiary ikon, fonty
@@ -143,7 +162,7 @@ ich listę w body.
 
 ---
 
-## v0.9 — explicit rooms config + per-room overrides ⬜
+## v0.9 — explicit rooms config + per-room overrides ✅
 
 - `rooms: []` w configu — jawna lista pomieszczeń zamiast auto-discover
   ```yaml
@@ -165,7 +184,7 @@ ich listę w body.
 
 ---
 
-## v0.10 — merge rooms (hierarchia pomieszczeń) ⬜
+## v0.10 — merge rooms (hierarchia pomieszczeń) ✅
 
 - `merge_with: [area_id, ...]` w `RoomConfig` — łączy agregaty podrzędne
   do głównego wiersza
@@ -186,7 +205,7 @@ ich listę w body.
 
 ---
 
-## v0.11 — UX polish rooms selection ⬜
+## v0.11 — UX polish rooms selection 🚧
 
 - Drag&drop w editorze rooms (zmiana kolejności)
 - Przycisk „Dodaj wszystkie z floor" / „Wyklucz wybrane"
@@ -195,9 +214,12 @@ ich listę w body.
 
 **Commit:** `feat(rooms): reorder + bulk actions in editor`
 
+**Stan:** kolejność zmieniają strzałki (nie drag&drop), jest „Zaznacz
+wszystkie"; zamiast pola `excluded` odznaczony pokój dostaje `hidden`.
+
 ---
 
-## v1.0 — room detail view (stratum-room-card) ⬜
+## v1.0 — room detail view (stratum-room-card) ✅
 
 Nowy custom element `stratum-room-card` — widok pojedynczego pomieszczenia.
 Automatycznie generuje sekcje na podstawie encji area (i ich merge children):
@@ -231,8 +253,9 @@ Rejestracja jako drugi card type (obok `stratum-card`).
 
 ## v1.1 — room navigation popup ✅
 
-Klik w wiersz pokoju otwiera `stratum-room-card` jako natywny modal
-(`<dialog>`), bez potrzeby osobnego dashboardu. Działa automatycznie gdy
+Klik w wiersz pokoju otwiera `stratum-room-card` jako modal (nakładka
+`role="dialog"` obok `ha-card`, nie natywny `<dialog>`), bez potrzeby
+osobnego dashboardu. Działa automatycznie gdy
 `room_tap_action` nie jest ustawione; jawnie ustawione `tap_action` (w tym
 `action: none`) dalej wygrywa.
 
@@ -245,7 +268,7 @@ Fallback chain:
 
 ---
 
-## v1.2 — sceny per pomieszczenie ⬜
+## v1.2 — sceny per pomieszczenie ✅
 
 - `scenes:` w `stratum-room-card` i `RoomConfig`
   ```yaml
@@ -263,7 +286,7 @@ Fallback chain:
 
 ---
 
-## v1.3 — stylizacja finalna (ex-v0.9 z pierwszego planu) ⬜
+## v1.3 — stylizacja finalna (ex-v0.9 z pierwszego planu) ✅
 
 - Pełna lista CSS variables w `docs/styling.md`
 - Kompatybilność z Minimalist / Mushroom / default HA
@@ -273,7 +296,7 @@ Fallback chain:
 
 ---
 
-## v2.0 — HACS publication + dashboard generator ⬜
+## v2.0 — HACS publication + dashboard generator 🚧
 
 - GitHub release (już jest — tagi `vX.Y.Z` → auto-release)
 - HACS submission — PR do `hacs/default`
@@ -286,6 +309,10 @@ Fallback chain:
   gotowy YAML do wklejenia
 
 **Commit:** `chore: 2.0.0 release + dashboard generator`
+
+**Stan:** auto-release działa; repo jest gotowe do zgłoszenia do
+`hacs/default` (`docs/hacs-submission.md`), ale karta instaluje się dziś
+jako custom repository. README jest po polsku; generatora dashboardu nie ma.
 
 ---
 

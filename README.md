@@ -23,7 +23,9 @@ Widok detalu pomieszczenia. Header z chipami specyficznymi dla pokoju, sekcje au
 ### Floor card
 - Automatyczna detekcja pomieszczeń z `hass.floors` (HA 2024.3+)
 - **Merge rooms** — łączenie pokoi (Kuchnia+Spiżarnia → jeden wiersz z zagregowanymi licznikami)
-- **Auto-collapse** po N sekundach bezczynności (domyślnie 60 s, configurable)
+- **Zwijanie** — rozwinięta karta wraca do stanu z `expanded`, gdy wychodzisz
+  z widoku albo aplikacja schodzi do tła. Opcjonalnie `auto_collapse: N` zwija
+  ją po N sekundach bezczynności (domyślnie wyłączone)
 - **Klik pokoju otwiera popup** z widokiem tego pomieszczenia (bez potrzeby osobnego dashboardu)
 - **Pasek scen** opcjonalny — nad / pod listą pomieszczeń
 - Pełna kontrola kolejności + per-room overrides (nazwa, ikona, tap_action, widoki popup)
@@ -36,10 +38,12 @@ Widok detalu pomieszczenia. Header z chipami specyficznymi dla pokoju, sekcje au
   po puszczeniu palca, pasek idzie za palcem na bieżąco.
 
 ### Room card (popup)
-- **9 typów sekcji**: `summary` / `lights` / `covers` / `windows` / `doors` / `climate` / `media` / `fans` / `switches` / `scenes` / `custom`
-- **7 trybów wyświetlania** per sekcja:
+- **11 typów sekcji**: `summary` / `lights` / `covers` / `windows` / `doors` / `climate` / `media` / `fans` / `switches` / `scenes` / `custom`
+- **Tryby wyświetlania** per sekcja, m.in.:
   - `tile` (default) — pełny kafel z toggle
   - `slider` — brightness (lights) / position (covers)
+  - `rail` / `tint` (grupy świateł) — kafel z paskiem jasności; strzałki ←/→ z klawiatury
+  - `player` (media) — odtwarzacz z okładką i głośnością
   - `ambient` (lights) — tile zmienia kolor i jasność wg encji 🌈
   - `bubble` — duża ikona w kółku (mushroom-style)
   - `chips` — kompaktowy pasek pigułek
@@ -47,9 +51,12 @@ Widok detalu pomieszczenia. Header z chipami specyficznymi dla pokoju, sekcje au
   - **`custom:<any-hacs-card>`** — każda encja w sekcji jako dowolna karta HACS (mushroom, bubble-card, button-card…)
 
 ### Sceny
-- **24 wbudowane grafiki** SVG (jasne / noc / usypianie / czytanie / relaks / kino / disco / gaming / medytacja / …)
+- **36 wbudowanych scen** (`image: stratum:<id>`): 26 zdjęć (jasne / noc /
+  usypianie / czytanie / relaks / disco / kinkiety / …) dostarczanych jako
+  osobne pliki `sceny-<id>.webp` obok bundla i 10 grafik SVG w bundlu
+  (praca / kino / gaming / medytacja / …)
 - Własne URL obrazków albo ikony + kolor
-- Konfigurowalna pozycja, rozmiar, kolumny, aspect ratio (default 16:9, 3 kolumny)
+- Konfigurowalna pozycja, rozmiar, kolumny, aspect ratio (default 16:9; bez `columns` siatka sama dobiera liczbę kolumn)
 - Tap action override per scena
 
 ### Konfiguracja
@@ -59,9 +66,21 @@ Widok detalu pomieszczenia. Header z chipami specyficznymi dla pokoju, sekcje au
 - Per-sekcja: filter encji, kolumny, tryb wyświetlania
 - Custom HACS cards w dropdown „Tryb wyświetlania" (auto-enumerate z `window.customCards`)
 
+### Język
+- Interfejs idzie za językiem użytkownika HA: polski, dla pozostałych
+  języków angielski.
+
+### Dostępność
+- Obsługa z klawiatury i czytnika ekranu: widoczny obrys fokusu (kolor
+  z `--stratum-focus`), Enter/Spacja na kontrolkach, zwinięta lista poza
+  kolejnością Tab, popup jako dialog z nazwą pokoju.
+- Animacje wyłączają się przy `prefers-reduced-motion`.
+
 ### Stylizacja
-- CSS variables (`--stratum-*`) dla wszystkich kolorów i wymiarów
-- Shadow parts (`::part(card)`, `::part(chip)`, `::part(popup)` itd.)
+- CSS variables (`--stratum-*`) dla kolorów i wymiarów, z fallbackiem do
+  zmiennych motywu HA
+- Shadow parts (`::part(card)`, `::part(header)`, `::part(popup)` itd. —
+  które party są osiągalne skąd, opisuje `docs/styling.md`)
 - Kompatybilność z `card-mod`
 - Pełna dokumentacja stylizacji w [`docs/styling.md`](docs/styling.md)
 
@@ -121,7 +140,7 @@ npm run build      # jednorazowy
 npm run watch      # rebuild on save
 ```
 
-Plik wyjściowy: `dist/stratum-card.js`. Skopiuj do `/config/www/` swojej instancji HA żeby testować zmiany.
+Plik wyjściowy: `dist/stratum-card.js`. Skopiuj do `/config/www/` swojej instancji HA żeby testować zmiany — razem ze zdjęciami scen (`assets/sceny/<id>.webp` jako `sceny-<id>.webp` w tym samym katalogu), jeśli nie masz instalacji z HACS.
 
 Szczegóły dev loopu w [`docs/development.md`](docs/development.md).
 
@@ -129,6 +148,11 @@ Szczegóły dev loopu w [`docs/development.md`](docs/development.md).
 
 Pełna lista w [`CHANGELOG.md`](CHANGELOG.md). Highlighty:
 
+- **v1.109** — poprawki z pełnego audytu: poprawność, edytor, telefon,
+  dostępność i kontrast
+- **v1.108** — natychmiastowa reakcja przełączników na tapnięcie
+- **v1.107** — suwak jasności ściemnia tylko włączone światła, proporcjonalnie
+- **v1.106** — belka „Smugi" (`header.style: stripes`)
 - **v1.12** — zunifikowany system wizualny wszystkich edytorów
 - **v1.11** — custom HACS cards w dropdown trybów wyświetlania
 - **v1.10** — 24 scene presets (redesign + 10 nowych), 16:9 default
