@@ -718,6 +718,16 @@ export class StratumChipList extends LitElement {
       border-radius: 20px;
       background: var(--ha-card-background, var(--card-background-color, #1e1f22));
       color: var(--primary-text-color);
+      /* Akcent jako TEKST (aktywna zakładka, klasa i czas czujki): 40%
+         akcentu + 60% koloru tekstu. Żółty świateł i zielony ruchu jako
+         tekst na jasnym motywie miały 1,4–2,4:1; po zmieszaniu ≥ 4,8:1 na
+         jasnym i ≥ 5,4:1 na ciemnym, a odcień nadal mówi, czego dotyczy
+         lista. Ikony i tła zostają w czystym akcencie. */
+      --accent-ink: color-mix(
+        in srgb,
+        var(--accent, var(--primary-color)) 40%,
+        var(--primary-text-color)
+      );
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
       overflow: hidden;
       animation: pop-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -824,10 +834,13 @@ export class StratumChipList extends LitElement {
       transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
       font-variant-numeric: tabular-nums;
     }
+    /* Tekst w kolorze akcentu ginął na jasnym motywie (żółte „Wszystkie · 60"
+       na jasnym tle: 1,5:1). Tło i ramka zostają w akcencie, tekst bierze
+       --accent-ink (definicja przy .panel). */
     .tab.on {
-      background: color-mix(in srgb, var(--accent, var(--primary-color, #ff9b42)) 16%, transparent);
-      border-color: color-mix(in srgb, var(--accent, var(--primary-color, #ff9b42)) 45%, transparent);
-      color: var(--accent, var(--primary-color, #ff9b42));
+      background: color-mix(in srgb, var(--accent, var(--primary-color)) 16%, transparent);
+      border-color: color-mix(in srgb, var(--accent, var(--primary-color)) 45%, transparent);
+      color: var(--accent-ink);
     }
 
     .empty {
@@ -956,8 +969,14 @@ export class StratumChipList extends LitElement {
     }
 
     /* Tor bez bieli: rgba(255,255,255,.12) znikał na jasnym motywie HA.
-       Kciuk i cień z tokenów --stratum-ink-* (definiowanych przez kartę,
-       w której lista jest osadzona). */
+       22% koloru tekstu, nie 12%: przy 12% tor lampy na 25% był ledwie
+       widoczny (1,26:1 na jasnym, 1,38:1 na ciemnym; teraz 1,55 i 1,83)
+       i nie było wiadomo, gdzie suwak się kończy. Kciuk i cień z tokenów --stratum-ink-*
+       (definiowanych przez kartę, w której lista jest osadzona).
+       Granicę toru niesie obrys 1 px z 55% koloru tekstu (≥ 3:1 do tła
+       wiersza w obu motywach — próg WCAG 1.4.11 dla kontrolek). Sam tor
+       w 50%, żeby dobić do 3:1, byłby ciężką szarą belką przy każdej
+       lampie; obrys daje ten sam zasięg suwaka bez przyciemniania. */
     .bri-slider {
       -webkit-appearance: none;
       appearance: none;
@@ -968,8 +987,9 @@ export class StratumChipList extends LitElement {
       background: linear-gradient(
         90deg,
         var(--c, var(--accent, var(--primary-color))) var(--pct, 0%),
-        color-mix(in srgb, var(--primary-text-color) 12%, transparent) var(--pct, 0%)
+        color-mix(in srgb, var(--primary-text-color) 22%, transparent) var(--pct, 0%)
       );
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-text-color) 55%, transparent);
       cursor: pointer;
       transition: opacity 0.15s ease;
     }
@@ -1115,10 +1135,10 @@ export class StratumChipList extends LitElement {
       border-radius: 999px;
       background: color-mix(
         in srgb,
-        var(--accent, var(--primary-color, #ff9b42)) 16%,
+        var(--accent, var(--primary-color)) 16%,
         transparent
       );
-      color: var(--accent, var(--primary-color, #ff9b42));
+      color: var(--accent-ink);
       flex-shrink: 0;
     }
 
@@ -1130,7 +1150,7 @@ export class StratumChipList extends LitElement {
       flex-shrink: 0;
     }
     .prow.active .tm {
-      color: var(--accent, var(--primary-color, #ff9b42));
+      color: var(--accent-ink);
     }
 
     /* --- sticky stopka --- */

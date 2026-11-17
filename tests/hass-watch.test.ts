@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   addGroupMembers,
   collectEntityIds,
+  popupRelevantFilter,
+  sceneBarHassChanged,
   statesEmpty,
   statesReadyLatch,
   structureChanged,
+  touchesWatched,
   watchedStateChanged,
 } from '../src/hass-watch.js';
+import { SECTION_LABEL } from '../src/section-defaults.js';
+import { rawEntitiesForSection } from '../src/room-sections.js';
+import type { HassEntityRegistryEntry, RoomSectionType } from '../src/types.js';
 import { nextTickMs } from '../src/ago-ticker.js';
 import { getEntitiesInArea, getEntitiesInFloor } from '../src/area-entities.js';
 import type { HomeAssistant } from '../src/types.js';
@@ -221,5 +227,165 @@ describe('statesReadyLatch', () => {
     const after = enumerations;
     for (let i = 0; i < 1000; i++) expect(ready(big as never)).toBe(true);
     expect(enumerations).toBe(after);
+  });
+});
+
+describe('touchesWatched', () => {
+  it('przepuszcza tylko powiadomienia o obserwowanych encjach', () => {
+    const watched = new Set(['light.taras_1', 'light.taras_2']);
+    expect(touchesWatched(watched, new Set(['light.taras_2']))).toBe(true);
+    expect(touchesWatched(watched, new Set(['light.kuchnia_1', 'light.kuchnia_2']))).toBe(false);
+    expect(touchesWatched(watched, new Set())).toBe(false);
+  });
+
+  it('bez policzonego zbioru — przerysuj (bezpieczny domyślny)', () => {
+    expect(touchesWatched(undefined, new Set(['light.x']))).toBe(true);
+  });
+
+  it('działa także, gdy zmienionych jest więcej niż obserwowanych', () => {
+    const changed = new Set(Array.from({ length: 50 }, (_, i) => `light.l${i}`));
+    expect(touchesWatched(new Set(['light.l42']), changed)).toBe(true);
+    expect(touchesWatched(new Set(['light.inna']), changed)).toBe(false);
+  });
+});
+
+describe('popupRelevantFilter — co obserwuje otwarty popup pokoju', () => {
+  const states = {
+    'light.l': st('light.l'),
+    'binary_sensor.okno': st('binary_sensor.okno', 'off', { device_class: 'window' }),
+    'binary_sensor.drzwi': st('binary_sensor.drzwi', 'off', { device_class: 'door' }),
+    'binary_sensor.dym': st('binary_sensor.dym', 'off', { device_class: 'smoke' }),
+    'cover.r': st('cover.r', 'closed'),
+    'climate.k': st('climate.k', 'heat'),
+    'media_player.tv': st('media_player.tv', 'off'),
+    'fan.w': st('fan.w', 'off'),
+    'switch.s': st('switch.s', 'off'),
+    'scene.s': st('scene.s', '2026-01-01T00:00:00Z'),
+    'sensor.temp': st('sensor.temp', '21.5', { device_class: 'temperature' }),
+    'sensor.hum': st('sensor.hum', '50', { device_class: 'humidity' }),
+    'sensor.moc': st('sensor.moc', '12', { device_class: 'power' }),
+    'sensor.energia': st('sensor.energia', '3', { device_class: 'energy' }),
+    'sensor.linkquality': st('sensor.linkquality', '120'),
+    'sensor.bateria': st('sensor.bateria', '80', { device_class: 'battery' }),
+    'number.czulosc': st('number.czulosc', '3'),
+    'select.tryb': st('select.tryb', 'auto'),
+    'update.fw': st('update.fw', 'off'),
+    'vacuum.v': st('vacuum.v', 'docked'),
+    'lock.z': st('lock.z', 'locked'),
+  };
+  const hass = hassOf(states);
+
+  it('odrzuca szum Z2M (moc, energia, linkquality) i encje bez sekcji', () => {
+    const rel = popupRelevantFilter(hass, {});
+    for (const id of ['sensor.moc', 'sensor.energia', 'sensor.linkquality', 'number.czulosc', 'select.tryb', 'update.fw']) {
+      expect(rel(id), id).toBe(false);
+    }
+  });
+
+  it('obserwuje sekcje, chipy i alarmy oraz temperaturę i wilgotność', () => {
+    const rel = popupRelevantFilter(hass, {});
+    for (const id of ['light.l', 'binary_sensor.okno', 'binary_sensor.dym', 'cover.r', 'climate.k', 'media_player.tv', 'fan.w', 'switch.s', 'scene.s', 'sensor.temp', 'sensor.hum']) {
+      expect(rel(id), id).toBe(true);
+    }
+  });
+
+  it('każdy typ sekcji: encje, które sekcja pokazuje, są obserwowane', () => {
+    const entries: HassEntityRegistryEntry[] = Object.keys(states).map((entity_id) => ({ entity_id }));
+    const rel = popupRelevantFilter(hass, {});
+    for (const type of Object.keys(SECTION_LABEL) as RoomSectionType[]) {
+      for (const e of rawEntitiesForSection(hass, entries, type)) {
+        expect(rel(e.entity_id), `${type}: ${e.entity_id}`).toBe(true);
+      }
+    }
+  });
+
+  it('bateria tylko wtedy, gdy podsumowanie pokazuje „niska bateria"', () => {
+    expect(popupRelevantFilter(hass, {})('sensor.bateria')).toBe(false);
+    expect(popupRelevantFilter(hass, { sections: ['summary'] })('sensor.bateria')).toBe(false);
+    expect(
+      popupRelevantFilter(hass, { sections: [{ type: 'summary', fields: ['battery_low'] }] })('sensor.bateria'),
+    ).toBe(true);
+  });
+
+  it('chip filtrujący dokłada swoją domenę, a bez domeny — obserwuje wszystko', () => {
+    const withLock = popupRelevantFilter(hass, { chips: [{ type: 'filter', domain: 'lock', state: 'unlocked' }] });
+    expect(withLock('lock.z')).toBe(true);
+    expect(withLock('vacuum.v')).toBe(false);
+    const all = popupRelevantFilter(hass, { chips: [{ type: 'filter', device_class: 'window' }] });
+    expect(all('sensor.moc')).toBe(true);
+  });
+
+  it('czujnik bez stanu (klasa jeszcze nieznana) jest obserwowany', () => {
+    expect(popupRelevantFilter(hass, {})('sensor.nowy')).toBe(true);
+  });
+});
+
+describe('sceneBarHassChanged', () => {
+  const items = [
+    { entity: 'scene.wieczor' },
+    { separator: true, label: 'Inne' },
+    { entity: 'script.film' },
+  ];
+  const base = () => {
+    const states: Record<string, unknown> = {
+      'scene.wieczor': st('scene.wieczor', '2026-01-01', { entity_id: ['light.a', 'light.b'] }),
+      'script.film': st('script.film', 'off'),
+      'light.a': st('light.a', 'on', { rgb_color: [255, 0, 0] }),
+      'light.b': st('light.b', 'off'),
+      'light.c': st('light.c', 'on'),
+      'sensor.kuchnia_power': st('sensor.kuchnia_power', '12'),
+    };
+    return hassOf(states, { user: { id: 'u', is_admin: true } });
+  };
+
+  it('pierwsze podanie hass zawsze renderuje', () => {
+    expect(sceneBarHassChanged(undefined, base(), items)).toBe(true);
+    expect(sceneBarHassChanged(undefined, undefined, items)).toBe(false);
+  });
+
+  it('ten sam obiekt states — bez renderu', () => {
+    const a = base();
+    expect(sceneBarHassChanged(a, { ...a } as HomeAssistant, items)).toBe(false);
+  });
+
+  it('raport mocy, temperatury albo obcej lampy nie budzi paska', () => {
+    const a = base();
+    for (const id of ['sensor.kuchnia_power', 'light.c']) {
+      const b = { ...a, states: { ...a.states, [id]: st(id, '99') } } as HomeAssistant;
+      expect(sceneBarHassChanged(a, b, items)).toBe(false);
+    }
+  });
+
+  it('zmiana sceny, skryptu albo lampy-członka — render', () => {
+    const a = base();
+    for (const id of ['scene.wieczor', 'script.film', 'light.a', 'light.b']) {
+      const b = { ...a, states: { ...a.states, [id]: st(id, 'x') } } as HomeAssistant;
+      expect(sceneBarHassChanged(a, b, items)).toBe(true);
+    }
+  });
+
+  it('lampa usunięta ze sceny nadal jest obserwowana w tej zmianie', () => {
+    const a = base();
+    const b = {
+      ...a,
+      states: {
+        ...a.states,
+        'scene.wieczor': st('scene.wieczor', '2026-01-01', { entity_id: ['light.a'] }),
+        'light.b': st('light.b', 'on'),
+      },
+    } as HomeAssistant;
+    expect(sceneBarHassChanged(a, b, items)).toBe(true);
+  });
+
+  it('zmiana użytkownika (bramka admina) — render', () => {
+    const a = base();
+    const b = { ...a, user: { id: 'u', is_admin: false } } as unknown as HomeAssistant;
+    expect(sceneBarHassChanged(a, b, items)).toBe(true);
+  });
+
+  it('brak items — tylko pierwsze podanie i user', () => {
+    const a = base();
+    const b = { ...a, states: { ...a.states, 'light.a': st('light.a', 'off') } } as HomeAssistant;
+    expect(sceneBarHassChanged(a, b, undefined)).toBe(false);
   });
 });

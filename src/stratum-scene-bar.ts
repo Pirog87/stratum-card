@@ -4,9 +4,10 @@
 // scenę przez `scene.turn_on` (albo script/automation analogicznie).
 // Layout (liczba kolumn, aspect ratio, rozmiar) pełna customization z configu.
 
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant, SceneBarConfig, SceneConfig } from './types.js';
+import { sceneBarHassChanged } from './hass-watch.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneBackground } from './scene-presets.js';
 import { runTapAction } from './tap-action.js';
@@ -30,7 +31,15 @@ import {
  */
 
 const sceneColorsCache = new Map<string, SceneColors | null>();
-const sceneColorsPending = new Set<string>();
+/**
+ * Pobrania w toku: obietnica, nie sam znacznik. Pasek ma własną bramkę
+ * shouldUpdate, więc drugi pasek z tą samą sceną nie przerysuje się „przy
+ * okazji" następnego ticka hass (temperatura itp.) — odrzucony tick nie
+ * dociągnie gradientu z cache. Każda instancja, która zastała pobranie
+ * w toku, musi sama poczekać na jego koniec i poprosić o render; inaczej
+ * jej kafel zostaje płaski do zmiany sceny albo tapnięcia.
+ */
+const sceneColorsPending = new Map<string, Promise<SceneColors | null>>();
 
 async function fetchSceneColors(
   hass: HomeAssistant,
@@ -134,6 +143,12 @@ export class StratumSceneBar extends LitElement {
   @state() private _pending = new Map<string, ScenePending>();
 
   private _pendingTimer?: number;
+
+  /**
+   * Sceny, na których kolory ta instancja już czeka — render w trakcie
+   * pobrania wołany jest wielokrotnie, a jedno `.then` na scenę wystarczy.
+   */
+  private _colorWaits = new Set<string>();
 
   public disconnectedCallback(): void {
     for (const t of this._ackTimers.values()) window.clearTimeout(t);
@@ -252,13 +267,26 @@ export class StratumSceneBar extends LitElement {
       const style = (this.config?.gradient ?? 'mesh') as SceneGradientStyle;
       return buildGradient(style, data, entityId);
     }
-    if (!this.hass || sceneColorsPending.has(entityId)) return undefined;
-    sceneColorsPending.add(entityId);
-    void fetchSceneColors(this.hass, entityId).then((data) => {
-      sceneColorsCache.set(entityId, data);
-      sceneColorsPending.delete(entityId);
-      if (data) this.requestUpdate();
-    });
+    if (!this.hass) return undefined;
+    let pending = sceneColorsPending.get(entityId);
+    if (!pending) {
+      pending = fetchSceneColors(this.hass, entityId).then((data) => {
+        sceneColorsCache.set(entityId, data);
+        sceneColorsPending.delete(entityId);
+        return data;
+      });
+      sceneColorsPending.set(entityId, pending);
+    }
+    // Czeka każda instancja, nie tylko ta, która zaczęła pobranie (patrz
+    // komentarz przy sceneColorsPending). null = scena bez kolorów, kafel
+    // i tak zostaje płaski — wtedy renderu nie zamawiamy.
+    if (!this._colorWaits.has(entityId)) {
+      this._colorWaits.add(entityId);
+      void pending.then((data) => {
+        this._colorWaits.delete(entityId);
+        if (data) this.requestUpdate();
+      });
+    }
     return undefined;
   }
 
@@ -308,6 +336,24 @@ export class StratumSceneBar extends LitElement {
         <span class="tile-name">${name}</span>
       </button>
     `;
+  }
+
+  /**
+   * Własna bramka paska. Rodzic (popup, belka) podaje świeży `hass` przy
+   * każdej zmianie dowolnej encji, a stały config z rodzica niczego nie
+   * dawał bez bramki tutaj — pasek i tak przerysowywał wszystkie kafle.
+   * Przepuszczamy: każdą zmianę poza samym `hass` (config, potwierdzenia,
+   * sceny w toku) oraz `hass`, w którym zmieniło się coś czytanego przez
+   * kafle (sceneBarHassChanged). Timery scen w toku czytają `this.hass`
+   * same, więc odrzucony render nie zatrzymuje wykrycia końca sceny.
+   */
+  protected shouldUpdate(changed: PropertyValues<this>): boolean {
+    if (changed.size !== 1 || !changed.has('hass')) return true;
+    return sceneBarHassChanged(
+      changed.get('hass') as HomeAssistant | undefined,
+      this.hass,
+      this.config?.items,
+    );
   }
 
   protected render(): TemplateResult {
