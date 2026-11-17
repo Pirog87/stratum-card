@@ -194,7 +194,7 @@ export interface HeaderConfig {
   /** Kolor akcentowego paska (tylko gdy `accent_bar: true`). */
   accent_bar_color?: string;
   /**
-   * Wygląd belki: `classic` (default) albo `stripes` — ikona w kwadracie,
+   * Wygląd belki: `classic` (default) albo `stripes` — duża ikona piętra,
    * chipy pod nazwą, a z prawej skośne paski z nazwami pokoi, w których
    * świeci się światło. `stripes` nie rysuje chevronu ani akcentowego paska.
    */
@@ -210,6 +210,11 @@ export interface HeaderConfig {
   stripes_tap?: 'popup' | 'none';
   /** `stripes`: poświata wokół ikony, gdy coś świeci. Default true. */
   icon_glow?: boolean;
+  /**
+   * `stripes`: ikona w kwadracie z ramką (wygląd sprzed v1.109.1). Default
+   * false — sama ikona 36 px na tle karty.
+   */
+  icon_frame?: boolean;
   /**
    * `stripes`: kolor poświaty i ikony, gdy coś świeci (hex/var). Default:
    * kolor świateł z motywu (`--stratum-lights`).

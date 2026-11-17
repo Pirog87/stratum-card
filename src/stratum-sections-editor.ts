@@ -336,11 +336,16 @@ export class StratumSectionsEditor extends LitElement {
     const { next, removed } = removeAt(before, index);
     if (!removed) return;
     this._emit(next);
+    const prevOpen = new Set(this._open);
     // Natychmiast, ale z „Cofnij" — sekcja potrafi nieść tryb, encje
     // i szablon karty, a kosz stoi tuż obok ołówka (patrz editor-undo.ts).
-    this._undo.offer(removed.title ?? SECTION_LABEL[removed.type] ?? removed.type, () =>
-      this._emit(restoreRemoved(this.sections, next, before, index, removed)),
-    );
+    this._undo.offer(removed.title ?? SECTION_LABEL[removed.type] ?? removed.type, () => {
+      const restored = restoreRemoved(this.sections, next, before, index, removed);
+      this._emit(restored);
+      // Dokładny powrót przywraca rozwinięte formularze; inaczej zwijamy,
+      // żeby po cofnięciu nie otworzył się formularz innej sekcji.
+      this._open = JSON.stringify(restored) === JSON.stringify(before) ? prevOpen : new Set();
+    });
     const open = new Set<number>();
     for (const i of this._open) {
       if (i === index) continue;
@@ -440,16 +445,20 @@ export class StratumSectionsEditor extends LitElement {
                     <ha-icon .icon=${'mdi:chevron-down'} aria-hidden="true"></ha-icon>
                   </button>
                   <button
+                    type="button"
                     class="stratum-icon-btn"
                     title=${hidden
                       ? 'Pokaż'
                       : visibility === 'partial'
                       ? 'Ukryj oba bloki świateł'
                       : 'Ukryj'}
+                    aria-label=${`${label}: ukryta`}
+                    aria-pressed=${hidden ? 'true' : visibility === 'partial' ? 'mixed' : 'false'}
                     @click=${() => this._toggleHidden(idx)}
                   >
                     <ha-icon
                       .icon=${hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}
+                      aria-hidden="true"
                     ></ha-icon>
                   </button>
                   <button

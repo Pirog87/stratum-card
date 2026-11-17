@@ -196,14 +196,22 @@ export function selectAllRooms(
   rooms: readonly RoomConfig[],
   floorAreaIds: readonly string[],
 ): RoomConfig[] {
+  const floor = new Set(floorAreaIds);
   const known = new Set(rooms.map((r) => r.area_id));
   const next: RoomConfig[] = [
-    ...rooms.map((r) => {
-      if (!('hidden' in r)) return r;
-      const copy = { ...r };
-      delete copy.hidden;
-      return copy;
-    }),
+    ...rooms
+      // Ukryte wpisy spoza bieżącego piętra (zostałe po zmianie piętra albo
+      // po strefie usuniętej z HA) bez własnej konfiguracji to niewidoczne
+      // śmieci — edytor ich nie pokazuje, więc „Zaznacz wszystkie" nie może
+      // ich ożywić jako wierszy, których nie da się potem odznaczyć.
+      .filter((r) => floor.has(r.area_id) || !r.hidden || roomHasConfig(r))
+      .map((r) => {
+        // Odkrywamy tylko pokoje tego piętra; wpisy spoza zostają, jakie są.
+        if (!floor.has(r.area_id) || !('hidden' in r)) return r;
+        const copy = { ...r };
+        delete copy.hidden;
+        return copy;
+      }),
     ...floorAreaIds.filter((id) => !known.has(id)).map((id) => ({ area_id: id })),
   ];
   return compactRooms(next, floorAreaIds);
@@ -218,10 +226,12 @@ export function deselectAllRooms(
   rooms: readonly RoomConfig[],
   floorAreaIds: readonly string[],
 ): RoomConfig[] {
+  const floor = new Set(floorAreaIds);
   const list = materializeRooms(rooms, floorAreaIds);
   const known = new Set(list.map((r) => r.area_id));
   return [
-    ...list.map((r) => ({ ...r, hidden: true })),
+    // Chowamy tylko pokoje bieżącego piętra — wpisy spoza zostają bez zmian.
+    ...list.map((r) => (floor.has(r.area_id) ? { ...r, hidden: true } : r)),
     ...floorAreaIds
       .filter((id) => !known.has(id))
       .map((id) => ({ area_id: id, hidden: true })),

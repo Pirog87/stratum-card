@@ -332,21 +332,26 @@ export class StratumRoomCard extends LitElement {
     const hasExplicitScenes =
       this._config.scenes && (this._config.scenes.items ?? []).length > 0;
 
+    // Komunikat „brak encji" zależy od tego, co faktycznie się narysowało —
+    // nie od listy sekcji. Sekcja może istnieć, a jej blok być ukryty okiem
+    // edytora (popup_order), i wtedy popup był pusty bez słowa wyjaśnienia.
+    const blocks =
+      sections.length === 0 && !hasExplicitScenes
+        ? []
+        : this._renderOrderedBlocks(entries, allSections, sections, Boolean(hasExplicitScenes)).filter(
+            (b) => !(b.values.length === 0 && b.strings.join('').trim() === ''),
+          );
+
     return html`
       <ha-card part="card">
         ${this._renderHeader(entries, name, icon)}
         <div class="body" part="body">
           ${this._renderAlarmsBlock(entries)}
-          ${sections.length === 0 && !hasExplicitScenes
+          ${blocks.length === 0
             ? html`<div class="placeholder">
                 Brak encji do wyświetlenia — sprawdź przypisanie area.
               </div>`
-            : this._renderOrderedBlocks(
-                entries,
-                allSections,
-                sections,
-                Boolean(hasExplicitScenes),
-              )}
+            : blocks}
         </div>
       </ha-card>
       ${this._renderChipListPopup(entries)}

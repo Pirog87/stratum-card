@@ -171,13 +171,24 @@ export class StratumChipsEditor extends LitElement {
     const { next, removed } = removeAt(this._effective(), index);
     if (!removed) return;
     this._emit(next);
+    const prevOpen = this._openRow;
     if (this._openRow === index) this._openRow = -1;
     else if (this._openRow > index) this._openRow -= 1;
     // Usunięcie dalej jest natychmiastowe, ale odwracalne — dlaczego nie
     // dialog potwierdzenia: patrz editor-undo.ts.
-    this._undo.offer(CHIP_LABELS[removed.type] ?? removed.type, () =>
-      this._emit(restoreRemoved(this._effective(), next, before, index, removed)),
-    );
+    this._undo.offer(CHIP_LABELS[removed.type] ?? removed.type, () => {
+      // Usunięcie ostatniego chipa daje [], a rodzic kasuje wtedy klucz —
+      // _effective() pokazuje domyślny zestaw. To nadal „nic się nie
+      // zmieniło", więc wracamy dokładnie do `before`, a nie wklejamy
+      // chipa do całego zestawu domyślnego.
+      const raw = this.chips ?? [];
+      const current = raw.length === 0 && next.length === 0 ? next : this._effective();
+      const restored = restoreRemoved(current, next, before, index, removed);
+      this._emit(restored);
+      // Dokładny powrót = ten sam wiersz rozwinięty co przed usunięciem;
+      // inaczej zwijamy, żeby nie otworzyć formularza innego chipa.
+      this._openRow = JSON.stringify(restored) === JSON.stringify(before) ? prevOpen : -1;
+    });
   }
 
   private _move(index: number, delta: -1 | 1): void {

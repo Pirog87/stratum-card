@@ -111,7 +111,10 @@ describe('cleanDisplayStyle — wymiary wiersza nie są wycinane', () => {
   });
 
   it('kafel nadal wycina wartości równe swoim (jedynym) domyślnym', () => {
-    expect(cleanDisplayStyle({ ...TILE_STYLE_DEFAULTS }, true)).toEqual({});
+    // min_height zostaje: jawna wysokość kafla jest stała, a jej brak
+    // oznacza wysokość z proporcji — to nie to samo.
+    expect(cleanDisplayStyle({ ...TILE_STYLE_DEFAULTS }, true)).toEqual({ min_height: 110 });
+    expect(cleanDisplayStyle({ min_height: 110, aspect: '16/9' } as TileDisplayConfig, true)).toMatchObject({ min_height: 110 });
     expect(cleanDisplayStyle({ border_radius: 6, icon_size: 30 }, true)).toEqual({
       border_radius: 6,
       icon_size: 30,

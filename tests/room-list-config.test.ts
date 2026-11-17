@@ -259,3 +259,25 @@ describe('moveRoomInList / roomPosition (ED-1: strzałki w auto-discover)', () =
     expect(moveRoomInList(rooms, FLOOR, 'salon', -1)).toEqual([SALON_POPUP, { area_id: 'kuchnia' }]);
   });
 });
+
+describe('przegląd v1.109.1: wpisy spoza piętra', () => {
+  it('Zaznacz wszystkie nie ożywia pokoi z innego piętra', () => {
+    const hiddenOther = deselectAllRooms([], ['sypialnia', 'lazienka_g']);
+    const next = selectAllRooms(hiddenOther, ['salon', 'kuchnia']);
+    // Ukryte wpisy innego piętra bez konfiguracji znikają → auto-discover.
+    expect(next).toEqual([]);
+  });
+
+  it('wpis spoza piętra z konfiguracją zostaje, jak był', () => {
+    const rooms = [{ area_id: 'sypialnia', name: 'Sypialnia rodziców', hidden: true }];
+    const next = selectAllRooms(rooms, ['salon']);
+    expect(next.find((r) => r.area_id === 'sypialnia')).toEqual({ area_id: 'sypialnia', name: 'Sypialnia rodziców', hidden: true });
+  });
+
+  it('Odznacz wszystkie chowa tylko pokoje bieżącego piętra', () => {
+    const rooms = [{ area_id: 'salon' }, { area_id: 'sypialnia', name: 'X' }];
+    const next = deselectAllRooms(rooms, ['salon']);
+    expect(next.find((r) => r.area_id === 'sypialnia')).toEqual({ area_id: 'sypialnia', name: 'X' });
+    expect(next.find((r) => r.area_id === 'salon')?.hidden).toBe(true);
+  });
+});

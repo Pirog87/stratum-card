@@ -173,7 +173,10 @@ export function cleanDisplayStyle(
   for (const key of dims) {
     const v = raw[key];
     if (typeof v !== 'number' || !Number.isFinite(v)) continue;
-    if (isTile && v === TILE_STYLE_DEFAULTS[key]) continue;
+    // min_height kafla to wyjątek: karta traktuje KAŻDĄ jawną wysokość jako
+    // stałą (bez niej rządzi proporcja `aspect`), więc 110 ustawione
+    // świadomie różni się od braku klucza i nie wolno go wyciąć.
+    if (isTile && key !== 'min_height' && v === TILE_STYLE_DEFAULTS[key]) continue;
     out[key] = v;
   }
 

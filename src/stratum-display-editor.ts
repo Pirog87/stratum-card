@@ -860,17 +860,20 @@ export class StratumDisplayEditor extends LitElement {
       <div class="slider-row">
         <label class="slider-label">${label}</label>
         <div class="slider-value">
-          ${isSet
-            ? html`<button
-                type="button"
-                class="slider-reset"
-                title="Przywróć domyślne"
-                aria-label=${`${label}: przywróć domyślne`}
-                @click=${() => this._resetKey(key)}
-              >
-                <ha-icon .icon=${'mdi:restore'} aria-hidden="true"></ha-icon>
-              </button>`
-            : html`<span class="slider-default">domyślnie</span>`}
+          ${isSet ? nothing : html`<span class="slider-default">domyślnie</span>`}
+          <!-- Przycisk zostaje w DOM-ie (wyłączony, gdy nie ma czego
+               przywracać): usunięty po kliknięciu zabierał ze sobą fokus
+               klawiatury i trzeba było przechodzić Tabem przez cały edytor. -->
+          <button
+            type="button"
+            class="slider-reset"
+            title="Przywróć domyślne"
+            aria-label=${`${label}: przywróć domyślne`}
+            ?disabled=${!isSet}
+            @click=${() => this._resetKey(key)}
+          >
+            <ha-icon .icon=${'mdi:restore'} aria-hidden="true"></ha-icon>
+          </button>
           <span>${shown}</span>
         </div>
         <input
