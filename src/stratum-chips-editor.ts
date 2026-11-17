@@ -21,12 +21,13 @@ import {
 } from './chip-editor-ops.js';
 import { removeAt, restoreRemoved } from './editor-list-ops.js';
 import { EditorUndoController, renderUndoBar } from './editor-undo.js';
-import { localize, lookup, messages, type MessageKey } from './localize/localize.js';
+import { lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 
 interface ChipQuickPick {
   type: ChipConfig['type'];
   /** Klucz słownika (src/localize/). */
-  label: MessageKey;
+  label: UiKey;
   icon: string;
   /** Subtype tylko dla built-in. */
   builtin?: BuiltInChipType;
@@ -310,12 +311,12 @@ export class StratumChipsEditor extends LitElement {
     return common;
   }
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.hass, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
   }
 
   private _chipLabel(type: string): string {
-    return lookup(messages(this.hass).editor.chips.types, type) ?? type;
+    return lookup(editorMessages(this.hass).chips.types, type) ?? type;
   }
 
   private _labelFor = (
@@ -325,7 +326,7 @@ export class StratumChipsEditor extends LitElement {
     if (schema.name === 'entity' && data?.type && SENSOR_CHIP_TYPES.has(data.type)) {
       return this._t('editor.chips.sensor_entity');
     }
-    return lookup(messages(this.hass).editor.chips.labels, schema.name) ?? schema.name;
+    return lookup(editorMessages(this.hass).chips.labels, schema.name) ?? schema.name;
   };
 
   protected render(): TemplateResult {

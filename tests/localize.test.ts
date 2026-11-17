@@ -12,6 +12,13 @@ import {
 } from '../src/localize/localize.js';
 import { pl } from '../src/localize/pl.js';
 import { en } from '../src/localize/en.js';
+import { editorPl } from '../src/localize/editor-pl.js';
+import { editorEn } from '../src/localize/editor-en.js';
+import { editorMessages, localizeUi } from '../src/localize/editor-localize.js';
+
+// Słowniki karty i edytorów razem — testy kompletu kluczy obejmują oba.
+const PL = { ...pl, editor: editorPl };
+const EN = { ...en, editor: editorEn };
 
 /** Klucze liści (napis albo komplet form liczby mnogiej). */
 const leafKeys = (o: object, p = ''): string[] =>
@@ -149,7 +156,7 @@ describe('localize', () => {
 
 describe('słowniki', () => {
   it('EN ma dokładnie te same klucze co PL', () => {
-    expect(leafKeys(en).sort()).toEqual(leafKeys(pl).sort());
+    expect(leafKeys(EN).sort()).toEqual(leafKeys(PL).sort());
   });
 
   it('żaden tekst nie jest pusty', () => {
@@ -159,8 +166,8 @@ describe('słowniki', () => {
         else walk(v as object, `${p}${k}.`);
       }
     };
-    walk(pl);
-    walk(en);
+    walk(PL);
+    walk(EN);
   });
 
   it('formy liczby mnogiej: PL ma one/few/many, EN one/other', () => {
@@ -172,8 +179,8 @@ describe('słowniki', () => {
           ? [[`${p}${k}`, v as Record<string, string>] as [string, Record<string, string>]]
           : plurals(v as object, `${p}${k}.`),
       );
-    for (const [k, forms] of plurals(pl)) expect(Object.keys(forms).sort(), k).toEqual(['few', 'many', 'one']);
-    for (const [k, forms] of plurals(en)) expect(Object.keys(forms).sort(), k).toEqual(['one', 'other']);
+    for (const [k, forms] of plurals(PL)) expect(Object.keys(forms).sort(), k).toEqual(['few', 'many', 'one']);
+    for (const [k, forms] of plurals(EN)) expect(Object.keys(forms).sort(), k).toEqual(['one', 'other']);
   });
 
   it('parametry {x} są te same w obu językach', () => {
@@ -184,11 +191,34 @@ describe('słowniki', () => {
           ? [[`${p}${k}`, v] as [string, string]]
           : flat(v as object, `${p}${k}.`),
       );
-    const enMap = new Map(flat(en));
-    for (const [k, v] of flat(pl)) {
+    const enMap = new Map(flat(EN));
+    for (const [k, v] of flat(PL)) {
       const other = enMap.get(k.replace(/\.(few|many)$/, '.other'));
       if (other === undefined) continue;
       expect(params(other), k).toEqual(params(v));
     }
+  });
+});
+
+describe('słowniki edytorów (osobne wejście)', () => {
+  it('runtime karty nie zawiera napisów edytora', () => {
+    expect('editor' in pl).toBe(false);
+    expect('editor' in en).toBe(false);
+  });
+
+  it('localizeUi: klucze editor.* ze słownika edytora, reszta z karty', () => {
+    expect(localizeUi('pl', 'editor.common.clear_color')).toBe(editorPl.common.clear_color);
+    expect(localizeUi('en', 'editor.common.clear_color')).toBe(editorEn.common.clear_color);
+    expect(localizeUi('en', 'common.close')).toBe(localize('en', 'common.close'));
+    expect(localizeUi('de', 'editor.common.clear_color')).toBe(editorEn.common.clear_color);
+  });
+
+  it('nieznany klucz edytora → sam klucz, bez wyjątku', () => {
+    expect(localizeUi('en', 'editor.nope.nope' as never)).toBe('editor.nope.nope');
+  });
+
+  it('editorMessages wybiera słownik po języku', () => {
+    expect(editorMessages('pl')).toBe(editorPl);
+    expect(editorMessages({ language: 'en' })).toBe(editorEn);
   });
 });

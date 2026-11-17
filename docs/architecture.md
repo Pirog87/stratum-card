@@ -161,6 +161,17 @@ z deterministyczną regułą awaryjną. Fragmenty kodu w podpowiedziach edytora
 zapisujemy jako `<…>` — komponent renderuje je jako `<code>` bez innerHTML.
 Nowy język = nowy plik typu `Messages` + wpis w `DICTS` i `langOf`.
 
+**Słowniki edytorów osobno.** Napisy edytorów (`editor.*`) to ~83%
+słowników, a dashboard ich nie pokazuje. Leżą w `src/localize/editor-pl.ts`
+i `editor-en.ts` (typ `EditorMessages` z `editor-pl.ts`), a czytają je tylko
+edytory przez `localizeUi()` / `editorMessages()` z
+`src/localize/editor-localize.ts` — ta sama ścieżka awaryjna, klucze z pełnym
+prefiksem `editor.…`. Runtime karty importuje wyłącznie `pl.ts`/`en.ts`.
+Dopóki bundle jest jednym plikiem (ADR-005), bajty są te same; podział jest
+pod PKG-3 (v1.110.0) — edytory ładowane na żądanie zabiorą swoje słowniki
+ze sobą. Budżet: 1.109.2 → 1.109.3 bundle 482 306 → 573 151 B
+(gzip −9: 121 722 → 142 073 B), z czego słowniki ~65 KB po minifikacji.
+
 > Status: obowiązuje — mechanizm. Decyzję, który język widzi użytkownik,
 > opisuje ADR-009.
 

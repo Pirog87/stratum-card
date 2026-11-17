@@ -7,23 +7,23 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HeaderConfig, HeaderTitleSize } from './types.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
-import { localize, type MessageKey } from './localize/localize.js';
+import { localizeUi, type UiKey } from './localize/editor-localize.js';
 
 // `label` to klucz słownika (src/localize/) — tekst wybiera język z `hass`.
-const TITLE_SIZES: Array<{ value: HeaderTitleSize; label: MessageKey; preview: string }> = [
+const TITLE_SIZES: Array<{ value: HeaderTitleSize; label: UiKey; preview: string }> = [
   { value: 'sm', label: 'editor.header.size_sm', preview: '14px' },
   { value: 'md', label: 'editor.header.size_md', preview: '17px' },
   { value: 'lg', label: 'editor.header.size_lg', preview: '20px' },
 ];
 
-const TITLE_WEIGHTS: Array<{ value: 400 | 500 | 600 | 700; label: MessageKey }> = [
+const TITLE_WEIGHTS: Array<{ value: 400 | 500 | 600 | 700; label: UiKey }> = [
   { value: 400, label: 'editor.header.weight_400' },
   { value: 500, label: 'editor.header.weight_500' },
   { value: 600, label: 'editor.header.weight_600' },
   { value: 700, label: 'editor.header.weight_700' },
 ];
 
-const COLOR_SWATCHES: Array<{ key: string; color: string; label: MessageKey }> = [
+const COLOR_SWATCHES: Array<{ key: string; color: string; label: UiKey }> = [
   { key: 'amber', color: '#ffc107', label: 'editor.colors.amber' },
   { key: 'green', color: '#4caf50', label: 'editor.colors.green' },
   { key: 'blue', color: '#2196f3', label: 'editor.colors.blue' },
@@ -34,12 +34,12 @@ const COLOR_SWATCHES: Array<{ key: string; color: string; label: MessageKey }> =
   { key: 'pink', color: '#ec407a', label: 'editor.colors.pink' },
 ];
 
-const HEADER_STYLES: Array<{ value: 'classic' | 'stripes'; label: MessageKey }> = [
+const HEADER_STYLES: Array<{ value: 'classic' | 'stripes'; label: UiKey }> = [
   { value: 'classic', label: 'editor.header.style_classic' },
   { value: 'stripes', label: 'editor.header.style_stripes' },
 ];
 
-const STRIPES_COLORS: Array<{ value: 'lights' | 'static'; label: MessageKey }> = [
+const STRIPES_COLORS: Array<{ value: 'lights' | 'static'; label: UiKey }> = [
   { value: 'lights', label: 'editor.header.stripes_color_lights' },
   { value: 'static', label: 'editor.header.stripes_color_static' },
 ];
@@ -56,8 +56,8 @@ export class StratumHeaderEditor extends LitElement {
    */
   @property({ attribute: false }) public uiLang?: string;
 
-  private _t(key: MessageKey): string {
-    return localize(this.uiLang, key);
+  private _t(key: UiKey): string {
+    return localizeUi(this.uiLang, key);
   }
 
   private _emit(next: HeaderConfig): void {
@@ -339,7 +339,7 @@ export class StratumHeaderEditor extends LitElement {
   }
 
   private _renderColorRow(
-    label: MessageKey,
+    label: UiKey,
     key: ColorKey,
     value: string | undefined,
   ): TemplateResult {

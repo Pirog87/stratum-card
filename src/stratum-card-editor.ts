@@ -28,7 +28,8 @@ import './stratum-chips-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ROW_UI_ACTIONS } from './tap-action.js';
 import { cleanDisplayStyle } from './display-config-clean.js';
-import { langOf, localize, lookup, messages, type MessageKey } from './localize/localize.js';
+import { langOf, lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 
 interface FormSchemaItem {
   name: string;
@@ -87,8 +88,8 @@ const COLUMN_CHIPS: Array<{ value: 'auto' | 1 | 2 | 3 | 4 | 5 | 6; label: string
 export class StratumCardEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.hass, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
   }
 
   @state() private _config?: StratumCardConfig;
@@ -126,10 +127,10 @@ export class StratumCardEditor extends LitElement {
   }
 
   private _computeLabel = (schema: FormSchemaItem): string =>
-    lookup(messages(this.hass).editor.card.labels, schema.name) ?? schema.name;
+    lookup(editorMessages(this.hass).card.labels, schema.name) ?? schema.name;
 
   private _computeHelper = (schema: FormSchemaItem): string =>
-    lookup(messages(this.hass).editor.card.helpers, schema.name) ?? '';
+    lookup(editorMessages(this.hass).card.helpers, schema.name) ?? '';
 
   private _valueChanged(ev: CustomEvent<{ value: StratumCardConfig }>): void {
     ev.stopPropagation();

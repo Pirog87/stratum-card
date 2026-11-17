@@ -20,7 +20,8 @@ import {
 import { getEntitiesInArea, getAreasInFloor, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ENTITY_UI_ACTIONS } from './tap-action.js';
-import { langOf, localize, lookup, messages, type Lang, type MessageKey } from './localize/localize.js';
+import { langOf, lookup, type Lang } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 import { withCode } from './localize/with-code.js';
 
 // Schemat zależy od języka (etykiety opcji) — jeden obiekt na język, żeby
@@ -46,8 +47,8 @@ const buildGlobalSchema = (lang: Lang) => [
           select: {
             mode: 'dropdown',
             options: [
-              { value: 'top', label: localize(lang, 'editor.scene.pos_top') },
-              { value: 'bottom', label: localize(lang, 'editor.scene.pos_bottom') },
+              { value: 'top', label: localizeUi(lang, 'editor.scene.pos_top') },
+              { value: 'bottom', label: localizeUi(lang, 'editor.scene.pos_bottom') },
             ],
           },
         },
@@ -58,9 +59,9 @@ const buildGlobalSchema = (lang: Lang) => [
           select: {
             mode: 'dropdown',
             options: [
-              { value: 'sm', label: localize(lang, 'editor.header.size_sm') },
-              { value: 'md', label: localize(lang, 'editor.header.size_md') },
-              { value: 'lg', label: localize(lang, 'editor.header.size_lg') },
+              { value: 'sm', label: localizeUi(lang, 'editor.header.size_sm') },
+              { value: 'md', label: localizeUi(lang, 'editor.header.size_md') },
+              { value: 'lg', label: localizeUi(lang, 'editor.header.size_lg') },
             ],
           },
         },
@@ -84,10 +85,10 @@ const buildGlobalSchema = (lang: Lang) => [
       select: {
         mode: 'dropdown',
         options: [
-          { value: 'mesh', label: localize(lang, 'editor.scene.grad_mesh') },
-          { value: 'linear', label: localize(lang, 'editor.scene.grad_linear') },
-          { value: 'glow', label: localize(lang, 'editor.scene.grad_glow') },
-          { value: 'horizon', label: localize(lang, 'editor.scene.grad_horizon') },
+          { value: 'mesh', label: localizeUi(lang, 'editor.scene.grad_mesh') },
+          { value: 'linear', label: localizeUi(lang, 'editor.scene.grad_linear') },
+          { value: 'glow', label: localizeUi(lang, 'editor.scene.grad_glow') },
+          { value: 'horizon', label: localizeUi(lang, 'editor.scene.grad_horizon') },
         ],
       },
     },
@@ -179,21 +180,21 @@ export class StratumSceneEditor extends LitElement {
     return items.length > 0 ? items : this._autoItems();
   }
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.hass, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
   }
 
   private _computeGlobalLabel = (schema: { name: string }): string =>
-    lookup(messages(this.hass).editor.scene.global_labels, schema.name) ?? schema.name;
+    lookup(editorMessages(this.hass).scene.global_labels, schema.name) ?? schema.name;
 
   private _computeGlobalHelper = (schema: { name: string }): string =>
-    lookup(messages(this.hass).editor.scene.global_helpers, schema.name) ?? '';
+    lookup(editorMessages(this.hass).scene.global_helpers, schema.name) ?? '';
 
   private _computeSceneLabel = (schema: { name: string }): string =>
-    lookup(messages(this.hass).editor.scene.labels, schema.name) ?? schema.name;
+    lookup(editorMessages(this.hass).scene.labels, schema.name) ?? schema.name;
 
   private _computeSceneHelper = (schema: { name: string }): string =>
-    lookup(messages(this.hass).editor.scene.helpers, schema.name) ?? '';
+    lookup(editorMessages(this.hass).scene.helpers, schema.name) ?? '';
 
   private _emit(next: SceneBarConfig): void {
     this.dispatchEvent(
@@ -321,7 +322,7 @@ export class StratumSceneEditor extends LitElement {
   }
 
   private _presetLabel(id: string): string {
-    return lookup(messages(this.hass).editor.scene_presets, id) ?? id;
+    return lookup(editorMessages(this.hass).scene_presets, id) ?? id;
   }
 
   private _selectPreset(index: number, id: string | null): void {

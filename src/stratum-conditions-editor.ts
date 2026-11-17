@@ -14,10 +14,11 @@ import type {
   TileField,
 } from './types.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
-import { localize, lookup, messages, type MessageKey } from './localize/localize.js';
+import { lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 
 // `label` to klucz słownika (src/localize/) — tekst wybiera język z `hass`.
-const FIELD_META: Array<{ value: TileField; label: MessageKey; icon: string }> = [
+const FIELD_META: Array<{ value: TileField; label: UiKey; icon: string }> = [
   { value: 'temperature', label: 'editor.fields.temperature', icon: 'mdi:thermometer' },
   { value: 'humidity', label: 'editor.fields.humidity', icon: 'mdi:water-percent' },
   { value: 'lights', label: 'editor.fields.lights', icon: 'mdi:lightbulb-on' },
@@ -32,7 +33,7 @@ const FIELD_META: Array<{ value: TileField; label: MessageKey; icon: string }> =
 
 // Etykiety operatorów: `editor.conditions.ops` w słowniku.
 
-const COLOR_SWATCHES: Array<{ key: string; color: string; label: MessageKey }> = [
+const COLOR_SWATCHES: Array<{ key: string; color: string; label: UiKey }> = [
   { key: 'amber', color: '#ffc107', label: 'editor.colors.amber' },
   { key: 'green', color: '#4caf50', label: 'editor.colors.green' },
   { key: 'blue', color: '#2196f3', label: 'editor.colors.blue' },
@@ -86,8 +87,8 @@ type ColorKey =
 /** Presety typowych scenariuszy — klik dodaje nową regułę z pre-fillem. */
 const PRESETS: Array<{
   id: string;
-  label: MessageKey;
-  hint: MessageKey;
+  label: UiKey;
+  hint: UiKey;
   icon: string;
   config: DisplayConditionConfig;
 }> = [
@@ -205,8 +206,8 @@ const PRESETS: Array<{
 export class StratumConditionsEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.hass, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
   }
 
   @property({ attribute: false }) public conditions: DisplayConditionConfig[] = [];
@@ -721,11 +722,11 @@ export class StratumConditionsEditor extends LitElement {
   private _summarize(cond: DisplayConditionConfig): { title: string; hint: string } {
     const fieldKey = FIELD_META.find((f) => f.value === cond.field)?.label;
     const fieldLabel = fieldKey ? this._t(fieldKey) : cond.field;
-    const opLabel = lookup(messages(this.hass).editor.conditions.ops, cond.when) ?? cond.when;
+    const opLabel = lookup(editorMessages(this.hass).conditions.ops, cond.when) ?? cond.when;
     const valuePart =
       needsValue(cond.when) && typeof cond.value === 'number' ? ` ${cond.value}` : '';
     const stylePieces: string[] = [];
-    const t = (key: MessageKey, v?: string | number): string =>
+    const t = (key: UiKey, v?: string | number): string =>
       this._t(key, v === undefined ? undefined : { v });
     if (cond.accent_color) stylePieces.push(t('editor.conditions.sum_accent', cond.accent_color));
     if (cond.border_color) stylePieces.push(t('editor.conditions.sum_border', cond.border_color));

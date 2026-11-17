@@ -34,7 +34,7 @@ export interface PluralForms {
  * liczby mnogiej (obiekt z `one`), reszta to zagnieżdżone grupy. Literały
  * z `pl` są poszerzane do `string`, żeby `en` mogło mieć inne słowa.
  */
-type Shape<T> = {
+export type Shape<T> = {
   [K in keyof T]: T[K] extends string
     ? string
     : T[K] extends { one: string }
@@ -45,7 +45,7 @@ type Shape<T> = {
 export type Messages = Shape<typeof pl>;
 
 /** Klucze kropkowe (`'card.expand'`) — tylko te, które istnieją w słowniku. */
-type KeysOf<T, P extends string = ''> = {
+export type KeysOf<T, P extends string = ''> = {
   [K in keyof T & string]: T[K] extends string
     ? `${P}${K}`
     : T[K] extends { one: string }
@@ -154,7 +154,7 @@ export function interpolate(text: string, vars: Vars): string {
   );
 }
 
-function resolve(dict: Messages, key: string): string | PluralForms | undefined {
+export function resolve(dict: object, key: string): string | PluralForms | undefined {
   let node: unknown = dict;
   for (const part of key.split('.')) {
     if (!node || typeof node !== 'object') return undefined;
@@ -168,19 +168,35 @@ function resolve(dict: Messages, key: string): string | PluralForms | undefined 
 }
 
 /**
- * Napis dla klucza. Formy liczby mnogiej wybiera `vars.count`. Ścieżka
- * awaryjna: brak w słowniku języka → polski → sam klucz (widoczny, ale
- * nigdy wyjątek ani pusty element).
+ * Napis z pary słowników (język + polski zapasowy). Wspólne dla runtime
+ * karty i słowników edytorów (editor-localize.ts). Ścieżka awaryjna: brak
+ * w słowniku języka → polski → sam klucz (widoczny, ale nigdy wyjątek ani
+ * pusty element).
  */
-export function localize(src: LangSource, key: MessageKey, vars?: Vars): string {
-  const lang = langOf(src);
-  const entry = resolve(DICTS[lang], key) ?? resolve(pl as Messages, key);
-  if (entry === undefined) return key;
+export function translate(
+  lang: Lang,
+  dict: object,
+  base: object,
+  key: string,
+  fullKey: string,
+  vars?: Vars,
+): string {
+  const entry = resolve(dict, key) ?? resolve(base, key);
+  if (entry === undefined) return fullKey;
   const text =
     typeof entry === 'string'
       ? entry
       : pickPlural(lang, entry, Number(vars?.count ?? 0));
   return vars ? interpolate(text, vars) : text;
+}
+
+/**
+ * Napis dla klucza. Formy liczby mnogiej wybiera `vars.count`. Napisy
+ * edytorów (`editor.*`) są w osobnym słowniku — patrz editor-localize.ts.
+ */
+export function localize(src: LangSource, key: MessageKey, vars?: Vars): string {
+  const lang = langOf(src);
+  return translate(lang, DICTS[lang], pl, key, key, vars);
 }
 
 /**

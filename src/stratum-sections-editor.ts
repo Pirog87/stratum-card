@@ -25,13 +25,8 @@ import { editorSharedStyles } from './editor-shared-styles.js';
 import { entityDomainsForType, retypeSection } from './section-type-change.js';
 import { removeAt, restoreRemoved } from './editor-list-ops.js';
 import { EditorUndoController, renderUndoBar } from './editor-undo.js';
-import {
-  localize,
-  lookup,
-  messages,
-  type LangSource,
-  type MessageKey,
-} from './localize/localize.js';
+import { lookup, messages, type LangSource } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 import { withCode } from './localize/with-code.js';
 
 // Kolejność opcji w dropdownach; etykiety ze słownika (src/localize/).
@@ -67,11 +62,12 @@ const SUMMARY_FIELD_ORDER: Array<Exclude<SummaryField, 'occupancy'>> = [
  */
 function buildSchema(section: RoomSectionConfig, lang: LangSource) {
   const m = messages(lang);
+  const em = editorMessages(lang);
   const entityDomains = entityDomainsForType(section.type);
   const typeOptions = TYPE_ORDER.map((value) => ({
     value,
     // „custom" w dropdownie ma dopisek (HA/HACS) — tytuł sekcji go nie ma.
-    label: value === 'custom' ? m.editor.sections.custom_type : m.sections[value],
+    label: value === 'custom' ? em.sections.custom_type : m.sections[value],
   }));
   const common = [
     {
@@ -101,7 +97,7 @@ function buildSchema(section: RoomSectionConfig, lang: LangSource) {
                 mode: 'dropdown',
                 options: (['cards', 'chips'] as const).map((value) => ({
                   value,
-                  label: m.editor.sections.summary_modes[value],
+                  label: em.sections.summary_modes[value],
                 })),
               },
             },
@@ -127,7 +123,7 @@ function buildSchema(section: RoomSectionConfig, lang: LangSource) {
             mode: 'list',
             options: SUMMARY_FIELD_ORDER.map((value) => ({
               value,
-              label: m.editor.sections.summary_fields[value],
+              label: em.sections.summary_fields[value],
             })),
           },
         },
@@ -183,10 +179,10 @@ function buildSchema(section: RoomSectionConfig, lang: LangSource) {
           select: {
             mode: 'dropdown',
             options: [
-              { value: 'auto', label: m.editor.sections.columns_auto },
+              { value: 'auto', label: em.sections.columns_auto },
               ...[1, 2, 3].map((n) => ({
                 value: n,
-                label: localize(lang, 'editor.sections.columns', { count: n }),
+                label: localizeUi(lang, 'editor.sections.columns', { count: n }),
               })),
             ],
           },
@@ -207,8 +203,8 @@ export class StratumSectionsEditor extends LitElement {
 
   @property({ attribute: false }) public sections: RoomSectionConfig[] = [];
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.hass, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
   }
 
   /**
@@ -504,9 +500,9 @@ export class StratumSectionsEditor extends LitElement {
                       .data=${this._formData(section)}
                       .schema=${buildSchema(section, this.hass)}
                       .computeLabel=${(s: { name: string }) =>
-                        lookup(messages(this.hass).editor.sections.labels, s.name) ?? s.name}
+                        lookup(editorMessages(this.hass).sections.labels, s.name) ?? s.name}
                       .computeHelper=${(s: { name: string }) =>
-                        lookup(messages(this.hass).editor.sections.helpers, s.name) ?? ''}
+                        lookup(editorMessages(this.hass).sections.helpers, s.name) ?? ''}
                       @value-changed=${(ev: CustomEvent<{ value: Partial<RoomSectionConfig> }>) =>
                         this._onFieldChange(idx, ev)}
                     ></ha-form>
@@ -647,7 +643,7 @@ export class StratumSectionsEditor extends LitElement {
           return html`
             <div class="preset-group">
               <div class="preset-category">
-                ${messages(this.hass).editor.sections.categories[cat]}
+                ${editorMessages(this.hass).sections.categories[cat]}
               </div>
               <div class="presets-grid">
                 ${items.map((preset) => this._renderPresetCard(preset))}
@@ -660,11 +656,11 @@ export class StratumSectionsEditor extends LitElement {
   }
 
   private _presetLabel(p: SectionPreset): string {
-    return lookup(messages(this.hass).editor.preset_labels, p.id) ?? p.id;
+    return lookup(editorMessages(this.hass).preset_labels, p.id) ?? p.id;
   }
 
   private _presetHint(p: SectionPreset): string {
-    return lookup(messages(this.hass).editor.preset_hints, p.id) ?? '';
+    return lookup(editorMessages(this.hass).preset_hints, p.id) ?? '';
   }
 
   private _renderPresetCard(preset: SectionPreset): TemplateResult {

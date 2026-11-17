@@ -14,7 +14,8 @@ import type {
 } from './types.js';
 import { SCENE_PRESETS } from './scene-presets.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
-import { localize, lookup, messages, type MessageKey } from './localize/localize.js';
+import { lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 import { effectiveFields } from './tile-data.js';
 import {
   moveField,
@@ -27,7 +28,7 @@ import {
 export type DisplayEditorMode = 'row' | 'tile';
 
 // `label`/`hint` w tablicach poniżej to klucze słownika (src/localize/).
-const FIELD_META: Array<{ key: TileField; icon: string; label: MessageKey }> = [
+const FIELD_META: Array<{ key: TileField; icon: string; label: UiKey }> = [
   { key: 'temperature', icon: 'mdi:thermometer', label: 'editor.fields.temperature' },
   { key: 'humidity', icon: 'mdi:water-percent', label: 'editor.fields.humidity' },
   { key: 'lights', icon: 'mdi:lightbulb-on', label: 'editor.fields.lights' },
@@ -48,7 +49,7 @@ const ASPECT_PRESETS: Array<{ value: string; label: string }> = [
   { value: '2/1', label: '2:1' },
 ];
 
-const COLOR_SWATCHES: Array<{ key: string; color: string; label: MessageKey }> = [
+const COLOR_SWATCHES: Array<{ key: string; color: string; label: UiKey }> = [
   { key: 'amber', color: '#ffc107', label: 'editor.colors.amber' },
   { key: 'green', color: '#4caf50', label: 'editor.colors.green' },
   { key: 'blue', color: '#2196f3', label: 'editor.colors.blue' },
@@ -59,7 +60,7 @@ const COLOR_SWATCHES: Array<{ key: string; color: string; label: MessageKey }> =
   { key: 'pink', color: '#ec407a', label: 'editor.colors.pink' },
 ];
 
-const ICON_POSITIONS: Array<{ value: IconPosition; label: MessageKey; preview: string }> = [
+const ICON_POSITIONS: Array<{ value: IconPosition; label: UiKey; preview: string }> = [
   { value: 'top-left', label: 'editor.display.pos_top_left', preview: '↖' },
   { value: 'top-right', label: 'editor.display.pos_top_right', preview: '↗' },
   { value: 'center', label: 'editor.display.pos_center', preview: '●' },
@@ -70,9 +71,9 @@ const ICON_POSITIONS: Array<{ value: IconPosition; label: MessageKey; preview: s
 
 const NARROW_MODES: Array<{
   value: NonNullable<TileDisplayConfig['narrow_mode']>;
-  label: MessageKey;
+  label: UiKey;
   icon: string;
-  hint: MessageKey;
+  hint: UiKey;
 }> = [
   {
     value: 'fields',
@@ -100,13 +101,13 @@ const NARROW_MODES: Array<{
   },
 ];
 
-const ICON_STYLES: Array<{ value: IconStyle; label: MessageKey; icon: string }> = [
+const ICON_STYLES: Array<{ value: IconStyle; label: UiKey; icon: string }> = [
   { value: 'bubble', label: 'editor.display.icon_bubble', icon: 'mdi:circle-slice-8' },
   { value: 'flat', label: 'editor.display.icon_flat', icon: 'mdi:circle-outline' },
   { value: 'none', label: 'editor.common.none', icon: 'mdi:eye-off-outline' },
 ];
 
-const HOVER_EFFECTS: Array<{ value: HoverEffect; label: MessageKey }> = [
+const HOVER_EFFECTS: Array<{ value: HoverEffect; label: UiKey }> = [
   { value: 'none', label: 'editor.common.none' },
   { value: 'subtle', label: 'editor.display.hover_subtle' },
   { value: 'lift', label: 'editor.display.hover_lift' },
@@ -116,9 +117,9 @@ const HOVER_EFFECTS: Array<{ value: HoverEffect; label: MessageKey }> = [
 /** Presety kształtu wiersza — tylko mode 'row'. */
 const ROW_PRESETS: Array<{
   value: RowPreset;
-  label: MessageKey;
+  label: UiKey;
   icon: string;
-  hint: MessageKey;
+  hint: UiKey;
 }> = [
   {
     value: 'fill',
@@ -156,8 +157,8 @@ export class StratumDisplayEditor extends LitElement {
    */
   @property({ attribute: false }) public uiLang?: string;
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.uiLang, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.uiLang, key, vars);
   }
 
   /** Tryb edytora — `tile` pokazuje wszystkie pola, `row` ukrywa tile-only. */
@@ -667,7 +668,7 @@ export class StratumDisplayEditor extends LitElement {
                       value=${`stratum:${p.id}`}
                       ?selected=${bg === `stratum:${p.id}`}
                     >
-                      ${lookup(messages(this.uiLang).editor.scene_presets, p.id) ?? p.id}
+                      ${lookup(editorMessages(this.uiLang).scene_presets, p.id) ?? p.id}
                     </option>`,
                   )}
                 </optgroup>

@@ -15,7 +15,8 @@ import type {
 import './stratum-scene-editor.js';
 import './stratum-sections-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
-import { langOf, localize, lookup, messages, type Lang } from './localize/localize.js';
+import { langOf, lookup, messages, type Lang } from './localize/localize.js';
+import { editorMessages, localizeUi } from './localize/editor-localize.js';
 
 interface FormSchemaItem {
   name: string;
@@ -65,7 +66,7 @@ const buildSchema = (lang: Lang): readonly FormSchemaItem[] => [
   {
     type: 'expandable',
     name: '',
-    title: localize(lang, 'editor.room_card.merge'),
+    title: localizeUi(lang, 'editor.room_card.merge'),
     icon: 'mdi:link-variant',
     schema: [
       {
@@ -77,7 +78,7 @@ const buildSchema = (lang: Lang): readonly FormSchemaItem[] => [
   {
     type: 'expandable',
     name: '',
-    title: localize(lang, 'editor.room_card.sections_auto'),
+    title: localizeUi(lang, 'editor.room_card.sections_auto'),
     icon: 'mdi:view-dashboard-outline',
     schema: [
       {
@@ -113,10 +114,10 @@ export class StratumRoomCardEditor extends LitElement {
   }
 
   private _computeLabel = (schema: FormSchemaItem): string =>
-    lookup(messages(this.hass).editor.room_card.labels, schema.name) ?? schema.name;
+    lookup(editorMessages(this.hass).room_card.labels, schema.name) ?? schema.name;
 
   private _computeHelper = (schema: FormSchemaItem): string =>
-    lookup(messages(this.hass).editor.room_card.helpers, schema.name) ?? '';
+    lookup(editorMessages(this.hass).room_card.helpers, schema.name) ?? '';
 
   private _valueChanged(ev: CustomEvent<{ value: StratumRoomCardConfig }>): void {
     ev.stopPropagation();
@@ -175,9 +176,9 @@ export class StratumRoomCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:floor-plan'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>${localize(this.hass, 'editor.room_card.room')}</h3>
+            <h3>${localizeUi(this.hass, 'editor.room_card.room')}</h3>
             <p class="stratum-panel-hint">
-              ${localize(this.hass, 'editor.room_card.room_hint')}
+              ${localizeUi(this.hass, 'editor.room_card.room_hint')}
             </p>
           </div>
         </div>
@@ -199,9 +200,9 @@ export class StratumRoomCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:view-dashboard-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>${localize(this.hass, 'editor.room_card.sections')}</h3>
+            <h3>${localizeUi(this.hass, 'editor.room_card.sections')}</h3>
             <p class="stratum-panel-hint">
-              ${localize(this.hass, 'editor.room_card.sections_hint')}
+              ${localizeUi(this.hass, 'editor.room_card.sections_hint')}
             </p>
           </div>
         </div>
@@ -220,9 +221,9 @@ export class StratumRoomCardEditor extends LitElement {
             <ha-icon .icon=${'mdi:palette-outline'}></ha-icon>
           </span>
           <div class="stratum-panel-title">
-            <h3>${localize(this.hass, 'editor.room_card.scenes')}</h3>
+            <h3>${localizeUi(this.hass, 'editor.room_card.scenes')}</h3>
             <p class="stratum-panel-hint">
-              ${localize(this.hass, 'editor.room_card.scenes_hint')}
+              ${localizeUi(this.hass, 'editor.room_card.scenes_hint')}
             </p>
           </div>
         </div>

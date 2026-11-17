@@ -11,7 +11,7 @@ import type {
   StratumRoomCardConfig,
 } from './types.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
-import { localize, type MessageKey } from './localize/localize.js';
+import { localizeUi, type UiKey } from './localize/editor-localize.js';
 
 @customElement('stratum-popup-header-editor')
 export class StratumPopupHeaderEditor extends LitElement {
@@ -23,8 +23,8 @@ export class StratumPopupHeaderEditor extends LitElement {
   /** Gotowy config karty pokoju do mini-podglądu (undefined = bez podglądu). */
   @property({ attribute: false }) public previewConfig?: StratumRoomCardConfig;
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.hass, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
   }
 
   private _update(patch: Partial<PopupHeaderConfig>): void {

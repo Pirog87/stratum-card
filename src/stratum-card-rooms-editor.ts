@@ -47,7 +47,8 @@ import './stratum-chips-editor.js';
 import './stratum-lights-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ROW_UI_ACTIONS } from './tap-action.js';
-import { localize, lookup, messages, type MessageKey } from './localize/localize.js';
+import { lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 import { withCode } from './localize/with-code.js';
 
 // Etykiety, podpowiedzi i tytuły bloków: grupa `editor.rooms` słownika.
@@ -81,15 +82,15 @@ export class StratumCardRoomsEditor extends LitElement {
     }
   }
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.hass, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
   }
 
   private _computeRoomLabel = (schema: { name: string }): string =>
-    lookup(messages(this.hass).editor.rooms.labels, schema.name) ?? schema.name;
+    lookup(editorMessages(this.hass).rooms.labels, schema.name) ?? schema.name;
 
   private _computeRoomHelper = (schema: { name: string }): string =>
-    lookup(messages(this.hass).editor.rooms.helpers, schema.name) ?? '';
+    lookup(editorMessages(this.hass).rooms.helpers, schema.name) ?? '';
 
   /** Schema części „Ogólne" widoku szczegółu. */
   private _generalSchema() {
@@ -334,7 +335,7 @@ export class StratumCardRoomsEditor extends LitElement {
         },
       },
     ];
-    const labels = messages(this.hass).editor.rooms.field_labels;
+    const labels = editorMessages(this.hass).rooms.field_labels;
     return html`
       <details class="stratum-collapsible">
         <summary>
@@ -878,7 +879,7 @@ export class StratumCardRoomsEditor extends LitElement {
           (i) => i.section,
           (item, idx) => {
             const icon = POPUP_GROUP_ICON[item.section];
-            const title = messages(this.hass).editor.rooms.groups[item.section];
+            const title = editorMessages(this.hass).rooms.groups[item.section];
             const hidden = isBlockHidden(room, item.section);
             return html`
               <details class="popup-group ${hidden ? 'hidden-group' : ''}">

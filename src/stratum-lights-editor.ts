@@ -17,7 +17,8 @@ import type {
 import { getEntitiesInArea, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ENTITY_UI_ACTIONS } from './tap-action.js';
-import { localize, lookup, messages, type MessageKey } from './localize/localize.js';
+import { lookup } from './localize/localize.js';
+import { editorMessages, localizeUi, type UiKey } from './localize/editor-localize.js';
 
 const SEPARATOR_FIELDS_SCHEMA = [{ name: 'label', selector: { text: {} } }];
 
@@ -32,7 +33,7 @@ export type EntityListSource =
 
 const SOURCE_META: Record<
   EntityListSource,
-  { domain: string; autoLabel: MessageKey; emptyHint: MessageKey; fallbackIcon: string }
+  { domain: string; autoLabel: UiKey; emptyHint: UiKey; fallbackIcon: string }
 > = {
   light_groups: {
     domain: 'light',
@@ -239,13 +240,13 @@ export class StratumLightsEditor extends LitElement {
     return this._meta.fallbackIcon;
   }
 
-  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
-    return localize(this.hass, key, vars);
+  private _t(key: UiKey, vars?: Record<string, string | number>): string {
+    return localizeUi(this.hass, key, vars);
   }
 
   protected render(): TemplateResult {
     const items = this._workingItems();
-    const m = messages(this.hass).editor.entity_list;
+    const m = editorMessages(this.hass).entity_list;
     const auto = this._isAuto;
     return html`
       ${auto && items.length > 0
