@@ -127,15 +127,20 @@ export const roomCardStyles = css`
        2. Górny padding daje rytm: nad nagłówkiem 18 (gap .body) + 8 = 26 px,
           pod nim dalej 8. Nagłówek przestaje wisieć w połowie drogi między
           sekcjami i zaczyna otwierać swoją. Dolny padding jest zdejmowany
-          ujemnym marginesem, żeby odstęp do treści nie urósł. */
+          ujemnym marginesem, żeby odstęp do treści nie urósł.
+       Przyklejony nagłówek nie może wjechać pod × ani pod uchwyt arkusza
+       popupu: master-switch świateł stoi przy prawej krawędzi i tap w niego
+       trafiał w × (popup się zamykał bez komendy) albo w uchwyt (nic się nie
+       działo). Stąd offset od góry i rezerwa z prawej — oba ustawia tylko
+       popup, na dashboardzie zostają zerami. */
     .section-header {
       position: var(--stratum-section-sticky, static);
-      top: 0;
+      top: var(--stratum-section-sticky-top, 0px);
       z-index: 2;
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 0 6px;
+      padding: 8px var(--stratum-room-header-pad-right, 0px) 6px 0;
       margin-bottom: -6px;
       background: var(--stratum-surface-base);
       font-size: 12px;
