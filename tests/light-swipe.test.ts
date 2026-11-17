@@ -15,6 +15,21 @@ interface Call {
 }
 
 /** Fałszywy HA: zapisuje wywołania; `echo()` nanosi je na stany jak prawdziwy. */
+
+/**
+ * Rejestr wyświetlania dla fałszywego HA: sterowniki główne WLED (stan z
+ * `group_entities`, nazwa „wled") dostają platform: 'wled' — tylko takie
+ * encje karta uznaje za bramkę zasilania segmentów.
+ */
+function registryFor(initial: HassEntity[]): Record<string, { entity_id: string; platform?: string }> {
+  return Object.fromEntries(
+    initial.map((s) => [
+      s.entity_id,
+      { entity_id: s.entity_id, platform: s.entity_id.includes('wled') ? 'wled' : 'mqtt' },
+    ]),
+  );
+}
+
 function fakeHa(initial: HassEntity[]) {
   const states: Record<string, HassEntity> = {};
   for (const s of initial) states[s.entity_id] = s;
@@ -22,6 +37,7 @@ function fakeHa(initial: HassEntity[]) {
   let hold: Array<() => void> | undefined;
   const hass = {
     states,
+    entities: registryFor(initial),
     callService: (
       _domain: string,
       service: string,

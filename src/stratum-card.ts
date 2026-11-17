@@ -79,7 +79,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.108.2';
+const VERSION = '1.109.0';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -722,11 +722,26 @@ export class StratumCard extends LitElement {
    * wypada ze stosu (jego wpis zostaje w historii — mniejsze zło niż
    * zamknięcie nie tego popupu).
    */
+  /**
+   * Popupy w trakcie zamykania przez history.back() — do nadejścia popstate.
+   * Bez tego podwójne × (albo dwa Escape pod rząd) wołało back() dwa razy:
+   * pierwsze zamykało popup, drugie wyrzucało z dashboardu na poprzedni
+   * widok. Bezpiecznik 500 ms domyka popup, gdyby popstate nie przyszło.
+   */
+  private _closing = new Set<GuardKind>();
+
   private _consumeBackGuard(kind: GuardKind): boolean {
+    if (this._closing.has(kind)) return true;
     const top = this._guards[this._guards.length - 1];
     if (top?.kind === kind) {
+      this._closing.add(kind);
       this._selfBack = true;
       window.history.back(); // popstate zamknie popup
+      window.setTimeout(() => {
+        if (!this._closing.delete(kind)) return;
+        if (kind === 'room' && this._popupRoom) this._closeRoomPopupNow();
+        if (kind === 'chip' && this._popupChip) this._closeChipListNow();
+      }, 500);
       return true;
     }
     const i = this._guards.map((g) => g.kind).lastIndexOf(kind);
@@ -738,6 +753,7 @@ export class StratumCard extends LitElement {
   }
 
   private _closeChipListNow(): void {
+    this._closing.delete('chip');
     this._popupChip = undefined;
   }
 
@@ -1976,6 +1992,7 @@ export class StratumCard extends LitElement {
   }
 
   private _closeRoomPopupNow(): void {
+    this._closing.delete('room');
     this._popupRoom = undefined;
     this._releaseRoomEscape?.();
     this._releaseRoomEscape = undefined;

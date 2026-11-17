@@ -165,7 +165,21 @@ describe('evaluateChip', () => {
       entity('light.wled', 'off', { group_entities: ['light.seg1', 'light.seg2'] }),
       entity('light.seg1', 'on'),
       entity('light.seg2', 'on'),
-    ]);
+    ], { 'light.wled': { platform: 'wled' } });
     expect(evaluateChip(hass, getEntitiesInArea(hass, 'pokoj'), { type: 'lights' } as ChipConfig, templates).label).toBe('0');
+  });
+
+  it('grupa podgrupy spoza strefy nie dubluje żarówek (przegląd v1.109.0)', () => {
+    const states = [
+      entity('light.kuchnia', 'on', { entity_id: ['light.blat'] }),
+      entity('light.b1', 'on'),
+      entity('light.b2', 'on'),
+    ];
+    const hass = home(states);
+    // Podgrupa „blat" bez strefy — jest w stanach, nie w rejestrze strefy.
+    (hass.states as Record<string, HassEntity>)['light.blat'] = entity('light.blat', 'on', {
+      entity_id: ['light.b1', 'light.b2'],
+    });
+    expect(ids(countableLights(hass, getEntitiesInArea(hass, 'pokoj')))).toEqual(['light.b1', 'light.b2']);
   });
 });

@@ -15,12 +15,28 @@ import { entity } from './helpers.js';
 
 interface Call { service: string; ids: string[] }
 
+
+/**
+ * Rejestr wyświetlania dla fałszywego HA: sterowniki główne WLED (stan z
+ * `group_entities`, nazwa „wled") dostają platform: 'wled' — tylko takie
+ * encje karta uznaje za bramkę zasilania segmentów.
+ */
+function registryFor(initial: HassEntity[]): Record<string, { entity_id: string; platform?: string }> {
+  return Object.fromEntries(
+    initial.map((s) => [
+      s.entity_id,
+      { entity_id: s.entity_id, platform: s.entity_id.includes('wled') ? 'wled' : 'mqtt' },
+    ]),
+  );
+}
+
 function ha(initial: HassEntity[]) {
   const states: Record<string, HassEntity> = {};
   for (const s of initial) states[s.entity_id] = s;
   const calls: Call[] = [];
   const hass = {
     states,
+    entities: registryFor(initial),
     callService: (_d: string, service: string, _data: unknown, target?: { entity_id?: string | string[] }) => {
       calls.push({ service, ids: ([] as string[]).concat(target?.entity_id ?? []) });
       return Promise.resolve();
@@ -238,5 +254,30 @@ describe('sterownik WLED (group_entities) jako bramka zasilania segmentów', () 
       { service: 'turn_on', ids: ['light.wled_main'] },
       { service: 'turn_on', ids: ['light.seg1'] },
     ]);
+  });
+});
+
+describe('bramka zasilania tylko dla WLED (przegląd v1.109.0)', () => {
+  it('grupa pokoju z innej integracji (group_entities) nie jest bramką', () => {
+    const states: Record<string, HassEntity> = {
+      'light.salon_room': entity('light.salon_room', 'off', { group_entities: ['light.b1', 'light.b2'] }),
+      'light.b1': entity('light.b1', 'off', { supported_color_modes: ['brightness'] }),
+      'light.b2': entity('light.b2', 'off', { supported_color_modes: ['brightness'] }),
+    };
+    const calls: Call[] = [];
+    const hass = {
+      states,
+      entities: {
+        'light.salon_room': { entity_id: 'light.salon_room', platform: 'hue' },
+        'light.b1': { entity_id: 'light.b1', platform: 'hue' },
+        'light.b2': { entity_id: 'light.b2', platform: 'hue' },
+      },
+      callService: (_d: string, service: string, _x: unknown, target?: { entity_id?: string | string[] }) => {
+        calls.push({ service, ids: ([] as string[]).concat(target?.entity_id ?? []) });
+        return Promise.resolve();
+      },
+    } as unknown as HomeAssistant;
+    tapPower(hass, 'light.b1');
+    expect(calls).toEqual([{ service: 'turn_on', ids: ['light.b1'] }]);
   });
 });

@@ -25,7 +25,7 @@ import { runTapAction } from './tap-action.js';
 import { buildDefaultCustomConfig, mergeCustomTileConfig } from './custom-cards.js';
 import { lightColorOf } from './tile-data.js';
 import { groupMemberIds } from './area-entities.js';
-import { roomLevelFromHass } from './light-dimming.js';
+import { expandLightIds, lightControllerOf, roomLevelFromHass } from './light-dimming.js';
 import {
   effectiveState,
   effectiveView,
@@ -492,6 +492,16 @@ export class StratumRoomTile extends LitElement {
     if (members) {
       for (const m of members) {
         if (prev.states?.[m] !== next.states?.[m]) return true;
+      }
+    }
+    // Segment WLED: zgaszenie/zapalenie sterownika z zewnątrz (automatyzacja,
+    // aplikacja WLED) nie zmienia stanu segmentu w HA, a zmienia to, co kafel
+    // pokazuje i co zrobi tapnięcie. Dla grupy — sterowniki jej segmentów.
+    if (this.entity.startsWith('light.')) {
+      const leaves = members ? expandLightIds(next, [this.entity]) : [this.entity];
+      for (const leaf of leaves) {
+        const c = lightControllerOf(next, leaf);
+        if (c && prev.states?.[c] !== next.states?.[c]) return true;
       }
     }
     return false;

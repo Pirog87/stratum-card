@@ -309,11 +309,25 @@ export function countableLights(
 ): HassEntityRegistryEntry[] {
   const pool = filterByDomain(filterPrimary(hass, entries), 'light');
   const inPool = new Set(pool.map((e) => e.entity_id));
-  return pool.filter((e) => {
-    const members = groupMemberIds(hass.states?.[e.entity_id]);
-    if (!members) return true;
-    return !members.some((m) => inPool.has(m));
-  });
+  // Grupa odpada, gdy w puli jest KTÓRYKOLWIEK jej potomek — także przez
+  // podgrupę spoza strefy (grupa „kuchnia" → podgrupa „blat" → żarówki
+  // kuchni). Sprawdzanie tylko bezpośrednich członków liczyło takie żarówki
+  // podwójnie. Głębokość i odwiedzone chronią przed cyklami.
+  const hasPooledDescendant = (id: string): boolean => {
+    const seen = new Set<string>([id]);
+    const walk = (cur: string, depth: number): boolean => {
+      const members = groupMemberIds(hass.states?.[cur]);
+      if (!members || depth > 6) return false;
+      for (const m of members) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        if (inPool.has(m) || walk(m, depth + 1)) return true;
+      }
+      return false;
+    };
+    return walk(id, 0);
+  };
+  return pool.filter((e) => !hasPooledDescendant(e.entity_id));
 }
 
 /**

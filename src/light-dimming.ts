@@ -195,10 +195,17 @@ function lightIds(hass: HomeAssistant): string[] {
 
 /** Segmenty sterownika WLED albo `undefined`, gdy encja nie jest sterownikiem. */
 function controllerSegments(hass: HomeAssistant, id: string): string[] | undefined {
+  // Bramką zasilania jest WYŁĄCZNIE sterownik główny WLED — jego jasność
+  // mnoży się przez jasność segmentów, a segment nie zapali taśmy przy
+  // zgaszonym sterowniku. Inne integracje też wystawiają `group_entities`
+  // (np. grupy pokoi Hue), ale to zwykłe grupy: potraktowane jak bramka,
+  // tapnięcie jednej żarówki włączałoby cały pokój. Bez rejestru (start
+  // aplikacji, testy) nie zgadujemy — fałszywa bramka wysyła prawdziwe
+  // komendy do całej grupy, więc to droższa pomyłka niż jej brak.
+  if (hass.entities?.[id]?.platform !== 'wled') return undefined;
   const attrs = hass.states?.[id]?.attributes;
   if (!attrs) return undefined;
   if (Array.isArray(attrs.entity_id)) return undefined;
-  if (hass.entities?.[id]?.platform === 'group') return undefined;
   const members = attrs.group_entities;
   if (!Array.isArray(members) || members.length === 0) return undefined;
   return members.filter((m): m is string => typeof m === 'string');

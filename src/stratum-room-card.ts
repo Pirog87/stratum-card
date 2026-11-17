@@ -1694,7 +1694,9 @@ export class StratumRoomCard extends LitElement {
     let featured: HassEntityRegistryEntry | undefined;
     if (section.entity) {
       featured = items.find((e) => e.entity_id === section.entity);
-      if (!featured && hass.states?.[section.entity]) {
+      // Z listy mediów (overrides): odtwarzacz ukryty albo nieobecny na liście
+      // nie może wrócić jako główny — lista decyduje, co jest widoczne.
+      if (!featured && !overrides && hass.states?.[section.entity]) {
         featured = { entity_id: section.entity } as HassEntityRegistryEntry;
       }
     }
@@ -1939,7 +1941,8 @@ export class StratumRoomCard extends LitElement {
     switch (field) {
       case 'motion':
       case 'occupancy': {
-        const on = filterBinarySensorDeviceClass(hass, entries, field).some(
+        // Bez diagnostycznych/konfiguracyjnych — jak wiersz i chip ruchu.
+        const on = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), field).some(
           (e) => hass.states?.[e.entity_id]?.state === 'on',
         );
         return mk('Obecność', 'mdi:motion-sensor', on ? 'aktywna' : 'brak', on, '#4caf50');
@@ -1947,7 +1950,9 @@ export class StratumRoomCard extends LitElement {
       case 'temperature':
       case 'humidity': {
         const cls = field;
-        const entry = entries.find(
+        // Pierwszy czujnik pierwszoplanowy — wewnętrzna temperatura wtyczki
+        // (encja diagnostyczna) nie jest temperaturą pokoju.
+        const entry = filterPrimary(hass, entries).find(
           (e) =>
             e.entity_id.startsWith('sensor.') &&
             hass.states?.[e.entity_id]?.attributes?.device_class === cls,

@@ -26,7 +26,16 @@ export interface EscapeEventLike {
  * więc nie łapiemy się sami.
  */
 export function isFromForeignDialog(pathNames: readonly string[]): boolean {
-  return pathNames.some((n) => n === 'dialog' || n.endsWith('-dialog'));
+  // Ścieżka zdarzenia idzie od elementu najgłębszego na zewnątrz. Dialog
+  // jest „obcy" tylko wtedy, gdy leży GŁĘBIEJ niż warstwa Stratum (more-info
+  // otwarte nad popupem). Gdy cała karta siedzi w dialogu — podgląd edytora
+  // HA, popup browser_mod — dialog jest dalej niż element Stratum i Escape
+  // ma zamykać nasz popup, a nie przepadać.
+  for (const n of pathNames) {
+    if (n.startsWith('stratum-')) return false;
+    if (n === 'dialog' || n.endsWith('-dialog')) return true;
+  }
+  return false;
 }
 
 /** Czy Escape ma trafić do warstw Stratum. */

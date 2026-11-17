@@ -4,6 +4,70 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.109.0] — 2026-11-17
+
+Poprawki z pełnego audytu karty — poprawność działania.
+
+### Fixed (światła i liczniki)
+- **Ukryte encje i diody statusu nie liczą się jako światła.** Karta
+  sprawdzała pole rejestru, którego HA w ogóle nie wysyła, więc ukrycie
+  encji niczego nie zmieniało. Teraz encje ukryte w HA znikają z karty, a
+  encje konfiguracyjne/diagnostyczne (np. dioda LED punktu dostępowego
+  UniFi) nie są liczone jako światła, ruch, okna, drzwi ani temperatura
+  pokoju (wewnętrzna temperatura wtyczki 41 °C nie jest już temperaturą
+  pokoju). Dotyczy licznika wiersza, chipa świateł i jego listy, belki
+  „Smugi", poświaty nagłówka, mini-włącznika, gestu jasności i podsumowania
+  popupu. Chip niskiej baterii, alarmy (wyciek, dym, gaz, problem, sabotaż)
+  i chipy filtrujące dalej widzą encje diagnostyczne; jawne
+  `field_entities` działają bez filtrów.
+- **Grupa świateł nie liczy się podwójnie**, także przez podgrupę spoza
+  strefy. Grupa, której członkowie są ukryci, liczy się raz.
+- **Sterownik główny WLED** (taśma z kilkoma segmentami): gdy jest
+  zgaszony, segmenty pokazują się jako zgaszone, a włącznik pokoju, gest i
+  kafel segmentu zapalają też sterownik (bez zmiany jasności). Dawniej po
+  nocnym „zgaś wszystko" taśma zostawała ciemna, a wiersz pokazywał, że
+  świeci. Bramką jest wyłącznie sterownik platformy WLED — grupy innych
+  integracji (np. pokoje Hue) działają jak zwykłe grupy.
+- Po zgaszeniu włącznikiem samej diody/przekaźnika przeciągnięcie po
+  ciemnym wierszu zapala żarówki zamiast „przywracać" diodę.
+
+### Fixed (popupy i nawigacja)
+- **Tap w chip nagłówka nie zwija i nie rozwija karty** (styl klasyczny).
+- **Zamknięcie okna szczegółów HA nie zamyka popupu Stratum.** „Wstecz" na
+  Androidzie, × i Escape w oknie more-info wracają do listy/popupu, a
+  dopiero następne „wstecz" go zamyka. Podwójne × nie wyrzuca już z
+  dashboardu. Escape zamyka tylko najwyższą warstwę (lista nad popupem
+  pokoju zamyka samą listę) i działa także, gdy karta stoi w podglądzie
+  edytora albo w popupie browser_mod.
+- **Główny włącznik świateł w przyklejonym nagłówku sekcji** nie chowa się
+  już pod × i uchwytem arkusza (tap zamykał popup).
+
+### Fixed (widok pokoju)
+- **Edycja listy mediów nie zabiera zakładek głośników**, przycisków
+  „Grupuj" i „Źródło" ani ukrywania wyłączonych. Lista decyduje, które
+  odtwarzacze widać i w jakiej kolejności; nazwy, ikony i akcje z edytora
+  trafiają na zakładki i kafle. Ukryty odtwarzacz nie wraca jako główny.
+- **„Ukryj" w „Dodatkowe sekcje" chowa bloki Światła, Rolety, Media i
+  Sceny.** Usunięta martwa opcja `group_by`.
+- **Literówka w `sections`** (np. `light` zamiast `lights`) nie daje pustej
+  karty — błędny wpis jest pomijany z ostrzeżeniem w konsoli.
+
+### Fixed (akcje i kafle)
+- **Akcje z edytora akcji HA działają:** „Wykonaj akcję" (perform-action),
+  „Przełącz" (sceny i skrypty uruchamia, przyciski naciska, zamki
+  zamyka/otwiera), „Więcej informacji" (encja kafla, chipa albo sceny),
+  `call-service` z `data`. Akcja, której nie da się wykonać, nie zostawia
+  martwego kafla ani chipa — wraca domyślne zachowanie. Edytor nie oferuje
+  już akcji, które w danym miejscu nie mają sensu.
+- **Nadpisanie ikony i akcji kliknięcia** z edytora listy działa w każdym
+  trybie kafla (dotąd tylko rail/tint), też pod klawiaturą i w kartach
+  `custom:*`. Pasek scen pokazuje potwierdzenie tylko po wykonanej akcji.
+
+### Changed (płynność)
+- Lista encji pokoju, filtr encji pierwszoplanowych i podzbiór czujników
+  binarnych są zapamiętywane do zmiany rejestru — render wiersza po
+  zmianie stanu kosztuje mniej niż w v1.108.2.
+
 ## [1.108.2] — 2026-11-17
 
 ### Changed (obciążenie w tle — mniej pracy, gdy nic na ekranie się nie zmienia)

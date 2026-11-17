@@ -70,3 +70,12 @@ describe('EscapeLayers', () => {
     expect(new EscapeLayers().handle(esc())).toBe(false);
   });
 });
+
+describe('dialog nadrzędny karty (przegląd v1.109.0)', () => {
+  it('karta w podglądzie edytora: dialog za warstwą Stratum nie blokuje Escape', () => {
+    expect(isFromForeignDialog(['div', 'stratum-room-card', 'div', 'stratum-card', 'hui-card-preview', 'ha-dialog', 'hui-dialog-edit-card', 'body'])).toBe(false);
+  });
+  it('more-info nad popupem: dialog przed warstwą Stratum blokuje', () => {
+    expect(isFromForeignDialog(['input', 'ha-more-info-dialog', 'home-assistant', 'body'])).toBe(true);
+  });
+});
