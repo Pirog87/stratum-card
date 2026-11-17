@@ -49,6 +49,9 @@ export interface SwipeEnv {
   clearTimer?: (handle: unknown) => void;
 }
 
+/** Pokój bez ściemnialnych świateł: puszczenie poniżej tej pozycji gasi. */
+const RELAY_OFF_BELOW = 50;
+
 /** Ile ms nasza komenda wygrywa z (być może nieświeżym) stanem z `hass`. */
 const OVERLAY_TTL_MS = 5000;
 /** Jak długo pamiętamy zestaw zgaszony suwakiem (do przywrócenia). */
@@ -231,7 +234,12 @@ export class LightSwipe {
       sentAny: false,
     });
 
-    if (lit.scaled.length > 0 || lit.switchOnly.length > 0) {
+    // Pokój „świeci", gdy świeci coś ściemnialnego — albo gdy w ogóle nie ma
+    // ściemnialnych, a świecą przekaźniki (wtedy suwak działa jak włącznik).
+    // Sam świecący przekaźnik / dioda AP przy zgaszonych żarówkach to dla
+    // suwaka ciemny pokój: przeciągnięcie ma przywrócić albo zapalić żarówki.
+    const relayOnlyRoom = lit.dimmableTotal === 0;
+    if (lit.scaled.length > 0 || (relayOnlyRoom && lit.switchOnly.length > 0)) {
       // Coś świeci — pamięć „co było zgaszone" jest już nieaktualna.
       memory.delete(this._key);
       const level = roomLevel(lit) ?? 0;
@@ -252,7 +260,9 @@ export class LightSwipe {
       const own = new Set(leaves);
       const memScaled = mem.scaled.filter((l) => own.has(l.id));
       const memSwitch = mem.switchOnly.filter((id) => own.has(id));
-      const stillOff = [...memScaled.map((l) => l.id), ...memSwitch].every(
+      // Warunek „nic z zestawu nie świeci" liczymy po żarówkach; przekaźnik,
+      // który ktoś zostawił włączony, nie blokuje przywrócenia reszty.
+      const stillOff = (memScaled.length > 0 ? memScaled.map((l) => l.id) : memSwitch).every(
         (id) => !view(id).on,
       );
       const scaled = memScaled.filter((l) => view(l.id).available);
@@ -345,7 +355,10 @@ export class LightSwipe {
 
     const stillOn = (id: string): boolean => viewWithOverlay(hass, id, now).on;
 
-    if (g.t <= OFF_THRESHOLD) {
+    // Pokój z samymi przekaźnikami: nie ma czego ściemniać, więc suwak jest
+    // włącznikiem — puszczenie poniżej połowy gasi, wyżej zostawia włączone.
+    const offAt = g.scaled.length === 0 ? RELAY_OFF_BELOW : OFF_THRESHOLD;
+    if (g.t <= offAt) {
       const ids = [...g.scaled.map((l) => l.id), ...g.switchOnly].filter(stillOn);
       if (ids.length === 0) return { outcome: 'noop', level: 0 };
       // Zapamiętujemy wartości SPRZED gestu, nie ściemnione po drodze.

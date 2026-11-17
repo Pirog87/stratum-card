@@ -47,9 +47,13 @@ export function structureChanged(
 }
 
 /**
- * Czy `states` jest puste — bez alokacji. `Object.keys(states).length`
- * budowało tablicę kilku tysięcy kluczy przy każdym renderze tylko po to,
- * żeby porównać jej długość z zerem.
+ * Czy `states` jest puste.
+ *
+ * UWAGA: to NIE jest O(1). HA buduje `states` na nowo przy każdym zdarzeniu
+ * (spread kilku tysięcy kluczy → obiekt w trybie słownikowym), a dla takich
+ * obiektów V8 zbiera i sortuje wszystkie klucze, zanim `for…in` zwróci
+ * pierwszy (~0,5 ms przy 5 tys. encji, na telefonie kilka ms). Wołać tylko
+ * do pierwszego niepustego wyniku — patrz `statesReadyLatch`.
  */
 export function statesEmpty(states: HomeAssistant['states'] | undefined): boolean {
   if (!states) return true;
@@ -71,6 +75,24 @@ export function watchedStateChanged(
     if (a[id] !== b[id]) return true;
   }
   return false;
+}
+
+/**
+ * Zatrzask „HA dosłał stany". Po pierwszym niepustym `states` już nigdy
+ * nie liczy — HA nie opróżnia stanów po starcie (także po reconnect), a
+ * sprawdzanie przy każdej zmianie stanu kosztowało pełne przejście po
+ * kluczach w każdej karcie piętra.
+ */
+export function statesReadyLatch(): (
+  states: HomeAssistant['states'] | undefined,
+) => boolean {
+  let ready = false;
+  return (states) => {
+    if (ready) return true;
+    if (statesEmpty(states)) return false;
+    ready = true;
+    return true;
+  };
 }
 
 const ENTITY_ID_RE = /^[a-z][a-z0-9_]*\.[a-z0-9_]+$/;

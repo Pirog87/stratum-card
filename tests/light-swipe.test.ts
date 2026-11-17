@@ -311,16 +311,49 @@ describe('LightSwipe — zgaszenie i przywracanie', () => {
     expect(allIds(ha.calls).sort()).toEqual(['light.a', 'light.b']);
   });
 
-  it('świecą same przekaźniki: środek suwaka nic nie robi, zero je gasi', () => {
-    const ha = fakeHa([relay('light.r1'), relay('light.r2'), dark('light.c')]);
-    const ids = ['light.r1', 'light.r2', 'light.c'];
+  it('pokój z samymi przekaźnikami: suwak jak włącznik — poniżej połowy gasi', () => {
+    const ha = fakeHa([relay('light.r1'), relay('light.r2')]);
+    const ids = ['light.r1', 'light.r2'];
     const sw = new LightSwipe('k', { hass: () => ha.hass });
     expect(sw.start(ids)).toEqual({ level: 100, active: true });
-    expect(sw.end(50)).toEqual({ outcome: 'noop', level: 100 });
+    expect(sw.end(70)).toEqual({ outcome: 'noop', level: 100 });
     expect(ha.calls).toEqual([]);
     sw.start(ids);
-    expect(sw.end(0).outcome).toBe('off');
+    expect(sw.end(30).outcome).toBe('off');
     expect(ha.calls).toEqual([{ service: 'turn_off', data: {}, ids: ['light.r1', 'light.r2'] }]);
+  });
+
+  it('zgłoszony błąd: świeci tylko dioda AP, żarówki zgaszone — suwak zapala żarówki zamiast odskakiwać', () => {
+    const ha = fakeHa([relay('light.ap_led'), dark('light.a'), dark('light.b')]);
+    const ids = ['light.ap_led', 'light.a', 'light.b'];
+    const sw = new LightSwipe('korytarz', { hass: () => ha.hass });
+    // Pokój jest dla suwaka ciemny (start od 0), nie „100%".
+    expect(sw.start(ids)).toEqual({ level: 0, active: true });
+    sw.move(40);
+    const res = sw.end(40);
+    expect(res.outcome).toBe('set');
+    expect(ha.calls[0]).toEqual({ service: 'turn_on', data: { brightness: 102, transition: 0.4 }, ids: ['light.a', 'light.b'] });
+  });
+
+  it('dioda AP świeci, a suwak zgasił żarówki — kolejne przeciągnięcie przywraca je', () => {
+    const ha = fakeHa([relay('light.ap_led'), dim('light.a', 200), dim('light.b', 100)]);
+    const ids = ['light.ap_led', 'light.a', 'light.b'];
+    const sw = new LightSwipe('korytarz', { hass: () => ha.hass });
+    sw.start(ids);
+    sw.end(0);
+    ha.echo();
+    // Dioda AP wraca (ktoś ją włączył / nie gaśnie) — żarówki dalej zgaszone.
+    ha.set('light.ap_led', { state: 'on' });
+    ha.calls.length = 0;
+    expect(sw.start(ids)).toEqual({ level: 0, active: true });
+    // Puszczenie na zapamiętanym poziomie (średnia 200 i 100 = 58,8%)
+    // przywraca dokładnie dawne wartości; wyżej/niżej — te same proporcje.
+    const remembered = (100 * (200 + 100)) / (255 * 2);
+    sw.move(remembered);
+    sw.end(remembered);
+    const byId = new Map(ha.calls.flatMap((c) => c.ids.map((id) => [id, c] as const)));
+    expect(byId.get('light.a')!.data.brightness).toBe(200);
+    expect(byId.get('light.b')!.data.brightness).toBe(100);
   });
 });
 

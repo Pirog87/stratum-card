@@ -4,6 +4,25 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.107.2] — 2026-11-17
+
+### Fixed
+- **Pokój „na 100%", którego nie dało się ściemnić.** Gdy żarówki były
+  zgaszone, a świeciło coś bez regulacji jasności — np. dioda punktu
+  dostępowego UniFi (HA pokazuje ją jako światło) albo przekaźnik — pasek
+  stał na 100%, a przeciągnięcie po puszczeniu wracało na 100%. Teraz pokój,
+  który ma ściemnialne światła, jest oceniany wyłącznie po nich: przy
+  zgaszonych żarówkach jest dla suwaka ciemny, a przeciągnięcie przywraca
+  ostatni zestaw albo zapala żarówki (jak przy zupełnie ciemnym pokoju).
+- **Pokój z samymi przekaźnikami** (np. spiżarnia): suwak działa jak
+  włącznik — puszczenie poniżej połowy gasi, wyżej zostawia włączone.
+
+### Changed (płynność)
+- Sprawdzenie „czy HA dosłał już stany" przeglądało przy każdej zmianie
+  stanu w domu wszystkie ~5 tys. kluczy w każdej karcie piętra. Teraz liczy
+  się raz, do pierwszego wyniku (zmiana stanu obcej encji: ok. 1,4 → 0,5 ms
+  na komputerze, kilka ms mniej na telefonie).
+
 ## [1.107.1] — 2026-11-17
 
 ### Fixed

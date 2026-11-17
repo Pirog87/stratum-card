@@ -3,6 +3,7 @@ import {
   addGroupMembers,
   collectEntityIds,
   statesEmpty,
+  statesReadyLatch,
   structureChanged,
   watchedStateChanged,
 } from '../src/hass-watch.js';
@@ -193,5 +194,27 @@ describe('indeks area → encje', () => {
     expect(getEntitiesInArea(added, 'kuchnia').map((e) => e.entity_id)).toEqual(['light.a', 'light.b', 'light.nowe']);
     // Stary hass dalej dostaje swój (stary) wynik.
     expect(getEntitiesInArea(hass, 'kuchnia').map((e) => e.entity_id)).toEqual(['light.a', 'light.b']);
+  });
+});
+
+describe('statesReadyLatch', () => {
+  it('po pierwszym niepustym wyniku nie przegląda już kluczy', () => {
+    let enumerations = 0;
+    const big = new Proxy(
+      { 'light.a': {} },
+      {
+        ownKeys(target) {
+          enumerations += 1;
+          return Reflect.ownKeys(target);
+        },
+      },
+    );
+    const ready = statesReadyLatch();
+    expect(ready({} as never)).toBe(false);
+    expect(ready(undefined)).toBe(false);
+    expect(ready(big as never)).toBe(true);
+    const after = enumerations;
+    for (let i = 0; i < 1000; i++) expect(ready(big as never)).toBe(true);
+    expect(enumerations).toBe(after);
   });
 });

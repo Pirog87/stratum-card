@@ -173,18 +173,22 @@ describe('zestaw świecących i poziom pokoju', () => {
       'light.a': entity('light.a', 'on', { supported_color_modes: ['brightness'], brightness: null }),
     });
     const lit = onLights(['light.a'], (id) => viewOf(hass.states[id]));
-    expect(lit).toEqual({ scaled: [], switchOnly: ['light.a'] });
+    expect(lit).toEqual({ scaled: [], switchOnly: ['light.a'], dimmableTotal: 1 });
   });
 
   it('przekaźniki nie zawyżają poziomu, gdy świeci coś ściemnialnego', () => {
     // Jedna żarówka na 26/255 + przekaźnik: 10%, nie 55% jak dawniej.
-    const lit = { scaled: [{ id: 'light.a', base: 26 }], switchOnly: ['light.r'] };
+    const lit = { scaled: [{ id: 'light.a', base: 26 }], switchOnly: ['light.r'], dimmableTotal: 1 };
     expect(roomLevel(lit)!).toBeCloseTo(10.2, 1);
   });
 
-  it('same przekaźniki = 100; nic nie świeci = undefined', () => {
-    expect(roomLevel({ scaled: [], switchOnly: ['light.r'] })).toBe(100);
-    expect(roomLevel({ scaled: [], switchOnly: [] })).toBeUndefined();
+  it('pokój z samymi przekaźnikami = 100; nic nie świeci = undefined', () => {
+    expect(roomLevel({ scaled: [], switchOnly: ['light.r'], dimmableTotal: 0 })).toBe(100);
+    expect(roomLevel({ scaled: [], switchOnly: [], dimmableTotal: 0 })).toBeUndefined();
+  });
+
+  it('dioda AP / przekaźnik przy zgaszonych żarówkach = ciemny pokój, nie 100%', () => {
+    expect(roomLevel({ scaled: [], switchOnly: ['light.ap_led'], dimmableTotal: 11 })).toBeUndefined();
   });
 
   it('poziom z hass liczy się po członkach grupy, nie po grupie', () => {
