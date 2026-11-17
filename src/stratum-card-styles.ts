@@ -758,10 +758,35 @@ export const cardStyles = css`
       align-items: center;
       justify-content: center;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      transition:
+        background-color 150ms ease,
+        transform 100ms ease;
     }
 
-    .stratum-popup-close:hover {
-      background: color-mix(in srgb, var(--card-background-color, #1c1e22) 45%, #000);
+    /* Hover tylko tam, gdzie jest kursor: na dotyku :hover „przykleja się"
+       po tapnięciu i × zostawał przyciemniony po powrocie do popupu.
+       Tło bez hexów — z tła karty w stronę --stratum-ink-shade. */
+    @media (hover: hover) {
+      .stratum-popup-close:hover {
+        background: color-mix(
+          in srgb,
+          var(--card-background-color, var(--stratum-surface-base)) 45%,
+          var(--stratum-ink-shade)
+        );
+      }
+    }
+
+    /* Domyślny obrys przeglądarki (auto 1px, ciemny) na ciemnym popupie był
+       prawie niewidoczny — klawiatura gubiła ×. */
+    .stratum-popup-close:focus-visible {
+      outline: 2px solid var(--stratum-focus-ring);
+      outline-offset: 2px;
+    }
+
+    /* translateY(10px) to pozycja bazowa (nakładka na nagłówek karty pod
+       spodem) — :active musi ją powtórzyć, inaczej × skacze o 10 px. */
+    .stratum-popup-close:active {
+      transform: translateY(10px) scale(0.96);
     }
 
     .stratum-popup-close ha-icon {
@@ -770,9 +795,13 @@ export const cardStyles = css`
 
     @media (prefers-reduced-motion: reduce) {
       .stratum-popup-backdrop,
-      .stratum-popup-card {
+      .stratum-popup-card,
+      .stratum-popup-close {
         animation: none;
         transition: none;
+      }
+      .stratum-popup-close:active {
+        transform: translateY(10px);
       }
     }
   

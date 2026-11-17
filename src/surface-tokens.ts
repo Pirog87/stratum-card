@@ -71,6 +71,13 @@ export const surfaceTokens = css`
     --stratum-ink-shade: #000;
     --stratum-ink-tint: #fff;
 
+    /* Znaczenia stanów — jedno źródło na kartę, delegowane do motywu HA
+       (Mushroom/Catppuccin przemalowują je bez card-moda). Dawniej kafle
+       binarne miały wpisane #f44336/#4caf50 i ignorowały motyw. Alarm jest
+       niżej, w bloku :host + ha-card. */
+    --stratum-ok: var(--success-color, #4caf50);
+    --stratum-warn: var(--warning-color, #ffa600);
+
     /* Mapowanie na tokeny, których używa reszta kodu. Nadpisanie
        któregokolwiek z nich z zewnątrz dalej wygrywa. */
     --stratum-tile-background: var(--stratum-surface-1);
@@ -82,5 +89,35 @@ export const surfaceTokens = css`
     --stratum-chip-background: var(--stratum-surface-2);
     --stratum-tile-hover-background: var(--stratum-surface-3);
     --stratum-chip-hover-background: var(--stratum-surface-3);
+  }
+
+  /* Tokeny liczone ze ZMIENNYCH UŻYTKOWNIKA — liczone drugi raz na
+     ha-card. Zmienna CSS dziedziczy się jako wartość już policzona:
+     definicja tylko na :host zamraża ją z tym, co widzi :host, więc
+     card-mod w zwykłej formie (ha-card { --stratum-focus: … }) nie docierał
+     do niczego pod spodem — kafle, popup i lista chipa dziedziczyły obrys
+     policzony piętro wyżej. Druga definicja na ha-card liczy go od nowa
+     z wartości ustawionej na karcie. Wolno tu trzymać tylko tokeny
+     prywatne i aliasy: nasza reguła ha-card wygrywa z regułą card-moda
+     (arkusz komponentu jest w kaskadzie po <style> w shadow root), więc
+     publiczna zmienna użytkownika zdefiniowana tutaj przestałaby działać. */
+  :host,
+  ha-card {
+    /* Alarm idzie najpierw za --stratum-chip-leak-color — tak samo definiują
+       go wiersz i kafel pokoju (stratum-card-room-row/-tile), a docs/styling.md
+       każe ustawiać właśnie tę zmienną. Bez tego alarm miałby dwa źródła:
+       wiersz w kolorze użytkownika, kafel popupu w --error-color. */
+    --stratum-alarm: var(--stratum-chip-leak-color, var(--error-color, #f44336));
+
+    /* Obrys fokusa klawiatury — prywatny token rozwiązywany tutaj.
+       Celowo NIE definiujemy samego --stratum-focus: to zmienna
+       użytkownika (docs/styling.md), a nasza definicja przykrywała
+       wartość dziedziczoną z motywu HA (html → karta) i obrys wracał do
+       --primary-color. Kolejność: --stratum-focus → starsza nazwa
+       --stratum-card-focus-color → akcent motywu. */
+    --stratum-focus-ring: var(
+      --stratum-focus,
+      var(--stratum-card-focus-color, var(--primary-color, #ff9b42))
+    );
   }
 `;
