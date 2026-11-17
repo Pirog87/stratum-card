@@ -46,11 +46,19 @@ export interface SwipeResult {
 }
 
 /**
+ * Cofnięcie stanu w toku po nieudanej komendzie. `failed` = encje komendy,
+ * która padła: gest wysyła kilka komend (po jednej na poziom jasności,
+ * osobno przekaźniki), a jedna nieudana nie może zgasić przełącznika
+ * światłom, którym komenda doszła. Bez argumentu = cały zgłoszony zestaw.
+ */
+export type SwipePowerUndo = (failed?: readonly string[]) => void;
+
+/**
  * Zgłoszenie „te światła zaraz będą włączone / zgaszone" — stan w toku
  * przełączników (power-pending.ts). Zwraca funkcję cofającą, wołaną, gdy
  * komenda do HA się nie uda.
  */
-export type SwipePowerHook = (ids: string[], want: 'on' | 'off') => (() => void) | void;
+export type SwipePowerHook = (ids: string[], want: 'on' | 'off') => SwipePowerUndo | void;
 
 export interface SwipeEnv {
   hass: () => HomeAssistant | undefined;
@@ -118,11 +126,46 @@ const memory = new Map<string, Memory>();
  */
 const controllersOn = new Map<string, { at: number; seen: unknown }>();
 
+/**
+ * Komendy końcowe WSZYSTKICH gestów, które czekają na falę w locie (do
+ * 600 ms, patrz `_afterInflight`). Globalnie, a nie per instancja: ten sam
+ * zestaw świateł przełącza wiersz karty, główny włącznik popupu (osobny
+ * komponent, bez dostępu do suwaka wiersza) i kafel — a każdy z nich musi
+ * umieć wypchnąć zaległą komendę gestu przed własną.
+ */
+interface PendingFinal {
+  ids: ReadonlySet<string>;
+  run: () => void;
+}
+const pendingFinals = new Set<PendingFinal>();
+
+/**
+ * Nowa komenda użytkownika (tapnięcie przełącznika) dla tych encji: zaległa
+ * komenda gestu idzie TERAZ, przed nią. Inaczej kolejność się odwracała:
+ * suwak do zera zaznaczał „off" od razu, ale `turn_off` czekał na falę;
+ * tapnięcie w tym oknie czytało przełącznik jako zgaszony i wysyłało
+ * `turn_on` — a spóźnione `turn_off` gestu gasiło światła po nim, wbrew
+ * ostatniej decyzji użytkownika.
+ */
+export function flushSwipesTouching(ids: Iterable<string>): void {
+  const wanted = new Set(ids);
+  if (wanted.size === 0) return;
+  for (const p of [...pendingFinals]) {
+    for (const id of p.ids) {
+      if (wanted.has(id)) {
+        p.run();
+        break;
+      }
+    }
+  }
+}
+
 /** Tylko do testów: czyści pamięć między przypadkami. */
 export function resetLightSwipeState(): void {
   overlay.clear();
   memory.clear();
   controllersOn.clear();
+  pendingFinals.clear();
 }
 
 /** Zapisuje, że sami właśnie włączyliśmy te sterowniki WLED. */
@@ -424,7 +467,9 @@ export class LightSwipe {
       const undo = this._markPower([...g.scaled.map((l) => l.id), ...g.switchOnly], 'on');
       if (controllers.length > 0) {
         markControllersOn(hass, controllers, now);
-        this._turnOn(controllers, undo);
+        // Bez sterownika nie zapali się żaden jego segment — porażka cofa
+        // cały zestaw, nie tylko (niezaznaczony) sterownik.
+        this._turnOn(controllers, undo && (() => undo()));
       }
       void this._send(g, calls, FINAL_TRANSITION_S, undo);
       if (g.switchOnly.length > 0) this._turnOn(g.switchOnly, undo);
@@ -454,7 +499,7 @@ export class LightSwipe {
       // czekać do 600 ms na falę w locie, a przełącznik ma się przestawić
       // razem z wypełnieniem, w chwili puszczenia palca.
       const undo = this._markPower(ids, 'off');
-      this._afterInflight(g, () => this._turnOff(ids, undo));
+      this._afterInflight(g, ids, () => this._turnOff(ids, undo));
       return { outcome: 'off', level: 0 };
     }
 
@@ -467,7 +512,11 @@ export class LightSwipe {
     if (calls.length === 0) {
       return { outcome: g.sentAny ? 'set' : 'noop', level: g.sentAny ? g.t : g.level };
     }
-    this._afterInflight(g, () => this._send(g, calls, FINAL_TRANSITION_S));
+    this._afterInflight(
+      g,
+      calls.flatMap((c) => c.ids),
+      () => this._send(g, calls, FINAL_TRANSITION_S),
+    );
     return { outcome: 'set', level: g.t };
   }
 
@@ -482,7 +531,7 @@ export class LightSwipe {
     this._g = undefined;
     this._clearGestureTimer(g);
     if (g.mode !== 'scale' || !g.sentAny) return;
-    this._afterInflight(g, () => {
+    this._afterInflight(g, g.scaled.map((l) => l.id), () => {
       // Stan sprawdzamy w chwili wysyłki: żarówki zgaszonej w międzyczasie
       // (ściana, automatyzacja) cofnięcie nie może zapalić.
       const hass = this._env.hass();
@@ -512,15 +561,22 @@ export class LightSwipe {
     this._flushPending();
   }
 
+  /**
+   * Wysyła od razu komendę zatwierdzoną puszczeniem palca, jeśli jeszcze
+   * czeka na falę w locie. Dla wołających, którzy za chwilę wyślą własną
+   * komendę do tych samych świateł — ta musi dojść do HA jako ostatnia.
+   */
+  public flush(): void {
+    this._flushPending();
+  }
+
   /** Komenda końcowa czekająca na falę w locie (patrz `_afterInflight`). */
   private _pending?: { run: () => void; timer: unknown };
 
   private _flushPending(): void {
-    const p = this._pending;
-    if (!p) return;
-    this._pending = undefined;
-    this._clearTimer(p.timer);
-    p.run();
+    // `run` sam sprząta (_pending, timer, rejestr globalny) i jest
+    // jednorazowy — ta sama ścieżka co flush z zewnątrz.
+    this._pending?.run();
   }
 
   private _abortTimers(): void {
@@ -570,8 +626,12 @@ export class LightSwipe {
     });
   }
 
-  /** Wykonuje `fn` po fali będącej w locie (ale nie czeka w nieskończoność). */
-  private _afterInflight(g: Gesture, fn: () => void): void {
+  /**
+   * Wykonuje `fn` po fali będącej w locie (ale nie czeka w nieskończoność).
+   * @param ids encje, których dotyczy komenda — po nich tapnięcie
+   *   przełącznika znajduje ją w `flushSwipesTouching`.
+   */
+  private _afterInflight(g: Gesture, ids: readonly string[], fn: () => void): void {
     const pending = g.inflight;
     if (!pending) {
       fn();
@@ -584,23 +644,24 @@ export class LightSwipe {
       run: () => {
         if (ran) return;
         ran = true;
-        if (this._pending === entry) {
-          this._pending = undefined;
-          this._clearTimer(entry.timer);
-        }
+        pendingFinals.delete(registered);
+        if (this._pending === entry) this._pending = undefined;
+        this._clearTimer(entry.timer);
         fn();
       },
       timer: undefined,
     };
+    const registered: PendingFinal = { ids: new Set(ids), run: entry.run };
     // Komenda końcowa nie może zostać wyprzedzona przez spóźnioną falę
     // pośrednią — inaczej żarówka kończy na starej wartości.
     entry.timer = this._setTimer(entry.run, FINAL_WAIT_MS);
     this._pending = entry;
+    pendingFinals.add(registered);
     void pending.then(entry.run);
   }
 
   /** Zgłasza stan w toku (jeśli wołający go słucha); zwraca cofnięcie. */
-  private _markPower(ids: string[], want: 'on' | 'off'): (() => void) | undefined {
+  private _markPower(ids: string[], want: 'on' | 'off'): SwipePowerUndo | undefined {
     if (ids.length === 0) return undefined;
     return this._env.onPower?.(ids, want) ?? undefined;
   }
@@ -613,7 +674,7 @@ export class LightSwipe {
     g: Gesture,
     calls: WaveCall[],
     transition: number,
-    onFail?: () => void,
+    onFail?: SwipePowerUndo,
   ): Promise<unknown> {
     const hass = this._env.hass();
     if (!hass || calls.length === 0) return Promise.resolve();
@@ -635,21 +696,22 @@ export class LightSwipe {
             { entity_id: call.ids },
           ),
           // Błąd pojedynczej komendy nie może wywrócić gestu; HA pokaże toast.
-        ).catch(() => onFail?.()),
+          // Stan w toku cofamy tylko jej światłom — reszcie komenda doszła.
+        ).catch(() => onFail?.(call.ids)),
       );
     }
     return Promise.all(promises);
   }
 
-  private _turnOn(ids: string[], onFail?: () => void): void {
+  private _turnOn(ids: string[], onFail?: SwipePowerUndo): void {
     const hass = this._env.hass();
     if (!hass || ids.length === 0) return;
     void Promise.resolve(
       hass.callService('light', 'turn_on', {}, { entity_id: ids }),
-    ).catch(() => onFail?.());
+    ).catch(() => onFail?.(ids));
   }
 
-  private _turnOff(ids: string[], onFail?: () => void): void {
+  private _turnOff(ids: string[], onFail?: SwipePowerUndo): void {
     const hass = this._env.hass();
     if (!hass || ids.length === 0) return;
     const now = this._now();
@@ -658,6 +720,6 @@ export class LightSwipe {
     }
     void Promise.resolve(
       hass.callService('light', 'turn_off', {}, { entity_id: ids }),
-    ).catch(() => onFail?.());
+    ).catch(() => onFail?.(ids));
   }
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LightSwipe,
+  flushSwipesTouching,
   markOff,
   rememberBeforeOff,
   resetLightSwipeState,
@@ -745,5 +746,64 @@ describe('LightSwipe — stan w toku przełączników (onPower)', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(spy.marks).toHaveLength(1);
     expect(spy.undone()).toBeGreaterThan(0);
+  });
+
+  it('przywrócenie: padła jedna komenda (jeden poziom) — cofnięcie dostaje tylko jej światła', async () => {
+    const ha = fakeHa([dim('light.a', 255), dim('light.b', 51)]);
+    const ids = ['light.a', 'light.b'];
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    sw.start(ids);
+    sw.end(0);
+    ha.echo();
+    const failedArgs: Array<readonly string[] | undefined> = [];
+    const okCall = ha.hass.callService;
+    ha.hass.callService = ((d, s, data, target) =>
+      ([] as string[]).concat(target?.entity_id ?? []).includes('light.b')
+        ? Promise.reject(new Error('zha'))
+        : okCall(d, s, data, target)) as HomeAssistant['callService'];
+    const sw2 = new LightSwipe('k', {
+      hass: () => ha.hass,
+      onPower: () => (failed) => {
+        failedArgs.push(failed);
+      },
+    });
+    sw2.start(ids);
+    sw2.move(60);
+    expect(sw2.end(60).outcome).toBe('set');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(failedArgs).toEqual([['light.b']]);
+  });
+});
+
+describe('LightSwipe — zaległa komenda końcowa a nowa komenda użytkownika', () => {
+  it('flush() wysyła od razu komendę czekającą na falę w locie — i tylko raz', async () => {
+    const ha = room();
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    sw.start(ROOM);
+    ha.stall();
+    sw.move(40);
+    await vi.advanceTimersByTimeAsync(300);
+    sw.end(0);
+    expect(ha.calls.some((c) => c.service === 'turn_off')).toBe(false);
+    sw.flush();
+    expect(ha.calls.filter((c) => c.service === 'turn_off')).toHaveLength(1);
+    ha.release();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(ha.calls.filter((c) => c.service === 'turn_off')).toHaveLength(1);
+  });
+
+  it('flushSwipesTouching wypycha tylko komendy dotyczące podanych encji', async () => {
+    const ha = room();
+    const sw = new LightSwipe('k', { hass: () => ha.hass });
+    sw.start(ROOM);
+    ha.stall();
+    sw.move(40);
+    await vi.advanceTimersByTimeAsync(300);
+    sw.end(0);
+    flushSwipesTouching(['light.c']); // zgaszona, poza komendą
+    expect(ha.calls.some((c) => c.service === 'turn_off')).toBe(false);
+    flushSwipesTouching(['light.b']);
+    expect(ha.calls.filter((c) => c.service === 'turn_off')).toHaveLength(1);
+    ha.release();
   });
 });
