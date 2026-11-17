@@ -4,6 +4,11 @@ import {
   autoRoomChips,
   rawEntitiesForSection,
   resolveMediaList,
+  autoSections,
+  entitiesForSection,
+  roomViewEntitiesForSection,
+  sectionCountLabel,
+  summaryMeasurement,
 } from '../src/room-sections.js';
 import { fieldColorStyle } from '../src/field-colors.js';
 import type { HomeAssistant, RoomSectionSpec, RoomSectionType } from '../src/types.js';
@@ -183,5 +188,87 @@ describe('fieldColorStyle', () => {
   it('pusty config → pusty string', () => {
     expect(fieldColorStyle(undefined)).toBe('');
     expect(fieldColorStyle({})).toBe('');
+  });
+});
+
+describe('widok popupu z niedostępnymi encjami', () => {
+  const hass = makeHass({
+    'cover.okno': entity('cover.okno', 'unavailable'),
+    'light.lampa': entity('light.lampa', 'unknown'),
+    'light.ok': entity('light.ok', 'on'),
+  });
+  const entries = [
+    entry('cover.okno'),
+    entry('light.lampa'),
+    entry('light.ok'),
+    entry('light.ukryta', { hidden: true }),
+    entry('light.dioda', { entity_category: 'diagnostic' }),
+    entry('light.usunieta'),
+  ];
+
+  it('roomViewEntitiesForSection zostawia unavailable/unknown, odrzuca ukryte, diagnostyczne i bez stanu', () => {
+    const h = makeHass({
+      ...hass.states,
+      'light.ukryta': entity('light.ukryta', 'on'),
+      'light.dioda': entity('light.dioda', 'on'),
+    });
+    expect(roomViewEntitiesForSection(h, entries, 'lights').map((e) => e.entity_id)).toEqual([
+      'light.lampa',
+      'light.ok',
+    ]);
+    // Sterowanie i liczenie dalej tylko na dostępnych.
+    expect(entitiesForSection(h, entries, 'lights').map((e) => e.entity_id)).toEqual([
+      'light.ok',
+    ]);
+  });
+
+  it('pokój, którego jedyna roleta jest offline, zachowuje sekcję rolet', () => {
+    expect(autoSections(hass, entries)).toContain('covers');
+  });
+});
+
+describe('sectionCountLabel', () => {
+  it('sceny nie mają stanu „aktywna" — sama liczba zamiast stałego 0/N', () => {
+    expect(sectionCountLabel('scenes', 0, 3)).toBe('3');
+    expect(sectionCountLabel('covers', 1, 2)).toBe('1/2');
+  });
+});
+
+describe('summaryMeasurement', () => {
+  it('formatuje jak chip nagłówka (jedno miejsce po przecinku)', () => {
+    const hass = makeHass({
+      'sensor.t': entity('sensor.t', '21.456', {
+        device_class: 'temperature',
+        unit_of_measurement: '°C',
+      }),
+      'sensor.h': entity('sensor.h', '54.66', {
+        device_class: 'humidity',
+        unit_of_measurement: '%',
+      }),
+    });
+    const entries = [entry('sensor.t'), entry('sensor.h')];
+    expect(summaryMeasurement(hass, entries, 'temperature')).toEqual({
+      value: '21.5°C',
+      available: true,
+    });
+    expect(summaryMeasurement(hass, entries, 'humidity')?.value).toBe('54.7%');
+  });
+
+  it('pomija czujnik offline na rzecz działającego; same offline → „—"', () => {
+    const hass = makeHass({
+      'sensor.a': entity('sensor.a', 'unavailable', { device_class: 'temperature' }),
+      'sensor.b': entity('sensor.b', '19', { device_class: 'temperature' }),
+    });
+    expect(
+      summaryMeasurement(hass, [entry('sensor.a'), entry('sensor.b')], 'temperature'),
+    ).toEqual({ value: '19.0°C', available: true });
+    expect(summaryMeasurement(hass, [entry('sensor.a')], 'temperature')).toEqual({
+      value: '—',
+      available: false,
+    });
+  });
+
+  it('brak czujnika danej klasy → null (pole znika)', () => {
+    expect(summaryMeasurement(makeHass({}), [], 'humidity')).toBeNull();
   });
 });

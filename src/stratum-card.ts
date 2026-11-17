@@ -106,6 +106,9 @@ export class StratumCard extends LitElement {
     popup_order?: import('./types.js').RoomPopupOrderItem[];
     popup_extra?: import('./types.js').RoomPopupExtraConfig;
     chips?: import('./types.js').ChipConfig[];
+    /** Nazwa i ikona z wiersza (RoomConfig) — popup ma mówić to samo, co wiersz. */
+    name?: string;
+    icon?: string;
   };
 
   /** Popup listy encji po kliknięciu chipa nagłówka. */
@@ -1053,6 +1056,10 @@ export class StratumCard extends LitElement {
       popup_order: room.popup_order,
       popup_extra: room.popup_extra,
       chips: room.chips,
+      // Bez tych dwóch popup brał nazwę i ikonę z rejestru area — wiersz
+      // „Salon + jadalnia" otwierał popup „Salon" z inną ikoną.
+      name: room.name,
+      icon: room.icon,
     };
   }
 
@@ -1275,6 +1282,8 @@ export class StratumCard extends LitElement {
       popup_order: this._popupRoom.popup_order,
       popup_extra: this._popupRoom.popup_extra,
       chips: this._popupRoom.chips,
+      name: this._popupRoom.name,
+      icon: this._popupRoom.icon,
       scene_size_default: this._config?.rooms_scene_size,
       scene_columns_default: this._config?.rooms_scene_columns,
       scene_gradient_default: this._config?.rooms_scene_gradient,
@@ -1678,6 +1687,8 @@ export class StratumCard extends LitElement {
       popup_order?: import('./types.js').RoomPopupOrderItem[];
       popup_extra?: import('./types.js').RoomPopupExtraConfig;
       chips?: import('./types.js').ChipConfig[];
+      name?: string;
+      icon?: string;
     },
     display: 'row' | 'tile' = 'row',
     fieldEntities?: import('./types.js').TileFieldEntities,
@@ -1905,6 +1916,8 @@ export class StratumCard extends LitElement {
       popup_order?: import('./types.js').RoomPopupOrderItem[];
       popup_extra?: import('./types.js').RoomPopupExtraConfig;
       chips?: import('./types.js').ChipConfig[];
+      name?: string;
+      icon?: string;
     },
     entries?: readonly HassEntityRegistryEntry[],
     fieldEntities?: import('./types.js').TileFieldEntities,
@@ -1976,6 +1989,8 @@ export class StratumCard extends LitElement {
       popup_order?: import('./types.js').RoomPopupOrderItem[];
       popup_extra?: import('./types.js').RoomPopupExtraConfig;
       chips?: import('./types.js').ChipConfig[];
+      name?: string;
+      icon?: string;
     },
   ): void {
     // Popup już otwarty (np. drugi tap, zanim tło przechwyciło dotyk) —
@@ -1997,6 +2012,8 @@ export class StratumCard extends LitElement {
       popup_order: overrides?.popup_order,
       popup_extra: overrides?.popup_extra,
       chips: overrides?.chips,
+      name: overrides?.name,
+      icon: overrides?.icon,
     };
     if (wasOpen) return;
     this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup());

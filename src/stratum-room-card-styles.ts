@@ -29,15 +29,24 @@ export const roomCardStyles = css`
         var(--ha-card-border-color, var(--divider-color, transparent));
     }
 
+    /* Chipy „inline" przechodzą do drugiej linii dopiero wtedy, gdy obok
+       nich na nazwę zostałoby mniej niż ~8 znaków. Dawniej chipy miały
+       flex-shrink: 0 i cały niedobór szerokości brała nazwa — na telefonie
+       przy czterech auto-chipach (światła, ruch, temperatura, wilgotność)
+       tytuł miał 0 px i nie było widać, który pokój jest otwarty. Druga
+       linia też respektuje rezerwę na × (padding-right całego nagłówka),
+       więc żaden chip nie wjeżdża pod przycisk zamknięcia. Bez container
+       query: zawijanie samo reaguje na miejsce, które karta dostała. */
     .header {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 12px;
+      gap: 8px 12px;
       margin-bottom: 16px;
       padding-bottom: 12px;
       /* Rezerwa na przycisk × popupu — ustawiana z zewnątrz przez wrapper. */
       padding-right: var(--stratum-room-header-pad-right, 0px);
-      border-bottom: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+      border-bottom: 1px solid var(--divider-color);
     }
 
     .icon {
@@ -92,7 +101,11 @@ export const roomCardStyles = css`
     }
 
     .title {
-      flex: 1;
+      /* Podstawa 8ch = próg zawinięcia chipów; min-width trzyma nazwę przy
+         życiu także wtedy, gdy chipy stoją już w drugiej linii, a jedna
+         linia chipów i tak jest za szeroka. */
+      flex: 1 1 8ch;
+      min-width: 8ch;
       font-size: 20px;
       font-weight: 600;
       letter-spacing: -0.01em;
@@ -105,7 +118,10 @@ export const roomCardStyles = css`
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
-      flex-shrink: 0;
+      /* Zwęża się do szerokości linii — chipy zawijają się wtedy wewnątrz
+         (flex-wrap), zamiast wystawać poza nagłówek pod ×. */
+      flex-shrink: 1;
+      min-width: 0;
     }
 
     .body {

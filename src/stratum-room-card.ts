@@ -59,6 +59,9 @@ import {
   entitiesForSection,
   normalizeSections,
   resolveMediaList,
+  roomViewEntitiesForSection,
+  sectionCountLabel,
+  summaryMeasurement,
 } from './room-sections.js';
 import { roomCardStyles } from './stratum-room-card-styles.js';
 import { SECTION_ICON, SECTION_LABEL, SECTION_LAYOUT } from './section-defaults.js';
@@ -656,7 +659,8 @@ export class StratumRoomCard extends LitElement {
         )
         .filter((e) => Boolean(this.hass!.states?.[e.entity_id]));
     } else {
-      items = entitiesForSection(this.hass!, entries, 'lights');
+      // Z niedostępnymi — kafel offline zamiast znikającej lampy.
+      items = roomViewEntitiesForSection(this.hass!, entries, 'lights');
     }
     // Extra spoza obszaru: grupy i pojedyncze — filtr isGroup rozdzieli je
     // na właściwe bloki.
@@ -741,6 +745,8 @@ export class StratumRoomCard extends LitElement {
     const entries = areaId
       ? getEntitiesInArea(this.hass!, areaId)
       : this._getEntries();
+    // Tylko dostępne (nie roomView…): włącznik nie bierze pod uwagę lamp,
+    // które i tak nie odpowiedzą — ich kafle offline pokazuje sekcja.
     return entitiesForSection(this.hass!, entries, 'lights')
       .filter((e) => !this._isLightGroup(e.entity_id))
       .map((e) => e.entity_id);
@@ -820,7 +826,7 @@ export class StratumRoomCard extends LitElement {
     );
     const blocks: TemplateResult[] = [];
     for (const areaId of areaIds) {
-      const entriesA = entitiesForSection(
+      const entriesA = roomViewEntitiesForSection(
         this.hass!,
         getEntitiesInArea(this.hass!, areaId),
         'lights',
@@ -1052,7 +1058,7 @@ export class StratumRoomCard extends LitElement {
         )
         .filter((e) => Boolean(this.hass!.states?.[e.entity_id]));
     } else {
-      items = entitiesForSection(this.hass!, entries, type);
+      items = roomViewEntitiesForSection(this.hass!, entries, type);
     }
     items = this._appendExtra(items, extraIds);
     if (items.length === 0) return html``;
@@ -1095,7 +1101,9 @@ export class StratumRoomCard extends LitElement {
         <div class="section-header" part="section-header">
           <ha-icon .icon=${iconName}></ha-icon>
           <span>${title}</span>
-          <span class="count">${this._activeCount(items)}/${items.length}</span>
+          <span class="count"
+            >${sectionCountLabel(type, this._activeCount(items), items.length)}</span
+          >
         </div>
         ${type === 'covers' ? this._renderCoversMaster(section, items) : nothing}
         <div class="tiles ${layout}">
@@ -1950,27 +1958,20 @@ export class StratumRoomCard extends LitElement {
         const on = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), field).some(
           (e) => hass.states?.[e.entity_id]?.state === 'on',
         );
-        return mk('Obecność', 'mdi:motion-sensor', on ? 'aktywna' : 'brak', on, '#4caf50');
+        return mk('Obecność', 'mdi:motion-sensor', on ? 'aktywna' : 'brak', on, resolveChipColor({ type: field }));
       }
       case 'temperature':
       case 'humidity': {
         const cls = field;
-        // Pierwszy czujnik pierwszoplanowy — wewnętrzna temperatura wtyczki
-        // (encja diagnostyczna) nie jest temperaturą pokoju.
-        const entry = filterPrimary(hass, entries).find(
-          (e) =>
-            e.entity_id.startsWith('sensor.') &&
-            hass.states?.[e.entity_id]?.attributes?.device_class === cls,
-        );
-        if (!entry) return null;
-        const state = hass.states?.[entry.entity_id];
-        if (!state) return null;
-        const unit = (state.attributes?.unit_of_measurement as string | undefined) ??
-          (cls === 'temperature' ? '°C' : '%');
+        // Pierwszy pierwszoplanowy czujnik z liczbą — wewnętrzna temperatura
+        // wtyczki (diagnostyczna) nie jest temperaturą pokoju, a czujnik
+        // offline nie może dać „unavailable °C" (patrz summaryMeasurement).
+        const m = summaryMeasurement(hass, entries, cls);
+        if (!m) return null;
         const label = cls === 'temperature' ? 'Temperatura' : 'Wilgotność';
         const icon = cls === 'temperature' ? 'mdi:thermometer' : 'mdi:water-percent';
-        const color = cls === 'temperature' ? '#ffc107' : '#42a5f5';
-        return mk(label, icon, `${state.state} ${unit}`, true, color);
+        // Kolory z tokenów chipów nagłówka — jedno znaczenie koloru w karcie.
+        return mk(label, icon, m.value, m.available, resolveChipColor({ type: cls }));
       }
       case 'lights_on': {
         // Ten sam zbiór co licznik wiersza i chip nagłówka: bez diod statusu
@@ -1979,21 +1980,21 @@ export class StratumRoomCard extends LitElement {
         const n = countableLights(hass, entries).filter((e) =>
           lightOnInHass(hass, e.entity_id),
         ).length;
-        return mk('Światła', 'mdi:lightbulb-on', n > 0 ? `${n} włącz.` : 'wszystkie wył.', n > 0, '#ffc107');
+        return mk('Światła', 'mdi:lightbulb-on', n > 0 ? `${n} włącz.` : 'wszystkie wył.', n > 0, resolveChipColor({ type: 'lights' }));
       }
       case 'windows_open': {
         const n = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'window').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
-        return mk('Okna', 'mdi:window-open-variant', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, '#42a5f5');
+        return mk('Okna', 'mdi:window-open-variant', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, resolveChipColor({ type: 'windows' }));
       }
       case 'doors_open': {
         const n = filterBinarySensorDeviceClass(hass, filterPrimary(hass, entries), 'door').reduce(
           (acc, e) => acc + (hass.states?.[e.entity_id]?.state === 'on' ? 1 : 0),
           0,
         );
-        return mk('Drzwi', 'mdi:door-open', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, '#42a5f5');
+        return mk('Drzwi', 'mdi:door-open', n > 0 ? `${n} otwart.` : 'zamknięte', n > 0, resolveChipColor({ type: 'doors' }));
       }
       case 'battery_low': {
         const low = entries.some((e) => {
@@ -2003,14 +2004,14 @@ export class StratumRoomCard extends LitElement {
           return !Number.isNaN(v) && v < 20;
         });
         if (!low) return null;
-        return mk('Bateria', 'mdi:battery-alert', 'niski poziom', true, '#f44336');
+        return mk('Bateria', 'mdi:battery-alert', 'niski poziom', true, resolveChipColor({ type: 'battery_low' }));
       }
       case 'leak': {
         const active = filterBinarySensorDeviceClass(hass, entries, 'moisture').some(
           (e) => hass.states?.[e.entity_id]?.state === 'on',
         );
         if (!active) return null;
-        return mk('Wyciek', 'mdi:water-alert', 'wykryty', true, '#f44336');
+        return mk('Wyciek', 'mdi:water-alert', 'wykryty', true, resolveChipColor({ type: 'leak' }));
       }
       default:
         return null;

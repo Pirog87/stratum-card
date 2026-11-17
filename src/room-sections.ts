@@ -16,6 +16,7 @@ import {
   filterByDomain,
   filterBinarySensorDeviceClass,
   filterDisplayable,
+  isPrimaryEntity,
 } from './area-entities.js';
 import { SECTION_LABEL } from './section-defaults.js';
 /**
@@ -144,13 +145,88 @@ export function resolveMediaList(
   return { entries, overrides };
 }
 
-/** Filtry per sekcja — jakie encje do niej należą. */
+/**
+ * Encje sekcji tylko DOSTĘPNE (bez unavailable/unknown) — dla logiki, która
+ * steruje albo liczy: główny włącznik świateł pokoju nie może brać pod
+ * uwagę lamp, które i tak nie odpowiedzą.
+ */
 export function entitiesForSection(
   hass: HomeAssistant,
   entries: readonly HassEntityRegistryEntry[],
   section: RoomSectionType,
 ): HassEntityRegistryEntry[] {
   return filterDisplayable(hass, rawEntitiesForSection(hass, entries, section));
+}
+
+/**
+ * Encje sekcji do POKAZANIA w popupie pokoju — jak `entitiesForSection`
+ * (bez ukrytych, wyłączonych i config/diagnostic), ale niedostępne
+ * i `unknown` zostają. Dawniej żarówka, która wypadła z sieci Zigbee
+ * (albo wszystko na chwilę po restarcie Z2M), znikała z popupu: siatka
+ * przeskakiwała, licznik rolet spadał z 0/2 na 0/1, a pokój z jedyną roletą
+ * offline tracił całą sekcję „Rolety". Użytkownik nie dowiadywał się, że
+ * urządzenie nie działa, i nie miał jak otworzyć jego more-info. Kafel
+ * niedostępnej encji ma własny stan wizualny (off-pill, przekreślona ikona).
+ * Encja bez stanu w `hass` (usunięta) nadal odpada — nie ma czego pokazać.
+ */
+export function roomViewEntitiesForSection(
+  hass: HomeAssistant,
+  entries: readonly HassEntityRegistryEntry[],
+  section: RoomSectionType,
+): HassEntityRegistryEntry[] {
+  return rawEntitiesForSection(hass, entries, section).filter(
+    (e) => isPrimaryEntity(hass, e) && Boolean(hass.states?.[e.entity_id]),
+  );
+}
+
+/**
+ * Typy sekcji bez stanu „włączony": scena (stan = znacznik czasu ostatniej
+ * aktywacji) nie bywa „aktywna", więc licznik „aktywne/wszystkie" pokazywał
+ * w nich na stałe „0/3" — jakby nic nie działało. Tu liczymy same pozycje.
+ */
+const STATELESS_SECTIONS: ReadonlySet<RoomSectionType> = new Set(['scenes']);
+
+/** Napis pastylki licznika w nagłówku sekcji. */
+export function sectionCountLabel(
+  type: RoomSectionType,
+  active: number,
+  total: number,
+): string {
+  return STATELESS_SECTIONS.has(type) ? String(total) : `${active}/${total}`;
+}
+
+/**
+ * Wartość temperatury/wilgotności dla sekcji „Podsumowanie": pierwszy
+ * pierwszoplanowy czujnik z liczbą w stanie, sformatowany jak chip
+ * nagłówka (jedno miejsce po przecinku), żeby oba miejsca mówiły to samo.
+ *
+ * - brak czujnika danej klasy → `null` (pole znika, jak dotąd),
+ * - czujniki są, ale żaden nie podaje liczby (unavailable, unknown) →
+ *   „—" i `available: false`. Dawniej pole pokazywało „unavailable °C",
+ *   a surowy stan „21.456" szedł bez zaokrąglenia.
+ */
+export function summaryMeasurement(
+  hass: HomeAssistant,
+  entries: readonly HassEntityRegistryEntry[],
+  cls: 'temperature' | 'humidity',
+): { value: string; available: boolean } | null {
+  const sensors = entries.filter(
+    (e) =>
+      e.entity_id.startsWith('sensor.') &&
+      isPrimaryEntity(hass, e) &&
+      hass.states?.[e.entity_id]?.attributes?.device_class === cls,
+  );
+  if (sensors.length === 0) return null;
+  for (const e of sensors) {
+    const st = hass.states?.[e.entity_id];
+    const v = st ? parseFloat(st.state) : NaN;
+    if (!st || !Number.isFinite(v)) continue;
+    const unit =
+      (st.attributes?.unit_of_measurement as string | undefined) ??
+      (cls === 'temperature' ? '°C' : '%');
+    return { value: `${v.toFixed(1)}${unit.startsWith('%') ? '%' : unit}`, available: true };
+  }
+  return { value: '—', available: false };
 }
 
 export function rawEntitiesForSection(
@@ -205,5 +281,7 @@ export function autoSections(
     'media',
     'fans',
   ];
-  return order.filter((s) => entitiesForSection(hass, entries, s).length > 0);
+  // Wg widoku popupu (z niedostępnymi): pokój, którego jedyna roleta jest
+  // offline, zachowuje sekcję „Rolety" z kaflem offline.
+  return order.filter((s) => roomViewEntitiesForSection(hass, entries, s).length > 0);
 }
