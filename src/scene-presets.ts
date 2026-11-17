@@ -30,8 +30,8 @@ function photoUrl(id: string): string {
 }
 
 export interface ScenePreset {
+  /** Id presetu; nazwa w UI: `editor.scene_presets.<id>` w słowniku. */
   id: string;
-  label: string;
   /** Grafika wektorowa (fallback dla scen bez zdjęcia). */
   svg?: string;
   /** URL zdjęcia WebP (obok bundla) — wygrywa nad `svg`. */
@@ -352,41 +352,41 @@ const SCENES: Record<string, string> = {
 // configi `stratum:<id>` działają bez zmian — te same id wskazują teraz
 // nową grafikę.
 export const SCENE_PRESETS: ScenePreset[] = [
-  { id: 'jasne', label: 'Jasne', photo: photoUrl('jasne') },
-  { id: 'poranek', label: 'Poranek', photo: photoUrl('poranek') },
-  { id: 'kawa', label: 'Kawa', photo: photoUrl('kawa') },
-  { id: 'praca', label: 'Praca', svg: SCENES.praca! },
-  { id: 'nauka', label: 'Nauka', photo: photoUrl('nauka') },
-  { id: 'czytanie', label: 'Czytanie', photo: photoUrl('czytanie') },
-  { id: 'czytanie-2', label: 'Czytanie 2', photo: photoUrl('czytanie-2') },
-  { id: 'gotowanie', label: 'Gotowanie', svg: SCENES.gotowanie! },
-  { id: 'relaks', label: 'Relaks', photo: photoUrl('relaks') },
-  { id: 'medytacja', label: 'Medytacja', svg: SCENES.medytacja! },
-  { id: 'muzyka', label: 'Muzyka', svg: SCENES.muzyka! },
-  { id: 'tv', label: 'TV', photo: photoUrl('tv') },
-  { id: 'tv-2', label: 'TV 2', photo: photoUrl('tv-2') },
-  { id: 'kino', label: 'Kino', svg: SCENES.kino! },
-  { id: 'gaming', label: 'Gaming', svg: SCENES.gaming! },
-  { id: 'sport', label: 'Sport', svg: SCENES.sport! },
-  { id: 'goscie', label: 'Goście', svg: SCENES.goscie! },
-  { id: 'impreza', label: 'Impreza', photo: photoUrl('impreza') },
-  { id: 'impreza-2', label: 'Impreza 2', photo: photoUrl('impreza-2') },
-  { id: 'disco', label: 'Disco', photo: photoUrl('disco') },
-  { id: 'romantyczne', label: 'Romantyczne', photo: photoUrl('romantyczne') },
-  { id: 'kapiel', label: 'Kąpiel', photo: photoUrl('kapiel') },
-  { id: 'kapiel-cieply', label: 'Kąpiel ciepła', photo: photoUrl('kapiel-cieply') },
-  { id: 'kapiel-fiolet', label: 'Kąpiel fiolet', photo: photoUrl('kapiel-fiolet') },
-  { id: 'ogrod', label: 'Ogród', photo: photoUrl('ogrod') },
-  { id: 'wieczor', label: 'Wieczór', photo: photoUrl('wieczor') },
-  { id: 'usypianie', label: 'Usypianie', photo: photoUrl('usypianie') },
-  { id: 'noc', label: 'Noc', photo: photoUrl('noc') },
-  { id: 'noc-2', label: 'Noc 2', photo: photoUrl('noc-2') },
-  { id: 'bezpieczenstwo', label: 'Bezpieczeństwo', svg: SCENES.bezpieczenstwo! },
-  { id: 'kinkiet-cieply', label: 'Kinkiet ciepły', photo: photoUrl('kinkiet-cieply') },
-  { id: 'kinkiet-przygaszony', label: 'Kinkiet przygaszony', photo: photoUrl('kinkiet-przygaszony') },
-  { id: 'kinkiet-czerwony', label: 'Kinkiet czerwony', photo: photoUrl('kinkiet-czerwony') },
-  { id: 'kinkiet-fioletowy', label: 'Kinkiet fioletowy', photo: photoUrl('kinkiet-fioletowy') },
-  { id: 'kinkiet-niebieski', label: 'Kinkiet niebieski', photo: photoUrl('kinkiet-niebieski') },
+  { id: 'jasne', photo: photoUrl('jasne') },
+  { id: 'poranek', photo: photoUrl('poranek') },
+  { id: 'kawa', photo: photoUrl('kawa') },
+  { id: 'praca', svg: SCENES.praca! },
+  { id: 'nauka', photo: photoUrl('nauka') },
+  { id: 'czytanie', photo: photoUrl('czytanie') },
+  { id: 'czytanie-2', photo: photoUrl('czytanie-2') },
+  { id: 'gotowanie', svg: SCENES.gotowanie! },
+  { id: 'relaks', photo: photoUrl('relaks') },
+  { id: 'medytacja', svg: SCENES.medytacja! },
+  { id: 'muzyka', svg: SCENES.muzyka! },
+  { id: 'tv', photo: photoUrl('tv') },
+  { id: 'tv-2', photo: photoUrl('tv-2') },
+  { id: 'kino', svg: SCENES.kino! },
+  { id: 'gaming', svg: SCENES.gaming! },
+  { id: 'sport', svg: SCENES.sport! },
+  { id: 'goscie', svg: SCENES.goscie! },
+  { id: 'impreza', photo: photoUrl('impreza') },
+  { id: 'impreza-2', photo: photoUrl('impreza-2') },
+  { id: 'disco', photo: photoUrl('disco') },
+  { id: 'romantyczne', photo: photoUrl('romantyczne') },
+  { id: 'kapiel', photo: photoUrl('kapiel') },
+  { id: 'kapiel-cieply', photo: photoUrl('kapiel-cieply') },
+  { id: 'kapiel-fiolet', photo: photoUrl('kapiel-fiolet') },
+  { id: 'ogrod', photo: photoUrl('ogrod') },
+  { id: 'wieczor', photo: photoUrl('wieczor') },
+  { id: 'usypianie', photo: photoUrl('usypianie') },
+  { id: 'noc', photo: photoUrl('noc') },
+  { id: 'noc-2', photo: photoUrl('noc-2') },
+  { id: 'bezpieczenstwo', svg: SCENES.bezpieczenstwo! },
+  { id: 'kinkiet-cieply', photo: photoUrl('kinkiet-cieply') },
+  { id: 'kinkiet-przygaszony', photo: photoUrl('kinkiet-przygaszony') },
+  { id: 'kinkiet-czerwony', photo: photoUrl('kinkiet-czerwony') },
+  { id: 'kinkiet-fioletowy', photo: photoUrl('kinkiet-fioletowy') },
+  { id: 'kinkiet-niebieski', photo: photoUrl('kinkiet-niebieski') },
 ];
 
 const PRESET_PREFIX = 'stratum:';

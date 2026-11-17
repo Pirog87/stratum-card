@@ -17,23 +17,11 @@ import type {
 import { getEntitiesInArea, filterByDomain, filterDisplayable } from './area-entities.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
 import { ENTITY_UI_ACTIONS } from './tap-action.js';
+import { localize, lookup, messages, type MessageKey } from './localize/localize.js';
 
 const SEPARATOR_FIELDS_SCHEMA = [{ name: 'label', selector: { text: {} } }];
 
-const LABELS: Record<string, string> = {
-  entity: 'Encja',
-  name: 'Nazwa (override)',
-  icon: 'Ikona (override)',
-  label: 'Podpis separatora (opcjonalny)',
-  tap_action: 'Akcja kliknięcia kafla (override)',
-};
-
-const HELPERS: Record<string, string> = {
-  entity: 'Może być spoza obszaru pomieszczenia.',
-  label: 'Puste = sama linia. Z podpisem = linia z tekstem po środku.',
-  tap_action:
-    'Domyślnie: toggle (klik w kafel) i more-info (klik w ikonę). Nadpisuje klik w kafel.',
-};
+// Etykiety i podpowiedzi pól ha-form: grupa `editor.entity_list` słownika.
 
 /** Źródło auto-listy — decyduje co edytor wykrywa z obszaru. */
 export type EntityListSource =
@@ -44,32 +32,30 @@ export type EntityListSource =
 
 const SOURCE_META: Record<
   EntityListSource,
-  { domain: string; autoLabel: string; emptyHint: string; fallbackIcon: string }
+  { domain: string; autoLabel: MessageKey; emptyHint: MessageKey; fallbackIcon: string }
 > = {
   light_groups: {
     domain: 'light',
-    autoLabel: 'Grupy świateł (pomocniki) wykryte automatycznie z obszaru',
-    emptyHint:
-      'Obszar nie ma pomocników „Grupa światła" — ten blok nie pokaże się w popupie. Możesz dodać grupy ręcznie (także spoza obszaru).',
+    autoLabel: 'editor.entity_list.auto_light_groups',
+    emptyHint: 'editor.entity_list.empty_light_groups',
     fallbackIcon: 'mdi:lightbulb-group',
   },
   light_singles: {
     domain: 'light',
-    autoLabel: 'Pojedyncze światła wykryte automatycznie z obszaru',
-    emptyHint: 'Obszar nie ma pojedynczych encji światła. Możesz dodać ręcznie.',
+    autoLabel: 'editor.entity_list.auto_light_singles',
+    emptyHint: 'editor.entity_list.empty_light_singles',
     fallbackIcon: 'mdi:lightbulb',
   },
   covers: {
     domain: 'cover',
-    autoLabel: 'Rolety wykryte automatycznie z obszaru',
-    emptyHint: 'Obszar nie ma rolet. Możesz dodać ręcznie (także spoza obszaru).',
+    autoLabel: 'editor.entity_list.auto_covers',
+    emptyHint: 'editor.entity_list.empty_covers',
     fallbackIcon: 'mdi:blinds',
   },
   media: {
     domain: 'media_player',
-    autoLabel: 'Odtwarzacze wykryte automatycznie z obszaru',
-    emptyHint:
-      'Obszar nie ma odtwarzaczy. Możesz dodać ręcznie (także spoza obszaru).',
+    autoLabel: 'editor.entity_list.auto_media',
+    emptyHint: 'editor.entity_list.empty_media',
     fallbackIcon: 'mdi:speaker',
   },
 };
@@ -228,13 +214,15 @@ export class StratumLightsEditor extends LitElement {
   }
 
   private _title(item: RoomLightItemConfig): string {
-    if (item.separator) return item.label ? `— ${item.label} —` : '— separator —';
+    if (item.separator) {
+      return item.label ? `— ${item.label} —` : this._t('editor.common.separator_title');
+    }
     if (item.name) return item.name;
     const state = item.entity ? this.hass?.states?.[item.entity] : undefined;
     return (
       (state?.attributes?.friendly_name as string | undefined) ??
       item.entity ??
-      '(nowe światło)'
+      this._t('editor.entity_list.new_light')
     );
   }
 
@@ -251,27 +239,34 @@ export class StratumLightsEditor extends LitElement {
     return this._meta.fallbackIcon;
   }
 
+  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
+    return localize(this.hass, key, vars);
+  }
+
   protected render(): TemplateResult {
     const items = this._workingItems();
+    const m = messages(this.hass).editor.entity_list;
     const auto = this._isAuto;
     return html`
       ${auto && items.length > 0
         ? html`<p class="auto-hint">
             <ha-icon .icon=${'mdi:auto-fix'}></ha-icon>
-            ${this._meta.autoLabel} (${items.length}). Każda zmiana utrwali
-            tę listę w konfiguracji pokoju.
+            ${this._t('editor.entity_list.auto_hint', {
+              label: this._t(this._meta.autoLabel),
+              count: items.length,
+            })}
           </p>`
         : nothing}
       ${auto && items.length === 0
         ? html`<p class="auto-hint">
             <ha-icon .icon=${'mdi:information-outline'}></ha-icon>
-            ${this._meta.emptyHint}
+            ${this._t(this._meta.emptyHint)}
           </p>`
         : nothing}
       ${!auto && items.length > 0
         ? html`<button class="reset-auto" @click=${this._resetToAuto}>
             <ha-icon .icon=${'mdi:auto-fix'}></ha-icon>
-            Przywróć auto-wykrywanie z obszaru
+            ${this._t('editor.entity_list.reset_auto')}
           </button>`
         : nothing}
 
@@ -291,12 +286,14 @@ export class StratumLightsEditor extends LitElement {
                 </span>
                 <span class="stratum-row-title">${this._title(item)}</span>
                 ${item.hidden
-                  ? html`<span class="stratum-badge ghost">ukryte</span>`
+                  ? html`<span class="stratum-badge ghost"
+                      >${this._t('editor.common.hidden_badge')}</span
+                    >`
                   : nothing}
                 <div class="stratum-row-actions">
                   <button
                     class="stratum-icon-btn"
-                    title=${item.hidden ? 'Pokaż' : 'Ukryj'}
+                    title=${this._t(item.hidden ? 'editor.common.show' : 'editor.common.hide')}
                     @click=${() => this._update(idx, { hidden: !item.hidden })}
                   >
                     <ha-icon
@@ -305,7 +302,7 @@ export class StratumLightsEditor extends LitElement {
                   </button>
                   <button
                     class="stratum-icon-btn"
-                    title="Przesuń w górę"
+                    title=${this._t('editor.common.move_up')}
                     ?disabled=${idx === 0}
                     @click=${() => this._move(idx, -1)}
                   >
@@ -313,7 +310,7 @@ export class StratumLightsEditor extends LitElement {
                   </button>
                   <button
                     class="stratum-icon-btn"
-                    title="Przesuń w dół"
+                    title=${this._t('editor.common.move_down')}
                     ?disabled=${idx === items.length - 1}
                     @click=${() => this._move(idx, 1)}
                   >
@@ -321,14 +318,14 @@ export class StratumLightsEditor extends LitElement {
                   </button>
                   <button
                     class="stratum-icon-btn ${open ? 'accent' : ''}"
-                    title=${open ? 'Zwiń' : 'Edytuj'}
+                    title=${this._t(open ? 'editor.common.collapse' : 'editor.common.edit')}
                     @click=${() => this._toggleEdit(idx)}
                   >
                     <ha-icon .icon=${open ? 'mdi:chevron-up' : 'mdi:pencil'}></ha-icon>
                   </button>
                   <button
                     class="stratum-icon-btn danger"
-                    title="Usuń"
+                    title=${this._t('editor.common.remove')}
                     @click=${() => this._remove(idx)}
                   >
                     <ha-icon .icon=${'mdi:delete-outline'}></ha-icon>
@@ -342,9 +339,9 @@ export class StratumLightsEditor extends LitElement {
                       .data=${item}
                       .schema=${sep ? SEPARATOR_FIELDS_SCHEMA : this._entitySchema()}
                       .computeLabel=${(s: { name: string }) =>
-                        LABELS[s.name] ?? s.name}
+                        lookup(m.labels, s.name) ?? s.name}
                       .computeHelper=${(s: { name: string }) =>
-                        HELPERS[s.name] ?? ''}
+                        lookup(m.helpers, s.name) ?? ''}
                       @value-changed=${(ev: CustomEvent<{
                         value: Partial<RoomLightItemConfig>;
                       }>) => {
@@ -362,14 +359,14 @@ export class StratumLightsEditor extends LitElement {
       <div class="add-row">
         <button class="stratum-add-btn" @click=${() => this._add({ entity: '' })}>
           <ha-icon .icon=${'mdi:plus'}></ha-icon>
-          Dodaj encję (także spoza obszaru)
+          ${this._t('editor.entity_list.add_entity')}
         </button>
         <button
           class="stratum-add-btn"
           @click=${() => this._add({ separator: true })}
         >
           <ha-icon .icon=${'mdi:minus'}></ha-icon>
-          Dodaj separator
+          ${this._t('editor.entity_list.add_separator')}
         </button>
       </div>
     `;

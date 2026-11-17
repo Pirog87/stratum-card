@@ -2,20 +2,20 @@
 // Wydzielone aby uniknąć cyklu sections-editor ↔ room-card.
 
 import type { RoomSectionType } from './types.js';
+import { pl } from './localize/pl.js';
+import { messages, type LangSource } from './localize/localize.js';
 
-export const SECTION_LABEL: Record<RoomSectionType, string> = {
-  summary: 'Podsumowanie',
-  lights: 'Światła',
-  covers: 'Rolety',
-  windows: 'Okna',
-  doors: 'Drzwi',
-  climate: 'Klimat',
-  media: 'Media',
-  fans: 'Wentylacja',
-  switches: 'Przełączniki',
-  scenes: 'Sceny',
-  custom: 'Karta custom',
-};
+/**
+ * Domyślne tytuły sekcji po polsku — słownik bazowy. Klucze tej mapy to
+ * zarazem lista znanych typów sekcji (room-sections.ts, testy); tytuł
+ * pokazywany użytkownikowi bierz z `sectionLabel`, który zna język.
+ */
+export const SECTION_LABEL: Readonly<Record<RoomSectionType, string>> = pl.sections;
+
+/** Domyślny tytuł sekcji w języku UI. */
+export function sectionLabel(type: RoomSectionType, lang: LangSource): string {
+  return messages(lang).sections[type] ?? type;
+}
 
 export const SECTION_ICON: Record<RoomSectionType, string> = {
   summary: 'mdi:information-outline',

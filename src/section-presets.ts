@@ -15,12 +15,11 @@ import type { RoomSectionConfig } from './types.js';
 export type PresetCategory = 'builtin' | 'mushroom' | 'bubble' | 'other';
 
 export interface SectionPreset {
-  /** Unikalne ID presetu. */
+  /**
+   * Unikalne ID presetu. Nazwa i opis w UI: `editor.preset_labels.<id>`
+   * i `editor.preset_hints.<id>` w słowniku (src/localize/).
+   */
   id: string;
-  /** Czytelna nazwa (label). */
-  label: string;
-  /** Krótki opis pod labelem. */
-  hint: string;
   /** Ikona avatara presetu (MDI). */
   avatar: string;
   /** Kategoria — do grupowania w UI. */
@@ -41,112 +40,84 @@ export const SECTION_PRESETS: SectionPreset[] = [
   // ======================================================================
   {
     id: 'builtin_lights_groups',
-    label: 'Światła — Grupy',
-    hint: 'Kafle GRUP (pomocników) z paskiem jasności + swipe; składowe schowane',
     avatar: 'mdi:lightbulb-group',
     category: 'builtin',
     config: { type: 'lights', mode: 'rail' },
   },
   {
     id: 'builtin_lights_tile',
-    label: 'Światła — Tile',
-    hint: 'Wbudowany tile z toggle + rgb tint + brightness bar',
     avatar: 'mdi:lightbulb-on',
     category: 'builtin',
     config: { type: 'lights', mode: 'tile' },
   },
   {
     id: 'builtin_lights_slider',
-    label: 'Światła — Slider',
-    hint: 'Wbudowany tile z suwakiem jasności',
     avatar: 'mdi:lightbulb-on-outline',
     category: 'builtin',
     config: { type: 'lights', mode: 'slider' },
   },
   {
     id: 'builtin_lights_ambient',
-    label: 'Światła — Ambient',
-    hint: 'Tło kafla w kolorze żarówki (rgb_color)',
     avatar: 'mdi:spotlight-beam',
     category: 'builtin',
     config: { type: 'lights', mode: 'ambient' },
   },
   {
     id: 'builtin_media_player',
-    label: 'Media — Player',
-    hint: 'Jeden duży player z okładką (auto: ten, który gra), reszta zwinięta',
     avatar: 'mdi:album',
     category: 'builtin',
     config: { type: 'media', mode: 'player' },
   },
   {
     id: 'builtin_covers_tile',
-    label: 'Rolety — Tile',
-    hint: 'Wbudowany tile z ↑/⏹/↓ + position bar',
     avatar: 'mdi:blinds',
     category: 'builtin',
     config: { type: 'covers', mode: 'tile' },
   },
   {
     id: 'builtin_covers_slider',
-    label: 'Rolety — Slider',
-    hint: 'Tile z suwakiem pozycji',
     avatar: 'mdi:blinds-horizontal',
     category: 'builtin',
     config: { type: 'covers', mode: 'slider' },
   },
   {
     id: 'builtin_scenes_tile',
-    label: 'Sceny',
-    hint: 'Tile z przyciskiem „Aktywuj"',
     avatar: 'mdi:palette',
     category: 'builtin',
     config: { type: 'scenes', mode: 'tile' },
   },
   {
     id: 'builtin_windows_chips',
-    label: 'Okna — Chips',
-    hint: 'Kompaktowe chipy ze statusem otwarte/zamknięte',
     avatar: 'mdi:window-open-variant',
     category: 'builtin',
     config: { type: 'windows', mode: 'chips' },
   },
   {
     id: 'builtin_doors_chips',
-    label: 'Drzwi — Chips',
-    hint: 'Kompaktowe chipy ze statusem',
     avatar: 'mdi:door-open',
     category: 'builtin',
     config: { type: 'doors', mode: 'chips' },
   },
   {
     id: 'builtin_switches_tile',
-    label: 'Przełączniki',
-    hint: 'Tile z toggle on/off',
     avatar: 'mdi:toggle-switch',
     category: 'builtin',
     config: { type: 'switches', mode: 'tile' },
   },
   {
     id: 'builtin_climate_tile',
-    label: 'Klimat',
-    hint: 'Tile z obecną temperaturą i setpointem',
     avatar: 'mdi:thermostat',
     category: 'builtin',
     config: { type: 'climate', mode: 'tile' },
   },
   {
     id: 'builtin_media_tile',
-    label: 'Media',
-    hint: 'Tile z play/pause',
     avatar: 'mdi:music',
     category: 'builtin',
     config: { type: 'media', mode: 'tile' },
   },
   {
     id: 'builtin_fans_tile',
-    label: 'Wentylatory',
-    hint: 'Tile z toggle',
     avatar: 'mdi:fan',
     category: 'builtin',
     config: { type: 'fans', mode: 'tile' },
@@ -157,8 +128,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   // ======================================================================
   {
     id: 'mushroom_light',
-    label: 'Mushroom Light',
-    hint: 'fill_container + use_light_color + brightness slider',
     avatar: 'mdi:mushroom',
     category: 'mushroom',
     requires: 'mushroom-light-card',
@@ -176,8 +145,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'mushroom_cover',
-    label: 'Mushroom Cover',
-    hint: 'position control + open/stop/close buttons',
     avatar: 'mdi:mushroom',
     category: 'mushroom',
     requires: 'mushroom-cover-card',
@@ -194,8 +161,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'mushroom_climate',
-    label: 'Mushroom Climate',
-    hint: 'HVAC modes + setpoint control',
     avatar: 'mdi:mushroom',
     category: 'mushroom',
     requires: 'mushroom-climate-card',
@@ -212,8 +177,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'mushroom_media',
-    label: 'Mushroom Media',
-    hint: 'media controls + volume slider',
     avatar: 'mdi:mushroom',
     category: 'mushroom',
     requires: 'mushroom-media-player-card',
@@ -232,8 +195,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'mushroom_fan',
-    label: 'Mushroom Fan',
-    hint: 'percentage + oscillate control',
     avatar: 'mdi:mushroom',
     category: 'mushroom',
     requires: 'mushroom-fan-card',
@@ -250,8 +211,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'mushroom_entity',
-    label: 'Mushroom Entity',
-    hint: 'Uniwersalny — dla switches / scenes / binary',
     avatar: 'mdi:mushroom',
     category: 'mushroom',
     requires: 'mushroom-entity-card',
@@ -267,8 +226,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   // ======================================================================
   {
     id: 'bubble_lights',
-    label: 'Bubble Lights',
-    hint: 'card_type: button, button_type: slider',
     avatar: 'mdi:circle-double',
     category: 'bubble',
     requires: 'bubble-card',
@@ -285,8 +242,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'bubble_covers',
-    label: 'Bubble Covers',
-    hint: 'card_type: cover z buttons',
     avatar: 'mdi:circle-double',
     category: 'bubble',
     requires: 'bubble-card',
@@ -302,8 +257,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'bubble_climate',
-    label: 'Bubble Climate',
-    hint: 'card_type: climate',
     avatar: 'mdi:circle-double',
     category: 'bubble',
     requires: 'bubble-card',
@@ -318,8 +271,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'bubble_media',
-    label: 'Bubble Media',
-    hint: 'card_type: media-player',
     avatar: 'mdi:circle-double',
     category: 'bubble',
     requires: 'bubble-card',
@@ -338,8 +289,6 @@ export const SECTION_PRESETS: SectionPreset[] = [
   // ======================================================================
   {
     id: 'summary',
-    label: 'Podsumowanie',
-    hint: 'Motion/temp/humidity/lights — w kartach albo chipach',
     avatar: 'mdi:view-dashboard-variant',
     category: 'other',
     config: {
@@ -356,21 +305,13 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
   {
     id: 'custom_yaml',
-    label: 'Custom YAML',
-    hint: 'Dowolna karta HA/HACS — pełny YAML',
     avatar: 'mdi:code-braces',
     category: 'other',
     config: { type: 'custom' },
   },
 ];
 
-/** Labele kategorii do wyświetlenia w UI. */
-export const CATEGORY_LABELS: Record<PresetCategory, string> = {
-  builtin: 'Wbudowane (Stratum)',
-  mushroom: 'Mushroom (HACS)',
-  bubble: 'Bubble Card (HACS)',
-  other: 'Inne',
-};
+// Nazwy kategorii w UI: `editor.sections.categories` w słowniku.
 
 /** Sprawdza czy karta HACS jest zainstalowana (window.customCards). */
 export function isCardInstalled(cardType: string): boolean {

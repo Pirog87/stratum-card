@@ -29,8 +29,15 @@ ma mieć pełną kontrolę nad tym, które metryki się pokazują i jak wygląda
    Podkomponenty (chipy, editor, room-row) w osobnych plikach w `src/`.
 2. **Typy** w `src/types.ts` — współdzielone interface'y (`StratumCardConfig`,
    `ChipConfig`, `HomeAssistant` stub).
-3. **Lokalizacja** — teksty UI w `src/localize/pl.json` i `en.json`.
-   Nigdy nie hardcoduj stringów user-facing w komponentach.
+3. **Lokalizacja** — teksty UI w `src/localize/pl.ts` (baza, polski) i
+   `src/localize/en.ts` (fallback dla każdego innego języka HA). Typ
+   `Messages` wyprowadzony z `pl.ts` pilnuje, że `en.ts` ma komplet kluczy
+   (brak = błąd kompilacji). Komponent bierze tekst przez
+   `localize(this.hass, 'grupa.klucz', { param })` z `src/localize/localize.ts`
+   (język z `hass.locale.language` / `hass.language`, liczba mnoga przez
+   `{ one, few, many }` / `{ one, other }` i `{count}`). Podkomponent bez
+   `hass` dostaje `.uiLang=${langOf(this.hass)}`. Nigdy nie hardcoduj
+   stringów user-facing w komponentach.
 4. **Unit testy** — Vitest, `npm test`. Testujemy czyste funkcje (bez
    DOM/Lit) w `tests/`; helpery wymagające testów wydzielamy z komponentów
    do osobnych modułów (wzór: `scene-gradient.ts`). CI odpala testy przed
@@ -270,7 +277,7 @@ Tak ten projekt jest napisany. Trzymaj się tego, zamiast wprowadzać własny st
   i długa nazwa piętra rozpycha nagłówek poza kartę."* Tak piszemy.
 - Obejścia i decyzje nieoczywiste (fallback chain dla nie-adminów, przekodowanie
   WAV, winieta scen) mają blok komentarza z uzasadnieniem. Nie usuwaj ich.
-- Teksty user-facing wyłącznie z `src/localize/pl.json` / `en.json`.
+- Teksty user-facing wyłącznie z `src/localize/pl.ts` / `en.ts` (przez `localize()`).
 
 ### Fallback chains
 
@@ -314,7 +321,7 @@ Bump wersji w `package.json` idzie w tym samym commicie co zmiana.
 - Stos: Mushroom + Bubble Card + card-mod (istniejące karty zostają,
   ta karta jest dodatkiem, nie zamiennikiem)
 - Priorytet mobilka — desktop jest secondary use case
-- Język UI: polski (`src/localize/pl.json` ma pierwszeństwo)
+- Język UI: polski (`src/localize/pl.ts` jest bazą; inne języki dostają `en.ts`)
 
 ## Wersjonowanie
 

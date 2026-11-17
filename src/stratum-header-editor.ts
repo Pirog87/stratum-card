@@ -7,39 +7,41 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HeaderConfig, HeaderTitleSize } from './types.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { localize, type MessageKey } from './localize/localize.js';
 
-const TITLE_SIZES: Array<{ value: HeaderTitleSize; label: string; preview: string }> = [
-  { value: 'sm', label: 'Mały', preview: '14px' },
-  { value: 'md', label: 'Średni', preview: '17px' },
-  { value: 'lg', label: 'Duży', preview: '20px' },
+// `label` to klucz słownika (src/localize/) — tekst wybiera język z `hass`.
+const TITLE_SIZES: Array<{ value: HeaderTitleSize; label: MessageKey; preview: string }> = [
+  { value: 'sm', label: 'editor.header.size_sm', preview: '14px' },
+  { value: 'md', label: 'editor.header.size_md', preview: '17px' },
+  { value: 'lg', label: 'editor.header.size_lg', preview: '20px' },
 ];
 
-const TITLE_WEIGHTS: Array<{ value: 400 | 500 | 600 | 700; label: string }> = [
-  { value: 400, label: 'Normalna' },
-  { value: 500, label: 'Średnia' },
-  { value: 600, label: 'Semi-bold' },
-  { value: 700, label: 'Bold' },
+const TITLE_WEIGHTS: Array<{ value: 400 | 500 | 600 | 700; label: MessageKey }> = [
+  { value: 400, label: 'editor.header.weight_400' },
+  { value: 500, label: 'editor.header.weight_500' },
+  { value: 600, label: 'editor.header.weight_600' },
+  { value: 700, label: 'editor.header.weight_700' },
 ];
 
-const COLOR_SWATCHES: Array<{ key: string; color: string; label: string }> = [
-  { key: 'amber', color: '#ffc107', label: 'Amber' },
-  { key: 'green', color: '#4caf50', label: 'Zielony' },
-  { key: 'blue', color: '#2196f3', label: 'Niebieski' },
-  { key: 'red', color: '#e53935', label: 'Czerwony' },
-  { key: 'purple', color: '#9c27b0', label: 'Fioletowy' },
-  { key: 'orange', color: '#ff9800', label: 'Pomarańcz' },
-  { key: 'teal', color: '#009688', label: 'Morski' },
-  { key: 'pink', color: '#ec407a', label: 'Różowy' },
+const COLOR_SWATCHES: Array<{ key: string; color: string; label: MessageKey }> = [
+  { key: 'amber', color: '#ffc107', label: 'editor.colors.amber' },
+  { key: 'green', color: '#4caf50', label: 'editor.colors.green' },
+  { key: 'blue', color: '#2196f3', label: 'editor.colors.blue' },
+  { key: 'red', color: '#e53935', label: 'editor.colors.red' },
+  { key: 'purple', color: '#9c27b0', label: 'editor.colors.purple' },
+  { key: 'orange', color: '#ff9800', label: 'editor.colors.orange' },
+  { key: 'teal', color: '#009688', label: 'editor.colors.teal' },
+  { key: 'pink', color: '#ec407a', label: 'editor.colors.pink' },
 ];
 
-const HEADER_STYLES: Array<{ value: 'classic' | 'stripes'; label: string }> = [
-  { value: 'classic', label: 'Klasyczna' },
-  { value: 'stripes', label: 'Smugi' },
+const HEADER_STYLES: Array<{ value: 'classic' | 'stripes'; label: MessageKey }> = [
+  { value: 'classic', label: 'editor.header.style_classic' },
+  { value: 'stripes', label: 'editor.header.style_stripes' },
 ];
 
-const STRIPES_COLORS: Array<{ value: 'lights' | 'static'; label: string }> = [
-  { value: 'lights', label: 'Kolor światła' },
-  { value: 'static', label: 'Stały' },
+const STRIPES_COLORS: Array<{ value: 'lights' | 'static'; label: MessageKey }> = [
+  { value: 'lights', label: 'editor.header.stripes_color_lights' },
+  { value: 'static', label: 'editor.header.stripes_color_static' },
 ];
 
 type ColorKey = 'title_color' | 'icon_color' | 'accent_bar_color';
@@ -47,6 +49,16 @@ type ColorKey = 'title_color' | 'icon_color' | 'accent_bar_color';
 @customElement('stratum-header-editor')
 export class StratumHeaderEditor extends LitElement {
   @property({ attribute: false }) public config: HeaderConfig = {};
+  /**
+   * Język UI (`langOf(hass)` z edytora karty). Sam kod języka zamiast
+   * `hass`: edytor belki nie czyta encji, a nowe `hass` przy każdej
+   * zmianie stanu w domu przerysowywałoby cały formularz.
+   */
+  @property({ attribute: false }) public uiLang?: string;
+
+  private _t(key: MessageKey): string {
+    return localize(this.uiLang, key);
+  }
 
   private _emit(next: HeaderConfig): void {
     this.dispatchEvent(
@@ -136,7 +148,7 @@ export class StratumHeaderEditor extends LitElement {
     const colorMode = cfg.stripes_color ?? 'lights';
     return html`
       <div class="stratum-group">
-        <label class="stratum-group-label">Kolor pasków</label>
+        <label class="stratum-group-label">${this._t('editor.header.stripes_color')}</label>
         <div class="stratum-chip-row">
           ${STRIPES_COLORS.map(
             (c) => html`<button
@@ -144,14 +156,14 @@ export class StratumHeaderEditor extends LitElement {
               class="stratum-chip ${colorMode === c.value ? 'on' : ''}"
               @click=${() => this._setStripesColor(c.value)}
             >
-              ${c.label}
+              ${this._t(c.label)}
             </button>`,
           )}
         </div>
       </div>
 
       <div class="stratum-slider-row">
-        <label class="stratum-slider-label">Liczba pasków</label>
+        <label class="stratum-slider-label">${this._t('editor.header.stripes_max')}</label>
         <div class="stratum-slider-value">${max}</div>
         <input
           type="range"
@@ -171,7 +183,7 @@ export class StratumHeaderEditor extends LitElement {
             .checked=${cfg.icon_glow !== false}
             @change=${(ev: Event) => this._onDefaultOnToggle('icon_glow', ev)}
           />
-          <span>Poświata wokół ikony</span>
+          <span>${this._t('editor.header.icon_glow')}</span>
         </label>
         <label class="stratum-toggle">
           <input
@@ -179,7 +191,7 @@ export class StratumHeaderEditor extends LitElement {
             .checked=${cfg.icon_frame === true}
             @change=${this._onIconFrameToggle}
           />
-          <span>Ikona w kwadracie z ramką</span>
+          <span>${this._t('editor.header.icon_frame')}</span>
         </label>
         <label class="stratum-toggle">
           <input
@@ -187,7 +199,7 @@ export class StratumHeaderEditor extends LitElement {
             .checked=${cfg.stripes_tap !== 'none'}
             @change=${(ev: Event) => this._onDefaultOnToggle('stripes_tap', ev)}
           />
-          <span>Pasek otwiera pomieszczenie</span>
+          <span>${this._t('editor.header.stripes_tap')}</span>
         </label>
       </div>
     `;
@@ -205,7 +217,7 @@ export class StratumHeaderEditor extends LitElement {
 
     return html`
       <div class="stratum-group">
-        <label class="stratum-group-label">Styl belki</label>
+        <label class="stratum-group-label">${this._t('editor.header.style')}</label>
         <div class="stratum-chip-row">
           ${HEADER_STYLES.map(
             (s) => html`<button
@@ -213,7 +225,7 @@ export class StratumHeaderEditor extends LitElement {
               class="stratum-chip ${style === s.value ? 'on' : ''}"
               @click=${() => this._setStyle(s.value)}
             >
-              ${s.label}
+              ${this._t(s.label)}
             </button>`,
           )}
         </div>
@@ -222,7 +234,7 @@ export class StratumHeaderEditor extends LitElement {
       ${isStripes ? this._renderStripesOptions(cfg) : nothing}
 
       <div class="stratum-group">
-        <label class="stratum-group-label">Rozmiar tytułu</label>
+        <label class="stratum-group-label">${this._t('editor.header.title_size')}</label>
         <div class="stratum-chip-row">
           ${TITLE_SIZES.map(
             (s) => html`<button
@@ -231,14 +243,14 @@ export class StratumHeaderEditor extends LitElement {
               @click=${() => this._setTitleSize(s.value)}
             >
               <span class="size-preview" data-size=${s.value}>Aa</span>
-              <span>${s.label}</span>
+              <span>${this._t(s.label)}</span>
             </button>`,
           )}
         </div>
       </div>
 
       <div class="stratum-group">
-        <label class="stratum-group-label">Waga tytułu</label>
+        <label class="stratum-group-label">${this._t('editor.header.title_weight')}</label>
         <div class="stratum-chip-row">
           ${TITLE_WEIGHTS.map(
             (w) => html`<button
@@ -247,17 +259,17 @@ export class StratumHeaderEditor extends LitElement {
               style="font-weight:${w.value};"
               @click=${() => this._setTitleWeight(w.value)}
             >
-              ${w.label}
+              ${this._t(w.label)}
             </button>`,
           )}
         </div>
       </div>
 
-      ${this._renderColorRow('Kolor tytułu', 'title_color', cfg.title_color)}
-      ${this._renderColorRow('Kolor ikony', 'icon_color', cfg.icon_color)}
+      ${this._renderColorRow('editor.header.title_color', 'title_color', cfg.title_color)}
+      ${this._renderColorRow('editor.header.icon_color', 'icon_color', cfg.icon_color)}
 
       <div class="stratum-slider-row">
-        <label class="stratum-slider-label">Rozmiar ikony</label>
+        <label class="stratum-slider-label">${this._t('editor.header.icon_size')}</label>
         <div class="stratum-slider-value">${iconSize} px</div>
         <input
           type="range"
@@ -276,7 +288,7 @@ export class StratumHeaderEditor extends LitElement {
         isStripes
           ? nothing
           : html`<div class="stratum-slider-row">
-              <label class="stratum-slider-label">Padding belki</label>
+              <label class="stratum-slider-label">${this._t('editor.header.padding')}</label>
               <div class="stratum-slider-value">${padding} px</div>
               <input
                 type="range"
@@ -303,7 +315,7 @@ export class StratumHeaderEditor extends LitElement {
                     @change=${(ev: Event) =>
                       this._onToggle('hide_expander', ev)}
                   />
-                  <span>Ukryj chevron</span>
+                  <span>${this._t('editor.header.hide_chevron')}</span>
                 </label>
                 <label class="stratum-toggle">
                   <input
@@ -311,13 +323,13 @@ export class StratumHeaderEditor extends LitElement {
                     .checked=${cfg.accent_bar === true}
                     @change=${(ev: Event) => this._onToggle('accent_bar', ev)}
                   />
-                  <span>Akcentowy pasek z lewej</span>
+                  <span>${this._t('editor.header.accent_bar')}</span>
                 </label>
               </div>
 
               ${cfg.accent_bar
                 ? this._renderColorRow(
-                    'Kolor akcentowego paska',
+                    'editor.header.accent_bar_color',
                     'accent_bar_color',
                     cfg.accent_bar_color,
                   )
@@ -327,7 +339,7 @@ export class StratumHeaderEditor extends LitElement {
   }
 
   private _renderColorRow(
-    label: string,
+    label: MessageKey,
     key: ColorKey,
     value: string | undefined,
   ): TemplateResult {
@@ -335,21 +347,21 @@ export class StratumHeaderEditor extends LitElement {
     const custom = !isPreset && value ? value : '';
     return html`
       <div class="stratum-group">
-        <label class="stratum-group-label">${label}</label>
+        <label class="stratum-group-label">${this._t(label)}</label>
         <div class="stratum-chip-row">
           ${COLOR_SWATCHES.map(
             (s) => html`<button
               type="button"
               class="swatch ${value === s.key ? 'on' : ''}"
               style="--swatch:${s.color};"
-              title=${s.label}
+              title=${this._t(s.label)}
               @click=${() => this._onColorSwatch(key, s.key)}
             ></button>`,
           )}
           <input
             type="text"
             class="custom-input"
-            placeholder="#hex lub var(--color)"
+            placeholder=${this._t('editor.common.color_placeholder')}
             .value=${custom}
             @change=${(ev: Event) => this._onColorCustom(key, ev)}
           />
@@ -357,7 +369,7 @@ export class StratumHeaderEditor extends LitElement {
             ? html`<button
                 type="button"
                 class="stratum-chip subtle"
-                title="Wyłącz"
+                title=${this._t('editor.common.clear_color')}
                 @click=${() => this._onColorClear(key)}
               >
                 <ha-icon .icon=${'mdi:close'}></ha-icon>

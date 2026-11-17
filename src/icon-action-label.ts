@@ -4,41 +4,24 @@
 // ekranu, co się stanie po Enterze — a ikona ma właśnie inną akcję niż
 // wiersz, więc użytkownik musi wiedzieć, czym się różnią. Opis wynika
 // z typu akcji, więc to czysta funkcja (testowalna bez DOM-u i Lita).
-//
-// Teksty są tu jeszcze po polsku, w jednym słowniku — faza lokalizacji
-// przeniesie `ICON_ACTION_VERBS_PL` do src/localize/ obok wersji EN.
+// Czasowniki siedzą w słownikach (grupa `icon_action` w src/localize/).
 
-/** Czasownik dla typu akcji; klucze to `action` z TapActionConfig. */
-export const ICON_ACTION_VERBS_PL: Readonly<Record<string, string>> = {
-  popup: 'pokaż szczegóły pokoju',
-  'toggle-lights': 'przełącz światła',
-  navigate: 'przejdź do widoku',
-  url: 'otwórz link',
-  'perform-action': 'uruchom akcję',
-  'call-service': 'uruchom akcję',
-  'more-info': 'pokaż szczegóły',
-  toggle: 'przełącz',
-};
-
-/** Deterministyczny default dla typu spoza słownika (YAML bywa dowolny). */
-export const ICON_ACTION_FALLBACK_PL = 'akcja ikony';
+import { lookup, messages, type LangSource } from './localize/localize.js';
 
 /**
  * `"Kuchnia: przejdź do widoku"`. Bez nazwy pokoju (wiersz bez `name`)
  * zostaje sam czasownik — lepsze niż „: …" czytane przez TalkBack.
+ * Typ spoza słownika (YAML bywa dowolny) dostaje deterministyczny default.
  */
 export function iconActionLabel(
   roomName: string | undefined,
   action: string | undefined,
-  verbs: Readonly<Record<string, string>> = ICON_ACTION_VERBS_PL,
-  fallback: string = ICON_ACTION_FALLBACK_PL,
+  lang?: LangSource,
 ): string {
-  // hasOwnProperty, nie `verbs[action]`: akcja „constructor" z YAML
-  // zwróciłaby funkcję z prototypu zamiast fallbacku.
-  const verb =
-    (action && Object.prototype.hasOwnProperty.call(verbs, action)
-      ? verbs[action]
-      : undefined) ?? fallback;
+  const m = messages(lang).icon_action;
+  // lookup sprawdza hasOwnProperty: akcja „constructor" z YAML zwróciłaby
+  // funkcję z prototypu zamiast fallbacku.
+  const verb = lookup(m.verbs, action) ?? m.fallback;
   const name = roomName?.trim();
   return name ? `${name}: ${verb}` : verb;
 }

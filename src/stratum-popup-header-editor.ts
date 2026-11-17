@@ -11,6 +11,7 @@ import type {
   StratumRoomCardConfig,
 } from './types.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { localize, type MessageKey } from './localize/localize.js';
 
 @customElement('stratum-popup-header-editor')
 export class StratumPopupHeaderEditor extends LitElement {
@@ -21,6 +22,10 @@ export class StratumPopupHeaderEditor extends LitElement {
 
   /** Gotowy config karty pokoju do mini-podglądu (undefined = bez podglądu). */
   @property({ attribute: false }) public previewConfig?: StratumRoomCardConfig;
+
+  private _t(key: MessageKey, vars?: Record<string, string | number>): string {
+    return localize(this.hass, key, vars);
+  }
 
   private _update(patch: Partial<PopupHeaderConfig>): void {
     const merged: PopupHeaderConfig = { ...(this.value ?? {}), ...patch };
@@ -86,7 +91,7 @@ export class StratumPopupHeaderEditor extends LitElement {
       <input
         type="text"
         class="ph-input"
-        placeholder="#hex, nazwa albo var(--color) — puste = domyślny"
+        placeholder=${this._t('editor.popup_header.color_placeholder')}
         .value=${value ?? ''}
         @change=${(ev: Event) => {
           const v = (ev.target as HTMLInputElement).value.trim();
@@ -101,8 +106,9 @@ export class StratumPopupHeaderEditor extends LitElement {
     const areaId = this.previewConfig.area_id;
     return html`<div class="ph-preview-wrap">
       <label class="stratum-group-label"
-        >Podgląd na żywo (${(areaId && this.hass.areas?.[areaId]?.name) ??
-        areaId})</label
+        >${this._t('editor.popup_header.preview', {
+          name: (areaId && this.hass.areas?.[areaId]?.name) ?? areaId ?? '',
+        })}</label
       >
       <div class="ph-preview">
         <stratum-room-card
@@ -120,64 +126,64 @@ export class StratumPopupHeaderEditor extends LitElement {
     return html`
       ${this._renderPreview()}
       ${this._seg(
-        'Styl belki',
+        this._t('editor.header.style'),
         [
-          { value: 'classic', label: 'Klasyczny' },
-          { value: 'avatar', label: 'Avatar' },
-          { value: 'gradient', label: 'Gradient' },
-          { value: 'compact', label: 'Kompakt' },
+          { value: 'classic', label: this._t('editor.popup_header.style_classic') },
+          { value: 'avatar', label: this._t('editor.popup_header.style_avatar') },
+          { value: 'gradient', label: this._t('editor.popup_header.style_gradient') },
+          { value: 'compact', label: this._t('editor.popup_header.style_compact') },
         ] as const,
         style,
         (v) => this._update({ style: v }),
-        'Avatar = ikona w kółku + podtytuł; Gradient = belka podbarwiona akcentem; Kompakt = niska belka.',
+        this._t('editor.popup_header.style_hint'),
       )}
       ${this._seg(
-        'Rozmiar tytułu',
+        this._t('editor.header.title_size'),
         [
-          { value: 'sm', label: 'Mały' },
-          { value: 'md', label: 'Średni' },
-          { value: 'lg', label: 'Duży' },
+          { value: 'sm', label: this._t('editor.header.size_sm') },
+          { value: 'md', label: this._t('editor.header.size_md') },
+          { value: 'lg', label: this._t('editor.header.size_lg') },
         ] as const,
         ph.title_size ?? 'md',
         (v) => this._update({ title_size: v }),
       )}
       ${this._seg(
-        'Waga tytułu',
+        this._t('editor.header.title_weight'),
         [
-          { value: 400, label: 'Normalna' },
-          { value: 500, label: 'Średnia' },
-          { value: 600, label: 'Semi-bold' },
-          { value: 700, label: 'Bold' },
+          { value: 400, label: this._t('editor.header.weight_400') },
+          { value: 500, label: this._t('editor.header.weight_500') },
+          { value: 600, label: this._t('editor.header.weight_600') },
+          { value: 700, label: this._t('editor.header.weight_700') },
         ] as const,
         ph.title_weight ?? 600,
         (v) => this._update({ title_weight: v }),
       )}
-      ${this._colorInput('Kolor tytułu', ph.title_color, (v) =>
+      ${this._colorInput(this._t('editor.header.title_color'), ph.title_color, (v) =>
         this._update({ title_color: v }),
       )}
       ${this._seg(
-        'Pozycja chipów',
+        this._t('editor.popup_header.chips_position'),
         [
-          { value: 'inline', label: 'Przy tytule' },
-          { value: 'below', label: 'Druga linia' },
-          { value: 'hidden', label: 'Ukryte' },
+          { value: 'inline', label: this._t('editor.popup_header.chips_inline') },
+          { value: 'below', label: this._t('editor.popup_header.chips_below') },
+          { value: 'hidden', label: this._t('editor.popup_header.chips_hidden') },
         ] as const,
         ph.chips_position ?? 'inline',
         (v) => this._update({ chips_position: v }),
-        'Druga linia = chipy pod tytułem, przewijane — najlepsze na telefonie przy wielu chipach.',
+        this._t('editor.popup_header.chips_hint'),
       )}
       ${this._seg(
-        'Podtytuł pod nazwą',
+        this._t('editor.popup_header.subtitle'),
         [
-          { value: 'none', label: 'Brak' },
-          { value: 'areas', label: 'Strefy scalone' },
-          { value: 'entities', label: 'Liczba encji' },
+          { value: 'none', label: this._t('editor.popup_header.subtitle_none') },
+          { value: 'areas', label: this._t('editor.popup_header.subtitle_areas') },
+          { value: 'entities', label: this._t('editor.popup_header.subtitle_entities') },
         ] as const,
         ph.subtitle ?? (style === 'avatar' ? 'areas' : 'none'),
         (v) => this._update({ subtitle: v }),
       )}
       <div class="stratum-slider-row">
-        <label class="stratum-slider-label">Rozmiar ikony</label>
+        <label class="stratum-slider-label">${this._t('editor.header.icon_size')}</label>
         <div class="stratum-slider-value">${ph.icon_size ?? 28} px</div>
         <input
           type="range"
@@ -193,7 +199,7 @@ export class StratumPopupHeaderEditor extends LitElement {
         />
       </div>
       <div class="stratum-slider-row">
-        <label class="stratum-slider-label">Padding belki (dół)</label>
+        <label class="stratum-slider-label">${this._t('editor.popup_header.padding_bottom')}</label>
         <div class="stratum-slider-value">${ph.padding ?? 12} px</div>
         <input
           type="range"
@@ -208,16 +214,16 @@ export class StratumPopupHeaderEditor extends LitElement {
             })}
         />
       </div>
-      ${this._colorInput('Kolor ikony', ph.icon_color, (v) =>
+      ${this._colorInput(this._t('editor.header.icon_color'), ph.icon_color, (v) =>
         this._update({ icon_color: v }),
       )}
       ${this._colorInput(
-        'Kolor tła ikony (avatar/gradient)',
+        this._t('editor.popup_header.icon_bg_color'),
         ph.icon_bg_color,
         (v) => this._update({ icon_bg_color: v }),
       )}
       ${this._colorInput(
-        'Kolor akcentu (gradient / pasek / tło ikony)',
+        this._t('editor.popup_header.accent_color'),
         ph.accent_color,
         (v) => this._update({ accent_color: v }),
       )}
@@ -231,7 +237,7 @@ export class StratumPopupHeaderEditor extends LitElement {
                 hide_icon: (ev.target as HTMLInputElement).checked || undefined,
               })}
           />
-          <span>Ukryj ikonę pomieszczenia</span>
+          <span>${this._t('editor.popup_header.hide_icon')}</span>
         </label>
         <label class="stratum-toggle">
           <input
@@ -242,7 +248,7 @@ export class StratumPopupHeaderEditor extends LitElement {
                 divider: (ev.target as HTMLInputElement).checked ? undefined : false,
               })}
           />
-          <span>Separator pod belką</span>
+          <span>${this._t('editor.popup_header.divider')}</span>
         </label>
         <label class="stratum-toggle">
           <input
@@ -253,7 +259,7 @@ export class StratumPopupHeaderEditor extends LitElement {
                 accent_bar: (ev.target as HTMLInputElement).checked || undefined,
               })}
           />
-          <span>Akcentowy pasek z lewej</span>
+          <span>${this._t('editor.header.accent_bar')}</span>
         </label>
       </div>
     `;

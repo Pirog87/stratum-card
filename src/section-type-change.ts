@@ -5,66 +5,22 @@
 import type { RoomSectionConfig, RoomSectionType } from './types.js';
 import { SECTION_PRESETS } from './section-presets.js';
 
-/** Opcje trybu wyświetlania dostępne per typ sekcji. */
-export const MODE_OPTIONS_BY_TYPE: Partial<
-  Record<RoomSectionType, Array<{ value: string; label: string }>>
-> = {
-  lights: [
-    { value: 'rail', label: 'Rail (pasek jasności z lewej + swipe)' },
-    { value: 'tint', label: 'Tint (tło w kolorze światła + swipe)' },
-    { value: 'tile', label: 'Tile (kafel z toggle)' },
-    { value: 'slider', label: 'Slider (brightness)' },
-    { value: 'ambient', label: 'Ambient (kolor + jasność w tle)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  covers: [
-    { value: 'tile', label: 'Tile (kafel z przyciskami)' },
-    { value: 'slider', label: 'Slider (pozycja)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (open/close)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  switches: [
-    { value: 'tile', label: 'Tile (kafel z toggle)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  fans: [
-    { value: 'tile', label: 'Tile (kafel z toggle)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  media: [
-    { value: 'player', label: 'Player (okładka + sterowanie, reszta zwinięta)' },
-    { value: 'tile', label: 'Tile (play/pause)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (play/pause)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  windows: [
-    { value: 'tile', label: 'Tile (kafel ze statusem)' },
-    { value: 'chips', label: 'Chips (status readonly)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  doors: [
-    { value: 'tile', label: 'Tile (kafel ze statusem)' },
-    { value: 'chips', label: 'Chips (status readonly)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  scenes: [
-    { value: 'tile', label: 'Tile (przycisk aktywuj)' },
-    { value: 'bubble', label: 'Bubble (duża ikona w kółku)' },
-    { value: 'chips', label: 'Chips (przycisk aktywuj)' },
-    { value: 'icon', label: 'Icon (sama ikona)' },
-  ],
-  summary: [
-    { value: 'cards', label: 'Cards (kafle z labelem + value)' },
-    { value: 'chips', label: 'Chips (kompaktowy pasek)' },
-  ],
+/**
+ * Tryby wyświetlania dostępne per typ sekcji (wartości `mode`). Etykiety
+ * nie mieszkają tutaj: edytor pokazuje dropdown trybu tylko dla summary
+ * (`editor.sections.summary_modes` w słowniku), resztę wybiera się
+ * wizualnym pickerem presetów.
+ */
+export const MODES_BY_TYPE: Partial<Record<RoomSectionType, readonly string[]>> = {
+  lights: ['rail', 'tint', 'tile', 'slider', 'ambient', 'bubble', 'chips', 'icon'],
+  covers: ['tile', 'slider', 'bubble', 'chips', 'icon'],
+  switches: ['tile', 'bubble', 'chips', 'icon'],
+  fans: ['tile', 'bubble', 'chips', 'icon'],
+  media: ['player', 'tile', 'bubble', 'chips', 'icon'],
+  windows: ['tile', 'chips', 'icon'],
+  doors: ['tile', 'chips', 'icon'],
+  scenes: ['tile', 'bubble', 'chips', 'icon'],
+  summary: ['cards', 'chips'],
 };
 
 /** Domeny encji, które może pokazywać sekcja danego typu. */
@@ -102,7 +58,7 @@ export function entityDomainsForType(type: RoomSectionType): string[] {
  * nie ma własnej listy).
  */
 export function builtinModesForType(type: RoomSectionType): Set<string> {
-  const modes = new Set((MODE_OPTIONS_BY_TYPE[type] ?? []).map((o) => o.value));
+  const modes = new Set(MODES_BY_TYPE[type] ?? []);
   for (const p of SECTION_PRESETS) {
     const m = p.config.mode;
     if (p.config.type === type && m && !m.startsWith('custom:')) modes.add(m);
