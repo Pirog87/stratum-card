@@ -561,12 +561,6 @@ export interface RoomSectionConfig {
    */
   intercom?: boolean;
   /**
-   * Tylko `lights`: grupowanie po pomocnikach „Grupa światła" przypisanych do
-   * obszaru. `helpers` (default) — pokazuj kafle GRUP, chowaj ich encje-składowe,
-   * światła spoza grup w zwijanym „Pozostałe". `none` — płaska lista jak dotąd.
-   */
-  group_by?: 'helpers' | 'none';
-  /**
    * Tylko `covers`: pasek akcji zbiorczych nad listą (Otwórz / Stop / Zamknij
    * + szybkie pozycje %) działający na wszystkie rolety sekcji. Default: true.
    */
