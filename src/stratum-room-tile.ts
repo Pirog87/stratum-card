@@ -21,7 +21,7 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { HassEntity, HomeAssistant, TapActionConfig } from './types.js';
-import { runTapAction } from './tap-action.js';
+import { runTapAction, tapMayChangeState } from './tap-action.js';
 import { buildDefaultCustomConfig, mergeCustomTileConfig } from './custom-cards.js';
 import { lightColorOf } from './tile-data.js';
 import { groupMemberIds } from './area-entities.js';
@@ -1339,6 +1339,11 @@ export class StratumRoomTile extends LitElement {
     // Klik bez pointerdown (czytnik ekranu, el.click()) też kończy serię
     // strzałek, zanim przełączy — kolejność komend w HA = kolejność gestów.
     this._commitKeyDim();
+    // Override, który przełącza (tap_action toggle / perform-action), też
+    // porzuca trzymaną wartość — PRZED wykonaniem, bo _customTap kończy
+    // obsługę. Wcześniej `toggle` z listy gasił światło, a pasek trzymał
+    // 40% serii strzałek do 6 s. more-info/navigate/url zostawiają ją.
+    if (tapMayChangeState(this.tapAction)) this._dropHeldLevel();
     if (this._customTap(ev)) return;
     // Przełączenie ma ostatnie słowo — jak w _onGroupKey. Trzymana wartość
     // (seria strzałek zatwierdzona przez pointerdown albo linijkę wyżej,
@@ -1384,7 +1389,10 @@ export class StratumRoomTile extends LitElement {
       // przy pointerdown. Bez tego timer serii odpalał turn_on z jasnością
       // ~450 ms po Enterze i cofał świeże „wyłącz" użytkownika.
       this._commitKeyDim();
-      // Klawiatura = to samo co tap: override akcji z listy najpierw.
+      // Klawiatura = to samo co tap: override akcji z listy najpierw —
+      // a jeśli przełącza, trzymana wartość idzie precz już teraz (jak
+      // w _onGroupClick).
+      if (tapMayChangeState(this.tapAction)) this._dropHeldLevel();
       if (this._customTap(ev)) return;
       // Przełączenie ma ostatnie słowo — trzymana wartość serii (np. 40%)
       // nie może wisieć na pasku do 6 s nad zgaszonym światłem. Tak samo

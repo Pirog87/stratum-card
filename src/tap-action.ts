@@ -127,6 +127,30 @@ export function resolveTapAction(
 }
 
 /**
+ * Czy akcja może zmienić stan encji (przełączyć, wywołać usługę).
+ *
+ * Kafel grupy świateł trzyma po geście jasność docelową na pasku, aż HA ją
+ * potwierdzi. Tap, który przełącza światło — także override z listy
+ * (`toggle`, `perform-action`) — musi tę wartość porzucić, inaczej pasek
+ * pokazuje np. 40% nad zgaszonym światłem do 6 s. Akcje tylko „patrzące"
+ * (more-info, navigate, url) i świadome `none` nic nie zmieniają, więc
+ * trzymana wartość zostaje — porzucona mignęłaby starym poziomem do echa
+ * HA. Nieznany typ liczymy jako zmianę: lepiej raz mignąć niż kłamać.
+ */
+export function tapMayChangeState(action: TapActionConfig | undefined): boolean {
+  if (!action) return false;
+  switch (action.action) {
+    case 'none':
+    case 'navigate':
+    case 'url':
+    case 'more-info':
+      return false;
+    default:
+      return true;
+  }
+}
+
+/**
  * Wykonuje tap_action. Zwraca `true`, gdy akcja została obsłużona; `false`,
  * gdy nie było czego wykonać — wywołujący wraca wtedy do swojego
  * domyślnego zachowania (toggle kafla, lista chipa, aktywacja sceny).
