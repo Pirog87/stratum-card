@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   decidePopState,
   GUARD_STATE,
+  isGuardOnTop,
   isGuardState,
+  leavesView,
+  liveGuards,
   navigateMode,
+  registerGuardSource,
   planConsume,
   stateHasDialog,
   type GuardEntry,
@@ -57,21 +61,62 @@ describe('planConsume', () => {
 });
 
 describe('navigate z popupu nadpisuje wpis strażnika (przegląd v1.109.3)', () => {
-  it('strażnik na szczycie historii → replace', () => {
+  const href = 'http://ha.local/dom/parter';
+
+  it('strażnik na szczycie + inny widok → replace', () => {
     expect(isGuardState({ ...GUARD_STATE })).toBe(true);
-    expect(navigateMode({ ...GUARD_STATE })).toBe('replace');
+    expect(navigateMode({ guardOnTop: true, fromHref: href, toPath: '/dom/pietro' })).toBe('replace');
+    expect(navigateMode({ guardOnTop: true, fromHref: href, toPath: '/lovelace/0#x' })).toBe('replace');
   });
 
-  it('zwykły wpis, dialog HA, null → push', () => {
-    expect(navigateMode(null)).toBe('push');
-    expect(navigateMode(undefined)).toBe('push');
-    expect(navigateMode({ dialog: 'ha-more-info-dialog', open: true })).toBe('push');
-    expect(navigateMode({ root: true })).toBe('push');
+  it('hash albo query na tym samym widoku → push (kolejna warstwa, np. Bubble Card)', () => {
+    expect(navigateMode({ guardOnTop: true, fromHref: href, toPath: '#salon' })).toBe('push');
+    expect(navigateMode({ guardOnTop: true, fromHref: href, toPath: '/dom/parter#salon' })).toBe('push');
+    expect(navigateMode({ guardOnTop: true, fromHref: href, toPath: '?edit=1' })).toBe('push');
+    expect(navigateMode({ guardOnTop: true, fromHref: `${href}#salon`, toPath: '/dom/parter' })).toBe('push');
+  });
+
+  it('bez strażnika na szczycie albo z nieparsowalnym adresem → push', () => {
+    expect(navigateMode({ guardOnTop: false, fromHref: href, toPath: '/dom/pietro' })).toBe('push');
+    expect(navigateMode({ guardOnTop: true, fromHref: '', toPath: '/dom/pietro' })).toBe('push');
+    expect(leavesView('', '/x')).toBe(false);
+    expect(leavesView(href, 'dom/pietro')).toBe(true);
     expect(isGuardState({ stratum: 'true' })).toBe(false);
   });
 
-  it('po nadpisaniu jedno wstecz zamyka popup, gdy karta została na widoku', () => {
-    // Popup 5 nadpisany ścieżką navigate (ten sam widok) → wstecz na 4.
+  it('Navigation API: decyduje indeks żywego strażnika, nie history.state', () => {
+    // More-info otwarte i zamknięte z popupu nadpisuje wpis strażnika
+    // stanem HA — strażnik dalej jest na szczycie (indeks 5).
+    const closedMoreInfo = { dialog: 'ha-more-info-dialog', open: false, oldState: null };
+    expect(isGuardOnTop([roomAt(5)], 5, closedMoreInfo)).toBe(true);
+    expect(isGuardOnTop([roomAt(5), roomChipAt(6)], 6, null)).toBe(true);
+    // Nad strażnikiem leży cudzy wpis (hash Bubble Card) — nie nadpisujemy.
+    expect(isGuardOnTop([roomAt(5)], 6, { ...GUARD_STATE })).toBe(false);
+    // Brak żywych strażników: stan z historii nic nie znaczy.
+    expect(isGuardOnTop([], 5, { ...GUARD_STATE })).toBe(false);
+  });
+
+  it('bez Navigation API: żywy strażnik + nasz stan albo ślad zamkniętego more-info', () => {
+    expect(isGuardOnTop([roomAt(null)], null, { ...GUARD_STATE })).toBe(true);
+    expect(isGuardOnTop([roomAt(null)], null, { dialog: 'ha-more-info-dialog', open: false })).toBe(true);
+    expect(isGuardOnTop([roomAt(null)], null, { dialog: 'ha-more-info-dialog', open: true })).toBe(false);
+    expect(isGuardOnTop([roomAt(null)], null, null)).toBe(false);
+    expect(isGuardOnTop([], null, { ...GUARD_STATE })).toBe(false);
+  });
+
+  it('rejestr strażników czyta bieżący stan źródła i się wyrejestrowuje', () => {
+    const guards: GuardEntry[] = [];
+    const unregister = registerGuardSource(() => guards);
+    expect(liveGuards()).toEqual([]);
+    guards.push(roomAt(5));
+    expect(liveGuards()).toEqual([roomAt(5)]);
+    unregister();
+    expect(liveGuards()).toEqual([]);
+  });
+
+  it('hash nad popupem: pierwsze wstecz zdejmuje hash, popup zostaje; drugie zamyka popup', () => {
+    // Popup 5, #salon dopisany jako 6 → wstecz na 5 nie rusza strażnika.
+    expect(decidePopState([roomAt(5)], 5, 0, false).pop).toBe(0);
     expect(decidePopState([roomAt(5)], 4, 0, false).pop).toBe(1);
   });
 });

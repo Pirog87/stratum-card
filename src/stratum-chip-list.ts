@@ -107,7 +107,7 @@ export class StratumChipList extends LitElement {
   public connectedCallback(): void {
     super.connectedCallback();
     this._releaseEscape?.();
-    this._releaseEscape = pushEscapeLayer(() => this._close());
+    this._releaseEscape = pushEscapeLayer(() => this._close(), this);
     this._unsubPower = subscribePower((ids) => {
       if (this._shown.some((id) => ids.has(id))) this.requestUpdate();
     });

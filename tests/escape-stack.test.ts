@@ -71,6 +71,18 @@ describe('EscapeLayers', () => {
   it('pusty stos niczego nie obsługuje', () => {
     expect(new EscapeLayers().handle(esc())).toBe(false);
   });
+
+  it('topHost: gospodarz najwyższej warstwy (do wykrycia dialogu-gospodarza)', () => {
+    const layers = new EscapeLayers<string>();
+    expect(layers.topHost).toBeUndefined();
+    const releaseRoom = layers.push(() => {}, 'card');
+    const releaseList = layers.push(() => {}, 'list');
+    expect(layers.topHost).toBe('list');
+    releaseList();
+    expect(layers.topHost).toBe('card');
+    releaseRoom();
+    expect(layers.topHost).toBeUndefined();
+  });
 });
 
 describe('dialog nadrzędny karty (przegląd v1.109.0)', () => {
@@ -98,6 +110,14 @@ describe('karta w dialogu-gospodarzu: faza capture (przegląd v1.109.3)', () => 
     expect(isHostedInDialog(['input', 'ha-more-info-dialog', 'home-assistant', 'body'])).toBe(false);
     expect(isHostedInDialog(['body', 'html'])).toBe(false);
     expect(escapePhase(['div', 'stratum-card', 'body'])).toBe('bubble');
+  });
+
+  it('fokus poza popupem, na elemencie dialogu-gospodarza: capture z flagi gospodarza', () => {
+    // Gospodarz wycięty ze ścieżki (to przodek karty, nie dialog nad nią).
+    const path = ['button', 'body', 'html'];
+    expect(escapePhase(path)).toBe('bubble');
+    expect(escapePhase(path, true)).toBe('capture');
+    expect(isFromForeignDialog(path)).toBe(false);
   });
 
   it('dialog nad warstwą (głębiej niż Stratum) to nie gospodarz', () => {

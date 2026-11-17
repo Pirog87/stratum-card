@@ -48,17 +48,108 @@ export function isGuardState(state: unknown): boolean {
 }
 
 /**
- * Akcja navigate przy strażniku na szczycie historii NADPISUJE jego wpis
- * zamiast dokładać nowy. Przejście na inny widok odpina kartę (popup
- * znika razem z nią), a osierocony wpis strażnika zostawał pod nowym
- * widokiem: pierwsze „wstecz" wracało na ten sam adres i wyglądało, jakby
- * nic się nie stało — trzeba było wciskać drugi raz. Po nadpisaniu jedno
- * „wstecz" wraca na widok z popupem. Gdy navigate zostaje na tym samym
- * widoku (karta żyje), popstate i tak zamknie popup — indeks strażnika
- * jest wyżej niż wpis, na który się cofamy.
+ * Czy wpis historii to zamknięty dialog HA (`{dialog, open:false}`). HA
+ * nadpisuje tak bieżący wpis przy KAŻDYM otwarciu more-info — także wpis
+ * naszego strażnika, gdy more-info otwarto z wnętrza popupu.
  */
-export function navigateMode(state: unknown): 'push' | 'replace' {
-  return isGuardState(state) ? 'replace' : 'push';
+function isClosedDialogState(state: unknown): boolean {
+  return stateHasDialog(state) && (state as { open?: unknown }).open === false;
+}
+
+/**
+ * Czy bieżący wpis historii to strażnik żywego popupu Stratum.
+ *
+ * Decydujemy ze stanu kart, nie z `history.state`: HA przy otwarciu
+ * more-info robi replaceState({dialog, open:false}) na bieżącym wpisie,
+ * więc po pierwszym more-info z popupu wpis strażnika nie wyglądał już
+ * na strażnika i navigate wracało do pushState — martwy krok w historii.
+ * - Z Navigation API: któryś żywy strażnik ma indeks bieżącego wpisu
+ *   (replaceState indeksu nie zmienia).
+ * - Bez API: jest żywy strażnik, a wpis to nasz stan albo ślad more-info
+ *   po zamknięciu. Navigate z wnętrza popupu odpala się tylko, gdy popup
+ *   jest na wierzchu — dialog HA nad nim zasłoniłby kafel.
+ *
+ * @param live         strażnicy otwartych popupów ze wszystkich kart
+ * @param currentIndex indeks bieżącego wpisu (null bez Navigation API)
+ * @param state        `history.state`
+ */
+export function isGuardOnTop(
+  live: readonly GuardEntry[],
+  currentIndex: number | null,
+  state: unknown,
+): boolean {
+  if (live.length === 0) return false;
+  if (currentIndex !== null && live.some((g) => g.index !== null)) {
+    return live.some((g) => g.index === currentIndex);
+  }
+  return isGuardState(state) || isClosedDialogState(state);
+}
+
+/**
+ * Czy navigate opuszcza bieżący widok — inna ścieżka (pathname). Sam hash
+ * (`#salon` — pop-up Bubble Card) albo sama query zostają na widoku.
+ * Nieparsowalny adres traktujemy jak pozostanie (bezpieczny push).
+ */
+export function leavesView(fromHref: string, toPath: string): boolean {
+  try {
+    return new URL(toPath, fromHref).pathname !== new URL(fromHref).pathname;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Akcja navigate NA INNY WIDOK przy strażniku na szczycie historii
+ * NADPISUJE jego wpis zamiast dokładać nowy. Przejście na inny widok
+ * odpina kartę (popup znika razem z nią), a osierocony wpis strażnika
+ * zostawał pod nowym widokiem: pierwsze „wstecz" wracało na ten sam adres
+ * i wyglądało, jakby nic się nie stało — trzeba było wciskać drugi raz.
+ * Po nadpisaniu jedno „wstecz" wraca na widok, z którego otwarto popup.
+ *
+ * Navigate w obrębie widoku (hash, query) zawsze dokłada wpis: to zwykle
+ * KOLEJNA warstwa nad popupem (pop-up Bubble Card na `#salon`). Gdyby
+ * nadpisać strażnika, pierwsze „wstecz" zamknęłoby obie warstwy naraz,
+ * a drugie wyrzuciło z widoku. Z pushem „wstecz" zdejmuje je po kolei.
+ */
+export function navigateMode(ctx: {
+  guardOnTop: boolean;
+  fromHref: string;
+  toPath: string;
+}): 'push' | 'replace' {
+  return ctx.guardOnTop && leavesView(ctx.fromHref, ctx.toPath) ? 'replace' : 'push';
+}
+
+/** Indeks bieżącego wpisu historii albo null bez Navigation API. */
+export function currentHistoryIndex(): number | null {
+  const nav = (
+    globalThis as unknown as {
+      navigation?: { currentEntry?: { index: number } | null };
+    }
+  ).navigation;
+  const idx = nav?.currentEntry?.index;
+  return typeof idx === 'number' && idx >= 0 ? idx : null;
+}
+
+// Rejestr żywych strażników — singleton modułu (jeden bundle, wspólny dla
+// wszystkich kart na widoku). Akcja navigate (tap-action.ts) nie wie, z
+// której karty przyszła, a musi wiedzieć, czy szczyt historii to strażnik.
+// Karta rejestruje źródło przy pierwszym strażniku i wyrejestrowuje przy
+// ostatnim / odpięciu — rejestr nie trzyma kopii, więc się nie rozjedzie.
+const guardSources = new Set<() => readonly GuardEntry[]>();
+
+/** Rejestruje źródło strażników karty. Zwraca wyrejestrowanie. */
+export function registerGuardSource(source: () => readonly GuardEntry[]): () => void {
+  guardSources.add(source);
+  return () => {
+    guardSources.delete(source);
+  };
+}
+
+/** Strażnicy wszystkich zarejestrowanych kart. */
+export function liveGuards(): GuardEntry[] {
+  const all: GuardEntry[] = [];
+  for (const source of guardSources) all.push(...source());
+  return all;
 }
 
 /** Warstwy zagnieżdżone: dziecko → rodzic, z którym się zamyka. */

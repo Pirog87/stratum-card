@@ -66,9 +66,11 @@ import './stratum-scene-bar.js';
 
 import { cardStyles } from './stratum-card-styles.js';
 import {
+  currentHistoryIndex,
   decidePopState,
   GUARD_STATE,
   planConsume,
+  registerGuardSource,
   stateHasDialog,
   type GuardEntry,
   type GuardKind,
@@ -674,28 +676,24 @@ export class StratumCard extends LitElement {
    */
   private _selfBack = 0;
 
-  /** Indeks bieżącego wpisu historii albo null bez Navigation API. */
-  private _historyIndex(): number | null {
-    const nav = (
-      window as unknown as {
-        navigation?: { currentEntry?: { index: number } | null };
-      }
-    ).navigation;
-    const idx = nav?.currentEntry?.index;
-    return typeof idx === 'number' && idx >= 0 ? idx : null;
-  }
+  /** Wyrejestrowanie strażników z rejestru modułu (back-guard.ts). */
+  private _unregisterGuards?: () => void;
 
   private _pushBackGuard(kind: GuardKind, close?: () => void): void {
     window.history.pushState({ ...GUARD_STATE }, '');
     if (this._guards.length === 0) {
       window.addEventListener('popstate', this._onPopState);
+      // Akcja navigate z wnętrza popupu pyta rejestr, czy szczyt historii
+      // to nasz strażnik — history.state tego nie powie (more-info HA go
+      // nadpisuje). Źródło czyta bieżące _guards, bez kopii.
+      this._unregisterGuards ??= registerGuardSource(() => this._guards);
       // Zdarzenia z wnętrza popupów (wiersz listy, ikona kafla) przechodzą
       // przez host karty — tak wiemy, że HA otworzy dialog nad nami.
       this.addEventListener('hass-more-info', this._onDialogAbove);
       this.addEventListener('show-dialog', this._onDialogAbove);
     }
     // Indeks czytamy PO pushState — to pozycja naszego wpisu.
-    this._guards.push({ kind, index: this._historyIndex(), close });
+    this._guards.push({ kind, index: currentHistoryIndex(), close });
   }
 
   /**
@@ -731,6 +729,8 @@ export class StratumCard extends LitElement {
 
   private _dropGuardListeners(): void {
     window.removeEventListener('popstate', this._onPopState);
+    this._unregisterGuards?.();
+    this._unregisterGuards = undefined;
     this.removeEventListener('hass-more-info', this._onDialogAbove);
     this.removeEventListener('show-dialog', this._onDialogAbove);
     this._dialogsAbove = 0;
@@ -740,7 +740,7 @@ export class StratumCard extends LitElement {
   private _onPopState = (ev: PopStateEvent): void => {
     const decision = decidePopState(
       this._guards,
-      this._historyIndex(),
+      currentHistoryIndex(),
       this._dialogsAbove,
       stateHasDialog(ev.state),
       this._selfBack,
@@ -2054,7 +2054,7 @@ export class StratumCard extends LitElement {
       icon: overrides?.icon,
     };
     if (wasOpen) return;
-    this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup());
+    this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup(), this);
     this._pushBackGuard('room');
     // Popup to zwykly div nad trescia, nie natywny dialog, wiec fokus
     // klawiatury sam do niego nie wejdzie - zostalby na wierszu pod

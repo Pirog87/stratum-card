@@ -33,7 +33,7 @@ export function isFromForeignDialog(pathNames: readonly string[]): boolean {
   // ma zamykać nasz popup, a nie przepadać.
   for (const n of pathNames) {
     if (n.startsWith('stratum-')) return false;
-    if (n === 'dialog' || n.endsWith('-dialog')) return true;
+    if (isDialogName(n)) return true;
   }
   return false;
 }
@@ -45,7 +45,7 @@ export function isFromForeignDialog(pathNames: readonly string[]): boolean {
 export function isHostedInDialog(pathNames: readonly string[]): boolean {
   const i = pathNames.findIndex((n) => n.startsWith('stratum-'));
   if (i < 0) return false;
-  return pathNames.slice(i + 1).some((n) => n === 'dialog' || n.endsWith('-dialog'));
+  return pathNames.slice(i + 1).some(isDialogName);
 }
 
 /**
@@ -59,8 +59,16 @@ export function isHostedInDialog(pathNames: readonly string[]): boolean {
  * mechanizmy. Poza dialogiem zostaje bubble: pole tekstowe, które samo
  * obsłużyło Escape (defaultPrevented), dalej ma pierwszeństwo.
  */
-export function escapePhase(pathNames: readonly string[]): 'capture' | 'bubble' {
-  return isHostedInDialog(pathNames) ? 'capture' : 'bubble';
+export function escapePhase(
+  pathNames: readonly string[],
+  hosted = false,
+): 'capture' | 'bubble' {
+  return hosted || isHostedInDialog(pathNames) ? 'capture' : 'bubble';
+}
+
+/** Nazwa tagu dialogu (HA, mwc, natywny <dialog>). */
+export function isDialogName(name: string): boolean {
+  return name === 'dialog' || name.endsWith('-dialog');
 }
 
 /** Czy Escape ma trafić do warstw Stratum. */
@@ -71,16 +79,21 @@ export function shouldHandleEscape(ev: EscapeEventLike): boolean {
   return !isFromForeignDialog(ev.pathNames);
 }
 
-export class EscapeLayers {
-  private _stack: { handler: EscapeHandler }[] = [];
+export class EscapeLayers<H = unknown> {
+  private _stack: { handler: EscapeHandler; host?: H }[] = [];
 
   public get size(): number {
     return this._stack.length;
   }
 
+  /** Element, który otworzył najwyższą warstwę (undefined = brak). */
+  public get topHost(): H | undefined {
+    return this._stack[this._stack.length - 1]?.host;
+  }
+
   /** Dokłada warstwę na szczyt. Zwraca funkcję zdejmującą tę warstwę. */
-  public push(handler: EscapeHandler): () => void {
-    const layer = { handler };
+  public push(handler: EscapeHandler, host?: H): () => void {
+    const layer = { handler, host };
     this._stack.push(layer);
     return () => {
       // Zdejmujemy po tożsamości, nie ze szczytu — warstwa pod spodem może
@@ -98,17 +111,42 @@ export class EscapeLayers {
   }
 }
 
-const layers = new EscapeLayers();
+const layers = new EscapeLayers<Element>();
+
+/**
+ * Dialogi, w których siedzi element (przodkowie w drzewie złożonym — przez
+ * sloty i granice shadow DOM). To dialogi-GOSPODARZE karty, nie obce.
+ */
+function hostDialogsOf(el: Element | undefined): Set<EventTarget> {
+  const found = new Set<EventTarget>();
+  let node: Node | null | undefined = el;
+  while (node) {
+    if (node instanceof Element && isDialogName(node.localName)) found.add(node);
+    node =
+      (node instanceof Element && node.assignedSlot) ||
+      node.parentNode ||
+      (node instanceof ShadowRoot ? node.host : null);
+  }
+  return found;
+}
 
 const makeKeydown =
   (phase: 'capture' | 'bubble') =>
   (ev: KeyboardEvent): void => {
     if (ev.key !== 'Escape') return;
+    // Fokus mógł wyjść z popupu na inny element dialogu-gospodarza (przycisk
+    // w podglądzie edytora) — wtedy na ścieżce nie ma węzła stratum-*
+    // i isHostedInDialog nic nie widzi. Dlatego gospodarzy bierzemy z
+    // drzewa karty, która otworzyła warstwę, i wycinamy ich ze ścieżki:
+    // nie są „obcym dialogiem nad popupem". Bez tego Escape zamykał cały
+    // dialog-gospodarz, a popup Stratum i jego strażnik historii zostawały.
+    const hosts = hostDialogsOf(layers.topHost);
     const pathNames = ev
       .composedPath()
+      .filter((n) => !hosts.has(n))
       .map((n) => (n as Element).localName)
       .filter((n): n is string => typeof n === 'string');
-    if (escapePhase(pathNames) !== phase) return;
+    if (escapePhase(pathNames, hosts.size > 0) !== phase) return;
     if (layers.handle({ key: ev.key, defaultPrevented: ev.defaultPrevented, pathNames })) {
       ev.stopPropagation();
       // Natywny <dialog> nad kartą nie dostaje wtedy „cancel".
@@ -122,12 +160,12 @@ const onKeydown = makeKeydown('bubble');
  * Rejestruje warstwę Stratum dla Escape. Słuchacze na `document` istnieją
  * tylko, gdy jest co najmniej jedna warstwa.
  */
-export function pushEscapeLayer(handler: EscapeHandler): () => void {
+export function pushEscapeLayer(handler: EscapeHandler, host?: Element): () => void {
   if (layers.size === 0) {
     document.addEventListener('keydown', onKeydownCapture, true);
     document.addEventListener('keydown', onKeydown);
   }
-  const release = layers.push(handler);
+  const release = layers.push(handler, host);
   let released = false;
   return () => {
     if (released) return;

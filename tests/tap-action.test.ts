@@ -5,6 +5,7 @@ import {
   resolveTapAction,
   runTapAction,
 } from '../src/tap-action.js';
+import { registerGuardSource } from '../src/back-guard.js';
 import { mergeCustomTileConfig } from '../src/custom-cards.js';
 import type { HassEntity, HomeAssistant, TapActionConfig } from '../src/types.js';
 import { entity } from './helpers.js';
@@ -183,15 +184,43 @@ describe('runTapAction', () => {
     expect(window.dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
-  it('navigate z otwartego popupu (strażnik na szczycie): replaceState zamiast pushState', () => {
+  it('navigate na inny widok z otwartego popupu (strażnik na szczycie): replaceState', () => {
     vi.stubGlobal('history', { state: { stratum: true }, pushState: vi.fn(), replaceState: vi.fn() });
-    const { source } = fakeSource();
-    expect(runTapAction(undefined, act({ action: 'navigate', navigation_path: '/b' }), { source })).toBe(true);
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), location: { href: 'http://ha.local/dom/parter' } });
+    const unregister = registerGuardSource(() => [{ kind: 'room', index: null }]);
+    try {
+      const { source } = fakeSource();
+      expect(runTapAction(undefined, act({ action: 'navigate', navigation_path: '/b' }), { source })).toBe(true);
+    } finally {
+      unregister();
+    }
     expect(history.replaceState).toHaveBeenCalledWith(null, '', '/b');
     expect(history.pushState).not.toHaveBeenCalled();
     const ev = vi.mocked(window.dispatchEvent).mock.calls[0]![0] as CustomEvent;
     expect(ev.type).toBe('location-changed');
     expect(ev.detail).toEqual({ replace: true });
+  });
+
+  it('navigate na hash z popupu (pop-up Bubble Card): pushState — kolejna warstwa', () => {
+    vi.stubGlobal('history', { state: { stratum: true }, pushState: vi.fn(), replaceState: vi.fn() });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), location: { href: 'http://ha.local/dom/parter' } });
+    const unregister = registerGuardSource(() => [{ kind: 'room', index: null }]);
+    try {
+      const { source } = fakeSource();
+      runTapAction(undefined, act({ action: 'navigate', navigation_path: '#salon' }), { source });
+    } finally {
+      unregister();
+    }
+    expect(history.pushState).toHaveBeenCalledWith(null, '', '#salon');
+    expect(history.replaceState).not.toHaveBeenCalled();
+  });
+
+  it('stan strażnika bez żywej karty (popup już zamknięty): pushState', () => {
+    vi.stubGlobal('history', { state: { stratum: true }, pushState: vi.fn(), replaceState: vi.fn() });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), location: { href: 'http://ha.local/dom/parter' } });
+    const { source } = fakeSource();
+    runTapAction(undefined, act({ action: 'navigate', navigation_path: '/b' }), { source });
+    expect(history.pushState).toHaveBeenCalledWith(null, '', '/b');
   });
 
   it('url: nowa karta domyślnie, ta sama przy new_tab: false', () => {
