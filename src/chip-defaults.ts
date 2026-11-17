@@ -61,7 +61,7 @@ const BUILTIN_COLOR: Record<BuiltInChipType, string> = {
   doors: 'var(--stratum-chip-doors-color, #ba68c8)',
   // Ten sam łańcuch co alias --stratum-alarm karty: chip wycieku i reszta
   // alarmów idą za --error-color motywu, nie za wpisaną czerwienią.
-  leak: 'var(--stratum-chip-leak-color, var(--error-color, #f44336))',
+  leak: 'var(--stratum-alarm, var(--error-color))',
   smoke: 'var(--stratum-chip-smoke-color, #e53935)',
   gas: 'var(--stratum-chip-gas-color, #ff5722)',
   co: 'var(--stratum-chip-co-color, #d84315)',

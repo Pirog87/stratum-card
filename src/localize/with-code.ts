@@ -2,8 +2,10 @@
 //
 // Podpowiedzi edytora mieszają zdania z nazwami plików i kluczami YAML.
 // Słownik trzyma je jako jeden napis (tłumacz widzi całe zdanie), a znaczniki
-// `<…>` zamieniamy tu na węzły Lita. Bez innerHTML/unsafeHTML: dzielimy napis
-// i każdy kawałek idzie do szablonu jako zwykły tekst.
+// `<…>` zamieniamy tu na węzły Lita. Bez wstrzykiwania surowego HTML-a:
+// dzielimy napis i każdy kawałek idzie do szablonu jako zwykły tekst.
+// (Nie wpisuj tu nazwy dyrektywy od surowego HTML-a — minifier szablonów
+// widzi ją nawet w komentarzu i wyłącza minifikację całego pliku.)
 
 import { html, type TemplateResult } from 'lit';
 

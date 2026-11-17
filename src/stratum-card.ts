@@ -1489,7 +1489,7 @@ export class StratumCard extends LitElement {
       entityIds: [],
       label: localize(this.hass, 'common.active_alarms'),
       icon: 'mdi:alert',
-      color: 'var(--stratum-chip-leak-color, var(--error-color, #f44336))',
+      color: 'var(--stratum-alarm, var(--error-color))',
       alarmAreaIds: areaIds,
     });
   }

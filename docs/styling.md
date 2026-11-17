@@ -41,9 +41,12 @@ Dwie pułapki:
     elementy — `--stratum-room-row-bg`, `--stratum-tile-background`,
     `--stratum-room-tile-bg`, `--stratum-chip-background` i reszta listy
     z „Powierzchnie". `ha-card { --stratum-surface-1: … }` nie zmieni
-    wierszy ani kafli, bo te tokeny policzyły się z surface-1 na `:host`;
-    sam stopień `--stratum-surface-N` (i bazę `--stratum-card-background`)
-    ustawiaj na `:host` albo w motywie;
+    wierszy ani kafli, bo te tokeny policzyły się z surface-1 na `:host`.
+    Sam stopień `--stratum-surface-N` nie da się nadpisać ani w motywie,
+    ani przez card-mod `:host { … }` — definicja karty jest w kaskadzie
+    później; zadziała tylko z `!important`. Żeby przesunąć wszystkie
+    stopnie naraz, zmień bazę `--stratum-card-background` (w motywie albo
+    na `:host`) — stopnie liczą się z niej;
   - **kolor świateł**: `ha-card { --stratum-chip-lights-color: … }`
     przemaluje chipy, przełącznik w wierszu, kafle i przełącznik nagłówka
     sekcji w karcie pokoju (czytają zmienną bazową wprost), ale nie paski
@@ -104,9 +107,10 @@ card_mod:
       --stratum-room-row-bg: color-mix(in srgb, var(--card-background-color) 90%, var(--primary-text-color));
       --stratum-tile-background: color-mix(in srgb, var(--card-background-color) 90%, var(--primary-text-color));
     }
-    /* albo cały stopień naraz — na :host, nie na ha-card */
+    /* albo cały stopień naraz — tylko z !important, bo karta sama
+       definiuje --stratum-surface-N na :host później w kaskadzie */
     :host {
-      --stratum-surface-1: color-mix(in srgb, var(--card-background-color) 90%, var(--primary-text-color));
+      --stratum-surface-1: color-mix(in srgb, var(--card-background-color) 90%, var(--primary-text-color)) !important;
     }
 ```
 

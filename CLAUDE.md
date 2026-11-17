@@ -37,7 +37,9 @@ ma mieć pełną kontrolę nad tym, które metryki się pokazują i jak wygląda
    (język z `hass.locale.language` / `hass.language`, liczba mnoga przez
    `{ one, few, many }` / `{ one, other }` i `{count}`). Podkomponent bez
    `hass` dostaje `.uiLang=${langOf(this.hass)}`. Nigdy nie hardcoduj
-   stringów user-facing w komponentach.
+   stringów user-facing w komponentach. Teksty edytorów siedzą osobno
+   w `src/localize/editor-pl.ts` / `editor-en.ts` i idą przez
+   `localizeUi()` z `src/localize/editor-localize.ts`.
 4. **Unit testy** — Vitest, `npm test`. Testujemy czyste funkcje (bez
    DOM/Lit) w `tests/`; helpery wymagające testów wydzielamy z komponentów
    do osobnych modułów (wzór: `scene-gradient.ts`). CI odpala testy przed
