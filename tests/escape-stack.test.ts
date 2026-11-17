@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   EscapeLayers,
+  escapePhase,
   isFromForeignDialog,
+  isHostedInDialog,
   shouldHandleEscape,
   type EscapeEventLike,
 } from '../src/escape-stack.js';
@@ -77,5 +79,28 @@ describe('dialog nadrzędny karty (przegląd v1.109.0)', () => {
   });
   it('more-info nad popupem: dialog przed warstwą Stratum blokuje', () => {
     expect(isFromForeignDialog(['input', 'ha-more-info-dialog', 'home-assistant', 'body'])).toBe(true);
+  });
+});
+
+describe('karta w dialogu-gospodarzu: faza capture (przegląd v1.109.3)', () => {
+  const preview = ['div', 'stratum-room-card', 'div', 'stratum-card', 'hui-card-preview', 'ha-dialog', 'hui-dialog-edit-card', 'body'];
+
+  it('podgląd edytora i browser_mod: karta w dialogu', () => {
+    expect(isHostedInDialog(preview)).toBe(true);
+    expect(isHostedInDialog(['div', 'stratum-card', 'ha-wa-dialog', 'browser-mod-popup', 'body'])).toBe(true);
+    expect(isHostedInDialog(['div', 'stratum-card', 'dialog', 'body'])).toBe(true);
+    expect(escapePhase(preview)).toBe('capture');
+  });
+
+  it('zwykły dashboard i more-info nad popupem: bubble jak dotąd', () => {
+    expect(isHostedInDialog(['div', 'stratum-card', 'hui-view', 'home-assistant', 'body'])).toBe(false);
+    // more-info leży poza kartą — na ścieżce nie ma elementu Stratum.
+    expect(isHostedInDialog(['input', 'ha-more-info-dialog', 'home-assistant', 'body'])).toBe(false);
+    expect(isHostedInDialog(['body', 'html'])).toBe(false);
+    expect(escapePhase(['div', 'stratum-card', 'body'])).toBe('bubble');
+  });
+
+  it('dialog nad warstwą (głębiej niż Stratum) to nie gospodarz', () => {
+    expect(isHostedInDialog(['input', 'ha-md-dialog', 'stratum-card', 'body'])).toBe(false);
   });
 });

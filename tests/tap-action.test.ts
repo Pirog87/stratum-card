@@ -183,6 +183,17 @@ describe('runTapAction', () => {
     expect(window.dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
+  it('navigate z otwartego popupu (strażnik na szczycie): replaceState zamiast pushState', () => {
+    vi.stubGlobal('history', { state: { stratum: true }, pushState: vi.fn(), replaceState: vi.fn() });
+    const { source } = fakeSource();
+    expect(runTapAction(undefined, act({ action: 'navigate', navigation_path: '/b' }), { source })).toBe(true);
+    expect(history.replaceState).toHaveBeenCalledWith(null, '', '/b');
+    expect(history.pushState).not.toHaveBeenCalled();
+    const ev = vi.mocked(window.dispatchEvent).mock.calls[0]![0] as CustomEvent;
+    expect(ev.type).toBe('location-changed');
+    expect(ev.detail).toEqual({ replace: true });
+  });
+
   it('url: nowa karta domyślnie, ta sama przy new_tab: false', () => {
     const { source } = fakeSource();
     runTapAction(undefined, act({ action: 'url', url_path: 'https://a' }), { source });

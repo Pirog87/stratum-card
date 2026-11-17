@@ -11,6 +11,7 @@
 // `toggle` bez encji), ma wrócić do swojego domyślnego kliknięcia, a chip
 // — do listy encji, zamiast udawać przycisk, który nic nie robi.
 
+import { navigateMode } from './back-guard.js';
 import type { HomeAssistant, TapActionConfig } from './types.js';
 
 /** Kontekst potrzebny do rozwiązania akcji (bez DOM-u — testowalny). */
@@ -133,10 +134,16 @@ export function runTapAction(
   const plan = resolveTapAction(hass, action, ctx);
   if (!plan) return false;
   switch (plan.kind) {
-    case 'navigate':
-      history.pushState(null, '', plan.path);
-      window.dispatchEvent(new Event('location-changed'));
+    case 'navigate': {
+      // Z wnętrza popupu (strażnik „wstecz" na szczycie) nadpisujemy wpis
+      // strażnika — uzasadnienie przy navigateMode w back-guard.ts.
+      // `replace` w szczególe zdarzenia — tak samo woła router HA navigate().
+      const replace = navigateMode(history.state) === 'replace';
+      if (replace) history.replaceState(null, '', plan.path);
+      else history.pushState(null, '', plan.path);
+      window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace } }));
       return true;
+    }
     case 'url':
       if (plan.newTab) window.open(plan.url, '_blank', 'noopener');
       else window.location.href = plan.url;

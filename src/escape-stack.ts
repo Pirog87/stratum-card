@@ -38,6 +38,31 @@ export function isFromForeignDialog(pathNames: readonly string[]): boolean {
   return false;
 }
 
+/**
+ * Czy karta siedzi w cudzym dialogu (podgląd edytora HA, popup
+ * browser_mod): dialog leży na ścieżce DALEJ niż element Stratum.
+ */
+export function isHostedInDialog(pathNames: readonly string[]): boolean {
+  const i = pathNames.findIndex((n) => n.startsWith('stratum-'));
+  if (i < 0) return false;
+  return pathNames.slice(i + 1).some((n) => n === 'dialog' || n.endsWith('-dialog'));
+}
+
+/**
+ * Faza, w której łapiemy Escape. Karta w dialogu-gospodarzu: CAPTURE na
+ * document. Dialog HA łapie Escape sam — mwc ha-dialog słuchaczem keydown
+ * na document (zarejestrowanym wcześniej niż nasz, więc w bubble byłby
+ * pierwszy), a dialogi na natywnym <dialog> (ha-md-dialog, ha-wa-dialog)
+ * domyślną akcją klawisza. W bubble Escape zamykał nasz popup ORAZ cały
+ * dialog-gospodarz (podgląd edytora znikał razem z popupem). W capture
+ * jesteśmy przed nimi, a stopPropagation + preventDefault zatrzymują oba
+ * mechanizmy. Poza dialogiem zostaje bubble: pole tekstowe, które samo
+ * obsłużyło Escape (defaultPrevented), dalej ma pierwszeństwo.
+ */
+export function escapePhase(pathNames: readonly string[]): 'capture' | 'bubble' {
+  return isHostedInDialog(pathNames) ? 'capture' : 'bubble';
+}
+
 /** Czy Escape ma trafić do warstw Stratum. */
 export function shouldHandleEscape(ev: EscapeEventLike): boolean {
   if (ev.key !== 'Escape') return false;
@@ -75,29 +100,42 @@ export class EscapeLayers {
 
 const layers = new EscapeLayers();
 
-const onKeydown = (ev: KeyboardEvent): void => {
-  if (ev.key !== 'Escape') return;
-  const pathNames = ev
-    .composedPath()
-    .map((n) => (n as Element).localName)
-    .filter((n): n is string => typeof n === 'string');
-  if (layers.handle({ key: ev.key, defaultPrevented: ev.defaultPrevented, pathNames })) {
-    ev.stopPropagation();
-  }
-};
+const makeKeydown =
+  (phase: 'capture' | 'bubble') =>
+  (ev: KeyboardEvent): void => {
+    if (ev.key !== 'Escape') return;
+    const pathNames = ev
+      .composedPath()
+      .map((n) => (n as Element).localName)
+      .filter((n): n is string => typeof n === 'string');
+    if (escapePhase(pathNames) !== phase) return;
+    if (layers.handle({ key: ev.key, defaultPrevented: ev.defaultPrevented, pathNames })) {
+      ev.stopPropagation();
+      // Natywny <dialog> nad kartą nie dostaje wtedy „cancel".
+      ev.preventDefault();
+    }
+  };
+const onKeydownCapture = makeKeydown('capture');
+const onKeydown = makeKeydown('bubble');
 
 /**
- * Rejestruje warstwę Stratum dla Escape. Słuchacz na `document` istnieje
+ * Rejestruje warstwę Stratum dla Escape. Słuchacze na `document` istnieją
  * tylko, gdy jest co najmniej jedna warstwa.
  */
 export function pushEscapeLayer(handler: EscapeHandler): () => void {
-  if (layers.size === 0) document.addEventListener('keydown', onKeydown);
+  if (layers.size === 0) {
+    document.addEventListener('keydown', onKeydownCapture, true);
+    document.addEventListener('keydown', onKeydown);
+  }
   const release = layers.push(handler);
   let released = false;
   return () => {
     if (released) return;
     released = true;
     release();
-    if (layers.size === 0) document.removeEventListener('keydown', onKeydown);
+    if (layers.size === 0) {
+      document.removeEventListener('keydown', onKeydownCapture, true);
+      document.removeEventListener('keydown', onKeydown);
+    }
   };
 }

@@ -20,12 +20,80 @@
 //   zostawia `{dialog, open:false}` na wpisie dashboardu po każdym more-info
 //   i taka heurystyka blokowałaby zwykłe „wstecz" do końca sesji.
 
-export type GuardKind = 'room' | 'chip';
+// 'room-chip' to lista chipa otwarta przez kartę pokoju WEWNĄTRZ popupu
+// pokoju. Karta pokoju nie zna historii — prosi kartę piętra o strażnika
+// zdarzeniem i podaje własne zamknięcie (`close`). Bez tego „wstecz" przy
+// otwartej liście zdejmowało strażnika popupu i zamykało cały popup,
+// choć Escape zamykał tylko listę.
+export type GuardKind = 'room' | 'chip' | 'room-chip';
 
 export interface GuardEntry {
   kind: GuardKind;
   /** Indeks wpisu historii z Navigation API; null = API niedostępne. */
   index: number | null;
+  /** Zamknięcie warstwy, której stanu karta piętra nie trzyma ('room-chip'). */
+  close?: () => void;
+}
+
+/** Stan wpisu historii, który wypycha strażnik. */
+export const GUARD_STATE = { stratum: true } as const;
+
+/** Czy wpis historii to nasz strażnik (popup Stratum na szczycie). */
+export function isGuardState(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { stratum?: unknown }).stratum === true
+  );
+}
+
+/**
+ * Akcja navigate przy strażniku na szczycie historii NADPISUJE jego wpis
+ * zamiast dokładać nowy. Przejście na inny widok odpina kartę (popup
+ * znika razem z nią), a osierocony wpis strażnika zostawał pod nowym
+ * widokiem: pierwsze „wstecz" wracało na ten sam adres i wyglądało, jakby
+ * nic się nie stało — trzeba było wciskać drugi raz. Po nadpisaniu jedno
+ * „wstecz" wraca na widok z popupem. Gdy navigate zostaje na tym samym
+ * widoku (karta żyje), popstate i tak zamknie popup — indeks strażnika
+ * jest wyżej niż wpis, na który się cofamy.
+ */
+export function navigateMode(state: unknown): 'push' | 'replace' {
+  return isGuardState(state) ? 'replace' : 'push';
+}
+
+/** Warstwy zagnieżdżone: dziecko → rodzic, z którym się zamyka. */
+const NESTED_IN: Partial<Record<GuardKind, GuardKind>> = { 'room-chip': 'room' };
+
+export type ConsumePlan =
+  /** history.go(-steps) — popstate zamknie warstwę (i jej dzieci nad nią). */
+  | { kind: 'back'; steps: number }
+  /** Strażnik nie na szczycie — tylko wyjąć ze stosu, historii nie ruszać. */
+  | { kind: 'drop'; at: number }
+  | { kind: 'none' };
+
+/**
+ * Programowe zamknięcie (×, Escape, tło) warstwy `kind`. Cofamy historię,
+ * gdy nad strażnikiem leżą wyłącznie jego dzieci — × popupu przy otwartej
+ * liście karty pokoju cofa o dwa wpisy i zamyka obie warstwy. Dawniej
+ * strażnik popupu nie był na szczycie, więc wypadał ze stosu bez cofnięcia
+ * i w historii zostawały martwe wpisy („wstecz" bez widocznego efektu).
+ * Gdy nad strażnikiem leży coś obcego, cofnięcie zamknęłoby nie tę
+ * warstwę — wtedy tylko „drop" (zostaje wpis, mniejsze zło).
+ */
+export function planConsume(stack: readonly GuardEntry[], kind: GuardKind): ConsumePlan {
+  let at = -1;
+  for (let i = stack.length - 1; i >= 0; i--) {
+    if (stack[i].kind === kind) {
+      at = i;
+      break;
+    }
+  }
+  if (at < 0) return { kind: 'none' };
+  const above = stack.slice(at + 1);
+  if (above.every((g) => NESTED_IN[g.kind] === kind)) {
+    return { kind: 'back', steps: stack.length - at };
+  }
+  return { kind: 'drop', at };
 }
 
 export interface PopDecision {
@@ -42,16 +110,18 @@ export interface PopDecision {
  * @param currentIndex indeks bieżącego wpisu po popie (null bez Navigation API)
  * @param dialogsAbove ile dialogów HA otwarto nad popupem (tryb zapasowy)
  * @param stateHasDialog czy `event.state` ma pole `dialog` (wpis HA)
- * @param selfBack     pop wywołany naszym history.back() (×, Escape, tło)
+ * @param selfBack     pop wywołany naszym cofnięciem (×, Escape, tło): ile
+ *                     strażników zdejmuje (true = 1; false/0 = pop obcy)
  */
 export function decidePopState(
   stack: readonly GuardEntry[],
   currentIndex: number | null,
   dialogsAbove: number,
   stateHasDialog: boolean,
-  selfBack = false,
+  selfBack: number | boolean = false,
 ): PopDecision {
   if (stack.length === 0) return { pop: 0, dialogsAbove: 0 };
+  const own = Math.min(stack.length, Number(selfBack));
   const top = stack[stack.length - 1];
 
   if (currentIndex !== null && top.index !== null) {
@@ -64,15 +134,15 @@ export function decidePopState(
       if (idx === null || idx <= currentIndex) break;
       pop++;
     }
-    // × zawsze zamyka — nawet gdy ktoś (np. akcja navigate) dopisał wpis
-    // nad naszym strażnikiem i cofnięcie wylądowało jeszcze nad nim.
-    if (selfBack && pop === 0) pop = 1;
+    // × zawsze zamyka (tyle warstw, o ile cofnęliśmy) — nawet gdy ktoś
+    // dopisał wpis nad naszym strażnikiem i cofnięcie wylądowało nad nim.
+    if (pop < own) pop = own;
     return { pop, dialogsAbove };
   }
 
   // Nasze własne cofnięcie zawsze zamyka szczyt — inaczej rozjechany licznik
   // dialogów zablokowałby × (wpis dashboardu też bywa `{dialog, open:false}`).
-  if (selfBack) return { pop: 1, dialogsAbove: 0 };
+  if (own > 0) return { pop: own, dialogsAbove: 0 };
 
   if (dialogsAbove > 0 && stateHasDialog) {
     // Zamknięcie dialogu HA otwartego nad naszym popupem — popup zostaje.

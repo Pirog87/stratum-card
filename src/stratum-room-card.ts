@@ -281,6 +281,7 @@ export class StratumRoomCard extends LitElement {
       runTapAction(this.hass, { action: 'more-info' }, { source: this, entity_id: tap.entityId });
       return;
     }
+    const wasOpen = Boolean(this._popupChip);
     this._popupChip = {
       chip,
       label: CHIP_LIST_LABELS[chip.type] ?? 'Lista',
@@ -290,7 +291,36 @@ export class StratumRoomCard extends LitElement {
         CHIP_LIST_COLORS[chip.type] ??
         'var(--primary-color)',
     };
+    // W popupie karty piętra lista dostaje strażnika „wstecz" (back-guard.ts,
+    // 'room-chip') — Android „wstecz" zamyka wtedy tylko listę, nie cały
+    // popup. Przy podmianie treści otwartej listy drugiego wpisu nie
+    // dokładamy. Samodzielna karta pokoju nie ma słuchacza i nic się nie
+    // zmienia.
+    if (!wasOpen) {
+      this.dispatchEvent(
+        new CustomEvent('stratum-layer-open', {
+          bubbles: true,
+          composed: true,
+          detail: { close: () => (this._popupChip = undefined) },
+        }),
+      );
+    }
   }
+
+  /**
+   * × / Escape / tło listy. Gdy karta piętra trzyma strażnika, anuluje
+   * zdarzenie i zamyka listę sama po cofnięciu historii (popstate) —
+   * inaczej wpis listy zostałby w historii. Bez gospodarza chowamy od razu.
+   */
+  private _closeChipList = (): void => {
+    const ev = new CustomEvent('stratum-layer-close', {
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+    });
+    if (!this.dispatchEvent(ev)) return;
+    this._popupChip = undefined;
+  };
 
   private _renderChipListPopup(entries: HassEntityRegistryEntry[]): TemplateResult {
     if (!this._popupChip || !this.hass) return html``;
@@ -303,9 +333,7 @@ export class StratumRoomCard extends LitElement {
       .label=${this._popupChip.label}
       .icon=${this._popupChip.icon}
       .color=${this._popupChip.color}
-      @close=${() => {
-        this._popupChip = undefined;
-      }}
+      @close=${this._closeChipList}
     ></stratum-chip-list>`;
   }
 
