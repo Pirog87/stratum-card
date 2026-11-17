@@ -81,7 +81,11 @@ import './stratum-scene-bar.js';
 
 import { cardStyles } from './stratum-card-styles.js';
 import {
+  currentHistoryIndex,
   decidePopState,
+  GUARD_STATE,
+  planConsume,
+  registerGuardSource,
   stateHasDialog,
   type GuardEntry,
   type GuardKind,
@@ -679,32 +683,53 @@ export class StratumCard extends LitElement {
   /** Dialogi HA otwarte nad popupem — tylko dla trybu bez Navigation API. */
   private _dialogsAbove = 0;
 
-  /** Popstate wywołany naszym history.back() (×, Escape, tło, uchwyt). */
-  private _selfBack = false;
+  /**
+   * Popstate wywołany naszym cofnięciem (×, Escape, tło, uchwyt): ile
+   * strażników zdejmuje. 0 = pop obcy (Android „wstecz", dialog HA).
+   */
+  private _selfBack = 0;
 
-  /** Indeks bieżącego wpisu historii albo null bez Navigation API. */
-  private _historyIndex(): number | null {
-    const nav = (
-      window as unknown as {
-        navigation?: { currentEntry?: { index: number } | null };
-      }
-    ).navigation;
-    const idx = nav?.currentEntry?.index;
-    return typeof idx === 'number' && idx >= 0 ? idx : null;
-  }
+  /** Wyrejestrowanie strażników z rejestru modułu (back-guard.ts). */
+  private _unregisterGuards?: () => void;
 
-  private _pushBackGuard(kind: GuardKind): void {
-    window.history.pushState({ stratum: true }, '');
+  private _pushBackGuard(kind: GuardKind, close?: () => void): void {
+    window.history.pushState({ ...GUARD_STATE }, '');
     if (this._guards.length === 0) {
       window.addEventListener('popstate', this._onPopState);
+      // Akcja navigate z wnętrza popupu pyta rejestr, czy szczyt historii
+      // to nasz strażnik — history.state tego nie powie (more-info HA go
+      // nadpisuje). Źródło czyta bieżące _guards, bez kopii.
+      this._unregisterGuards ??= registerGuardSource(() => this._guards);
       // Zdarzenia z wnętrza popupów (wiersz listy, ikona kafla) przechodzą
       // przez host karty — tak wiemy, że HA otworzy dialog nad nami.
       this.addEventListener('hass-more-info', this._onDialogAbove);
       this.addEventListener('show-dialog', this._onDialogAbove);
     }
     // Indeks czytamy PO pushState — to pozycja naszego wpisu.
-    this._guards.push({ kind, index: this._historyIndex() });
+    this._guards.push({ kind, index: currentHistoryIndex(), close });
   }
+
+  /**
+   * Lista chipa karty pokoju w popupie prosi o strażnika (back-guard.ts,
+   * 'room-chip') — „wstecz" ma zamknąć tylko ją, nie cały popup. Samodzielna
+   * karta pokoju nie ma tego słuchacza i działa po staremu, bez historii.
+   */
+  private _onNestedLayerOpen = (ev: CustomEvent<{ close: () => void }>): void => {
+    ev.stopPropagation();
+    if (this._guards.some((g) => g.kind === 'room-chip')) return;
+    this._pushBackGuard('room-chip', ev.detail.close);
+  };
+
+  /**
+   * × / Escape / tło listy karty pokoju. preventDefault = „zamknę ja, przez
+   * history.back()" — karta pokoju nie chowa wtedy listy sama, robi to
+   * popstate przez `close` strażnika. Bez tego wpis listy zostawał
+   * w historii i następne „wstecz" nic nie robiło.
+   */
+  private _onNestedLayerClose = (ev: Event): void => {
+    ev.stopPropagation();
+    if (this._consumeBackGuard('room-chip')) ev.preventDefault();
+  };
 
   private _onDialogAbove = (ev: Event): void => {
     // hass-more-info bez encji zamyka more-info, a nie otwiera nowego.
@@ -717,27 +742,33 @@ export class StratumCard extends LitElement {
 
   private _dropGuardListeners(): void {
     window.removeEventListener('popstate', this._onPopState);
+    this._unregisterGuards?.();
+    this._unregisterGuards = undefined;
     this.removeEventListener('hass-more-info', this._onDialogAbove);
     this.removeEventListener('show-dialog', this._onDialogAbove);
     this._dialogsAbove = 0;
-    this._selfBack = false;
+    this._selfBack = 0;
   }
 
   private _onPopState = (ev: PopStateEvent): void => {
     const decision = decidePopState(
       this._guards,
-      this._historyIndex(),
+      currentHistoryIndex(),
       this._dialogsAbove,
       stateHasDialog(ev.state),
       this._selfBack,
     );
-    this._selfBack = false;
+    this._selfBack = 0;
     this._dialogsAbove = decision.dialogsAbove;
     // Historia jest już cofnięta przez system — zamykamy bez history.back().
     for (let i = 0; i < decision.pop; i++) {
       const guard = this._guards.pop();
       if (guard?.kind === 'chip') this._closeChipListNow();
       else if (guard?.kind === 'room') this._closeRoomPopupNow();
+      else if (guard?.kind === 'room-chip') {
+        this._closing.delete('room-chip');
+        guard.close?.();
+      }
     }
     if (this._guards.length === 0) this._dropGuardListeners();
   };
@@ -759,21 +790,24 @@ export class StratumCard extends LitElement {
 
   private _consumeBackGuard(kind: GuardKind): boolean {
     if (this._closing.has(kind)) return true;
-    const top = this._guards[this._guards.length - 1];
-    if (top?.kind === kind) {
+    // Szczyt albo popup z otwartą nad nim listą karty pokoju — wtedy
+    // cofamy o oba wpisy naraz (planConsume w back-guard.ts).
+    const plan = planConsume(this._guards, kind);
+    if (plan.kind === 'back') {
+      const guard = this._guards[this._guards.length - plan.steps];
       this._closing.add(kind);
-      this._selfBack = true;
-      window.history.back(); // popstate zamknie popup
+      this._selfBack = plan.steps;
+      window.history.go(-plan.steps); // popstate zamknie popup
       window.setTimeout(() => {
         if (!this._closing.delete(kind)) return;
         if (kind === 'room' && this._popupRoom) this._closeRoomPopupNow();
         if (kind === 'chip' && this._popupChip) this._closeChipListNow();
+        if (kind === 'room-chip') guard.close?.();
       }, 500);
       return true;
     }
-    const i = this._guards.map((g) => g.kind).lastIndexOf(kind);
-    if (i >= 0) {
-      this._guards.splice(i, 1);
+    if (plan.kind === 'drop') {
+      this._guards.splice(plan.at, 1);
       if (this._guards.length === 0) this._dropGuardListeners();
     }
     return false;
@@ -824,6 +858,8 @@ export class StratumCard extends LitElement {
     // strażnika historii i bez Escape.
     this._dropGuardListeners();
     this._guards = [];
+    // Zatrzask × też — bezpiecznik 500 ms nie ma już czego domykać.
+    this._closing.clear();
     this._releaseRoomEscape?.();
     this._releaseRoomEscape = undefined;
     this._popupRoom = undefined;
@@ -1347,6 +1383,8 @@ export class StratumCard extends LitElement {
           <stratum-room-card
             .hass=${this.hass}
             .config=${popupConfig}
+            @stratum-layer-open=${this._onNestedLayerOpen}
+            @stratum-layer-close=${this._onNestedLayerClose}
           ></stratum-room-card>
           <span
             class="stratum-popup-sentinel"
@@ -2029,7 +2067,7 @@ export class StratumCard extends LitElement {
       icon: overrides?.icon,
     };
     if (wasOpen) return;
-    this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup());
+    this._releaseRoomEscape = pushEscapeLayer(() => this._closeRoomPopup(), this);
     this._pushBackGuard('room');
     // Popup to zwykly div nad trescia, nie natywny dialog, wiec fokus
     // klawiatury sam do niego nie wejdzie - zostalby na wierszu pod
@@ -2048,6 +2086,8 @@ export class StratumCard extends LitElement {
 
   private _closeRoomPopupNow(): void {
     this._closing.delete('room');
+    // Lista karty pokoju znika razem z popupem.
+    this._closing.delete('room-chip');
     this._popupRoom = undefined;
     this._releaseRoomEscape?.();
     this._releaseRoomEscape = undefined;
