@@ -141,6 +141,14 @@ card_mod:
 | `--stratum-tile-background` | `rgba(255,255,255,0.03)` | tło tile (stan nieaktywny) |
 | `--stratum-tile-hover-background` | `rgba(255,255,255,0.06)` | tło tile przy hover |
 | `--stratum-tile-accent` | `--primary-color` | akcent border/ikony tile aktywnego |
+| `--stratum-player-accent` | `--primary-color` | akcent playera: przycisk ⏯, pasek postępu, suwak głośności, stan „wysyłanie" krótkofalówki |
+| `--stratum-player-min-height` | `168px` | minimalna wysokość kafla playera (`mode: player`) |
+| `--stratum-focus` | `--primary-color` | obrys fokusu klawiatury przycisków playera i ikony kafla ambient |
+
+Rząd sterowania playera zawija się w dwa rzędy (transport / głośność), gdy
+kafel ma poniżej ~430 px szerokości — to container query na kaflu
+(`container: stratum-player`), nie media query, więc działa tak samo w
+kolumnie na telefonie i w wąskiej kolumnie sections view.
 
 ### Room card — własne
 
@@ -188,6 +196,19 @@ Używaj z zewnątrz przez `card-mod` (`style: | ... ::part(X) { ... }`) lub bezp
 | `tile` | kafelek encji w sekcji |
 | `scene-bar` | pasek scen |
 | `scene` | pojedyncza kafla sceny |
+
+### `stratum-room-tile` (kafel encji, `mode: player`)
+
+Części wewnątrz kafla — stylizuj z poziomu `stratum-room-tile`
+(np. card-mod na popupie: `stratum-room-tile::part(player-controls)`).
+
+| Part | Opis |
+|---|---|
+| `tile` | kafel encji (każdy tryb) |
+| `player-controls` | cały rząd sterowania playera |
+| `player-transport` | grupa ⏮ ⏯ ⏭ |
+| `player-volume-row` | grupa głośności: wycisz, −, suwak, +, 🎙 |
+| `player-volume` | suwak głośności (`<input type="range">`) |
 
 ---
 

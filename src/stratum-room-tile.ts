@@ -38,6 +38,26 @@ import {
 import { LightSwipe } from './light-swipe.js';
 import { appBrandGradient } from './media-brands.js';
 import { encodeWav } from './audio-wav.js';
+import { playerCaps, volumeMode } from './media-features.js';
+import {
+  INTERCOM_ERROR_MS,
+  INTERCOM_PLAY_TIMEOUT_MS,
+  INTERCOM_UPLOAD_TIMEOUT_MS,
+  IntercomError,
+  intercomMessage,
+  micFailure,
+  sendFailure,
+  uploadFailure,
+  withTimeout,
+} from './intercom.js';
+import { ambientColor, ambientStyle } from './tile-ambient.js';
+import {
+  binaryStateText,
+  entityStateText,
+  mediaStateText,
+  tileStrings,
+} from './tile-state-text.js';
+import type { TileStrings } from './localize/tile.js';
 
 /** Stany z podmienionym `state` (w toku) — ta sama tożsamość między renderami. */
 const patchedStates = new WeakMap<HassEntity, Map<string, HassEntity>>();
@@ -86,8 +106,17 @@ export class StratumRoomTile extends LitElement {
   /** Player: krótkofalówka 🎙 (config sekcji `intercom`). Default true. */
   @property({ attribute: false }) public intercom?: boolean;
 
-  /** Stan krótkofalówki: nagrywanie / wysyłka (undefined = spoczynek). */
-  @state() private _rec?: 'recording' | 'sending';
+  /**
+   * Stan krótkofalówki: nagrywanie / wysyłka / błąd (undefined = spoczynek).
+   * `error` trzyma się kilka sekund — przycisk, który po porażce po prostu
+   * wraca do spoczynku, wygląda jak udana wysyłka.
+   */
+  @state() private _rec?: 'recording' | 'sending' | 'error';
+
+  /** Komunikat ostatniej porażki krótkofalówki (podpis przycisku w stanie `error`). */
+  @state() private _recError?: string;
+
+  private _recErrorTimer?: number;
 
   private _recorder?: MediaRecorder;
 
@@ -100,11 +129,11 @@ export class StratumRoomTile extends LitElement {
   /** Czy palec nadal trzyma przycisk — getUserMedia jest async. */
   private _recWanted = false;
 
-  /**
-   * Krótkofalówka dostępna: config nie wyłącza, kontekst bezpieczny
-   * (mikrofon działa tylko po HTTPS), przeglądarka umie nagrywać,
-   * a user jest adminem (upload do /media to endpoint admin-only).
-   */
+  /** Słownik tekstów kafla w języku HA (PL domyślnie). */
+  private get _s(): TileStrings {
+    return tileStrings(this.hass?.language);
+  }
+
   /** Dekoduje nagranie i przepisuje do WAV 24 kHz mono. null = nie wyszło. */
   private async _toWav(blob: Blob): Promise<Blob | null> {
     try {
@@ -134,6 +163,12 @@ export class StratumRoomTile extends LitElement {
     }
   }
 
+  /**
+   * Krótkofalówka dostępna: config nie wyłącza, kontekst bezpieczny
+   * (mikrofon działa tylko po HTTPS), przeglądarka umie nagrywać,
+   * a user jest adminem (upload do /media to endpoint admin-only).
+   * Bit PLAY_MEDIA sprawdza render playera — getter nie zna stanu encji.
+   */
   private get _canIntercom(): boolean {
     if (this.intercom === false) return false;
     if (typeof MediaRecorder === 'undefined') return false;
@@ -148,10 +183,13 @@ export class StratumRoomTile extends LitElement {
     ev.stopPropagation();
     ev.preventDefault();
     (ev.target as HTMLElement).setPointerCapture?.(ev.pointerId);
+    // Błąd poprzedniej próby nie blokuje nowej — przytrzymanie go zdejmuje.
+    if (this._rec === 'error') this._clearRecError();
     if (this._rec) return;
     this._recWanted = true;
+    let stream: MediaStream | undefined;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!this._recWanted) {
         // Palec puszczony zanim przeglądarka dała mikrofon.
         stream.getTracks().forEach((t) => t.stop());
@@ -179,11 +217,46 @@ export class StratumRoomTile extends LitElement {
       this._rec = 'recording';
       // Bezpiecznik: max 30 s nagrania.
       this._recMaxTimer = window.setTimeout(() => this._intercomStop(), 30000);
-    } catch {
-      // Brak zgody na mikrofon — nic nie robimy.
+    } catch (err) {
+      // Brak zgody na mikrofon (aplikacja HA bez uprawnienia, odmowa w
+      // przeglądarce) albo brak urządzenia — mówimy to wprost, zamiast
+      // martwego przycisku bez wyjaśnienia.
       this._recWanted = false;
-      this._rec = undefined;
+      // Mikrofon dany, ale MediaRecorder nie wstał (nieobsługiwany format)
+      // — zwalniamy go, inaczej Android trzyma ikonę nagrywania.
+      stream?.getTracks().forEach((t) => t.stop());
+      this._recFail(new IntercomError(micFailure(err)));
     }
+  }
+
+  /** Stan błędu krótkofalówki: czerwony przycisk + toast HA z powodem. */
+  private _recFail(err: IntercomError): void {
+    const message = intercomMessage(err, this._s);
+    this._rec = 'error';
+    this._recError = message;
+    if (this._recErrorTimer !== undefined) window.clearTimeout(this._recErrorTimer);
+    this._recErrorTimer = window.setTimeout(() => {
+      this._recErrorTimer = undefined;
+      if (this._rec === 'error') this._clearRecError();
+    }, INTERCOM_ERROR_MS);
+    // Toast HA — ten sam kanał, którym frontend pokazuje własne błędy.
+    // Zostaje na ekranie także wtedy, gdy popup z kaflem zaraz się zamknie.
+    this.dispatchEvent(
+      new CustomEvent('hass-notification', {
+        detail: { message },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private _clearRecError(): void {
+    if (this._recErrorTimer !== undefined) {
+      window.clearTimeout(this._recErrorTimer);
+      this._recErrorTimer = undefined;
+    }
+    if (this._rec === 'error') this._rec = undefined;
+    this._recError = undefined;
   }
 
   private _intercomStop = (ev?: Event): void => {
@@ -211,41 +284,71 @@ export class StratumRoomTile extends LitElement {
       return;
     }
     this._rec = 'sending';
-    // Przekodowanie do WAV — Cast/TV często nie dekodują WebM/Opus
-    // (przyjmują plik i „grają" ciszę). WAV PCM gra wszędzie.
-    const wav = await this._toWav(blob);
-    const upBlob = wav ?? blob;
-    const ext = wav ? 'wav' : mime.includes('mp4') ? 'm4a' : 'webm';
-    const upMime = wav ? 'audio/wav' : mime;
-    const fname = `stratum-intercom.${ext}`;
-    const contentId = `media-source://media_source/local/${fname}`;
     try {
+      // Przekodowanie do WAV — Cast/TV często nie dekodują WebM/Opus
+      // (przyjmują plik i „grają" ciszę). WAV PCM gra wszędzie.
+      // Limit: decodeAudioData w części WebView potrafi nigdy nie wrócić —
+      // wtedy wysyłamy oryginał zamiast wisieć.
+      const wav = await withTimeout(() => this._toWav(blob), 8000).catch(() => null);
+      const upBlob = wav ?? blob;
+      const ext = wav ? 'wav' : mime.includes('mp4') ? 'm4a' : 'webm';
+      const upMime = wav ? 'audio/wav' : mime;
+      const fname = `stratum-intercom.${ext}`;
+      const contentId = `media-source://media_source/local/${fname}`;
+      const hass = this.hass;
+      const fetchWithAuth = hass?.fetchWithAuth;
+      if (!hass || !fetchWithAuth) throw new IntercomError('upload_denied', 401);
       // Poprzednie nagranie precz — inaczej upload dostaje sufiks _2, _3…
-      await this.hass
-        ?.callWS?.({
-          type: 'media_source/local_source/remove',
-          media_content_id: contentId,
-        })
-        .catch(() => undefined);
+      // Porażka (brak pliku, brak uprawnień) nie jest tu błędem: o
+      // uprawnieniach i tak powie upload. Krótki limit — WS bywa zawieszony.
+      await withTimeout(
+        () =>
+          Promise.resolve(
+            hass.callWS?.({
+              type: 'media_source/local_source/remove',
+              media_content_id: contentId,
+            }),
+          ),
+        5000,
+      ).catch(() => undefined);
       const form = new FormData();
       form.append('media_content_id', 'media-source://media_source/local/.');
       form.append('file', new File([upBlob], fname, { type: upMime }));
-      const resp = await this.hass!.fetchWithAuth!(
-        '/api/media_source/local_source/upload',
-        { method: 'POST', body: form },
+      const data = await withTimeout(async (signal) => {
+        const resp = await fetchWithAuth('/api/media_source/local_source/upload', {
+          method: 'POST',
+          body: form,
+          signal,
+        });
+        // 401/403: nie-admin albo zablokowany endpoint; 400/404/500: zwykle
+        // brak `media_dirs` (katalog /media nie istnieje w tej instalacji).
+        if (!resp.ok) throw new IntercomError(uploadFailure(resp.status), resp.status);
+        return (await resp.json()) as { media_content_id?: string };
+      }, INTERCOM_UPLOAD_TIMEOUT_MS);
+      await withTimeout(
+        () =>
+          Promise.resolve(
+            hass.callService('media_player', 'play_media', {
+              entity_id: this.entity,
+              media_content_id: data.media_content_id ?? contentId,
+              media_content_type: 'music',
+              announce: true,
+            }),
+          ).catch(() => {
+            // Odrzucenie usługi to porażka głośnika, nie sieci — nawet gdy
+            // WebSocket opakuje ją w TypeError.
+            throw new IntercomError('play_failed');
+          }),
+        INTERCOM_PLAY_TIMEOUT_MS,
       );
-      if (!resp.ok) throw new Error(String(resp.status));
-      const data = (await resp.json()) as { media_content_id?: string };
-      await this.hass!.callService('media_player', 'play_media', {
-        entity_id: this.entity,
-        media_content_id: data.media_content_id ?? contentId,
-        media_content_type: 'music',
-        announce: true,
-      });
-    } catch {
-      // 401/403 (nie-admin), brak media_dirs albo sieć — po prostu cicho.
+      this._rec = undefined;
+    } catch (err) {
+      this._recFail(sendFailure(err));
+    } finally {
+      // Nigdy nie zostawiamy „wysyłania" — dawniej zawieszony fetch
+      // blokował przycisk do przeładowania strony.
+      if (this._rec === 'sending') this._rec = undefined;
     }
-    this._rec = undefined;
   }
 
   /**
@@ -429,6 +532,29 @@ export class StratumRoomTile extends LitElement {
     ).then(done, done);
   }
 
+  /**
+   * Urządzenie zna tylko krok (VOLUME_STEP bez VOLUME_SET — pilot IR,
+   * część TV): `volume_up` / `volume_down`. `volume_set` skończyłby się
+   * toastem „akcja nieobsługiwana". Jedna komenda w locie — przytrzymanie
+   * nie zakolejkuje kilkudziesięciu kroków, które TV odrabiałby po puszczeniu.
+   */
+  private _volStepSend(dir: 1 | -1): void {
+    if (!this.hass || this._volInflight) return;
+    this._volInflight = true;
+    const gen = this._volGen;
+    const done = (): void => {
+      if (gen === this._volGen) this._volInflight = false;
+    };
+    void Promise.resolve(
+      this.hass.callService(
+        'media_player',
+        dir > 0 ? 'volume_up' : 'volume_down',
+        {},
+        { entity_id: this.entity },
+      ),
+    ).then(done, done);
+  }
+
   /** Oddaje suwak stanowi z HA, gdy ten dogonił wartość optymistyczną. */
   private _volMaybeRelease(): void {
     if (this._volPending === undefined || this._volInflight || this._volQueued !== undefined) return;
@@ -568,12 +694,20 @@ export class StratumRoomTile extends LitElement {
     this._recorder = undefined;
     this._recStream?.getTracks().forEach((t) => t.stop());
     this._recStream = undefined;
+    this._clearRecError();
     this._rec = undefined;
     super.disconnectedCallback();
   }
 
   private _volStep(dir: 1 | -1): void {
     const st = this.entity ? this.hass?.states?.[this.entity] : undefined;
+    if (
+      volumeMode(playerCaps(st?.attributes?.supported_features), st?.attributes?.volume_level) ===
+      'step'
+    ) {
+      this._volStepSend(dir);
+      return;
+    }
     const cur =
       this._volPending ??
       ((st?.attributes?.volume_level as number | undefined) ?? 0);
@@ -939,11 +1073,12 @@ export class StratumRoomTile extends LitElement {
   private _renderAmbientLight(state: HassEntity): TemplateResult {
     const on = state.state === 'on';
     const pct = this._sliderPct(state);
-    const color = lightColorOf(state) ?? '#ffc107';
-    const bgIntensity = on ? 0.15 + (pct / 100) * 0.55 : 0;
-    const bgStyle = on
-      ? `background: linear-gradient(135deg, ${color}${Math.round(bgIntensity * 255).toString(16).padStart(2, '0')}, ${color}22);`
-      : '';
+    const lightColor = lightColorOf(state);
+    const color = ambientColor(lightColor);
+    // Gradient składa CSS (`.ambient-tile.on`) z dwóch zmiennych — patrz
+    // tile-ambient.ts, dlaczego nie doklejamy alfy do koloru.
+    const bgStyle = ambientStyle(on, lightColor, pct);
+    const s = this._s;
     return html`
       <div class="ambient-tile ${on ? 'on' : 'off'}" part="tile" style=${bgStyle}>
         <button
@@ -951,13 +1086,18 @@ export class StratumRoomTile extends LitElement {
           @click=${(ev: Event) =>
             this._customTap(ev) || this._callService(ev, 'light', 'toggle')}
           @contextmenu=${this._openMoreInfo}
-          title=${on ? 'Wyłącz' : 'Włącz'}
+          title=${on ? s.player.power_off : s.player.power_on}
+          aria-label=${`${this._displayName(state)}: ${on ? s.player.power_off : s.player.power_on}`}
         >
-          <ha-icon .icon=${this._icon(on ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline')} style="color:${color};"></ha-icon>
+          <ha-icon
+            aria-hidden="true"
+            .icon=${this._icon(on ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline')}
+            style="color:${color};"
+          ></ha-icon>
         </button>
         <div class="ambient-info">
           <span class="ambient-name">${this._displayName(state)}</span>
-          <span class="ambient-state">${on ? `${pct}%` : 'wyłączone'}</span>
+          <span class="ambient-state">${on ? `${pct}%` : s.off}</span>
         </div>
         <input
           type="range"
@@ -1234,7 +1374,7 @@ export class StratumRoomTile extends LitElement {
             @change=${(ev: Event) => this._onBrightnessChange(ev)}
           />
         </div>
-        <span class="tile-state">${on ? `${pct}%` : 'off'}</span>
+        <span class="tile-state">${on ? `${pct}%` : this._s.off}</span>
       </div>
     `;
   }
@@ -1391,8 +1531,8 @@ export class StratumRoomTile extends LitElement {
       on && typeof brightnessPct === 'number'
         ? `${brightnessPct}%`
         : on
-        ? 'włączone'
-        : 'wyłączone';
+        ? this._s.on
+        : this._s.off;
     return html`
       <button
         class="tile toggle ${on ? 'on' : 'off'} ${domain}"
@@ -1438,7 +1578,7 @@ export class StratumRoomTile extends LitElement {
         <span class="cover-body">
           <span class="tile-name">${this._displayName(state)}</span>
           <span class="cover-state">
-            ${posNum !== undefined ? `${posNum}%` : isOpen ? 'otwarte' : 'zamknięte'}
+            ${posNum !== undefined ? `${posNum}%` : isOpen ? this._s.open : this._s.closed}
           </span>
         </span>
         <span class="cover-ctrl">
@@ -1486,7 +1626,7 @@ export class StratumRoomTile extends LitElement {
       >
         <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
-        <span class="tile-state">${on ? 'otwarte' : 'zamknięte'}</span>
+        <span class="tile-state">${binaryStateText(this.hass, state)}</span>
       </button>
     `;
   }
@@ -1543,29 +1683,34 @@ export class StratumRoomTile extends LitElement {
     }
 
     const volume = state.attributes?.volume_level as number | undefined;
-    const stateText =
-      state.state === 'off'
-        ? 'wyłączony'
-        : state.state === 'idle'
-        ? 'bezczynny'
-        : state.state === 'playing'
-        ? 'odtwarza'
-        : state.state === 'paused'
-        ? 'pauza'
-        : state.state === 'unavailable'
-        ? 'niedostępny'
-        : state.state;
+    const s = this._s;
+    const stateText = mediaStateText(state.state, s);
 
-    // Bity supported_features media_player (HA): SEEK=2, VOLUME_MUTE=8,
-    // TURN_ON=128, TURN_OFF=256.
-    const features =
-      (state.attributes?.supported_features as number | undefined) ?? 0;
-    const canSeek =
-      (features & 2) !== 0 && typeof duration === 'number' && duration > 0;
-    const canMute = (features & 8) !== 0;
+    // Co urządzenie umie — bity supported_features (media-features.ts).
+    const caps = playerCaps(state.attributes?.supported_features);
+    const canSeek = caps.seek && typeof duration === 'number' && duration > 0;
+    const canMute = caps.mute;
     const muted = state.attributes?.is_volume_muted === true;
     const isOff = state.state === 'off' || state.state === 'standby';
-    const canPower = isOff ? (features & 128) !== 0 : (features & 256) !== 0;
+    const canPower = isOff ? caps.turnOn : caps.turnOff;
+    // Głośność tylko u włączonego urządzenia, które ją zna (poziom albo
+    // krok). Wyłączony TV często dalej deklaruje bity głośności, ale
+    // komenda do niego kończy się błędem.
+    const volMode = isOff ? 'none' : volumeMode(caps, volume);
+    const showMute = canMute && volMode !== 'none';
+    // Krótkofalówka leci przez play_media — bez tego bitu nagranie by
+    // przepadło z toastem „akcja nieobsługiwana".
+    const showMic = this._canIntercom && caps.playMedia;
+    const transportTitle = (label: string, ok: boolean): string =>
+      ok ? label : `${label} — ${s.player.unsupported}`;
+    const micTitle =
+      this._rec === 'error'
+        ? this._recError ?? s.intercom.idle
+        : this._rec === 'recording'
+        ? s.intercom.recording
+        : this._rec === 'sending'
+        ? s.intercom.sending
+        : s.intercom.idle;
 
     // Netflix/Disney+/Prime na TV i Chromecastach zwykle NIE wystawiają
     // okładki ani tytułu — zostaje tylko app_name. Wtedy: brandowany
@@ -1594,7 +1739,8 @@ export class StratumRoomTile extends LitElement {
         ${canPower
           ? html`<button
               class="player-btn player-power"
-              title=${isOff ? 'Włącz' : 'Wyłącz'}
+              title=${isOff ? s.player.power_on : s.player.power_off}
+              aria-label=${isOff ? s.player.power_on : s.player.power_off}
               @click=${(ev: Event) =>
                 this._callService(
                   ev,
@@ -1612,7 +1758,7 @@ export class StratumRoomTile extends LitElement {
         ${active && pct > 0
           ? html`<span
               class="player-progress ${canSeek ? 'seekable' : ''}"
-              title=${canSeek ? 'Tapnij, żeby przewinąć' : ''}
+              title=${canSeek ? s.player.seek : ''}
               @click=${(ev: MouseEvent) => {
                 if (!canSeek) return;
                 ev.stopPropagation();
@@ -1631,125 +1777,185 @@ export class StratumRoomTile extends LitElement {
               ><i style="width:${pct.toFixed(1)}%"></i
             ></span>`
           : nothing}
-        <div class="player-controls" @click=${(ev: Event) => ev.stopPropagation()}>
-          <button
-            class="player-btn"
-            title="Poprzedni"
-            @click=${(ev: Event) =>
-              this._callService(ev, 'media_player', 'media_previous_track')}
-          >
-            <ha-icon .icon=${'mdi:skip-previous'}></ha-icon>
-          </button>
-          <button
-            class="player-btn play"
-            title=${playing ? 'Pauza' : 'Odtwarzaj'}
-            @click=${(ev: Event) =>
-              this._callService(ev, 'media_player', 'media_play_pause')}
-          >
-            <ha-icon .icon=${playing ? 'mdi:pause' : 'mdi:play'}></ha-icon>
-          </button>
-          <button
-            class="player-btn"
-            title="Następny"
-            @click=${(ev: Event) =>
-              this._callService(ev, 'media_player', 'media_next_track')}
-          >
-            <ha-icon .icon=${'mdi:skip-next'}></ha-icon>
-          </button>
-          ${typeof volume === 'number'
-            ? html`
-                ${canMute
+        <div
+          class="player-controls"
+          part="player-controls"
+          @click=${(ev: Event) => ev.stopPropagation()}
+        >
+          <!-- Przyciski transportu renderowane zawsze, nieobsługiwane jako
+               disabled: Cast i Android TV zmieniają supported_features per
+               aplikacja, a znikające przyciski przesuwałyby cały rząd. -->
+          <div class="player-transport" part="player-transport">
+            <button
+              class="player-btn"
+              title=${transportTitle(s.player.prev, caps.prev)}
+              aria-label=${transportTitle(s.player.prev, caps.prev)}
+              ?disabled=${!caps.prev}
+              @click=${(ev: Event) =>
+                this._callService(ev, 'media_player', 'media_previous_track')}
+            >
+              <ha-icon aria-hidden="true" .icon=${'mdi:skip-previous'}></ha-icon>
+            </button>
+            <button
+              class="player-btn play"
+              title=${transportTitle(playing ? s.player.pause : s.player.play, caps.playPause)}
+              aria-label=${transportTitle(
+                playing ? s.player.pause : s.player.play,
+                caps.playPause,
+              )}
+              ?disabled=${!caps.playPause}
+              @click=${(ev: Event) =>
+                this._callService(ev, 'media_player', 'media_play_pause')}
+            >
+              <ha-icon aria-hidden="true" .icon=${playing ? 'mdi:pause' : 'mdi:play'}></ha-icon>
+            </button>
+            <button
+              class="player-btn"
+              title=${transportTitle(s.player.next, caps.next)}
+              aria-label=${transportTitle(s.player.next, caps.next)}
+              ?disabled=${!caps.next}
+              @click=${(ev: Event) =>
+                this._callService(ev, 'media_player', 'media_next_track')}
+            >
+              <ha-icon aria-hidden="true" .icon=${'mdi:skip-next'}></ha-icon>
+            </button>
+          </div>
+          ${volMode !== 'none' || showMic
+            ? html`<div
+                class="player-vol-row ${volMode !== 'none' ? 'has-volume' : ''}"
+                part="player-volume-row"
+              >
+                ${showMute
                   ? html`<button
                       class="player-btn vol-btn mute ${muted ? 'muted' : ''}"
-                      title=${muted ? 'Wyłącz wyciszenie' : 'Wycisz'}
+                      title=${muted ? s.player.unmute : s.player.mute}
+                      aria-label=${muted ? s.player.unmute : s.player.mute}
+                      aria-pressed=${muted ? 'true' : 'false'}
                       @click=${(ev: Event) =>
                         this._callService(ev, 'media_player', 'volume_mute', {
                           is_volume_muted: !muted,
                         })}
                     >
                       <ha-icon
+                        aria-hidden="true"
                         .icon=${muted ? 'mdi:volume-off' : 'mdi:volume-high'}
                       ></ha-icon>
                     </button>`
-                  : html`<ha-icon
+                  : volMode !== 'none'
+                  ? html`<ha-icon
                       class="player-vol-icon"
+                      aria-hidden="true"
                       .icon=${'mdi:volume-high'}
-                    ></ha-icon>`}
-                <button
-                  class="player-btn vol-btn"
-                  title="Ciszej (przytrzymaj = płynnie)"
-                  @pointerdown=${(ev: PointerEvent) => this._volHoldStart(ev, -1)}
-                  @pointerup=${this._volHoldEnd}
-                  @pointercancel=${this._volHoldEnd}
-                  @pointerleave=${this._volHoldEnd}
-                  @contextmenu=${(ev: Event) => ev.preventDefault()}
-                >
-                  <ha-icon .icon=${'mdi:minus'}></ha-icon>
-                </button>
-                <input
-                  type="range"
-                  class="player-volume"
-                  min="0"
-                  max="100"
-                  step="1"
-                  .value=${String(
-                    Math.round((this._volPending ?? volume) * 100),
-                  )}
-                  @change=${(ev: Event) => {
-                    // Suwak idzie tą samą kolejką co ± — ostatnia akcja
-                    // użytkownika wygrywa. Dawniej czekające „+" leciało
-                    // po suwaku i nadpisywało jego wartość.
-                    const v = Math.round(Number((ev.target as HTMLInputElement).value)) / 100;
-                    this._volStopHold();
-                    this._volPressing = false;
-                    this._volPending = v;
-                    if (this._volClearTimer !== undefined) window.clearTimeout(this._volClearTimer);
-                    this._volClearTimer = window.setTimeout(() => {
-                      this._volClearTimer = undefined;
-                      this._volPending = undefined;
-                    }, 4000);
-                    this._volSend(v);
-                    this._volMaybeRelease();
-                  }}
-                />
-                <button
-                  class="player-btn vol-btn"
-                  title="Głośniej (przytrzymaj = płynnie)"
-                  @pointerdown=${(ev: PointerEvent) => this._volHoldStart(ev, 1)}
-                  @pointerup=${this._volHoldEnd}
-                  @pointercancel=${this._volHoldEnd}
-                  @pointerleave=${this._volHoldEnd}
-                  @contextmenu=${(ev: Event) => ev.preventDefault()}
-                >
-                  <ha-icon .icon=${'mdi:plus'}></ha-icon>
-                </button>
-              `
-            : nothing}
-          ${this._canIntercom
-            ? html`<button
-                class="player-btn vol-btn mic ${this._rec === 'recording'
-                  ? 'rec'
-                  : this._rec === 'sending'
-                  ? 'sending'
-                  : ''}"
-                title="Przytrzymaj i mów — nagranie poleci na ten głośnik"
-                @pointerdown=${(ev: PointerEvent) => this._intercomStart(ev)}
-                @pointerup=${this._intercomStop}
-                @pointercancel=${this._intercomStop}
-                @contextmenu=${(ev: Event) => ev.preventDefault()}
-              >
-                <ha-icon
-                  .icon=${this._rec === 'sending'
-                    ? 'mdi:send'
-                    : this._rec === 'recording'
-                    ? 'mdi:microphone'
-                    : 'mdi:microphone-outline'}
-                ></ha-icon>
-              </button>`
+                    ></ha-icon>`
+                  : nothing}
+                ${volMode !== 'none'
+                  ? html`<button
+                      class="player-btn vol-btn"
+                      title=${s.player.vol_down}
+                      aria-label=${s.player.vol_down}
+                      @pointerdown=${(ev: PointerEvent) => this._volHoldStart(ev, -1)}
+                      @pointerup=${this._volHoldEnd}
+                      @pointercancel=${this._volHoldEnd}
+                      @pointerleave=${this._volHoldEnd}
+                      @keydown=${(ev: KeyboardEvent) => this._volKey(ev, -1)}
+                      @contextmenu=${(ev: Event) => ev.preventDefault()}
+                    >
+                      <ha-icon aria-hidden="true" .icon=${'mdi:minus'}></ha-icon>
+                    </button>`
+                  : nothing}
+                ${volMode === 'set' ? this._renderVolumeSlider(volume as number, s) : nothing}
+                ${volMode !== 'none'
+                  ? html`<button
+                      class="player-btn vol-btn"
+                      title=${s.player.vol_up}
+                      aria-label=${s.player.vol_up}
+                      @pointerdown=${(ev: PointerEvent) => this._volHoldStart(ev, 1)}
+                      @pointerup=${this._volHoldEnd}
+                      @pointercancel=${this._volHoldEnd}
+                      @pointerleave=${this._volHoldEnd}
+                      @keydown=${(ev: KeyboardEvent) => this._volKey(ev, 1)}
+                      @contextmenu=${(ev: Event) => ev.preventDefault()}
+                    >
+                      <ha-icon aria-hidden="true" .icon=${'mdi:plus'}></ha-icon>
+                    </button>`
+                  : nothing}
+                ${showMic ? this._renderMic(micTitle) : nothing}
+              </div>`
             : nothing}
         </div>
       </div>
     `;
+  }
+
+  /**
+   * ± sterowane wyłącznie pointerdown — z klawiatury (Enter/Spacja) nie
+   * działały wcale. Jeden krok na naciśnięcie, bez przytrzymania.
+   */
+  private _volKey(ev: KeyboardEvent, dir: 1 | -1): void {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (ev.repeat) return;
+    this._volStep(dir);
+    this._volPressing = false;
+    if (this._volClearTimer !== undefined) window.clearTimeout(this._volClearTimer);
+    this._volClearTimer = window.setTimeout(() => {
+      this._volClearTimer = undefined;
+      this._volPending = undefined;
+    }, 4000);
+  }
+
+  private _renderMic(title: string): TemplateResult {
+    const rec = this._rec;
+    return html`<button
+      class="player-btn vol-btn mic ${rec ?? ''}"
+      title=${title}
+      aria-label=${title}
+      @pointerdown=${(ev: PointerEvent) => this._intercomStart(ev)}
+      @pointerup=${this._intercomStop}
+      @pointercancel=${this._intercomStop}
+      @contextmenu=${(ev: Event) => ev.preventDefault()}
+    >
+      <ha-icon
+        aria-hidden="true"
+        .icon=${rec === 'sending'
+          ? 'mdi:send'
+          : rec === 'recording'
+          ? 'mdi:microphone'
+          : rec === 'error'
+          ? 'mdi:microphone-off'
+          : 'mdi:microphone-outline'}
+      ></ha-icon>
+    </button>`;
+  }
+
+  private _renderVolumeSlider(volume: number, s: TileStrings): TemplateResult {
+    return html`<input
+      type="range"
+      class="player-volume"
+      part="player-volume"
+      aria-label=${s.player.volume}
+      min="0"
+      max="100"
+      step="1"
+      .value=${String(Math.round((this._volPending ?? volume) * 100))}
+      @change=${(ev: Event) => {
+        // Suwak idzie tą samą kolejką co ± — ostatnia akcja
+        // użytkownika wygrywa. Dawniej czekające „+" leciało
+        // po suwaku i nadpisywało jego wartość.
+        const v = Math.round(Number((ev.target as HTMLInputElement).value)) / 100;
+        this._volStopHold();
+        this._volPressing = false;
+        this._volPending = v;
+        if (this._volClearTimer !== undefined) window.clearTimeout(this._volClearTimer);
+        this._volClearTimer = window.setTimeout(() => {
+          this._volClearTimer = undefined;
+          this._volPending = undefined;
+        }, 4000);
+        this._volSend(v);
+        this._volMaybeRelease();
+      }}
+    />`;
   }
 
   private _renderUnavailable(state: HassEntity): TemplateResult {
@@ -1764,7 +1970,7 @@ export class StratumRoomTile extends LitElement {
           ></ha-icon>
         </span>
         <span class="tile-name">${this._displayName(state)}</span>
-        <span class="off-pill">offline</span>
+        <span class="off-pill">${this._s.unavailable}</span>
       </button>
     `;
   }
@@ -1781,7 +1987,7 @@ export class StratumRoomTile extends LitElement {
       >
         <ha-icon class="tile-icon" .icon=${this._icon(playing ? 'mdi:pause' : 'mdi:play')}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
-        <span class="tile-state">${state.state}</span>
+        <span class="tile-state">${mediaStateText(state.state, this._s)}</span>
       </button>
     `;
   }
@@ -1796,7 +2002,7 @@ export class StratumRoomTile extends LitElement {
       >
         <ha-icon class="tile-icon" .icon=${this._icon('mdi:palette')}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
-        <span class="tile-state">aktywuj</span>
+        <span class="tile-state">${this._s.activate}</span>
       </button>
     `;
   }
@@ -1810,7 +2016,7 @@ export class StratumRoomTile extends LitElement {
       >
         <ha-icon class="tile-icon" .icon=${this._icon('mdi:tag')}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
-        <span class="tile-state">${state.state}</span>
+        <span class="tile-state">${entityStateText(this.hass, state)}</span>
       </button>
     `;
   }
@@ -2355,14 +2561,31 @@ export class StratumRoomTile extends LitElement {
       padding: 14px;
       min-height: 88px;
       border-radius: 16px;
-      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
-      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.03));
-      transition: background 0.3s ease, box-shadow 0.3s ease;
+      border: 1px solid var(--divider-color);
+      background: var(--stratum-tile-background);
+      /* Bez tranzycji tła: gradient i tak się nie interpoluje (przeskok),
+         a box-shadow nie należy do animowanych właściwości (CLAUDE.md §4). */
       color: var(--primary-text-color);
     }
 
+    /* Tło w kolorze światła. Kolor i nasycenie (15–70% wg jasności) daje
+       kafel jako zmienne (tile-ambient.ts); color-mix działa dla rgb(),
+       hexa i tokenu — dawne doklejanie alfy do rgb() psuło całą regułę.
+       Spód to powierzchnia kafla, żeby w jasnym motywie tło nie
+       przeświecało przez półprzezroczysty gradient. */
     .ambient-tile.on {
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      background:
+        linear-gradient(
+          135deg,
+          color-mix(
+            in srgb,
+            var(--stratum-ambient-color) var(--stratum-ambient-pct),
+            transparent
+          ),
+          color-mix(in srgb, var(--stratum-ambient-color) 13%, transparent)
+        ),
+        var(--stratum-tile-background);
+      box-shadow: 0 4px 16px color-mix(in srgb, var(--stratum-ink-shade) 25%, transparent);
       border-color: transparent;
     }
 
@@ -2372,16 +2595,30 @@ export class StratumRoomTile extends LitElement {
       height: 44px;
       border-radius: 50%;
       border: 0;
-      background: rgba(0, 0, 0, 0.25);
+      background: color-mix(in srgb, var(--stratum-ink-shade) 25%, transparent);
       color: var(--secondary-text-color);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      transition: transform 0.1s ease;
     }
 
     .ambient-tile.on .ambient-icon {
-      background: rgba(255, 255, 255, 0.2);
+      background: color-mix(in srgb, var(--stratum-ink-tint) 20%, transparent);
+    }
+
+    .ambient-icon:hover {
+      filter: brightness(1.15);
+    }
+
+    .ambient-icon:focus-visible {
+      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline-offset: 2px;
+    }
+
+    .ambient-icon:active {
+      transform: scale(0.96);
     }
 
     .ambient-icon ha-icon {
@@ -2407,6 +2644,8 @@ export class StratumRoomTile extends LitElement {
     .ambient-state {
       font-size: 12px;
       opacity: 0.85;
+      /* Procent zmienia się w miejscu przy suwaku — bez tabular-nums drga. */
+      font-variant-numeric: tabular-nums;
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     }
 
@@ -2435,14 +2674,26 @@ export class StratumRoomTile extends LitElement {
       gap: 6px;
       min-height: var(--stratum-player-min-height, 168px);
       border-radius: 16px;
-      padding: 14px;
-      background: var(--stratum-tile-background, rgba(255, 255, 255, 0.04));
+      /* Górne 44 px należy do absolutnych elementów (⏻ 8 + 32 px z lewej,
+         plakietka nazwy z prawej). Treść stoi przy dolnej krawędzi
+         (flex-end), więc na szerokim kaflu nic się nie zmienia — ale gdy
+         sterowanie zawinie się w dwa rzędy na telefonie, tytuł nie wjedzie
+         pod ⏻ (dawniej nachodził na niego także w stanie „wyłączony"). */
+      padding: 44px 14px 14px;
+      background: var(--stratum-tile-background);
       background-size: cover;
       background-position: center;
-      border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.06));
-      color: #fff;
+      border: 1px solid var(--divider-color);
+      /* Na okładce tekst jest zawsze jasny — tło to przyciemniona grafika,
+         nie powierzchnia motywu. */
+      color: var(--stratum-ink-tint);
       cursor: pointer;
       overflow: hidden;
+      /* Kontener dla rzędu sterowania: na telefonie kafel ma 300–370 px
+         i jeden rząd (⏮ ⏯ ⏭ + głośność + 🎙) się nie mieści. Kontener na
+         kaflu, nie na :host — :host dzielą wszystkie tryby kafla, a
+         containment rozmiaru mógłby zgnieść kafle o szerokości z treści. */
+      container: stratum-player / inline-size;
     }
 
     .player-tile:not(.has-art) {
@@ -2453,12 +2704,14 @@ export class StratumRoomTile extends LitElement {
       min-height: 96px;
     }
 
-    .player-power {
+    /* Dwie klasy: reguła .player-btn (niżej) ustawia position: relative
+       i rozmiar — sama .player-power przegrywała z nią kolejnością. */
+    .player-btn.player-power {
       position: absolute;
       top: 8px;
-      left: 10px;
-      width: 30px;
-      height: 30px;
+      left: 8px;
+      width: 32px;
+      height: 32px;
     }
     .player-power ha-icon {
       --mdc-icon-size: 16px;
@@ -2480,18 +2733,45 @@ export class StratumRoomTile extends LitElement {
       user-select: none;
       -webkit-user-select: none;
     }
-    .player-btn.vol-btn.mic.rec {
-      background: #e53935;
-      color: #fff;
-      animation: stratum-mic-pulse 1.1s ease-in-out infinite;
+    /* Nagrywanie: czerwień = „mikrofon na żywo", pulsowanie = trwa akcja
+       wymagająca uwagi (puść, żeby wysłać). Puls to pierścień ::before
+       animowany transform/opacity — ::after jest polem trafienia. */
+    .player-btn.vol-btn.mic.recording {
+      background: var(--error-color);
+      color: var(--text-primary-color);
+    }
+    .player-btn.vol-btn.mic.recording::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      box-shadow: 0 0 0 2px var(--error-color);
+      animation: stratum-mic-pulse 1.1s ease-out infinite;
+      pointer-events: none;
     }
     .player-btn.vol-btn.mic.sending {
-      background: color-mix(in srgb, var(--primary-color, #ff9b42) 60%, transparent);
-      color: #fff;
+      background: color-mix(
+        in srgb,
+        var(--stratum-player-accent, var(--primary-color)) 60%,
+        transparent
+      );
+      color: var(--text-primary-color);
+    }
+    /* Porażka (brak zgody na mikrofon, 403, timeout): przekreślony mikrofon
+       w kolorze błędu na kilka sekund, powód w toaście i w podpisie. */
+    .player-btn.vol-btn.mic.error {
+      background: color-mix(in srgb, var(--error-color) 25%, transparent);
+      color: var(--error-color);
     }
     @keyframes stratum-mic-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.55); }
-      50% { box-shadow: 0 0 0 7px rgba(229, 57, 53, 0); }
+      from {
+        transform: scale(1);
+        opacity: 0.8;
+      }
+      to {
+        transform: scale(1.5);
+        opacity: 0;
+      }
     }
 
     .player-tag {
@@ -2547,66 +2827,131 @@ export class StratumRoomTile extends LitElement {
       background: var(--stratum-player-accent, var(--primary-color, #ff9b42));
     }
 
+    /* Rząd sterowania: transport (⏮ ⏯ ⏭) + głośność (wycisz, −, suwak, +,
+       🎙). Pola trafienia 44 px bez nachodzenia: przycisk transportu 40 px
+       + odstęp 8, przycisk głośności 32 px + odstęp 12 — środki co ≥ 44 px,
+       więc ::after (44 px) sąsiadów się nie zazębiają i „−" nie łapie
+       palca przeznaczonego dla „wycisz". Przyciski nie kurczą się
+       (flex-shrink: 0) — dawniej ściskały się w owale 21–26 px. */
     .player-controls {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px 12px;
       margin-top: 4px;
+      min-width: 0;
+    }
+
+    .player-transport {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: none;
+    }
+
+    .player-vol-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    /* Telefon (kafel ≤ ~430 px): jeden rząd potrzebuje ~404 px treści
+       (136 transport + 12 + 176 przycisków głośności + 80 suwaka), więc
+       głośność schodzi do drugiego rzędu na pełną szerokość. Zmierzone:
+       popup 360 dp daje kafel 320 px, 412 dp — 372 px; oba się zawijają. */
+    @container stratum-player (max-width: 403px) {
+      .player-controls {
+        flex-wrap: wrap;
+      }
+      /* Tylko z głośnością — sam 🎙 (np. wyłączony głośnik) mieści się
+         obok transportu i nie potrzebuje własnego rzędu. */
+      .player-vol-row.has-volume {
+        flex: 1 0 100%;
+      }
     }
 
     .player-btn {
-      width: 38px;
-      height: 38px;
+      position: relative;
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      padding: 0;
       border-radius: 999px;
       border: 0;
-      background: rgba(255, 255, 255, 0.12);
+      /* Na okładce: półprzezroczyste rozjaśnienie ciemnej grafiki. */
+      background: color-mix(in srgb, var(--stratum-ink-tint) 12%, transparent);
       color: inherit;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       transition: background 0.12s ease, transform 0.08s ease;
+      touch-action: manipulation;
+    }
+
+    /* Pole trafienia 44 px niezależnie od rozmiaru wizualnego. */
+    .player-btn::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 999px;
     }
 
     .player-tile:not(.has-art) .player-btn {
-      background: var(--secondary-background-color, rgba(255, 255, 255, 0.07));
+      background: var(--stratum-surface-2);
     }
 
-    .player-btn:hover {
-      background: rgba(255, 255, 255, 0.22);
+    .player-btn:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--stratum-ink-tint) 22%, transparent);
     }
 
     /* Bez okładki przycisk leży na powierzchni karty, nie na grafice —
        biel przestaje być właściwym rozjaśnieniem. */
-    .player-tile:not(.has-art) .player-btn:hover {
+    .player-tile:not(.has-art) .player-btn:hover:not(:disabled) {
       background: var(--stratum-surface-4);
     }
 
-    .player-btn:active {
-      transform: scale(0.92);
+    .player-btn:focus-visible {
+      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline-offset: 2px;
     }
 
-    .player-btn.play {
-      background: var(--stratum-player-accent, var(--primary-color, #ff9b42));
-      color: #fff;
+    .player-btn:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+
+    /* Funkcja nieobsługiwana przez urządzenie (np. ⏭ na wejściu HDMI) —
+       widoczna, ale wyraźnie martwa; powód w podpisie. */
+    .player-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    /* Prefiks .player-tile: reguła „bez okładki" wyżej ma wyższą
+       specyficzność i bez niego gasiła akcent przycisku ⏯ na szaro. */
+    .player-tile .player-btn.play {
+      background: var(--stratum-player-accent, var(--primary-color));
+      color: var(--text-primary-color);
+    }
+
+    .player-tile .player-btn.play:hover:not(:disabled) {
+      background: var(--stratum-player-accent, var(--primary-color));
+      filter: brightness(1.1);
     }
 
     .player-btn.vol-btn {
-      position: relative;
-      width: 30px;
-      height: 30px;
+      width: 32px;
+      height: 32px;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
     }
 
-    /* Głośność / mute / mikrofon: 30 px wizualnie, 44 px pod palcem. */
+    /* Głośność / mute / mikrofon / zasilanie: 32 px wizualnie, 44 pod palcem. */
     .player-btn.vol-btn::after,
     .player-power::after {
-      content: '';
-      position: absolute;
-      inset: -7px;
-      border-radius: 999px;
+      inset: -6px;
     }
     .player-btn.vol-btn ha-icon {
       --mdc-icon-size: 16px;
@@ -2617,15 +2962,40 @@ export class StratumRoomTile extends LitElement {
 
     .player-vol-icon {
       --mdc-icon-size: 16px;
-      margin-left: auto;
+      flex: none;
       opacity: 0.75;
     }
 
+    /* Suwak rozciąga się na resztę rzędu (dawniej stałe 90 px). Wysokość
+       32 px to pas dotyku — tor pozostaje cienki, rysuje go przeglądarka. */
     .player-volume {
-      width: 90px;
-      height: 4px;
-      accent-color: var(--stratum-player-accent, var(--primary-color, #ff9b42));
+      flex: 1 1 80px;
+      min-width: 64px;
+      width: auto;
+      height: 32px;
+      margin: 0;
+      accent-color: var(--stratum-player-accent, var(--primary-color));
       cursor: pointer;
+    }
+
+    .player-volume:focus-visible {
+      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .player-btn,
+      .ambient-icon {
+        transition: none;
+      }
+      .player-btn:active:not(:disabled),
+      .ambient-icon:active {
+        transform: none;
+      }
+      /* Bez pulsu zostaje stały pierścień — stan nagrywania dalej widać. */
+      .player-btn.vol-btn.mic.recording::before {
+        animation: none;
+      }
     }
 
     /* ===== Kafel grupy świateł: rail / tint ===== */
