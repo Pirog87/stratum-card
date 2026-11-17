@@ -29,7 +29,6 @@ import {
   evaluateConditions,
   resolveFieldEntityIds,
 } from './tile-data.js';
-import { ensureRegistry, subscribeRegistry } from './entity-registry-cache.js';
 import {
   DEFAULT_CHIPS,
   evaluateChip,
@@ -73,7 +72,7 @@ import {
   type StripeRoom,
 } from './header-stripes.js';
 
-const VERSION = '1.108.1';
+const VERSION = '1.108.2';
 
 @customElement('stratum-card')
 export class StratumCard extends LitElement {
@@ -131,7 +130,48 @@ export class StratumCard extends LitElement {
     devices: HomeAssistant['devices'];
     areas: HomeAssistant['areas'];
     ids: Set<string>;
+    /** Encje zakresu poza `ids` — obserwowane tylko pod kątem dostępności. */
+    offlineOnly: string[];
   };
+
+  /**
+   * Które encje z zakresu karty w ogóle mogą zmienić to, co karta pokazuje.
+   * Wiersze i chipy czytają światła, czujniki binarne (ruch, okna, drzwi,
+   * alarmy, bateria) oraz czujniki temperatury i wilgotności. Reszta strefy
+   * — moc, energia, napięcie, linkquality — to ok. 80% encji, które
+   * raportują co kilka sekund i dotąd budziły całą kartę przy każdym
+   * raporcie, choć niczego z nich nie widać.
+   *
+   * Encje wskazane w configu wchodzą zawsze (collectEntityIds). Czujnik bez
+   * stanu w chwili budowania zbioru też wchodzi — nie znamy jeszcze jego
+   * klasy, a gdyby był temperaturą, wiersz by go nie zauważył.
+   */
+  private _relevantEntityFilter(hass: HomeAssistant): (id: string) => boolean {
+    const config = this._config!;
+    // Licznik niedostępnych liczy WSZYSTKIE encje zakresu.
+    if (config.unavailable_chip === true) return () => true;
+    const chips = config.chips ?? DEFAULT_CHIPS;
+    const extraDomains = new Set<string>();
+    for (const chip of chips) {
+      if (chip.type !== 'filter') continue;
+      const domain = (chip as import('./types.js').FilterChipConfig).domain;
+      // Chip filtrujący bez domeny patrzy na wszystko.
+      if (!domain) return () => true;
+      extraDomains.add(domain);
+    }
+    return (id: string): boolean => {
+      const domain = id.slice(0, id.indexOf('.'));
+      if (domain === 'light' || domain === 'binary_sensor') return true;
+      if (extraDomains.has(domain)) return true;
+      if (domain === 'sensor') {
+        const st = hass.states?.[id];
+        if (!st) return true;
+        const dc = st.attributes?.device_class;
+        return dc === 'temperature' || dc === 'humidity';
+      }
+      return false;
+    };
+  }
 
   private _watchedIds(hass: HomeAssistant): Set<string> {
     const config = this._config!;
@@ -148,19 +188,30 @@ export class StratumCard extends LitElement {
     // Zakres karty (piętro albo strefa) + strefy wierszy z configu — te
     // drugie potrafią leżeć poza piętrem (`rooms[].area_id`, `merge_with`).
     const ids = collectEntityIds(config);
-    for (const e of this._getEntries()) ids.add(e.entity_id);
+    const relevant = this._relevantEntityFilter(hass);
+    // Pozostałe encje zakresu obserwujemy tańszą drogą — tylko przejście
+    // do/z „unavailable". Wiersz jest „offline", gdy niedostępne są WSZYSTKIE
+    // jego encje (padł hub), także rolety i gniazdka spoza `ids`.
+    const rest = new Set<string>();
+    const consider = (id: string): void => {
+      if (relevant(id)) ids.add(id);
+      else rest.add(id);
+    };
+    for (const e of this._getEntries()) consider(e.entity_id);
     for (const room of config.rooms ?? []) {
       for (const areaId of [room.area_id, ...(room.merge_with ?? [])]) {
-        for (const e of getEntitiesInArea(hass, areaId)) ids.add(e.entity_id);
+        for (const e of getEntitiesInArea(hass, areaId)) consider(e.entity_id);
       }
     }
     addGroupMembers(hass, ids);
+    for (const id of ids) rest.delete(id);
     this._watch = {
       config,
       entities: hass.entities,
       devices: hass.devices,
       areas: hass.areas,
       ids,
+      offlineOnly: [...rest],
     };
     return ids;
   }
@@ -187,13 +238,49 @@ export class StratumCard extends LitElement {
     const prev = changed.get('hass') as HomeAssistant | undefined;
     const next = this.hass;
     if (!prev || !next || !this._config) return true;
-    // Otwarty popup czyta stany na żywo przez tę kartę — nie przycinamy mu
-    // dopływu. Debug loguje każdy render z założenia.
-    if (this._popupRoom || this._popupChip || this._config.debug) return true;
+    // Debug loguje każdy render z założenia.
+    if (this._config.debug) return true;
     // Dopóki widać skeleton (HA nie dosłał stanów), czekamy na pierwszy stan.
     if (!this._statesReady(prev.states)) return true;
     if (structureChanged(prev, next)) return true;
-    return watchedStateChanged(prev, next, this._watchedIds(next));
+    if (watchedStateChanged(prev, next, this._watchedIds(next))) return true;
+    if (this._availabilityFlipped(prev, next)) return true;
+    // Render odrzucony, ale otwarte popupy dostają nowy `hass` wprost.
+    // Dawniej otwarty popup wyłączał tę bramkę całkiem: karta piętra,
+    // schowana pod arkuszem, przeliczała wszystkie wiersze przy każdej
+    // zmianie stanu w całym domu (ok. 2× koszt aktualizacji przy otwartym
+    // popupie). Popup pokoju ma własną bramkę i sam decyduje, co go obchodzi;
+    // lista chipa ma przypięte wiersze, a stany jej encji i tak leżą w
+    // zakresie tej karty (zmiana = render powyżej).
+    this._forwardHassToPopups(next);
+    return false;
+  }
+
+  /**
+   * Czy któraś encja spoza obserwowanego zbioru zmieniła dostępność. Raport
+   * mocy czy energii (ta sama dostępność) nie budzi karty; padnięcie albo
+   * powrót huba — tak, bo od tego zależy znacznik „offline" wiersza.
+   */
+  private _availabilityFlipped(prev: HomeAssistant, next: HomeAssistant): boolean {
+    const a = prev.states;
+    const b = next.states;
+    if (a === b || !this._watch) return false;
+    for (const id of this._watch.offlineOnly) {
+      const pa = a?.[id];
+      const nb = b?.[id];
+      if (pa === nb) continue;
+      if ((!pa || pa.state === 'unavailable') !== (!nb || nb.state === 'unavailable')) return true;
+    }
+    return false;
+  }
+
+  private _forwardHassToPopups(hass: HomeAssistant): void {
+    if (!this._popupRoom && !this._popupChip) return;
+    const root = this.renderRoot;
+    const room = root.querySelector('stratum-room-card');
+    if (room) room.hass = hass;
+    const list = root.querySelector('stratum-chip-list');
+    if (list) list.hass = hass;
   }
 
   /** Timer auto-collapse — wołany gdy karta rozwinięta i nic nie klikniemy. */
@@ -567,7 +654,6 @@ export class StratumCard extends LitElement {
   private _unsubPower?: () => void;
 
   /** Unsubscribe dla entity registry — wywołujemy w disconnect. */
-  private _unsubRegistry?: () => void;
 
   public connectedCallback(): void {
     super.connectedCallback();
@@ -577,12 +663,8 @@ export class StratumCard extends LitElement {
       this._expanded = true;
       this._clearAutoCollapse();
     }
-    // Subskrybuj globalny entity registry cache — gdy fetch się zakończy,
-    // chipy / row / popup liczą device_class z overridem (np. SATEL).
-    this._unsubRegistry = subscribeRegistry(() => this.requestUpdate());
     // Tapnięty włącznik ma się przestawić od razu, a nie po raporcie z HA.
     this._unsubPower = subscribePower(() => this.requestUpdate());
-    if (this.hass) void ensureRegistry(this.hass);
     document.addEventListener('visibilitychange', this._onVisibilityChange);
   }
 
@@ -595,10 +677,8 @@ export class StratumCard extends LitElement {
     document.removeEventListener('keydown', this._onPopupKey);
     window.removeEventListener('popstate', this._onPopState);
     this._historyDepth = 0;
-    this._unsubRegistry?.();
     this._unsubPower?.();
     this._unsubPower = undefined;
-    this._unsubRegistry = undefined;
     // Żadnych spóźnionych komend jasności po zniknięciu karty z widoku.
     for (const swipe of this._swipes.values()) swipe.dispose();
     this._swipes.clear();
@@ -606,11 +686,6 @@ export class StratumCard extends LitElement {
 
   protected updated(changed: PropertyValues): void {
     super.updated(changed);
-    // Trigger fetch przy pierwszym hass update (gdy ensureRegistry
-    // z connectedCallback nie miał jeszcze hass).
-    if (changed.has('hass') && this.hass) {
-      void ensureRegistry(this.hass);
-    }
     this._persistRowCount();
   }
 

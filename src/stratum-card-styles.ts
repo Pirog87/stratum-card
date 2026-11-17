@@ -105,24 +105,37 @@ export const cardStyles = css`
       font-weight: 800;
       cursor: pointer;
       flex-shrink: 0;
-      animation: stratum-header-alarm-pulse 1.6s ease-in-out infinite;
+      position: relative;
     }
     .header-alarm-badge ha-icon {
       --mdc-icon-size: 15px;
     }
+    /* Puls = alarm wymagający reakcji. Poświata stoi na osobnej warstwie,
+       a animujemy tylko jej opacity: to robi kompozytor. Animowany
+       box-shadow przerysowywał odznakę w każdej klatce (ok. 60 razy na
+       sekundę) przez cały czas trwania alarmu — także godzinami. */
+    .header-alarm-badge::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: 0 0 8px 3px
+        color-mix(in srgb, var(--stratum-chip-leak-color, var(--error-color)) 25%, transparent);
+      opacity: 0;
+      animation: stratum-header-alarm-pulse 1.6s ease-in-out infinite;
+    }
     @keyframes stratum-header-alarm-pulse {
       0%,
       100% {
-        box-shadow: 0 0 0 0
-          color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 40%, transparent);
+        opacity: 0;
       }
       50% {
-        box-shadow: 0 0 8px 3px
-          color-mix(in srgb, var(--stratum-chip-leak-color, #f44336) 25%, transparent);
+        opacity: 1;
       }
     }
     @media (prefers-reduced-motion: reduce) {
-      .header-alarm-badge {
+      .header-alarm-badge::before {
         animation: none;
       }
     }

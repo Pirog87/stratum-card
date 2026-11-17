@@ -4,6 +4,43 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.108.2] — 2026-11-17
+
+### Changed (obciążenie w tle — mniej pracy, gdy nic na ekranie się nie zmienia)
+- **Otwarty popup nie wyłącza już oszczędzania renderów karty piętra.**
+  Dawniej karta schowana pod arkuszem popupu przeliczała wszystkie wiersze
+  przy każdej zmianie stanu w całym domu. Teraz popup dostaje nowe stany
+  bezpośrednio i sam decyduje, co go obchodzi (zmiana obcej encji przy
+  otwartym popupie: ok. 1,5 → 0,1 ms na komputerze).
+- **Czujniki mocy, energii, napięcia i linkquality nie budzą karty
+  piętra.** Karta obserwuje tylko to, co pokazuje: światła, czujniki
+  binarne, temperaturę, wilgotność i encje wskazane w configu (raport
+  czujnika mocy w kuchni: ok. 1,4 → 0,1 ms, zero renderów). Z włączonym
+  chipem niedostępnych urządzeń albo chipem filtrującym bez domeny karta
+  obserwuje — jak dotąd — wszystko.
+  Pozostałe encje pokoju budzą kartę tylko wtedy, gdy stają się niedostępne
+  albo wracają — znacznik „offline" wiersza działa jak dotąd.
+- **Bez pobierania rejestru encji przy starcie.** Karta pobierała pełny
+  rejestr (ok. 3 MB przy 5 tys. encji) przy każdym otwarciu aplikacji i po
+  każdej zmianie rejestru — tym samym połączeniem, którym idą pierwsze
+  tapnięcia. Klasa urządzenia ustawiona w „Pokaż jako" i tak trafia do
+  stanu encji (sprawdzone na czujnikach SATEL).
+- **Pulsujące odznaki alarmu** animują już tylko przezroczystość osobnej
+  warstwy (kompozytor), a nie cień — dawniej przerysowanie w każdej
+  klatce przez cały czas trwania alarmu.
+- **Bez rozmycia tła pod listą chipa na telefonie** (≤ 600 px), jak pod
+  popupem pokoju; token `--stratum-popup-backdrop-filter` przywraca.
+
+### Fixed
+- **Suwak rolety nie wraca do bieżącej pozycji w trakcie jazdy.** Pozycja
+  zadana zostaje na suwaku, aż roleta dojedzie (albo stanie).
+- **Suwak `slider` / `ambient` na grupie świateł HA** nie zapala już
+  wszystkich członków na jednym poziomie — świecącą grupę skaluje
+  proporcjonalnie (tylko świecący członkowie), a pozycja suwaka to średnia
+  ich jasności. Zgaszoną grupę suwak zapala jak dotąd. Sterownik WLED
+  (`group_entities`) jest sterowany bezpośrednio, bo jego jasność mnoży się
+  przez jasność segmentów.
+
 ## [1.108.1] — 2026-11-17
 
 ### Fixed (media)

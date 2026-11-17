@@ -522,6 +522,15 @@ export class StratumChipList extends LitElement {
       animation: fade-in 0.15s ease-out;
     }
 
+    /* Telefon: bez rozmycia pod listą, jak pod popupem pokoju. Pełnoekranowy
+       backdrop-filter kazał GPU rozmywać cały dashboard przy każdej klatce
+       przewijania listy i każdym ruchu suwaka. Token przywraca rozmycie. */
+    @media (max-width: 600px) {
+      .backdrop {
+        backdrop-filter: var(--stratum-popup-backdrop-filter, none);
+      }
+    }
+
     @keyframes fade-in {
       from { opacity: 0; }
       to { opacity: 1; }
