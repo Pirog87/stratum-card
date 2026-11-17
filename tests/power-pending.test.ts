@@ -10,6 +10,7 @@ import {
   swipePowerHook,
   tapPower,
   toggleRoomLights,
+  touches,
 } from '../src/power-pending.js';
 import { LightSwipe, resetLightSwipeState } from '../src/light-swipe.js';
 import type { HassEntity, HomeAssistant } from '../src/types.js';
@@ -428,5 +429,43 @@ describe('cofnięcie stanu w toku tylko przez właściciela (przegląd #1092)', 
     reject(new Error('zha timeout'));
     await vi.advanceTimersByTimeAsync(0);
     expect(pendingWant(hass, 'light.a')).toBe('on');
+  });
+});
+
+describe('touches — który kafel przerysować po zaznaczeniu stanu w toku', () => {
+  it('grupa grup: główny włącznik zaznacza liście, kafel grupy-grup dostaje sygnał', () => {
+    const { hass } = ha([
+      entity('light.caly_parter', 'on', { entity_id: ['light.kuchnia', 'light.salon'] }),
+      entity('light.kuchnia', 'on', { entity_id: ['light.k1', 'light.k2'] }),
+      entity('light.salon', 'off', { entity_id: ['light.s1'] }),
+      on('light.k1'),
+      on('light.k2'),
+      off('light.s1'),
+    ]);
+    // Tak zaznacza toggleRoomLights: same żarówki-liście.
+    const marked = new Set(['light.k1', 'light.k2']);
+    expect(touches(hass, 'light.caly_parter', marked)).toBe(true);
+    expect(touches(hass, 'light.kuchnia', marked)).toBe(true);
+    expect(touches(hass, 'light.salon', marked)).toBe(false);
+    // I faktycznie zmienia to, co kafel pokaże — bez echa z HA.
+    toggleRoomLights(hass, ['light.k1', 'light.k2']);
+    expect(effectiveState(hass, 'light.caly_parter')).toBe('off');
+  });
+
+  it('segment WLED dostaje sygnał, gdy zaznaczono jego sterownik', () => {
+    const { hass } = ha([
+      entity('light.wled_main', 'off', { group_entities: ['light.seg1'] }),
+      on('light.seg1'),
+      on('light.inny'),
+    ]);
+    expect(touches(hass, 'light.seg1', new Set(['light.wled_main']))).toBe(true);
+    expect(touches(hass, 'light.inny', new Set(['light.wled_main']))).toBe(false);
+  });
+
+  it('encje spoza świateł: tylko ona sama albo bezpośredni członek', () => {
+    const { hass } = ha([entity('switch.a', 'on'), entity('fan.b', 'on', { entity_id: ['switch.a'] })]);
+    expect(touches(hass, 'switch.a', new Set(['switch.a']))).toBe(true);
+    expect(touches(hass, 'fan.b', new Set(['switch.a']))).toBe(true);
+    expect(touches(hass, 'switch.a', new Set(['light.x']))).toBe(false);
   });
 });

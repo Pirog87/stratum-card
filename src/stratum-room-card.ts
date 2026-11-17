@@ -46,7 +46,9 @@ import { TemplateRenderer } from './template-renderer.js';
 import {
   addGroupMembers,
   collectEntityIds,
+  popupRelevantFilter,
   structureChanged,
+  touchesWatched,
   watchedStateChanged,
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
@@ -137,7 +139,15 @@ export class StratumRoomCard extends LitElement {
 
   public connectedCallback(): void {
     super.connectedCallback();
-    this._unsubPower = subscribePower(() => this.requestUpdate());
+    // Tylko tapnięcia dotyczące encji tego popupu. Bez filtra przełącznik
+    // w innej karcie (albo jego drugie powiadomienie po 5 s) przebudowywał
+    // wszystkie sekcje otwartego popupu. Kafle i lista chipa filtrują same.
+    this._unsubPower = subscribePower((ids) => {
+      // Zbiór z pamięci podręcznej (_watchedIds liczy tylko po zmianie
+      // rejestru/configu); bez hass albo configu — przerysuj na wszelki wypadek.
+      const watched = this.hass && this._config ? this._watchedIds(this.hass) : undefined;
+      if (touchesWatched(watched, ids)) this.requestUpdate();
+    });
     // Powrót z pamięci widoków HA: odpięcie skasowało subskrypcje szablonów,
     // a odnawia je dopiero render, który bramka `shouldUpdate` przepuszcza
     // tylko przy zmianie obserwowanej encji. Gołe requestUpdate() (pusta
@@ -174,9 +184,16 @@ export class StratumRoomCard extends LitElement {
       return w.ids;
     }
     const ids = collectEntityIds(config);
-    for (const e of this._getEntries()) ids.add(e.entity_id);
+    // Tylko encje, które sekcje, chipy albo alarmy faktycznie czytają —
+    // raporty mocy/energii/linkquality nie budzą otwartego popupu
+    // (szczegóły i lista domen: popupRelevantFilter w hass-watch.ts).
+    const relevant = popupRelevantFilter(hass, config);
+    for (const e of this._getEntries()) {
+      if (relevant(e.entity_id)) ids.add(e.entity_id);
+    }
     // Członkowie grup świateł potrafią leżeć w innej strefie niż grupa, a
-    // kafel grupy liczy pasek jasności właśnie z nich.
+    // kafel grupy liczy pasek jasności właśnie z nich. To samo dla świateł
+    // sceny (atrybut `entity_id`) — z nich pasek scen liczy gradient kafla.
     addGroupMembers(hass, ids);
     this._watch = { config, entities: hass.entities, devices: hass.devices, ids };
     return ids;
@@ -594,12 +611,13 @@ export class StratumRoomCard extends LitElement {
             out.push(
               html`<stratum-scene-bar
                 .hass=${this.hass}
-                .config=${{
+                .config=${this._stableSceneBarConfig('explicit', {
                   size: this._config!.scene_size_default,
                   columns: this._config!.scene_columns_default,
                   gradient: this._config!.scene_gradient_default,
                   ...this._config!.scenes,
-                }}
+                  // hasExplicitScenes gwarantuje niepuste `items`.
+                } as import('./types.js').SceneBarConfig)}
               ></stratum-scene-bar>`,
             );
           } else {
@@ -1171,6 +1189,26 @@ export class StratumRoomCard extends LitElement {
     return n;
   }
 
+  /**
+   * Config paska scen o stałej tożsamości, dopóki treść się nie zmieni.
+   * Obiekt budowany w renderze był za każdym razem nowy, więc Lit
+   * traktował go jak zmianę właściwości paska i przerysowywał pasek nawet
+   * wtedy, gdy jedyną nowością był `hass` niezwiązany ze scenami. Porównanie
+   * po JSON wystarcza: config to dane z YAML (kilka scen), bez funkcji.
+   */
+  private _sceneBarMemo = new Map<string, { key: string; value: import('./types.js').SceneBarConfig }>();
+
+  private _stableSceneBarConfig(
+    slot: 'explicit' | 'auto',
+    value: import('./types.js').SceneBarConfig,
+  ): import('./types.js').SceneBarConfig {
+    const key = JSON.stringify(value);
+    const prev = this._sceneBarMemo.get(slot);
+    if (prev && prev.key === key) return prev.value;
+    this._sceneBarMemo.set(slot, { key, value });
+    return value;
+  }
+
   private _renderScenesBar(
     section: RoomSectionConfig,
     items: HassEntityRegistryEntry[],
@@ -1198,7 +1236,10 @@ export class StratumRoomCard extends LitElement {
           <span>${title}</span>
           <span class="count">${items.length}</span>
         </div>
-        <stratum-scene-bar .hass=${this.hass} .config=${barConfig}></stratum-scene-bar>
+        <stratum-scene-bar
+          .hass=${this.hass}
+          .config=${this._stableSceneBarConfig('auto', barConfig)}
+        ></stratum-scene-bar>
       </div>
     `;
   }

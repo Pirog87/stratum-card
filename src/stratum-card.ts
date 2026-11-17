@@ -24,11 +24,8 @@ import {
   filterBinarySensorDeviceClass,
   unavailableEntityIds,
 } from './area-entities.js';
-import {
-  computeTileData,
-  evaluateConditions,
-  resolveFieldEntityIds,
-} from './tile-data.js';
+import { evaluateConditions, resolveFieldEntityIds } from './tile-data.js';
+import { TileDataPass } from './tile-data-pass.js';
 import {
   DEFAULT_CHIPS,
   evaluateChip,
@@ -50,6 +47,7 @@ import {
   collectEntityIds,
   statesReadyLatch,
   structureChanged,
+  touchesWatched,
   watchedStateChanged,
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
@@ -788,8 +786,16 @@ export class StratumCard extends LitElement {
       this._expanded = true;
       this._clearAutoCollapse();
     }
-    // Tapnięty włącznik ma się przestawić od razu, a nie po raporcie z HA.
-    this._unsubPower = subscribePower(() => this.requestUpdate());
+    // Tapnięty włącznik ma się przestawić od razu, a nie po raporcie z HA —
+    // ale tylko w karcie, której pokoi to dotyczy. Przełącznik tarasu
+    // przerysowywał dotąd także Parter i Piętro (i drugi raz po 5 s, gdy
+    // stan „w toku" wygasa). Zbiór obserwowanych zawiera członków grup
+    // i sterowniki WLED, więc tapnięcie grupy też tu trafia. Otwarte popupy
+    // i listy chipów subskrybują osobno.
+    this._unsubPower = subscribePower((ids) => {
+      const watched = this.hass && this._config ? this._watchedIds(this.hass) : undefined;
+      if (touchesWatched(watched, ids)) this.requestUpdate();
+    });
     document.addEventListener('visibilitychange', this._onVisibilityChange);
     // Powrót z pamięci widoków HA (przełączenie widoku i z powrotem): przy
     // odpięciu skasowaliśmy subskrypcje szablonów i zegar etykiet „5min",
@@ -936,7 +942,15 @@ export class StratumCard extends LitElement {
     </ha-card>`;
   }
 
+  /**
+   * Dane wierszy liczone raz na render — belka `stripes` i lista pomieszczeń
+   * czytają ten sam wynik zamiast agregować każdy pokój dwa razy
+   * (tile-data-pass.ts).
+   */
+  private readonly _tileData = new TileDataPass();
+
   protected render(): TemplateResult | typeof nothing {
+    this._tileData.begin(this.hass);
     if (!this._config) return nothing;
 
     // Skeleton: HA jeszcze nie doslal stanow (start aplikacji / wolny
@@ -1079,7 +1093,8 @@ export class StratumCard extends LitElement {
       room?: import('./types.js').RoomConfig,
     ): StripeRoom & { room?: import('./types.js').RoomConfig } => {
       const entries = this._roomEntries(areaIds);
-      const data = computeTileData(hass, entries, room?.field_entities);
+      // Ten sam wynik, którego za chwilę użyje wiersz pokoju (_renderRoomRow).
+      const data = this._tileData.get(hass, entries, room?.field_entities);
       return {
         area_id: areaIds[0]!,
         name,
@@ -1717,7 +1732,7 @@ export class StratumCard extends LitElement {
         return !st || st === 'unavailable';
       });
 
-    const data = computeTileData(this.hass!, entries, fieldEntities);
+    const data = this._tileData.get(this.hass!, entries, fieldEntities);
     const rowConfig = this._resolveRowConfig();
     const tileConfig = this._resolveTileConfig();
     const conditions = this._resolveConditions();

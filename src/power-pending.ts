@@ -272,7 +272,18 @@ export function touches(
 ): boolean {
   if (changed.has(entityId)) return true;
   const members = groupMemberIds(hass?.states?.[entityId]);
-  return Boolean(members?.some((m) => changed.has(m)));
+  if (members?.some((m) => changed.has(m))) return true;
+  if (!entityId.startsWith('light.')) return false;
+  // Grupa grup („Cały parter" = [grupa Kuchnia, grupa Salon]): główny
+  // włącznik pokoju zaznacza same żarówki-liście, a bezpośredni członkowie
+  // takiej grupy to podgrupy. Bez zejścia do liści kafel grupy nie dostawał
+  // sygnału i świecił „on" aż do echa z HA, choć effectiveState już liczył
+  // nowy stan z liści.
+  if (members && expandLightIds(hass, [entityId]).some((l) => changed.has(l))) return true;
+  // Segment WLED czyta stan sterownika (zgaszony sterownik = ciemny
+  // segment), a zapalanie segmentu zaznacza też sterownik.
+  const controller = lightControllerOf(hass, entityId);
+  return controller !== undefined && changed.has(controller);
 }
 
 const TOGGLEABLE = new Set([
