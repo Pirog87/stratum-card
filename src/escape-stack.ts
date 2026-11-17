@@ -51,8 +51,9 @@ export function isHostedInDialog(pathNames: readonly string[]): boolean {
 /**
  * Gdzie łapiemy Escape.
  *
- * - `capture` (na document): karta w dialogu-gospodarzu i fokus w warstwie
- *   Stratum. Dialog HA łapie Escape sam — mwc ha-dialog słuchaczem keydown
+ * - `capture` (na document): karta w dialogu-gospodarzu i zdarzenie idzie
+ *   z NASZEJ warstwy — popupu, listy chipa albo karty, która je otworzyła.
+ *   Dialog HA łapie Escape sam — mwc ha-dialog słuchaczem keydown
  *   na document (zarejestrowanym wcześniej niż nasz, więc w bubble byłby
  *   pierwszy), a dialogi na natywnym <dialog> (ha-md-dialog, ha-wa-dialog)
  *   domyślną akcją klawisza. W bubble Escape zamykał nasz popup ORAZ cały
@@ -62,7 +63,7 @@ export function isHostedInDialog(pathNames: readonly string[]): boolean {
  *   To samo, gdy fokus jest „nigdzie" (body): nie ma pola, które mogłoby
  *   chcieć Escape, a popup Stratum jest najwyższą warstwą.
  * - `host` (bubble na samym elemencie dialogu-gospodarza): karta w dialogu,
- *   fokus poza Stratum, na innym elemencie gospodarza (popup nie ma pułapki
+ *   fokus poza warstwą, na innym elemencie gospodarza (popup nie ma pułapki
  *   fokusu, Tab wychodzi do formularza edytora). Capture zabierałby Escape
  *   combo-boxowi, pickerowi czy wyszukiwarce edytora kodu — zamykał się
  *   popup zamiast ich listy. W bubble na gospodarzu pole dostaje klawisz
@@ -71,20 +72,48 @@ export function isHostedInDialog(pathNames: readonly string[]): boolean {
  *   i przed domyślną akcją natywnego <dialog>.
  * - `bubble` (na document): zwykły dashboard, jak dotąd.
  *
- * `pathNames` to ścieżka z wyciętymi gospodarzami, `hosted` — czy karta
- * najwyższej warstwy ma dialog-gospodarza.
+ * „Nasza warstwa" to konkretne elementy (`own`: gospodarze warstw ze stosu
+ * i ich przodkowie Stratum — patrz `isLayerOwnerName`), NIE każdy tag
+ * `stratum-*`. W dialogu edycji karty HA formularz to `stratum-card-editor`
+ * — sąsiad podglądu w tym samym dialogu. Dawne `startsWith('stratum-')`
+ * brało jego pola (ha-combo-box, ha-yaml-editor) za popup: capture zamykał
+ * popup podglądu i zabierał polu Escape, zanim do niego doszedł.
+ *
+ * `path` to ścieżka zdarzenia z wyciętymi gospodarzami (w testach: nazwy
+ * tagów, w DOM: węzły `composedPath()`), `hosted` — czy karta najwyższej
+ * warstwy ma dialog-gospodarza.
  */
-export function escapePhase(
-  pathNames: readonly string[],
+export function escapePhase<N>(
+  path: readonly N[],
+  own: ReadonlySet<N>,
   hosted = false,
 ): 'capture' | 'host' | 'bubble' {
-  if (pathNames.some((n) => n.startsWith('stratum-'))) {
-    return hosted || isHostedInDialog(pathNames) ? 'capture' : 'bubble';
+  if (path.some((n) => own.has(n))) {
+    return hosted || isHostedInDialog(namesOf(path)) ? 'capture' : 'bubble';
   }
   if (!hosted) return 'bubble';
-  return pathNames.length === 0 || pathNames[0] === 'body' || pathNames[0] === 'html'
-    ? 'capture'
-    : 'host';
+  const first = namesOf(path)[0];
+  return first === undefined || first === 'body' || first === 'html' ? 'capture' : 'host';
+}
+
+/**
+ * Czy przodek gospodarza warstwy należy do warstwy (lista chipa siedzi
+ * w karcie pokoju, ta w popupie stratum-card — fokus na nich też jest
+ * „u nas"). Edytory (`stratum-*-editor`) nigdy: to formularze konfiguracji,
+ * ich pola obsługują Escape same.
+ */
+export function isLayerOwnerName(name: string): boolean {
+  return name.startsWith('stratum-') && !name.endsWith('-editor');
+}
+
+/** Nazwy tagów ze ścieżki — węzły bez nazwy (ShadowRoot, document) pomijamy. */
+function namesOf(path: readonly unknown[]): string[] {
+  const out: string[] = [];
+  for (const n of path) {
+    const name = typeof n === 'string' ? n : (n as { localName?: unknown } | null)?.localName;
+    if (typeof name === 'string') out.push(name);
+  }
+  return out;
 }
 
 /** Nazwa tagu dialogu (HA, mwc, natywny <dialog>). */
@@ -105,6 +134,11 @@ export class EscapeLayers<H = unknown> {
 
   public get size(): number {
     return this._stack.length;
+  }
+
+  /** Elementy, które otworzyły warstwy (od spodu stosu). */
+  public get hosts(): H[] {
+    return this._stack.flatMap((l) => (l.host === undefined ? [] : [l.host]));
   }
 
   /** Element, który otworzył najwyższą warstwę (undefined = brak). */
@@ -151,6 +185,30 @@ function hostDialogsOf(el: Element | undefined): Set<EventTarget> {
   return found;
 }
 
+/**
+ * Elementy „naszej warstwy": gospodarze warstw ze stosu i ich przodkowie
+ * Stratum w drzewie złożonym (karta pokoju, stratum-card z popupem), aż do
+ * pierwszego dialogu — za nim zaczyna się gospodarz, nie my.
+ */
+function layerOwners(): Set<EventTarget> {
+  const own = new Set<EventTarget>();
+  for (const host of layers.hosts) {
+    own.add(host);
+    let node: Node | null | undefined = host;
+    while (node) {
+      if (node instanceof Element) {
+        if (isDialogName(node.localName)) break;
+        if (isLayerOwnerName(node.localName)) own.add(node);
+      }
+      node =
+        (node instanceof Element && node.assignedSlot) ||
+        node.parentNode ||
+        (node instanceof ShadowRoot ? node.host : null);
+    }
+  }
+  return own;
+}
+
 const makeKeydown =
   (phase: 'capture' | 'host' | 'bubble') =>
   (ev: KeyboardEvent): void => {
@@ -162,12 +220,9 @@ const makeKeydown =
     // nie są „obcym dialogiem nad popupem". Bez tego Escape zamykał cały
     // dialog-gospodarz, a popup Stratum i jego strażnik historii zostawały.
     const hosts = hostDialogsOf(layers.topHost);
-    const pathNames = ev
-      .composedPath()
-      .filter((n) => !hosts.has(n))
-      .map((n) => (n as Element).localName)
-      .filter((n): n is string => typeof n === 'string');
-    if (escapePhase(pathNames, hosts.size > 0) !== phase) return;
+    const path = ev.composedPath().filter((n) => !hosts.has(n));
+    const pathNames = namesOf(path);
+    if (escapePhase(path, layerOwners(), hosts.size > 0) !== phase) return;
     // Słuchacz gospodarza mógł zostać po warstwie spod spodu z innej karty —
     // reagujemy tylko na gospodarzach karty najwyższej warstwy.
     if (phase === 'host' && (!ev.currentTarget || !hosts.has(ev.currentTarget))) return;
