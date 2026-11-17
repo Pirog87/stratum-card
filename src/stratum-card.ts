@@ -35,7 +35,7 @@ import {
   resolveChipColor,
   resolveChipIcon,
 } from './chip-defaults.js';
-import { runTapAction } from './tap-action.js';
+import { resolveTapAction, runTapAction } from './tap-action.js';
 import {
   CHIP_LIST_COLORS,
   CHIP_LIST_LABELS,
@@ -553,7 +553,7 @@ export class StratumCard extends LitElement {
       // nieaktywny (typowy use-case: alarm tylko gdy coś się dzieje).
       const showWhenZero = chip.show_when_zero !== false;
       if (!value.active && !showWhenZero) continue;
-      const tapSet = this._isTapActionSet(chip.tap_action);
+      const tapSet = this._isTapActionSet(chip);
       const listAvailable = this._chipSupportsList(chip);
       const clickable = tapSet || listAvailable;
       rendered.push(html`<stratum-card-chip
@@ -570,12 +570,25 @@ export class StratumCard extends LitElement {
     return rendered;
   }
 
-  private _isTapActionSet(
-    a: import('./types.js').TapActionConfig | undefined,
-  ): boolean {
-    if (!a) return false;
-    const act = (a as { action?: string }).action;
-    return Boolean(act && act !== 'default' && act !== 'none');
+  /**
+   * Czy tap_action chipa faktycznie coś zrobi. Samo „ustawione" nie
+   * wystarcza: akcja, której nie umiemy wykonać (np. `toggle` na chipie
+   * licznika bez encji), robiła z chipa martwy przycisk i do tego
+   * zabierała mu listę encji. Teraz taka akcja oddaje klik liście.
+   */
+  private _isTapActionSet(chip: import('./types.js').ChipConfig): boolean {
+    return (
+      resolveTapAction(this.hass, chip.tap_action, {
+        entity_id: this._chipContextEntity(chip),
+      }) !== null
+    );
+  }
+
+  /** Encja kontekstu chipa — dla `more-info` / `toggle` bez jawnej encji. */
+  private _chipContextEntity(
+    chip: import('./types.js').ChipConfig,
+  ): string | undefined {
+    return (chip as { entity?: string }).entity || undefined;
   }
 
   private _chipSupportsList(chip: import('./types.js').ChipConfig): boolean {
@@ -583,8 +596,12 @@ export class StratumCard extends LitElement {
   }
 
   private _onChipTap(chip: import('./types.js').ChipConfig): void {
-    if (this._isTapActionSet(chip.tap_action)) {
-      void runTapAction(this.hass, chip.tap_action as never, { source: this });
+    if (
+      runTapAction(this.hass, chip.tap_action, {
+        source: this,
+        entity_id: this._chipContextEntity(chip),
+      })
+    ) {
       return;
     }
     if (this._chipSupportsList(chip)) {

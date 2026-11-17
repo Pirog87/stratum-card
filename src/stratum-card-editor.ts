@@ -26,6 +26,7 @@ import './stratum-display-editor.js';
 import './stratum-header-editor.js';
 import './stratum-chips-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { ROW_UI_ACTIONS } from './tap-action.js';
 
 interface FormSchemaItem {
   name: string;
@@ -53,12 +54,15 @@ const IDENTITY_SCHEMA: readonly FormSchemaItem[] = [
   },
 ];
 
+// Wiersz pokoju nie ma jednej encji — `more-info` / `toggle` nie miałyby
+// czego otworzyć ani przełączyć, a `assist` karta nie obsługuje. Edytor
+// HA oferowałby je domyślnie i zapisywał akcję, która nic nie robi.
 const ROW_TAP_SCHEMA: readonly FormSchemaItem[] = [
-  { name: 'room_tap_action', selector: { ui_action: {} } },
+  { name: 'room_tap_action', selector: { ui_action: { actions: ROW_UI_ACTIONS } } },
 ];
 
 const ICON_TAP_SCHEMA: readonly FormSchemaItem[] = [
-  { name: 'room_icon_tap_action', selector: { ui_action: {} } },
+  { name: 'room_icon_tap_action', selector: { ui_action: { actions: ROW_UI_ACTIONS } } },
 ];
 
 /** Szybkie presety akcji kliknięcia (wiersz / ikona). */

@@ -22,7 +22,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 import type { HassEntity, HomeAssistant, TapActionConfig } from './types.js';
 import { runTapAction } from './tap-action.js';
-import { buildDefaultCustomConfig } from './custom-cards.js';
+import { buildDefaultCustomConfig, mergeCustomTileConfig } from './custom-cards.js';
 import { lightColorOf } from './tile-data.js';
 import { groupMemberIds } from './area-entities.js';
 import { roomLevelFromHass } from './light-dimming.js';
@@ -247,13 +247,31 @@ export class StratumRoomTile extends LitElement {
     this._rec = undefined;
   }
 
-  /** Wykonuje override akcji kliknięcia. true = obsłużone. */
+  /**
+   * Wykonuje override akcji kliknięcia. true = obsłużone (event zjedzony).
+   * Akcja, której nie umiemy wykonać (np. `assist`, `default` z ha-form),
+   * zwraca false — kafel wraca do swojego domyślnego kliknięcia zamiast
+   * stać się martwy. `none` to świadome wyłączenie klika: zjadamy event.
+   */
   private _customTap(ev: Event): boolean {
-    if (!this.tapAction) return false;
+    const action = this.tapAction;
+    if (!action) return false;
+    const handled =
+      action.action === 'none' ||
+      runTapAction(this.hass, action, { source: this, entity_id: this.entity });
+    if (!handled) return false;
     ev.stopPropagation();
     ev.preventDefault();
-    void runTapAction(this.hass, this.tapAction, { source: this });
     return true;
+  }
+
+  /**
+   * Ikona kafla — override z listy popupu wygrywa w KAŻDYM trybie. Wcześniej
+   * czytał go tylko rail/tint, więc „Ikona (override)" z edytora nie
+   * działała w chips/bubble/icon/slider/ambient/tile ani dla rolet i mediów.
+   */
+  private _icon(fallback: string): string {
+    return this.iconOverride || fallback;
   }
 
   /** Nazwa do wyświetlenia — override wygrywa nad friendly_name. */
@@ -771,8 +789,10 @@ export class StratumRoomTile extends LitElement {
         : on ? 'mdi:alert' : 'mdi:check-circle',
       climate: 'mdi:thermostat',
     };
-    const icon = (state.attributes?.icon as string | undefined) ?? iconMap[domain] ?? 'mdi:help';
-    const click = readonly
+    const icon = this._icon(
+      (state.attributes?.icon as string | undefined) ?? iconMap[domain] ?? 'mdi:help',
+    );
+    const defaultClick = readonly
       ? (ev: Event) => this._openMoreInfo(ev)
       : domain === 'scene'
       ? (ev: Event) => this._callService(ev, 'scene', 'turn_on')
@@ -782,6 +802,11 @@ export class StratumRoomTile extends LitElement {
       : domain === 'media_player'
       ? (ev: Event) => this._callService(ev, 'media_player', 'media_play_pause')
       : (ev: Event) => this._callService(ev, domain, 'toggle');
+    // Override z listy popupu wygrywa także nad readonly more-info —
+    // _customTap zwraca false, gdy override'u nie ma.
+    const click = (ev: Event): void => {
+      if (!this._customTap(ev)) defaultClick(ev);
+    };
 
     return html`
       <button
@@ -817,6 +842,14 @@ export class StratumRoomTile extends LitElement {
   }
 
   private _actionForDomain(domain: string, on: boolean): (ev: Event) => void {
+    const fallback = this._defaultActionForDomain(domain, on);
+    // Override akcji z listy popupu najpierw — bez niego domyślna akcja domeny.
+    return (ev: Event) => {
+      if (!this._customTap(ev)) fallback(ev);
+    };
+  }
+
+  private _defaultActionForDomain(domain: string, on: boolean): (ev: Event) => void {
     const readonly = domain === 'binary_sensor' || domain === 'climate';
     if (readonly) return (ev: Event) => this._openMoreInfo(ev);
     if (domain === 'scene') return (ev: Event) => this._callService(ev, 'scene', 'turn_on');
@@ -836,12 +869,13 @@ export class StratumRoomTile extends LitElement {
 
   private _renderCustomCardMode(): TemplateResult {
     const base = buildDefaultCustomConfig(this.mode, this.entity);
-    // Template merge'uje się POD auto-config — `type` i `entity` z base
-    // zawsze wygrywają żeby template nie mógł przypadkiem wyłamać iteracji.
-    const config: Record<string, unknown> =
-      this.cardTemplate && Object.keys(this.cardTemplate).length > 0
-        ? { ...this.cardTemplate, ...base }
-        : base;
+    // Override'y pozycji listy (nazwa/ikona/akcja) też trafiają do karty
+    // custom:* — kolejność warstw opisana przy mergeCustomTileConfig.
+    const config = mergeCustomTileConfig(
+      this.cardTemplate,
+      { name: this.nameOverride, icon: this.iconOverride, tap_action: this.tapAction },
+      base,
+    );
     const key = JSON.stringify(config);
     if (!this._customEl || this._customKey !== key) {
       this._customEl = document.createElement('hui-card');
@@ -854,7 +888,7 @@ export class StratumRoomTile extends LitElement {
 
   private _renderBubbleMode(state: HassEntity, domain: string): TemplateResult {
     const on = this._isActive(state);
-    const icon = this._iconForDomain(state, domain, on);
+    const icon = this._icon(this._iconForDomain(state, domain, on));
     const click = this._actionForDomain(domain, on);
     return html`
       <button
@@ -874,7 +908,7 @@ export class StratumRoomTile extends LitElement {
 
   private _renderIconMode(state: HassEntity, domain: string): TemplateResult {
     const on = this._isActive(state);
-    const icon = this._iconForDomain(state, domain, on);
+    const icon = this._icon(this._iconForDomain(state, domain, on));
     const click = this._actionForDomain(domain, on);
     return html`
       <button
@@ -901,11 +935,12 @@ export class StratumRoomTile extends LitElement {
       <div class="ambient-tile ${on ? 'on' : 'off'}" part="tile" style=${bgStyle}>
         <button
           class="ambient-icon"
-          @click=${(ev: Event) => this._callService(ev, 'light', 'toggle')}
+          @click=${(ev: Event) =>
+            this._customTap(ev) || this._callService(ev, 'light', 'toggle')}
           @contextmenu=${this._openMoreInfo}
           title=${on ? 'Wyłącz' : 'Włącz'}
         >
-          <ha-icon .icon=${on ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline'} style="color:${color};"></ha-icon>
+          <ha-icon .icon=${this._icon(on ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline')} style="color:${color};"></ha-icon>
         </button>
         <div class="ambient-info">
           <span class="ambient-name">${this._displayName(state)}</span>
@@ -944,8 +979,7 @@ export class StratumRoomTile extends LitElement {
     const pct = overridden ? Math.round(this._dragPct!) : statePct;
     const color = on ? lightColorOf(state) : undefined;
     const isGroup = groupMemberIds(state) !== undefined;
-    const icon =
-      this.iconOverride ??
+    const icon = this._icon(
       (state.attributes?.icon as string | undefined) ??
       (isGroup
         ? on
@@ -953,7 +987,8 @@ export class StratumRoomTile extends LitElement {
           : 'mdi:lightbulb-group-off-outline'
         : on
         ? 'mdi:lightbulb-on'
-        : 'mdi:lightbulb-outline');
+        : 'mdi:lightbulb-outline'),
+    );
 
     const style = [
       color ? `--stratum-glight-accent:${color};` : '',
@@ -1019,6 +1054,8 @@ export class StratumRoomTile extends LitElement {
   private _onGroupKey = (ev: KeyboardEvent): void => {
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
+      // Klawiatura = to samo co tap: override akcji z listy najpierw.
+      if (this._customTap(ev)) return;
       if (!tapPower(this.hass, this.entity)) {
         void this.hass?.callService('light', 'toggle', { entity_id: this.entity });
       }
@@ -1159,12 +1196,13 @@ export class StratumRoomTile extends LitElement {
   private _renderLightSlider(state: HassEntity): TemplateResult {
     const on = state.state === 'on';
     const pct = this._sliderPct(state);
-    const icon = on ? 'mdi:lightbulb-on' : 'mdi:lightbulb';
+    const icon = this._icon(on ? 'mdi:lightbulb-on' : 'mdi:lightbulb');
     return html`
       <div class="tile slider ${on ? 'on' : 'off'}" part="tile">
         <button
           class="inline-toggle"
-          @click=${(ev: Event) => this._callService(ev, 'light', 'toggle')}
+          @click=${(ev: Event) =>
+            this._customTap(ev) || this._callService(ev, 'light', 'toggle')}
           @contextmenu=${this._openMoreInfo}
           title=${on ? 'Wyłącz' : 'Włącz'}
         >
@@ -1276,7 +1314,7 @@ export class StratumRoomTile extends LitElement {
     const isOpen = state.state === 'open' || pos > 0;
     return html`
       <div class="tile slider ${isOpen ? 'on' : 'off'}" part="tile">
-        <ha-icon class="tile-icon" .icon=${isOpen ? 'mdi:blinds-open' : 'mdi:blinds'}></ha-icon>
+        <ha-icon class="tile-icon" .icon=${this._icon(isOpen ? 'mdi:blinds-open' : 'mdi:blinds')}></ha-icon>
         <div class="slider-body">
           <span class="tile-name">${this._displayName(state)}</span>
           <input
@@ -1326,7 +1364,7 @@ export class StratumRoomTile extends LitElement {
         : on
         ? 'mdi:toggle-switch'
         : 'mdi:toggle-switch-off-outline';
-    const icon = (state.attributes?.icon as string | undefined) ?? defaultIcon;
+    const icon = this._icon((state.attributes?.icon as string | undefined) ?? defaultIcon);
     // Lights: użyj aktualnego koloru świecenia jako akcentu gdy ON.
     let accent: string | undefined;
     let brightnessPct: number | undefined;
@@ -1374,7 +1412,7 @@ export class StratumRoomTile extends LitElement {
     const pos = state.attributes?.current_position;
     const posNum = typeof pos === 'number' ? Math.round(pos) : undefined;
     const isOpen = state.state === 'open' || (typeof pos === 'number' && pos > 0);
-    const icon = isOpen ? 'mdi:blinds-open' : 'mdi:blinds';
+    const icon = this._icon(isOpen ? 'mdi:blinds-open' : 'mdi:blinds');
     return html`
       <div
         class="cover-row ${isOpen ? 'on' : 'off'}"
@@ -1420,16 +1458,18 @@ export class StratumRoomTile extends LitElement {
   private _renderBinary(state: HassEntity): TemplateResult {
     const on = state.state === 'on';
     const dc = state.attributes?.device_class as string | undefined;
-    const icon = dc === 'window'
-      ? (on ? 'mdi:window-open-variant' : 'mdi:window-closed-variant')
-      : dc === 'door'
-      ? (on ? 'mdi:door-open' : 'mdi:door-closed')
-      : on ? 'mdi:alert' : 'mdi:check-circle';
+    const icon = this._icon(
+      dc === 'window'
+        ? (on ? 'mdi:window-open-variant' : 'mdi:window-closed-variant')
+        : dc === 'door'
+        ? (on ? 'mdi:door-open' : 'mdi:door-closed')
+        : on ? 'mdi:alert' : 'mdi:check-circle',
+    );
     return html`
       <button
         class="tile binary ${on ? 'on' : 'off'}"
         part="tile"
-        @click=${this._openMoreInfo}
+        @click=${(ev: Event) => this._customTap(ev) || this._openMoreInfo(ev)}
       >
         <ha-icon class="tile-icon" .icon=${icon}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
@@ -1445,9 +1485,9 @@ export class StratumRoomTile extends LitElement {
       <button
         class="tile climate ${state.state !== 'off' ? 'on' : 'off'}"
         part="tile"
-        @click=${this._openMoreInfo}
+        @click=${(ev: Event) => this._customTap(ev) || this._openMoreInfo(ev)}
       >
-        <ha-icon class="tile-icon" .icon=${'mdi:thermostat'}></ha-icon>
+        <ha-icon class="tile-icon" .icon=${this._icon('mdi:thermostat')}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">
           ${typeof current === 'number' ? `${current}°` : '?°'}
@@ -1535,7 +1575,7 @@ export class StratumRoomTile extends LitElement {
           : ''}"
         part="tile"
         style=${bg}
-        @click=${this._openMoreInfo}
+        @click=${(ev: Event) => this._customTap(ev) || this._openMoreInfo(ev)}
       >
         <span class="player-tag">${this._displayName(state)}</span>
         ${canPower
@@ -1704,8 +1744,10 @@ export class StratumRoomTile extends LitElement {
       <button class="tile unav" part="tile" @click=${this._openMoreInfo}>
         <span class="unav-icon">
           <ha-icon
-            .icon=${(state.attributes?.icon as string | undefined) ??
-            'mdi:help-circle-outline'}
+            .icon=${this._icon(
+              (state.attributes?.icon as string | undefined) ??
+                'mdi:help-circle-outline',
+            )}
           ></ha-icon>
         </span>
         <span class="tile-name">${this._displayName(state)}</span>
@@ -1724,7 +1766,7 @@ export class StratumRoomTile extends LitElement {
           this._customTap(ev) || this._callService(ev, 'media_player', 'media_play_pause')}
         @contextmenu=${this._openMoreInfo}
       >
-        <ha-icon class="tile-icon" .icon=${playing ? 'mdi:pause' : 'mdi:play'}></ha-icon>
+        <ha-icon class="tile-icon" .icon=${this._icon(playing ? 'mdi:pause' : 'mdi:play')}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">${state.state}</span>
       </button>
@@ -1736,9 +1778,10 @@ export class StratumRoomTile extends LitElement {
       <button
         class="tile scene"
         part="tile"
-        @click=${(ev: Event) => this._callService(ev, 'scene', 'turn_on')}
+        @click=${(ev: Event) =>
+          this._customTap(ev) || this._callService(ev, 'scene', 'turn_on')}
       >
-        <ha-icon class="tile-icon" .icon=${'mdi:palette'}></ha-icon>
+        <ha-icon class="tile-icon" .icon=${this._icon('mdi:palette')}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">aktywuj</span>
       </button>
@@ -1747,8 +1790,12 @@ export class StratumRoomTile extends LitElement {
 
   private _renderGeneric(state: HassEntity): TemplateResult {
     return html`
-      <button class="tile" part="tile" @click=${this._openMoreInfo}>
-        <ha-icon class="tile-icon" .icon=${'mdi:tag'}></ha-icon>
+      <button
+        class="tile"
+        part="tile"
+        @click=${(ev: Event) => this._customTap(ev) || this._openMoreInfo(ev)}
+      >
+        <ha-icon class="tile-icon" .icon=${this._icon('mdi:tag')}></ha-icon>
         <span class="tile-name">${this._displayName(state)}</span>
         <span class="tile-state">${state.state}</span>
       </button>

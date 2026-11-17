@@ -29,6 +29,7 @@ import './stratum-scene-editor.js';
 import './stratum-chips-editor.js';
 import './stratum-lights-editor.js';
 import { editorSharedStyles } from './editor-shared-styles.js';
+import { ROW_UI_ACTIONS } from './tap-action.js';
 
 const ROOM_LABELS: Record<string, string> = {
   name: 'Nazwa (override)',
@@ -105,7 +106,9 @@ export class StratumCardRoomsEditor extends LitElement {
           },
         },
       },
-      { name: 'tap_action', selector: { ui_action: {} } },
+      // Akcja wiersza pokoju — bez encji, więc bez `more-info` / `toggle`;
+      // `assist` karta nie obsługuje.
+      { name: 'tap_action', selector: { ui_action: { actions: ROW_UI_ACTIONS } } },
     ];
   }
 
