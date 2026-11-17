@@ -288,6 +288,26 @@ export class StratumCardRoomRow extends LitElement {
     if (!this.iconTappable) return; // klik bąbelkuje do akcji wiersza
     ev.stopPropagation();
     if (this._clickSuppressed()) return;
+    this._emitIconTap();
+  };
+
+  /**
+   * Osobna akcja ikony (room_icon_tap_action — np. ikona → popup, wiersz →
+   * światła) była dostępna tylko palcem: stadion ikony nie miał fokusa ani
+   * obsługi klawiszy. Enter/Spacja na nim robią to samo, co tapnięcie.
+   * Wiersz nie przechwyci tych klawiszy — jego `_onKey` reaguje tylko na
+   * zdarzenia z samego wiersza; preventDefault blokuje przewinięcie strony
+   * Spacją.
+   */
+  private _onIconKey = (ev: KeyboardEvent): void => {
+    if (!this.iconTappable) return;
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    this._emitIconTap();
+  };
+
+  private _emitIconTap(): void {
     this.dispatchEvent(
       new CustomEvent('icon-tap', {
         detail: { area_id: this.areaId, area_name: this.name },
@@ -295,7 +315,7 @@ export class StratumCardRoomRow extends LitElement {
         composed: true,
       }),
     );
-  };
+  }
 
   /** Czy suwak gestem jest włączony dla tej konfiguracji. */
   private get _sliderEnabled(): boolean {
@@ -793,9 +813,17 @@ export class StratumCardRoomRow extends LitElement {
           : nothing}
         ${preset === 'rail' ? html`<span class="bar" aria-hidden="true"></span>` : nothing}
         ${showIcon
-          ? html`<span class="iconwrap" @click=${this._onIconClick}>
+          ? html`<span
+              class="iconwrap"
+              role=${this.iconTappable ? 'button' : nothing}
+              tabindex=${this.iconTappable ? '0' : nothing}
+              aria-label=${this.iconTappable ? `${this.name}: akcja ikony` : nothing}
+              @click=${this._onIconClick}
+              @keydown=${this._onIconKey}
+            >
               <ha-icon
                 class="icon ${iconAnim ? `icon-anim-${iconAnim}` : ''}"
+                aria-hidden="true"
                 .icon=${effectiveIcon}
               ></ha-icon>
             </span>`
@@ -1001,20 +1029,35 @@ export class StratumCardRoomRow extends LitElement {
       cursor: pointer;
     }
 
-    :host([clickable]) .row:active {
-      transform: scale(var(--stratum-room-row-press-scale, 0.98));
-    }
+    /* :active wiersza stoi niżej, za regułami hover — patrz „press". */
 
     :host([icon-tappable]) .iconwrap {
       cursor: pointer;
+      /* scale, nie transform: transform stadionu niesie już przesunięcie
+         z configu (iconbg-offset), a osobna właściwość składa się z nim
+         zamiast je nadpisywać. */
+      transition: background 0.15s ease, color 0.15s ease, scale 0.1s ease;
     }
 
-    :host([icon-tappable]) .iconwrap:hover .icon {
-      filter: brightness(1.25);
+    @media (hover: hover) {
+      :host([icon-tappable]) .iconwrap:hover .icon {
+        filter: brightness(1.25);
+      }
+    }
+
+    /* Obrys do środka: wiersz ma overflow: hidden, a stadion ikony stoi
+       przy jego krawędzi — obrys na zewnątrz byłby ucięty. */
+    :host([icon-tappable]) .iconwrap:focus-visible {
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline-offset: -2px;
+    }
+
+    :host([icon-tappable]) .iconwrap:active {
+      scale: 0.94;
     }
 
     :host([clickable]) .row:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
       outline-offset: -2px;
     }
 
@@ -1413,16 +1456,43 @@ export class StratumCardRoomRow extends LitElement {
       background: rgba(128, 132, 140, 0.9);
     }
 
-    /* ====== hover ====== */
-    :host([clickable]) .row[data-hover='subtle']:hover {
-      background-color: var(--stratum-card-room-hover, rgba(255, 255, 255, 0.07));
+    /* ====== hover ======
+       Tylko przy prawdziwym kursorze. Na dotyku :hover zostaje na ostatnio
+       tkniętym wierszu, aż palec dotknie czegoś innego — po zamknięciu
+       popupu wiersz wisiał podświetlony (a przy „lift" uniesiony z cieniem).
+       (hover: hover) pyta o urządzenie, nie o rozmiar — dlatego media
+       query, jak prefers-reduced-motion. */
+    @media (hover: hover) {
+      :host([clickable]) .row[data-hover='subtle']:hover {
+        background-color: var(--stratum-card-room-hover, var(--stratum-surface-2));
+      }
+      :host([clickable]) .row[data-hover='lift']:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
+      }
+      :host([clickable]) .row[data-hover='glow']:hover {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 50%, transparent);
+      }
     }
-    :host([clickable]) .row[data-hover='lift']:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
+
+    /* ====== press ======
+       Za hoverem i z tą samą specyficznością ([data-hover]): wcześniej
+       :active stało wyżej i było słabsze niż „lift" — wciśnięty wiersz
+       dostawał uniesienie zamiast pomniejszenia, a feedback dotyku znikał. */
+    :host([clickable]) .row:active,
+    :host([clickable]) .row[data-hover]:active {
+      transform: scale(var(--stratum-room-row-press-scale, 0.98));
     }
-    :host([clickable]) .row[data-hover='glow']:hover {
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #ff9b42) 50%, transparent);
+    /* Wciśnięcie przełącznika, odznaki albo ikony z własną akcją to
+       feedback TEJ kontrolki — cały wiersz nie może się wtedy kurczyć, bo
+       wygląda, jakby palec trafił w popup. Osobna reguła: przeglądarka bez
+       :has() odrzuci tylko ją, a zwykły feedback wiersza zostanie. */
+    :host([clickable]) .row[data-hover]:active:has(
+        .lights-toggle:active,
+        .alarm-badge:active,
+        .iconwrap[role='button']:active
+      ) {
+      transform: none;
     }
 
     /* ====== Animacje (z reguł warunkowych) ====== */
@@ -1480,8 +1550,14 @@ export class StratumCardRoomRow extends LitElement {
       .row.anim-pulse, .row.anim-blink, .row.anim-shake, .row.anim-glow, .row.anim-bounce,
       .icon.icon-anim-spin, .icon.icon-anim-pulse, .icon.icon-anim-blink,
       .icon.icon-anim-shake, .icon.icon-anim-bounce { animation: none; }
+      /* [data-hover] — ta sama specyficzność co reguły hover/press wyżej;
+         samo .row:hover przegrywało z „lift" i wiersz dalej skakał. */
       :host([clickable]) .row:hover,
-      :host([clickable]) .row:active { transform: none; }
+      :host([clickable]) .row:active,
+      :host([clickable]) .row[data-hover]:hover,
+      :host([clickable]) .row[data-hover]:active { transform: none; }
+      :host([icon-tappable]) .iconwrap { transition: none; }
+      :host([icon-tappable]) .iconwrap:active { scale: none; }
     }
 
     /* ====== Pola statusów ====== */
@@ -1515,8 +1591,11 @@ export class StratumCardRoomRow extends LitElement {
       flex-shrink: 0;
       transition: background 0.12s ease, transform 0.1s ease;
     }
-    .alarm-badge:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--stratum-alarm) 28%, transparent);
+    /* Bez lepkiego hovera na dotyku — jak hover wiersza. */
+    @media (hover: hover) {
+      .alarm-badge:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--stratum-alarm) 28%, transparent);
+      }
     }
     .alarm-badge:focus-visible {
       outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
@@ -1582,8 +1661,31 @@ export class StratumCardRoomRow extends LitElement {
       padding: 0;
       cursor: pointer;
       background: var(--stratum-surface-4);
-      transition: background 0.15s ease, box-shadow 0.2s ease;
+      transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.1s ease;
       flex-shrink: 0;
+    }
+    /* Komplet stanów przełącznika: bez obrysu fokusa klawiatura nie
+       widziała, że stoi na przełączniku, a nie na wierszu — a to dwie
+       różne akcje (światła vs popup). */
+    @media (hover: hover) {
+      .lights-toggle:hover {
+        filter: brightness(1.08);
+      }
+    }
+    .lights-toggle:focus-visible {
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
+      outline-offset: 2px;
+    }
+    .lights-toggle:active {
+      transform: scale(0.96);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .lights-toggle {
+        transition: none;
+      }
+      .lights-toggle:active {
+        transform: none;
+      }
     }
     /* Pole trafienia 48 × 44 bez zmiany wyglądu: sam przełącznik zostaje
        46 × 25, niewidoczny pseudo-element dobiera resztę do progu

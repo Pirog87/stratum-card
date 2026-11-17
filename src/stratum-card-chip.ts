@@ -86,19 +86,39 @@ export class StratumCardChip extends LitElement {
       background: var(--stratum-chip-background, rgba(255, 255, 255, 0.06));
       font-size: var(--stratum-chip-font-size, 12px);
       font-weight: 600;
-      transition: opacity 0.2s ease, color 0.2s ease;
+      transition: opacity 0.2s ease, color 0.2s ease, transform 0.1s ease;
     }
 
     :host([clickable]) .chip {
       cursor: pointer;
     }
 
-    :host([clickable]) .chip:hover {
-      background: var(--stratum-chip-hover-background, rgba(255, 255, 255, 0.1));
+    /* Hover tylko przy prawdziwym kursorze — na dotyku chip po tapnięciu
+       zostawał podświetlony, aż palec trafił w coś innego. (hover: hover)
+       pyta o urządzenie, nie o rozmiar, więc media query jest właściwe. */
+    @media (hover: hover) {
+      :host([clickable]) .chip:hover {
+        background: var(--stratum-chip-hover-background, var(--stratum-surface-3));
+      }
+    }
+
+    /* Chip klikalny otwiera listę — bez :active tapnięcie nie dawało
+       żadnego natychmiastowego śladu, zanim lista się pojawiła. */
+    :host([clickable]) .chip:active {
+      transform: scale(0.96);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .chip {
+        transition: none;
+      }
+      :host([clickable]) .chip:active {
+        transform: none;
+      }
     }
 
     :host([clickable]) .chip:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
       outline-offset: 2px;
     }
 

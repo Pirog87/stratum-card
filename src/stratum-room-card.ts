@@ -451,7 +451,15 @@ export class StratumRoomCard extends LitElement {
           .icon=${icon}
         ></ha-icon>`;
 
-    const titleEl = html`<span class="title" part="title" style=${titleStyle}
+    // Nazwa pokoju to nagłówek popupu — czytnik ekranu ogłasza dialog
+    // nazwą (aria-label arkusza), a nawigacja po nagłówkach ląduje tutaj.
+    // Rola zamiast <h2>, żeby nie ruszać stylów i ::part(title) z card-moda.
+    const titleEl = html`<span
+      class="title"
+      part="title"
+      role="heading"
+      aria-level="2"
+      style=${titleStyle}
       >${name}${subtitleText
         ? html`<small class="subtitle">${subtitleText}</small>`
         : nothing}</span

@@ -54,6 +54,7 @@ import {
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
 import { LightSwipe } from './light-swipe.js';
+import { firstTabbable, lastTabbable, type FocusProbe } from './focus-order.js';
 import { subscribePower, swipePowerHook, toggleRoomLights } from './power-pending.js';
 import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
@@ -386,6 +387,7 @@ export class StratumCard extends LitElement {
     this._autoCollapseTimer = window.setTimeout(() => {
       this._autoCollapseTimer = undefined;
       if (this._expanded) {
+        this._rescueFocusFromBody();
         this._expanded = false;
         this.dispatchEvent(
           new CustomEvent('stratum-card-toggle', {
@@ -405,9 +407,30 @@ export class StratumCard extends LitElement {
     }
   }
 
+  /**
+   * Każda interakcja z kartą odsuwa auto-zwinięcie — także klawiatura
+   * (focusin/keydown na ha-card). Dawniej timer odnawiał tylko pointerdown,
+   * więc ktoś chodzący Tabem po wierszach tracił listę w połowie drogi.
+   */
   private _onInteraction = (): void => {
     if (this._expanded) this._scheduleAutoCollapse();
   };
+
+  /**
+   * Zwijana treść dostaje `inert` — jeśli fokus siedzi w niej w chwili
+   * zwinięcia, przeglądarka go zdejmuje i kursor klawiatury ląduje na
+   * początku dokumentu. Przenosimy go więc wcześniej na przycisk belki,
+   * który zwinięcie przeżywa (ten sam element w obu stanach karty).
+   */
+  private _rescueFocusFromBody(): void {
+    const root = this.shadowRoot;
+    const active = root?.activeElement;
+    const body = root?.querySelector('.body-wrap');
+    if (!root || !active || !body || !body.contains(active)) return;
+    root
+      .querySelector<HTMLElement>('.header-toggle, .hs-title')
+      ?.focus({ preventScroll: true });
+  }
 
   /** HA wymaga żeby karta miała metodę `setConfig` — rzuci tu przy błędnej konfiguracji. */
   public setConfig(config: StratumCardConfig): void {
@@ -495,6 +518,7 @@ export class StratumCard extends LitElement {
   }
 
   private _toggleExpand = (): void => {
+    if (this._expanded) this._rescueFocusFromBody();
     this._expanded = !this._expanded;
     this.dispatchEvent(
       new CustomEvent('stratum-card-toggle', {
@@ -986,12 +1010,16 @@ export class StratumCard extends LitElement {
           class="stripes-card"
           part="card"
           @pointerdown=${this._onInteraction}
+          @focusin=${this._onInteraction}
+          @keydown=${this._onInteraction}
         >
           ${this._renderStripesHeader(name, icon, header, headerStyles)}
           <div
+            id="stratum-body"
             class="body-wrap ${this._expanded ? 'open' : ''}"
             part="body"
             aria-hidden=${!this._expanded}
+            ?inert=${!this._expanded}
           >
             <div class="body">${this._renderBody()}</div>
           </div>
@@ -1001,18 +1029,46 @@ export class StratumCard extends LitElement {
       `;
     }
 
+    // Belka klasyczna to kontener, nie jeden <button>: chipy i odznaki są
+    // osobnymi kontrolkami, a dzieci przycisku są dla czytnika ekranu
+    // prezentacyjne — TalkBack czytał tylko „Rozwiń Parter", bez liczników,
+    // i nie dawał wejść w odznakę ⚠ (do tego przycisk w przycisku to
+    // niepoprawny HTML). Rozwijanie niesie przycisk z ikoną i nazwą; klik
+    // w resztę belki (tło, strzałka, chip bez akcji) dalej rozwija kartę,
+    // tak jak w belce „stripes". `part="header"` zostaje na kontenerze —
+    // padding i tło belki, które stylują użytkownicy card-moda, są tutaj.
     return html`
-      <ha-card part="card" @pointerdown=${this._onInteraction}>
-        <button
+      <ha-card
+        part="card"
+        @pointerdown=${this._onInteraction}
+        @focusin=${this._onInteraction}
+        @keydown=${this._onInteraction}
+      >
+        <div
           class="header ${header.accent_bar ? 'has-accent-bar' : ''}"
           part="header"
           style=${headerStyles}
           @click=${this._toggleExpand}
-          aria-expanded=${this._expanded}
-          aria-label="Rozwiń ${name}"
         >
-          <ha-icon class="area-icon" part="area-icon" .icon=${icon}></ha-icon>
-          <span class="title" part="title">${name}</span>
+          <button
+            type="button"
+            class="header-toggle"
+            part="header-toggle"
+            aria-expanded=${this._expanded}
+            aria-controls="stratum-body"
+            @click=${(ev: Event) => {
+              ev.stopPropagation();
+              this._toggleExpand();
+            }}
+          >
+            <ha-icon
+              class="area-icon"
+              part="area-icon"
+              aria-hidden="true"
+              .icon=${icon}
+            ></ha-icon>
+            <span class="title" part="title">${name}</span>
+          </button>
           <div class="chips" part="chips">
             ${this._renderHeaderAlarmBadge()}
             ${this._renderHeaderUnavailableChip()}
@@ -1023,14 +1079,17 @@ export class StratumCard extends LitElement {
             : html`<ha-icon
                 class="expander ${this._expanded ? 'open' : ''}"
                 part="expander"
+                aria-hidden="true"
                 .icon=${'mdi:chevron-down'}
               ></ha-icon>`}
-        </button>
+        </div>
 
         <div
+          id="stratum-body"
           class="body-wrap ${this._expanded ? 'open' : ''}"
           part="body"
           aria-hidden=${!this._expanded}
+          ?inert=${!this._expanded}
         >
           <div class="body">${this._renderBody()}</div>
         </div>
@@ -1188,6 +1247,7 @@ export class StratumCard extends LitElement {
             class="hs-title"
             part="title"
             aria-expanded=${this._expanded}
+            aria-controls="stratum-body"
             @click=${(ev: Event) => {
               ev.stopPropagation();
               this._toggleExpand();
@@ -1305,6 +1365,7 @@ export class StratumCard extends LitElement {
           tabindex="-1"
           role="dialog"
           aria-modal="true"
+          aria-label=${this._popupRoomName()}
           @click=${(ev: Event) => ev.stopPropagation()}
         >
           <span
@@ -1378,6 +1439,7 @@ export class StratumCard extends LitElement {
       role="button"
       tabindex="0"
       title="Pokaż aktywne alarmy"
+      aria-label="Aktywne alarmy: ${ids.length}. Pokaż listę"
       @click=${(ev: Event) => {
         ev.stopPropagation();
         this._openAlarmList(areaIds);
@@ -1390,7 +1452,7 @@ export class StratumCard extends LitElement {
         }
       }}
     >
-      <ha-icon .icon=${'mdi:alert'}></ha-icon>
+      <ha-icon .icon=${'mdi:alert'} aria-hidden="true"></ha-icon>
       ${ids.length}
     </span>`;
   }
@@ -1455,6 +1517,7 @@ export class StratumCard extends LitElement {
       role="button"
       tabindex="0"
       title="Pokaż niedostępne urządzenia"
+      aria-label="Niedostępne urządzenia: ${ids.length}. Pokaż listę"
       @click=${(ev: Event) => {
         ev.stopPropagation();
         this._openUnavailableList(areaIds);
@@ -1467,7 +1530,7 @@ export class StratumCard extends LitElement {
         }
       }}
     >
-      <ha-icon .icon=${'mdi:lan-disconnect'}></ha-icon>
+      <ha-icon .icon=${'mdi:lan-disconnect'} aria-hidden="true"></ha-icon>
       ${ids.length}
     </span>`;
   }
@@ -2061,28 +2124,61 @@ export class StratumCard extends LitElement {
   /**
    * Pulapka fokusa na wartownikach: puste, focusowalne spany na poczatku
    * i koncu arkusza. Gdy Tab wyjdzie poza tresc, ladujemy na wartowniku
-   * i odbijamy fokus z powrotem do srodka. Dziala takze przez granice
-   * shadow DOM karty pokoju, czego reczne zbieranie focusowalnych
-   * elementow by nie zalatwilo.
+   * i odbijamy fokus z powrotem do srodka — Tab z ostatniej kontrolki na
+   * pierwsza, Shift+Tab z pierwszej na OSTATNIA. Dawniej wartownik
+   * poczatkowy zawsze oddawal fokus na x, wiec Shift+Tab krecil sie
+   * w miejscu. Ostatnia kontrolka siedzi gleboko w shadow DOM karty
+   * pokoju, stad przejscie po drzewie przez shadow rooty (focus-order.ts),
+   * a nie querySelector, ktory do nich nie wchodzi.
    */
-  private _focusInPopup(selector: string): void {
-    const el = this.shadowRoot?.querySelector(selector) as HTMLElement | null;
+  private readonly _popupFocusProbe: FocusProbe<Element> = {
+    children: (el) => {
+      if (el instanceof HTMLSlotElement) {
+        const assigned = el.assignedElements({ flatten: true });
+        return assigned.length > 0 ? assigned : Array.from(el.children);
+      }
+      return Array.from((el.shadowRoot ?? el).children);
+    },
+    tabbable: (el) => {
+      const h = el as HTMLElement;
+      if (typeof h.tabIndex !== 'number' || h.tabIndex < 0) return false;
+      if ((h as HTMLButtonElement).disabled === true) return false;
+      // Bez prostokata (display: none siebie albo przodka, takze uchwyt
+      // arkusza schowany na szerokim ekranie) focus() bylby no-opem.
+      return h.getClientRects().length > 0 && getComputedStyle(h).visibility !== 'hidden';
+    },
+    skip: (el) =>
+      el.classList.contains('stratum-popup-sentinel') || (el as HTMLElement).inert === true,
+  };
+
+  private _focusPopupEdge(edge: 'first' | 'last'): void {
+    const card = this.shadowRoot?.querySelector('.stratum-popup-card');
+    if (!card) return;
+    const target =
+      edge === 'first'
+        ? firstTabbable(card, this._popupFocusProbe)
+        : lastTabbable(card, this._popupFocusProbe);
+    // Fallback: x jest zawsze widoczny — gdyby przejscie nic nie znalazlo
+    // (karta pokoju jeszcze sie nie wyrenderowala), fokus nie ucieka z arkusza.
+    const el = (target ??
+      this.shadowRoot?.querySelector('.stratum-popup-close')) as HTMLElement | null;
     el?.focus();
   }
 
   private _onSentinelStart = (): void => {
-    this._focusInPopup('.stratum-popup-close');
+    this._focusPopupEdge('last');
   };
 
   private _onSentinelEnd = (): void => {
-    const grab = this.shadowRoot?.querySelector(
-      '.stratum-popup-grab',
-    ) as HTMLElement | null;
-    // Uchwyt istnieje tylko na telefonie (display:none wyzej), a element
-    // ukryty nie przyjmie fokusa - wtedy pierwszym przystankiem jest x.
-    if (grab && grab.offsetParent !== null) grab.focus();
-    else this._focusInPopup('.stratum-popup-close');
+    this._focusPopupEdge('first');
   };
+
+  /** Nazwa otwartego pokoju dla czytnika ekranu — ta sama, co w wierszu. */
+  private _popupRoomName(): string {
+    const room = this._popupRoom;
+    if (!room) return '';
+    return room.name ?? this.hass?.areas?.[room.area_id]?.name ?? room.area_id;
+  }
 
   private _closeRoomPopup = (): void => {
     if (this._consumeBackGuard('room')) return;

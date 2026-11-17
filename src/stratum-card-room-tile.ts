@@ -448,24 +448,40 @@ export class StratumCardRoomTile extends LitElement {
     /* --- Klikalność + warianty hover --- */
     :host([clickable]) .tile { cursor: pointer; }
 
-    :host([clickable]) .tile[data-hover='subtle']:hover {
-      background: color-mix(in srgb, var(--primary-color, #ff9b42) 6%, var(--stratum-room-tile-bg, rgba(255, 255, 255, 0.03)));
-    }
-    :host([clickable]) .tile[data-hover='lift']:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-    }
-    :host([clickable]) .tile[data-hover='glow']:hover {
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #ff9b42) 55%, transparent),
-        0 4px 20px color-mix(in srgb, var(--primary-color, #ff9b42) 35%, transparent);
+    /* Hover tylko przy prawdziwym kursorze. Na dotyku :hover zostaje na
+       ostatnio tkniętym kaflu — domyślny „lift" zostawiał kafel uniesiony
+       z cieniem po zamknięciu popupu. (hover: hover) pyta o urządzenie,
+       nie o rozmiar, więc media query jest tu właściwe. */
+    @media (hover: hover) {
+      :host([clickable]) .tile[data-hover='subtle']:hover {
+        background: color-mix(in srgb, var(--primary-color) 6%, var(--stratum-room-tile-bg, var(--stratum-surface-1)));
+      }
+      :host([clickable]) .tile[data-hover='lift']:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+      }
+      :host([clickable]) .tile[data-hover='glow']:hover {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 55%, transparent),
+          0 4px 20px color-mix(in srgb, var(--primary-color) 35%, transparent);
+      }
     }
 
-    :host([clickable]) .tile:active {
+    /* Za hoverem i z tą samą specyficznością ([data-hover]). Samo
+       .tile:active przegrywało z „lift" (domyślny efekt kafla), więc
+       wciśnięty kafel unosił się zamiast pomniejszyć — feedback dotyku
+       nie pokazywał się wcale. */
+    :host([clickable]) .tile:active,
+    :host([clickable]) .tile[data-hover]:active {
       transform: scale(var(--stratum-room-tile-press-scale, 0.98));
+    }
+    /* Wciśnięta odznaka alarmu ma własny feedback — kafel się nie kurczy.
+       Osobna reguła: bez :has() przeglądarka odrzuci tylko ją. */
+    :host([clickable]) .tile[data-hover]:active:has(.alarm-badge:active) {
+      transform: none;
     }
 
     :host([clickable]) .tile:focus-visible {
-      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color, #ff9b42));
+      outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
       outline-offset: 2px;
     }
 
@@ -603,12 +619,15 @@ export class StratumCardRoomTile extends LitElement {
     .tile[data-icon-pos='left'] .alarm-badge::after {
       inset: -12px -4px -4px;
     }
-    .alarm-badge:hover:not(:disabled) {
-      background: color-mix(
-        in srgb,
-        var(--stratum-alarm) 28%,
-        transparent
-      );
+    /* Bez lepkiego hovera na dotyku — jak hover kafla. */
+    @media (hover: hover) {
+      .alarm-badge:hover:not(:disabled) {
+        background: color-mix(
+          in srgb,
+          var(--stratum-alarm) 28%,
+          transparent
+        );
+      }
     }
     .alarm-badge:focus-visible {
       outline: 2px solid var(--stratum-card-focus-color, var(--primary-color));
@@ -854,8 +873,12 @@ export class StratumCardRoomTile extends LitElement {
 
     @media (prefers-reduced-motion: reduce) {
       .tile { transition: none; }
+      /* [data-hover] — ta sama specyficzność co reguły hover/press wyżej;
+         samo .tile:hover przegrywało z „lift" i kafel dalej skakał. */
       :host([clickable]) .tile:hover,
-      :host([clickable]) .tile:active { transform: none; }
+      :host([clickable]) .tile:active,
+      :host([clickable]) .tile[data-hover]:hover,
+      :host([clickable]) .tile[data-hover]:active { transform: none; }
     }
   
     /* ====== Pomieszczenie offline ====== */
