@@ -35,8 +35,19 @@ export class IntercomError extends Error {
 /** Limit uploadu nagrania (Nabu Casa na słabym LTE bywa wolny, ale nie 15 s). */
 export const INTERCOM_UPLOAD_TIMEOUT_MS = 15000;
 
-/** Limit na `play_media` — głośnik, który nie odpowiada, nie blokuje przycisku. */
-export const INTERCOM_PLAY_TIMEOUT_MS = 10000;
+/**
+ * Ile czekamy na odpowiedź `play_media`, zanim przycisk wróci do spoczynku.
+ * To NIE jest limit porażki: część integracji (Music Assistant
+ * `play_announcement`) odpowiada dopiero po odegraniu komunikatu, a
+ * nagranie ma do 30 s. Dawniej 15-sekundowa wiadomość kończyła się po 10 s
+ * czerwonym mikrofonem i „przerwano" — w trakcie odtwarzania — więc
+ * użytkownik nagrywał ją drugi raz. Po tym czasie uznajemy wysyłkę za
+ * dokonaną (plik jest na serwerze, usługa poszła), a błąd pokazujemy tylko
+ * wtedy, gdy usługa później naprawdę odrzuci wywołanie (settleWithin).
+ * „Przerwano" (`timeout`) zostaje dla uploadu — tam abort faktycznie
+ * zrywa połączenie.
+ */
+export const INTERCOM_PLAY_CONFIRM_MS = 10000;
 
 /** Jak długo przycisk pokazuje stan błędu, zanim wróci do spoczynku. */
 export const INTERCOM_ERROR_MS = 3000;
@@ -102,6 +113,35 @@ export function withTimeout<T>(
       (e: unknown) => {
         clearTimeout(timer);
         reject(e);
+      },
+    );
+  });
+}
+
+/**
+ * Czeka na `p` najwyżej `ms`. `'done'` — spełniona w czasie; `'pending'` —
+ * czas minął, a `p` dalej trwa (nie jest przerywana ani odrzucana);
+ * odrzucenie `p` w czasie przechodzi dalej jako błąd. W odróżnieniu od
+ * withTimeout przekroczenie czasu nie jest porażką — patrz
+ * INTERCOM_PLAY_CONFIRM_MS. Odrzucenie po czasie obsługuje wywołujący
+ * (własnym `.catch` na `p`); tu jest tylko połykane, żeby nie wisiało
+ * jako „unhandled rejection".
+ */
+export function settleWithin(p: Promise<unknown>, ms: number): Promise<'done' | 'pending'> {
+  return new Promise((resolve, reject) => {
+    let over = false;
+    const timer = setTimeout(() => {
+      over = true;
+      resolve('pending');
+    }, ms);
+    p.then(
+      () => {
+        clearTimeout(timer);
+        if (!over) resolve('done');
+      },
+      (e: unknown) => {
+        clearTimeout(timer);
+        if (!over) reject(e);
       },
     );
   });

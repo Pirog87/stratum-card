@@ -4,6 +4,7 @@ import {
   intercomMessage,
   micFailure,
   sendFailure,
+  settleWithin,
   uploadFailure,
   withTimeout,
 } from '../src/intercom.js';
@@ -98,5 +99,49 @@ describe('withTimeout', () => {
         throw new Error('sync');
       }, 1000),
     ).rejects.toThrow('sync');
+  });
+});
+
+describe('settleWithin', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('spełniona w czasie → done', async () => {
+    await expect(settleWithin(Promise.resolve(1), 1000)).resolves.toBe('done');
+  });
+
+  it('odrzucona w czasie → ten sam błąd', async () => {
+    const err = new IntercomError('play_failed');
+    await expect(settleWithin(Promise.reject(err), 1000)).rejects.toBe(err);
+  });
+
+  it('nadal trwa po czasie → pending, bez błędu (komunikat MA gra 15 s)', async () => {
+    let finish!: () => void;
+    const play = new Promise<void>((r) => {
+      finish = r;
+    });
+    const out = settleWithin(play, 10000);
+    await vi.advanceTimersByTimeAsync(10000);
+    await expect(out).resolves.toBe('pending');
+    finish();
+    await expect(play).resolves.toBeUndefined();
+  });
+
+  it('odrzucenie po czasie nie zmienia wyniku — obsługuje je wywołujący', async () => {
+    let fail!: (e: unknown) => void;
+    const play = new Promise<void>((_, rej) => {
+      fail = rej;
+    });
+    const late = play.catch((e: unknown) => e);
+    const out = settleWithin(play, 10000);
+    await vi.advanceTimersByTimeAsync(10000);
+    await expect(out).resolves.toBe('pending');
+    const err = new IntercomError('play_failed');
+    fail(err);
+    await expect(late).resolves.toBe(err);
   });
 });

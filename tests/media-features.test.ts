@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MP_FEATURE, playerCaps, volumeMode } from '../src/media-features.js';
+import { MP_FEATURE, playPauseService, playerCaps, volumeMode } from '../src/media-features.js';
 
 describe('playerCaps', () => {
   it('brak / zły supported_features → nic nie wspierane', () => {
     for (const f of [undefined, null, 'abc', NaN]) {
       const c = playerCaps(f);
-      expect(c.prev || c.next || c.playPause || c.volumeSet || c.playMedia).toBe(false);
+      expect(c.prev || c.next || c.play || c.pause || c.volumeSet || c.playMedia).toBe(false);
     }
   });
 
@@ -15,21 +15,54 @@ describe('playerCaps', () => {
     );
     expect(c.prev).toBe(false);
     expect(c.next).toBe(false);
-    expect(c.playPause).toBe(false);
+    expect(c.play || c.pause).toBe(false);
     expect(c.volumeSet).toBe(true);
     expect(c.mute).toBe(true);
     expect(c.turnOn && c.turnOff).toBe(true);
   });
 
-  it('play/pause: wystarczy PLAY albo PAUSE (jak walidacja usługi w HA)', () => {
-    expect(playerCaps(MP_FEATURE.PAUSE).playPause).toBe(true);
-    expect(playerCaps(MP_FEATURE.PLAY).playPause).toBe(true);
-    expect(playerCaps(MP_FEATURE.NEXT_TRACK).playPause).toBe(false);
+  it('play i pause to osobne bity', () => {
+    expect(playerCaps(MP_FEATURE.PAUSE)).toMatchObject({ play: false, pause: true });
+    expect(playerCaps(MP_FEATURE.PLAY)).toMatchObject({ play: true, pause: false });
+    expect(playerCaps(MP_FEATURE.NEXT_TRACK)).toMatchObject({ play: false, pause: false });
   });
 
   it('PLAY_MEDIA osobno — warunek krótkofalówki', () => {
     expect(playerCaps(MP_FEATURE.PLAY_MEDIA).playMedia).toBe(true);
     expect(playerCaps(MP_FEATURE.PLAY | MP_FEATURE.VOLUME_SET).playMedia).toBe(false);
+  });
+});
+
+describe('playPauseService', () => {
+  const both = playerCaps(MP_FEATURE.PLAY | MP_FEATURE.PAUSE);
+
+  it('grający → media_pause, każdy inny stan → media_play', () => {
+    expect(playPauseService('playing', both)).toBe('media_pause');
+    for (const st of ['paused', 'idle', 'on', 'buffering', undefined]) {
+      expect(playPauseService(st, both)).toBe('media_play');
+    }
+  });
+
+  it('nigdy media_play_pause — HA wymaga do niej obu bitów naraz', () => {
+    expect(playPauseService('playing', both)).not.toBe('media_play_pause');
+    expect(playPauseService('paused', both)).not.toBe('media_play_pause');
+  });
+
+  it('sam PAUSE: pauza działa, start nie', () => {
+    const c = playerCaps(MP_FEATURE.PAUSE);
+    expect(playPauseService('playing', c)).toBe('media_pause');
+    expect(playPauseService('paused', c)).toBeUndefined();
+  });
+
+  it('sam PLAY: start działa, pauza nie', () => {
+    const c = playerCaps(MP_FEATURE.PLAY);
+    expect(playPauseService('paused', c)).toBe('media_play');
+    expect(playPauseService('playing', c)).toBeUndefined();
+  });
+
+  it('bez bitów → brak akcji', () => {
+    expect(playPauseService('playing', playerCaps(0))).toBeUndefined();
+    expect(playPauseService('paused', playerCaps(0))).toBeUndefined();
   });
 });
 

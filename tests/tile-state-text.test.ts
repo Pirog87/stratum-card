@@ -98,6 +98,20 @@ describe('binaryStateText', () => {
     expect(binaryStateText(hass, st('on', { device_class: 'smoke' }))).toBe('Wykryto dym');
     expect(binaryStateText({ language: 'pl' }, st('on', { device_class: 'smoke' }))).toBe('włączone');
   });
+
+  it('unknown nie udaje „zamknięte" / „brak" (czujnik po restarcie HA)', () => {
+    expect(binaryStateText({ language: 'pl' }, st('unknown', { device_class: 'window' }))).toBe(
+      'nieznany',
+    );
+    expect(binaryStateText({ language: 'pl' }, st('unknown', { device_class: 'motion' }))).toBe(
+      'nieznany',
+    );
+    expect(binaryStateText({ language: 'en' }, st('unavailable', { device_class: 'door' }))).toBe(
+      tileEn.unavailable,
+    );
+    const hass = { language: 'pl', formatEntityState: () => 'Nieznany' };
+    expect(binaryStateText(hass, st('unknown', { device_class: 'window' }))).toBe('Nieznany');
+  });
 });
 
 describe('mediaStateText', () => {

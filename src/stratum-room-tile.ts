@@ -38,15 +38,16 @@ import {
 import { LightSwipe } from './light-swipe.js';
 import { appBrandGradient } from './media-brands.js';
 import { encodeWav } from './audio-wav.js';
-import { playerCaps, volumeMode } from './media-features.js';
+import { playPauseService, playerCaps, volumeMode } from './media-features.js';
 import {
   INTERCOM_ERROR_MS,
-  INTERCOM_PLAY_TIMEOUT_MS,
+  INTERCOM_PLAY_CONFIRM_MS,
   INTERCOM_UPLOAD_TIMEOUT_MS,
   IntercomError,
   intercomMessage,
   micFailure,
   sendFailure,
+  settleWithin,
   uploadFailure,
   withTimeout,
 } from './intercom.js';
@@ -129,6 +130,23 @@ export class StratumRoomTile extends LitElement {
   /** Czy palec nadal trzyma przycisk — getUserMedia jest async. */
   private _recWanted = false;
 
+  /**
+   * Głośnik, dla którego trwa nagranie — zapamiętany przy starcie.
+   * Zakładki odtwarzaczy w sekcji mediów renderują JEDEN kafel i
+   * podmieniają mu `entity`; czytane dopiero po uploadzie (do ~30 s)
+   * `this.entity` puszczało komunikat nagrany dla Kuchni w Salonie,
+   * jeśli w międzyczasie zmieniono zakładkę.
+   */
+  private _recEntity?: string;
+
+  /**
+   * Pokolenie krótkofalówki — rośnie przy zmianie encji i odłączeniu
+   * (_recReset). Wysyłka z poprzedniego pokolenia leci do końca na swój
+   * głośnik, ale nie rusza już stanu przycisku: „wysyłanie" / błąd
+   * Kuchni nie może się pokazać na kaflu Salonu.
+   */
+  private _recGen = 0;
+
   /** Słownik tekstów kafla w języku HA (PL domyślnie). */
   private get _s(): TileStrings {
     return tileStrings(this.hass?.language);
@@ -179,19 +197,30 @@ export class StratumRoomTile extends LitElement {
     return Boolean(this.hass?.fetchWithAuth);
   }
 
-  private async _intercomStart(ev: PointerEvent): Promise<void> {
+  /**
+   * Start nagrania — z palca/myszy (pointerdown) albo z klawiatury
+   * (Enter/Spacja, _micKeyDown). Przechwycenie wskaźnika tylko dla
+   * PointerEvent: KeyboardEvent nie ma `pointerId`, a setPointerCapture
+   * z undefined rzuca NotFoundError, zanim nagranie w ogóle ruszy.
+   */
+  private async _intercomStart(ev: Event): Promise<void> {
     ev.stopPropagation();
     ev.preventDefault();
-    (ev.target as HTMLElement).setPointerCapture?.(ev.pointerId);
+    if (ev instanceof PointerEvent) {
+      (ev.target as HTMLElement).setPointerCapture?.(ev.pointerId);
+    }
     // Błąd poprzedniej próby nie blokuje nowej — przytrzymanie go zdejmuje.
     if (this._rec === 'error') this._clearRecError();
     if (this._rec) return;
     this._recWanted = true;
+    const gen = this._recGen;
+    const entity = this.entity;
     let stream: MediaStream | undefined;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!this._recWanted) {
-        // Palec puszczony zanim przeglądarka dała mikrofon.
+      if (!this._recWanted || gen !== this._recGen) {
+        // Palec puszczony (albo zmiana zakładki / odłączenie), zanim
+        // przeglądarka dała mikrofon.
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
@@ -214,6 +243,7 @@ export class StratumRoomTile extends LitElement {
       rec.start();
       this._recorder = rec;
       this._recStream = stream;
+      this._recEntity = entity;
       this._rec = 'recording';
       // Bezpiecznik: max 30 s nagrania.
       this._recMaxTimer = window.setTimeout(() => this._intercomStop(), 30000);
@@ -225,23 +255,38 @@ export class StratumRoomTile extends LitElement {
       // Mikrofon dany, ale MediaRecorder nie wstał (nieobsługiwany format)
       // — zwalniamy go, inaczej Android trzyma ikonę nagrywania.
       stream?.getTracks().forEach((t) => t.stop());
-      this._recFail(new IntercomError(micFailure(err)));
+      this._recFail(new IntercomError(micFailure(err)), gen === this._recGen);
     }
   }
 
-  /** Stan błędu krótkofalówki: czerwony przycisk + toast HA z powodem. */
-  private _recFail(err: IntercomError): void {
+  /**
+   * Porażka krótkofalówki: toast HA z powodem zawsze, a czerwony przycisk
+   * tylko gdy `ownState` — kafel dalej pokazuje ten głośnik i nie zaczął
+   * w międzyczasie nowego nagrania.
+   */
+  private _recFail(err: IntercomError, ownState = true): void {
     const message = intercomMessage(err, this._s);
-    this._rec = 'error';
-    this._recError = message;
-    if (this._recErrorTimer !== undefined) window.clearTimeout(this._recErrorTimer);
-    this._recErrorTimer = window.setTimeout(() => {
-      this._recErrorTimer = undefined;
-      if (this._rec === 'error') this._clearRecError();
-    }, INTERCOM_ERROR_MS);
+    // Odłączony kafel (popup zamknięty w trakcie wysyłki): disconnected-
+    // Callback już wyczyścił stan, a timer ustawiałby go martwemu elementowi.
+    if (ownState && this.isConnected) {
+      this._rec = 'error';
+      this._recError = message;
+      if (this._recErrorTimer !== undefined) window.clearTimeout(this._recErrorTimer);
+      this._recErrorTimer = window.setTimeout(() => {
+        this._recErrorTimer = undefined;
+        if (this._rec === 'error') this._clearRecError();
+      }, INTERCOM_ERROR_MS);
+    }
     // Toast HA — ten sam kanał, którym frontend pokazuje własne błędy.
-    // Zostaje na ekranie także wtedy, gdy popup z kaflem zaraz się zamknie.
-    this.dispatchEvent(
+    // Event z odłączonego elementu nigdzie nie dopływa: użytkownik puszcza
+    // przycisk, zamyka popup, a 403 przychodzi chwilę później — dawniej
+    // znów cisza. Wtedy wysyłamy wprost na <home-assistant>, gdzie HA
+    // nasłuchuje `hass-notification`; window to ostatnia deska (bez toastu,
+    // ale i bez wyjątku).
+    const target: EventTarget = this.isConnected
+      ? this
+      : document.querySelector('home-assistant') ?? window;
+    target.dispatchEvent(
       new CustomEvent('hass-notification', {
         detail: { message },
         bubbles: true,
@@ -259,6 +304,31 @@ export class StratumRoomTile extends LitElement {
     this._recError = undefined;
   }
 
+  /**
+   * Pełny reset krótkofalówki (zmiana encji, odłączenie): trwające nagranie
+   * przepada bez wysyłki, mikrofon zwolniony, nowe pokolenie. Wysyłka już
+   * w locie kończy się na głośniku, który zapamiętała.
+   */
+  private _recReset(): void {
+    this._recGen += 1;
+    this._recWanted = false;
+    if (this._recMaxTimer !== undefined) {
+      window.clearTimeout(this._recMaxTimer);
+      this._recMaxTimer = undefined;
+    }
+    if (this._recorder && this._recorder.state === 'recording') {
+      this._recorder.onstop = null;
+      this._recorder.stop();
+    }
+    this._recorder = undefined;
+    this._recChunks = [];
+    this._recStream?.getTracks().forEach((t) => t.stop());
+    this._recStream = undefined;
+    this._recEntity = undefined;
+    this._clearRecError();
+    this._rec = undefined;
+  }
+
   private _intercomStop = (ev?: Event): void => {
     ev?.stopPropagation();
     this._recWanted = false;
@@ -271,7 +341,34 @@ export class StratumRoomTile extends LitElement {
     }
   };
 
+  /**
+   * Klawiatura: Enter/Spacja działają jak przytrzymanie palca — wciśnięty
+   * klawisz nagrywa, puszczony wysyła. Dawniej mikrofon reagował tylko na
+   * pointerdown i z klawiatury był martwy (CLAUDE.md §3). Autopowtórzenie
+   * trzymanego klawisza (`repeat`) ignorujemy — startowałoby w kółko.
+   */
+  private _micKeyDown(ev: KeyboardEvent): void {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (ev.repeat) return;
+    void this._intercomStart(ev);
+  }
+
+  private _micKeyUp = (ev: KeyboardEvent): void => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    // preventDefault: Spacja na <button> klika dopiero przy puszczeniu.
+    ev.preventDefault();
+    this._intercomStop(ev);
+  };
+
   private async _intercomSend(): Promise<void> {
+    const gen = this._recGen;
+    // To samo pokolenie = kafel dalej pokazuje ten głośnik i może ruszać
+    // stan przycisku.
+    const own = (): boolean => gen === this._recGen;
+    const entity = this._recEntity ?? this.entity;
+    this._recEntity = undefined;
     const mime = this._recorder?.mimeType || 'audio/webm';
     this._recorder = undefined;
     this._recStream?.getTracks().forEach((t) => t.stop());
@@ -325,29 +422,35 @@ export class StratumRoomTile extends LitElement {
         if (!resp.ok) throw new IntercomError(uploadFailure(resp.status), resp.status);
         return (await resp.json()) as { media_content_id?: string };
       }, INTERCOM_UPLOAD_TIMEOUT_MS);
-      await withTimeout(
-        () =>
-          Promise.resolve(
-            hass.callService('media_player', 'play_media', {
-              entity_id: this.entity,
-              media_content_id: data.media_content_id ?? contentId,
-              media_content_type: 'music',
-              announce: true,
-            }),
-          ).catch(() => {
-            // Odrzucenie usługi to porażka głośnika, nie sieci — nawet gdy
-            // WebSocket opakuje ją w TypeError.
-            throw new IntercomError('play_failed');
-          }),
-        INTERCOM_PLAY_TIMEOUT_MS,
-      );
-      this._rec = undefined;
+      const play = Promise.resolve(
+        hass.callService('media_player', 'play_media', {
+          entity_id: entity,
+          media_content_id: data.media_content_id ?? contentId,
+          media_content_type: 'music',
+          announce: true,
+        }),
+      ).catch(() => {
+        // Odrzucenie usługi to porażka głośnika, nie sieci — nawet gdy
+        // WebSocket opakuje ją w TypeError.
+        throw new IntercomError('play_failed');
+      });
+      // Brak odpowiedzi w INTERCOM_PLAY_CONFIRM_MS to nie porażka — część
+      // integracji odpowiada dopiero po odegraniu komunikatu. Przycisk wraca
+      // do spoczynku; późne odrzucenie i tak pokaże toast, a czerwony
+      // przycisk tylko, jeśli w międzyczasie nie ruszyło nowe nagranie.
+      const outcome = await settleWithin(play, INTERCOM_PLAY_CONFIRM_MS);
+      if (outcome === 'pending') {
+        play.catch((err: unknown) => {
+          this._recFail(sendFailure(err), own() && this._rec === undefined);
+        });
+      }
+      if (own()) this._rec = undefined;
     } catch (err) {
-      this._recFail(sendFailure(err));
+      this._recFail(sendFailure(err), own());
     } finally {
       // Nigdy nie zostawiamy „wysyłania" — dawniej zawieszony fetch
       // blokował przycisk do przeładowania strony.
-      if (this._rec === 'sending') this._rec = undefined;
+      if (own() && this._rec === 'sending') this._rec = undefined;
     }
   }
 
@@ -452,6 +555,10 @@ export class StratumRoomTile extends LitElement {
     // dawniej „+" po zmianie zakładki wysyłał telewizorowi głośność Sonosa.
     if (changed.has('entity') && changed.get('entity') !== undefined) {
       this._volReset();
+      // To samo dla krótkofalówki: nagranie trwające przy zmianie zakładki
+      // przepada (było dla innego głośnika), a „wysyłanie" / błąd
+      // poprzedniego nie zostaje na kaflu nowego.
+      this._recReset();
     }
     // Głośność trzymana po puszczeniu ± — oddajemy ją stanowi z HA, gdy ten
     // dogonił (i nic już nie leci), zamiast po sztywnych 1,5 s.
@@ -682,20 +789,7 @@ export class StratumRoomTile extends LitElement {
     // nie może zostawić zawieszonej wartości po ponownym podpięciu kafla.
     this._volReset();
     // Krótkofalówka: zwolnij mikrofon, gdy kafel wypada z DOM.
-    this._recWanted = false;
-    if (this._recMaxTimer !== undefined) {
-      window.clearTimeout(this._recMaxTimer);
-      this._recMaxTimer = undefined;
-    }
-    if (this._recorder && this._recorder.state === 'recording') {
-      this._recorder.onstop = null;
-      this._recorder.stop();
-    }
-    this._recorder = undefined;
-    this._recStream?.getTracks().forEach((t) => t.stop());
-    this._recStream = undefined;
-    this._clearRecError();
-    this._rec = undefined;
+    this._recReset();
     super.disconnectedCallback();
   }
 
@@ -822,6 +916,12 @@ export class StratumRoomTile extends LitElement {
 
   public connectedCallback(): void {
     super.connectedCallback();
+    // Ponowne podpięcie (pamięć widoku HA, powrót karty pokoju): rodzic
+    // przerysowuje się z tym samym `hass`, więc kafel sam by nie ruszył,
+    // a disconnectedCallback zatrzymał zegar postępu — pasek grającego
+    // playera stałby do następnej zmiany stanu encji. Puste requestUpdate()
+    // przechodzi przez shouldUpdate, a updated() wznawia zegar.
+    if (this.hasUpdated) this.requestUpdate();
     // Przerysuj od razu po tapnięciu (własnym albo głównego włącznika) —
     // ale tylko kafel, którego encji / członków grupy to dotyczy.
     this._unsubPower = subscribePower((ids) => {
@@ -846,6 +946,20 @@ export class StratumRoomTile extends LitElement {
       entity_id: this.entity,
       ...data,
     });
+  }
+
+  /**
+   * Tap w kafel media_playera: play albo pauza — ta sama reguła co ⏯
+   * w playerze (playPauseService). Urządzenie, które danej akcji nie
+   * obsłuży (TV na HDMI, pauza bez bitu PAUSE), dostaje more-info zamiast
+   * usługi kończącej się toastem „akcja nieobsługiwana" — kafel nie jest
+   * martwy, a z more-info widać, co urządzenie umie.
+   */
+  private _mediaToggle(ev: Event): void {
+    const st = this._state();
+    const svc = playPauseService(st?.state, playerCaps(st?.attributes?.supported_features));
+    if (svc) this._callService(ev, 'media_player', svc);
+    else this._openMoreInfo(ev);
   }
 
   private _openMoreInfo(ev: Event): void {
@@ -947,7 +1061,7 @@ export class StratumRoomTile extends LitElement {
       ? (ev: Event) =>
           this._callService(ev, 'cover', on ? 'close_cover' : 'open_cover')
       : domain === 'media_player'
-      ? (ev: Event) => this._callService(ev, 'media_player', 'media_play_pause')
+      ? (ev: Event) => this._mediaToggle(ev)
       : (ev: Event) => this._callService(ev, domain, 'toggle');
     // Override z listy popupu wygrywa także nad readonly more-info —
     // _customTap zwraca false, gdy override'u nie ma.
@@ -1002,8 +1116,7 @@ export class StratumRoomTile extends LitElement {
     if (domain === 'scene') return (ev: Event) => this._callService(ev, 'scene', 'turn_on');
     if (domain === 'cover')
       return (ev: Event) => this._callService(ev, 'cover', on ? 'close_cover' : 'open_cover');
-    if (domain === 'media_player')
-      return (ev: Event) => this._callService(ev, 'media_player', 'media_play_pause');
+    if (domain === 'media_player') return (ev: Event) => this._mediaToggle(ev);
     return (ev: Event) => this._callService(ev, domain, 'toggle');
   }
 
@@ -1611,8 +1724,15 @@ export class StratumRoomTile extends LitElement {
   private _renderBinary(state: HassEntity): TemplateResult {
     const on = state.state === 'on';
     const dc = state.attributes?.device_class as string | undefined;
+    // `unknown` (czujnik po restarcie HA jeszcze nic nie zgłosił) nie
+    // dostaje zamkniętego okna ani ikony „ok" (check-circle) — ikona nie może
+    // obiecywać „wszystko w porządku", gdy stanu nie znamy (jak tekst
+    // w binaryStateText).
+    const known = on || state.state === 'off';
     const icon = this._icon(
-      dc === 'window'
+      !known
+        ? 'mdi:help-circle-outline'
+        : dc === 'window'
         ? (on ? 'mdi:window-open-variant' : 'mdi:window-closed-variant')
         : dc === 'door'
         ? (on ? 'mdi:door-open' : 'mdi:door-closed')
@@ -1688,6 +1808,8 @@ export class StratumRoomTile extends LitElement {
 
     // Co urządzenie umie — bity supported_features (media-features.ts).
     const caps = playerCaps(state.attributes?.supported_features);
+    // ⏯ wysyła media_play / media_pause zależnie od stanu (media-features.ts).
+    const playSvc = playPauseService(state.state, caps);
     const canSeek = caps.seek && typeof duration === 'number' && duration > 0;
     const canMute = caps.mute;
     const muted = state.attributes?.is_volume_muted === true;
@@ -1798,14 +1920,15 @@ export class StratumRoomTile extends LitElement {
             </button>
             <button
               class="player-btn play"
-              title=${transportTitle(playing ? s.player.pause : s.player.play, caps.playPause)}
+              title=${transportTitle(playing ? s.player.pause : s.player.play, Boolean(playSvc))}
               aria-label=${transportTitle(
                 playing ? s.player.pause : s.player.play,
-                caps.playPause,
+                Boolean(playSvc),
               )}
-              ?disabled=${!caps.playPause}
-              @click=${(ev: Event) =>
-                this._callService(ev, 'media_player', 'media_play_pause')}
+              ?disabled=${!playSvc}
+              @click=${(ev: Event) => {
+                if (playSvc) this._callService(ev, 'media_player', playSvc);
+              }}
             >
               <ha-icon aria-hidden="true" .icon=${playing ? 'mdi:pause' : 'mdi:play'}></ha-icon>
             </button>
@@ -1825,11 +1948,15 @@ export class StratumRoomTile extends LitElement {
                 class="player-vol-row ${volMode !== 'none' ? 'has-volume' : ''}"
                 part="player-volume-row"
               >
+                <!-- Wycisz to przełącznik: stała etykieta + aria-pressed niesie
+                     stan. Zmienna etykieta razem z aria-pressed czytała się
+                     „Wyłącz wyciszenie, wciśnięty" — dwa sprzeczne opisy
+                     jednego stanu. Podpis (title) dalej mówi, co zrobi klik. -->
                 ${showMute
                   ? html`<button
                       class="player-btn vol-btn mute ${muted ? 'muted' : ''}"
                       title=${muted ? s.player.unmute : s.player.mute}
-                      aria-label=${muted ? s.player.unmute : s.player.mute}
+                      aria-label=${s.player.mute}
                       aria-pressed=${muted ? 'true' : 'false'}
                       @click=${(ev: Event) =>
                         this._callService(ev, 'media_player', 'volume_mute', {
@@ -1907,6 +2034,9 @@ export class StratumRoomTile extends LitElement {
 
   private _renderMic(title: string): TemplateResult {
     const rec = this._rec;
+    // blur kończy nagranie: fokus uciekł w trakcie trzymania Enter/Spacji
+    // (Tab, okno w tle), więc keyup tu już nie trafi — bez tego nagranie
+    // szłoby do bezpiecznika 30 s.
     return html`<button
       class="player-btn vol-btn mic ${rec ?? ''}"
       title=${title}
@@ -1914,6 +2044,9 @@ export class StratumRoomTile extends LitElement {
       @pointerdown=${(ev: PointerEvent) => this._intercomStart(ev)}
       @pointerup=${this._intercomStop}
       @pointercancel=${this._intercomStop}
+      @keydown=${(ev: KeyboardEvent) => this._micKeyDown(ev)}
+      @keyup=${this._micKeyUp}
+      @blur=${this._intercomStop}
       @contextmenu=${(ev: Event) => ev.preventDefault()}
     >
       <ha-icon
@@ -1981,8 +2114,7 @@ export class StratumRoomTile extends LitElement {
       <button
         class="tile media ${playing ? 'on' : 'off'}"
         part="tile"
-        @click=${(ev: Event) =>
-          this._customTap(ev) || this._callService(ev, 'media_player', 'media_play_pause')}
+        @click=${(ev: Event) => this._customTap(ev) || this._mediaToggle(ev)}
         @contextmenu=${this._openMoreInfo}
       >
         <ha-icon class="tile-icon" .icon=${this._icon(playing ? 'mdi:pause' : 'mdi:play')}></ha-icon>
@@ -2724,22 +2856,15 @@ export class StratumRoomTile extends LitElement {
       background-clip: content-box;
     }
 
-    .player-btn.vol-btn.mute.muted {
-      background: color-mix(in srgb, #f44336 35%, transparent);
-    }
-
     .player-btn.vol-btn.mic {
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
     }
-    /* Nagrywanie: czerwień = „mikrofon na żywo", pulsowanie = trwa akcja
-       wymagająca uwagi (puść, żeby wysłać). Puls to pierścień ::before
-       animowany transform/opacity — ::after jest polem trafienia. */
-    .player-btn.vol-btn.mic.recording {
-      background: var(--error-color);
-      color: var(--text-primary-color);
-    }
+    /* Kolory stanów mikrofonu i wyciszenia — niżej, za regułami :hover.
+       Pulsowanie nagrywania = trwa akcja wymagająca uwagi (puść, żeby
+       wysłać). Puls to pierścień ::before animowany transform/opacity —
+       ::after jest polem trafienia. */
     .player-btn.vol-btn.mic.recording::before {
       content: '';
       position: absolute;
@@ -2748,20 +2873,6 @@ export class StratumRoomTile extends LitElement {
       box-shadow: 0 0 0 2px var(--error-color);
       animation: stratum-mic-pulse 1.1s ease-out infinite;
       pointer-events: none;
-    }
-    .player-btn.vol-btn.mic.sending {
-      background: color-mix(
-        in srgb,
-        var(--stratum-player-accent, var(--primary-color)) 60%,
-        transparent
-      );
-      color: var(--text-primary-color);
-    }
-    /* Porażka (brak zgody na mikrofon, 403, timeout): przekreślony mikrofon
-       w kolorze błędu na kilka sekund, powód w toaście i w podpisie. */
-    .player-btn.vol-btn.mic.error {
-      background: color-mix(in srgb, var(--error-color) 25%, transparent);
-      color: var(--error-color);
     }
     @keyframes stratum-mic-pulse {
       from {
@@ -2938,6 +3049,35 @@ export class StratumRoomTile extends LitElement {
     .player-tile .player-btn.play:hover:not(:disabled) {
       background: var(--stratum-player-accent, var(--primary-color));
       filter: brightness(1.1);
+    }
+
+    /* Stany mikrofonu i wyciszenia. Prefiks .player-tile + miejsce ZA
+       regułami :hover: „bez okładki" :hover ma specyficzność (0,5,0) i
+       dawniej podmieniała czerwień „mikrofon na żywo" na szarą
+       powierzchnię — na telefonie :hover trzyma się pod palcem przez całe
+       mówienie, a biała ikona lądowała na jasnoszarym tle. Stan to
+       informacja, hover tylko zapowiedź — stan wygrywa. */
+    .player-tile .player-btn.vol-btn.mute.muted {
+      background: color-mix(in srgb, var(--error-color) 35%, transparent);
+    }
+    /* Nagrywanie: czerwień = „mikrofon na żywo". */
+    .player-tile .player-btn.vol-btn.mic.recording {
+      background: var(--error-color);
+      color: var(--text-primary-color);
+    }
+    .player-tile .player-btn.vol-btn.mic.sending {
+      background: color-mix(
+        in srgb,
+        var(--stratum-player-accent, var(--primary-color)) 60%,
+        transparent
+      );
+      color: var(--text-primary-color);
+    }
+    /* Porażka (brak zgody na mikrofon, 403, timeout): przekreślony mikrofon
+       w kolorze błędu na kilka sekund, powód w toaście i w podpisie. */
+    .player-tile .player-btn.vol-btn.mic.error {
+      background: color-mix(in srgb, var(--error-color) 25%, transparent);
+      color: var(--error-color);
     }
 
     .player-btn.vol-btn {

@@ -23,11 +23,10 @@ export const MP_FEATURE = {
 export interface PlayerCaps {
   prev: boolean;
   next: boolean;
-  /**
-   * `media_play_pause` — HA rejestruje usługę z wymaganiem PLAY *albo*
-   * PAUSE, więc sprawdzamy tak samo jak on (którykolwiek bit).
-   */
-  playPause: boolean;
+  /** `media_play` — wznowienie / start odtwarzania. */
+  play: boolean;
+  /** `media_pause` — pauza w trakcie odtwarzania. */
+  pause: boolean;
   seek: boolean;
   mute: boolean;
   /** `volume_set` — suwak i ± z wartością docelową. */
@@ -46,7 +45,8 @@ export function playerCaps(features: unknown): PlayerCaps {
   return {
     prev: has(MP_FEATURE.PREVIOUS_TRACK),
     next: has(MP_FEATURE.NEXT_TRACK),
-    playPause: has(MP_FEATURE.PLAY | MP_FEATURE.PAUSE),
+    play: has(MP_FEATURE.PLAY),
+    pause: has(MP_FEATURE.PAUSE),
     seek: has(MP_FEATURE.SEEK),
     mute: has(MP_FEATURE.VOLUME_MUTE),
     volumeSet: has(MP_FEATURE.VOLUME_SET),
@@ -67,4 +67,23 @@ export function volumeMode(caps: PlayerCaps, volumeLevel: unknown): 'set' | 'ste
   if (caps.volumeSet && typeof volumeLevel === 'number') return 'set';
   if (caps.volumeStep) return 'step';
   return 'none';
+}
+
+/**
+ * Usługa przycisku ⏯ dla stanu playera. `undefined` = urządzenie tej
+ * akcji nie obsłuży (przycisk wyłączony / kafel otwiera more-info).
+ *
+ * Nie `media_play_pause`: HA rejestruje ją z wymaganiem PLAY *i* PAUSE
+ * naraz (jeden zestaw bitów = wszystkie wymagane), więc player z samym
+ * PAUSE albo samym PLAY dostawał toast „akcja nieobsługiwana". Robimy
+ * jak frontend HA: grający → `media_pause` (bit PAUSE), każdy inny stan
+ * → `media_play` (bit PLAY). Player z samym PLAY zachowuje działający
+ * start zamiast martwego przycisku.
+ */
+export function playPauseService(
+  state: string | undefined,
+  caps: PlayerCaps,
+): 'media_play' | 'media_pause' | undefined {
+  if (state === 'playing') return caps.pause ? 'media_pause' : undefined;
+  return caps.play ? 'media_play' : undefined;
 }

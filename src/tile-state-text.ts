@@ -119,15 +119,23 @@ const PRESENCE_CLASSES = new Set(['motion', 'occupancy', 'presence', 'moving']);
  * czujnika ruchu SATEL dodanego do sekcji custom. Okna/drzwi i ruch mają
  * własne słowa (te same co chipy karty, małą literą); reszta klas
  * (dym, wilgoć, bateria…) idzie przez tłumaczenia HA.
+ *
+ * Własne słowa tylko dla jawnych `on` / `off`. Dawniej każdy stan inny niż
+ * `on` był „zamknięte" / „brak" — czujnik Zigbee, który po restarcie HA
+ * jeszcze nic nie zgłosił (`unknown`), udawał zamknięte okno i pusty
+ * pokój. Fałszywe „wszystko w porządku" jest gorsze niż „nieznany".
  */
 export function binaryStateText(
   hass: Pick<HomeAssistant, 'language' | 'formatEntityState'> | undefined,
   state: HassEntity,
 ): string {
   const s = tileStrings(hass?.language);
-  const on = state.state === 'on';
+  const raw = state.state;
   const dc = state.attributes?.device_class as string | undefined;
-  if (dc && OPENING_CLASSES.has(dc)) return on ? s.open : s.closed;
-  if (dc && PRESENCE_CLASSES.has(dc)) return on ? s.detected : s.clear;
+  if (dc && (raw === 'on' || raw === 'off')) {
+    const on = raw === 'on';
+    if (OPENING_CLASSES.has(dc)) return on ? s.open : s.closed;
+    if (PRESENCE_CLASSES.has(dc)) return on ? s.detected : s.clear;
+  }
   return entityStateText(hass, state);
 }
