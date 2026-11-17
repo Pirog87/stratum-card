@@ -12,6 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { getAreasInFloor } from './area-entities.js';
 import type {
   ChipConfig,
+  CoreSectionType,
   HomeAssistant,
   RoomConfig,
   RoomLightsConfig,
@@ -20,10 +21,24 @@ import type {
   RoomSectionConfig,
   RoomSectionType,
   SceneBarConfig,
-  TapActionConfig,
 } from './types.js';
 import { getCustomCardOptions } from './custom-cards.js';
-import { DEFAULT_POPUP_ORDER } from './types.js';
+import {
+  deselectAllRooms,
+  moveRoomInList,
+  roomHasConfig,
+  roomPosition,
+  selectAllRooms,
+  toggleRoomInList,
+  updateRoomInList,
+} from './room-list-config.js';
+import {
+  coreSectionVisibility,
+  isBlockHidden,
+  resolvePopupOrder,
+  setBlocksHidden,
+  toggleCoreSectionHidden,
+} from './room-block-visibility.js';
 import './stratum-sections-editor.js';
 import './stratum-scene-editor.js';
 import './stratum-chips-editor.js';
@@ -36,6 +51,7 @@ const ROOM_LABELS: Record<string, string> = {
   icon: 'Ikona (override)',
   display: 'Forma wyświetlania',
   tap_action: 'Akcja po kliknięciu (override)',
+  icon_tap_action: 'Akcja po kliknięciu w ikonę (override)',
   merge_with: 'Połącz z innymi pomieszczeniami',
   aggregate: 'Sposób agregacji',
 };
@@ -109,6 +125,9 @@ export class StratumCardRoomsEditor extends LitElement {
       // Akcja wiersza pokoju — bez encji, więc bez `more-info` / `toggle`;
       // `assist` karta nie obsługuje.
       { name: 'tap_action', selector: { ui_action: { actions: ROW_UI_ACTIONS } } },
+      // Karta czyta room.icon_tap_action (nadpisuje room_icon_tap_action),
+      // a bez tego pola dało się to ustawić tylko w YAML.
+      { name: 'icon_tap_action', selector: { ui_action: { actions: ROW_UI_ACTIONS } } },
     ];
   }
 
@@ -180,117 +199,18 @@ export class StratumCardRoomsEditor extends LitElement {
     );
   }
 
-  /** Materializuje obecny stan do explicit listy (używane gdy wychodzimy z auto-discover). */
-  private _materialize(): RoomConfig[] {
-    if (this.rooms.length > 0) return [...this.rooms];
-    return this._availableAreas().map((a) => ({ area_id: a.area_id }));
+  /** area_id piętra w kolejności HA — ta sama, w której renderuje auto-discover. */
+  private _floorIds(): string[] {
+    return this._availableAreas().map((a) => a.area_id);
   }
 
   private _toggleArea(areaId: string, show: boolean): void {
-    const rooms = this._materialize();
-    const existing = rooms.find((r) => r.area_id === areaId);
-    let next: RoomConfig[];
-    if (show) {
-      if (existing) {
-        next = rooms.map((r) =>
-          r.area_id === areaId ? { ...r, hidden: false } : r,
-        );
-      } else {
-        next = [...rooms, { area_id: areaId }];
-      }
-    } else {
-      if (existing) {
-        const hasOverrides =
-          existing.name ||
-          existing.icon ||
-          existing.tap_action ||
-          (existing.merge_with && existing.merge_with.length > 0);
-        next = hasOverrides
-          ? rooms.map((r) =>
-              r.area_id === areaId ? { ...r, hidden: true } : r,
-            )
-          : rooms.filter((r) => r.area_id !== areaId);
-      } else {
-        next = [...rooms, { area_id: areaId, hidden: true }];
-      }
-    }
-    this._emitChange(next);
+    this._emitChange(toggleRoomInList(this.rooms, this._floorIds(), areaId, show));
   }
 
+  /** Logika (materializacja, sprzątanie pustych pól) w room-list-config.ts. */
   private _updateRoom(areaId: string, patch: Partial<RoomConfig>): void {
-    const existing = this._getRoom(areaId);
-    const base: RoomConfig = existing ?? { area_id: areaId };
-    const merged: RoomConfig = { ...base, ...patch, area_id: areaId };
-    if (!merged.name) delete merged.name;
-    if (!merged.icon) delete merged.icon;
-    if (!merged.tap_action || (merged.tap_action as TapActionConfig).action === 'none') {
-      delete merged.tap_action;
-    }
-    if (!merged.merge_with || merged.merge_with.length === 0) {
-      delete merged.merge_with;
-    }
-    if (!merged.aggregate || merged.aggregate === 'sum') {
-      delete merged.aggregate;
-    }
-    if (!merged.sections || merged.sections.length === 0) delete merged.sections;
-    if (!merged.scenes || (merged.scenes.items ?? []).length === 0) {
-      delete merged.scenes;
-    }
-    if (!merged.lights || (merged.lights.items ?? []).length === 0) {
-      delete merged.lights;
-    }
-    if (!merged.light_auto_entity) delete merged.light_auto_entity;
-    if (!merged.light_split_areas) delete merged.light_split_areas;
-    if (
-      !merged.light_auto_entities ||
-      Object.keys(merged.light_auto_entities).length === 0
-    ) {
-      delete merged.light_auto_entities;
-    }
-    if (!merged.light_singles || (merged.light_singles.items ?? []).length === 0) {
-      delete merged.light_singles;
-    }
-    if (!merged.covers_list || (merged.covers_list.items ?? []).length === 0) {
-      delete merged.covers_list;
-    }
-    if (!merged.media_list || (merged.media_list.items ?? []).length === 0) {
-      delete merged.media_list;
-    }
-    // popup_order: kasujemy gdy = default (ta sama kolejność, nic nie ukryte).
-    if (merged.popup_order) {
-      const def = DEFAULT_POPUP_ORDER;
-      const isDefault =
-        merged.popup_order.length === def.length &&
-        merged.popup_order.every(
-          (i, idx) => i.section === def[idx] && !i.hidden,
-        );
-      if (isDefault || merged.popup_order.length === 0) delete merged.popup_order;
-    }
-    if (
-      merged.popup_extra &&
-      Object.values(merged.popup_extra).every((v) => !v || v.length === 0)
-    ) {
-      delete merged.popup_extra;
-    }
-    if (!merged.chips || merged.chips.length === 0) delete merged.chips;
-    // `display` zachowujemy zawsze gdy ustawione (row albo tile) — świadomy
-    // override globalnego `rooms_display`. Kasujemy tylko gdy pole puste.
-    if (!merged.display) delete merged.display;
-    if (
-      !merged.field_entities ||
-      Object.values(merged.field_entities).every(
-        (v) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0),
-      )
-    ) {
-      delete merged.field_entities;
-    }
-    if (!merged.style_override || merged.style_override.trim() === '') {
-      delete merged.style_override;
-    }
-    const next = existing
-      ? this.rooms.map((r) => (r.area_id === areaId ? merged : r))
-      : [...this.rooms, merged];
-    this._emitChange(next);
+    this._emitChange(updateRoomInList(this.rooms, this._floorIds(), areaId, patch));
   }
 
   private _onSectionsChanged(
@@ -493,60 +413,25 @@ export class StratumCardRoomsEditor extends LitElement {
   }
 
   private _selectAll(): void {
-    // Jeśli nie ma override'ów — wracamy do auto-discover (pusta lista).
-    // Jeśli są — materializujemy pełną listę z hidden:false, żeby zachować overrides.
-    const hasOverrides = this.rooms.some(
-      (r) => r.name || r.icon || r.tap_action || r.merge_with?.length,
-    );
-    if (!hasOverrides) {
-      this._emitChange([]);
-      return;
-    }
-    const floorAreas = this._availableAreas();
-    const existingById = new Map(this.rooms.map((r) => [r.area_id, r]));
-    const next = floorAreas.map(
-      (a) => ({ ...(existingById.get(a.area_id) ?? { area_id: a.area_id }), hidden: false }),
-    );
-    this._emitChange(next);
+    this._emitChange(selectAllRooms(this.rooms, this._floorIds()));
   }
 
   private _deselectAll(): void {
-    // Explicitnie: pełna lista z hidden:true (zero widocznych pokojów).
-    // Bez tego pusta lista byłaby traktowana jako auto-discover = wszystkie widoczne.
-    const floorAreas = this._availableAreas();
-    const existingById = new Map(this.rooms.map((r) => [r.area_id, r]));
-    const next = floorAreas.map((a) => ({
-      ...(existingById.get(a.area_id) ?? { area_id: a.area_id }),
-      hidden: true,
-    }));
-    this._emitChange(next);
+    this._emitChange(deselectAllRooms(this.rooms, this._floorIds()));
   }
 
   private _moveRoom(areaId: string, direction: -1 | 1): void {
-    const idx = this.rooms.findIndex((r) => r.area_id === areaId);
-    if (idx === -1) return;
-    const targetIdx = idx + direction;
-    if (targetIdx < 0 || targetIdx >= this.rooms.length) return;
-    const next = [...this.rooms];
-    [next[idx], next[targetIdx]] = [next[targetIdx]!, next[idx]!];
-    this._emitChange(next);
+    const next = moveRoomInList(this.rooms, this._floorIds(), areaId, direction);
+    if (next) this._emitChange(next);
   }
 
   private _getPosition(areaId: string): { index: number; total: number } {
-    const idx = this.rooms.findIndex((r) => r.area_id === areaId);
-    return { index: idx, total: this.rooms.length };
+    return roomPosition(this.rooms, this._floorIds(), areaId);
   }
 
   /** Kolejność bloków popupu dla pokoju: config + brakujące klucze wg defaultu. */
   private _orderFor(room: RoomConfig | undefined): RoomPopupOrderItem[] {
-    const cfg = room?.popup_order ?? [];
-    const seen = new Set(cfg.map((i) => i.section));
-    return [
-      ...cfg.filter((i) => DEFAULT_POPUP_ORDER.includes(i.section)),
-      ...DEFAULT_POPUP_ORDER.filter((k) => !seen.has(k)).map((k) => ({
-        section: k,
-      })),
-    ];
+    return resolvePopupOrder(room);
   }
 
   private _moveOrder(areaId: string, key: RoomPopupSectionKey, dir: -1 | 1): void {
@@ -558,15 +443,23 @@ export class StratumCardRoomsEditor extends LitElement {
     this._updateRoom(areaId, { popup_order: order });
   }
 
+  /**
+   * Oko na nagłówku bloku. Czyta i zapisuje stan EFEKTYWNY (popup_order
+   * albo hidden sekcji — oba honoruje karta), żeby nie rozjeżdżało się
+   * z okiem tej samej sekcji w „Dodatkowych sekcjach".
+   */
   private _toggleOrderHidden(areaId: string, key: RoomPopupSectionKey): void {
-    const order = this._orderFor(this._getRoom(areaId)).map((i) =>
-      i.section === key
-        ? i.hidden
-          ? { section: i.section }
-          : { section: i.section, hidden: true }
-        : i,
-    );
-    this._updateRoom(areaId, { popup_order: order });
+    const room = this._getRoom(areaId);
+    this._updateRoom(areaId, setBlocksHidden(room, [key], !isBlockHidden(room, key)));
+  }
+
+  /** Oko sekcji rdzeniowej w sections-editorze — ten sam stan co nagłówki bloków. */
+  private _onCoreSectionToggle(
+    areaId: string,
+    ev: CustomEvent<{ type: CoreSectionType }>,
+  ): void {
+    ev.stopPropagation();
+    this._updateRoom(areaId, toggleCoreSectionHidden(this._getRoom(areaId), ev.detail.type));
   }
 
   /** Aktualny mode sekcji danego typu (z room.sections). */
@@ -913,8 +806,11 @@ export class StratumCardRoomsEditor extends LitElement {
           <stratum-sections-editor
             .hass=${this.hass}
             .sections=${this._normalizedRoomSections(room)}
+            .coreVisibility=${coreSectionVisibility(room)}
             @sections-changed=${(ev: CustomEvent<{ sections: RoomSectionConfig[] }>) =>
               this._onSectionsChanged(areaId, ev)}
+            @core-section-toggle=${(ev: CustomEvent<{ type: CoreSectionType }>) =>
+              this._onCoreSectionToggle(areaId, ev)}
           ></stratum-sections-editor>
         `;
     }
@@ -999,7 +895,7 @@ export class StratumCardRoomsEditor extends LitElement {
           (i) => i.section,
           (item, idx) => {
             const meta = POPUP_GROUP_META[item.section];
-            const hidden = Boolean(item.hidden);
+            const hidden = isBlockHidden(room, item.section);
             return html`
               <details class="popup-group ${hidden ? 'hidden-group' : ''}">
                 <summary>
@@ -1122,9 +1018,9 @@ export class StratumCardRoomsEditor extends LitElement {
         ${areas.map((area) => {
           const visible = this._isVisible(area.area_id);
           const room = this._getRoom(area.area_id);
-          const hasOverrides = Boolean(
-            room && (room.name || room.icon || room.tap_action),
-          );
+          // Każde pole poza area_id/hidden — także sam config popupu —
+          // to „custom": user widzi, że pokój ma ustawienia do stracenia.
+          const hasOverrides = Boolean(room && roomHasConfig(room));
           const mergeCount = room?.merge_with?.length ?? 0;
           const mergedAwayInto = this.rooms.find((r) =>
             r.merge_with?.includes(area.area_id),

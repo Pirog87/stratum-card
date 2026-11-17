@@ -393,6 +393,16 @@ export interface RoomPopupOrderItem {
 }
 
 /**
+ * Widoczność sekcji rdzeniowej (lights/covers/media/scenes) w edytorze,
+ * liczona z bloków popupu. `partial` — tylko dla świateł, gdy ukryty jest
+ * jeden z dwóch bloków (grupy albo pojedyncze encje).
+ */
+export type SectionVisibility = 'visible' | 'partial' | 'hidden';
+
+/** Typy sekcji, których `hidden` karta stosuje do bloków popupu (nie do „extra"). */
+export type CoreSectionType = 'scenes' | 'lights' | 'covers' | 'media';
+
+/**
  * Dodatkowe encje (spoza obszaru) doliczane do auto-list bloków popupu.
  * Klucze: `light_entities`, `covers`, `media` (sceny/grupy/chipy mają
  * własne listy z pickerami bez ograniczenia do obszaru).

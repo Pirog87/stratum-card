@@ -7,11 +7,14 @@
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
+  CoreSectionType,
   HomeAssistant,
   RoomSectionConfig,
   RoomSectionType,
+  SectionVisibility,
   SummaryField,
 } from './types.js';
+import { isCoreSectionType } from './room-block-visibility.js';
 import { SECTION_LABEL, SECTION_ICON } from './section-defaults.js';
 import {
   SECTION_PRESETS,
@@ -282,6 +285,18 @@ export class StratumSectionsEditor extends LitElement {
 
   @property({ attribute: false }) public sections: RoomSectionConfig[] = [];
 
+  /**
+   * Widoczność sekcji rdzeniowych (lights/covers/media/scenes) liczona
+   * przez rodzica z bloków popupu. Gdy podana, oko tych sekcji pokazuje
+   * ten stan i zamiast pisać `section.hidden` emituje `core-section-toggle`
+   * — rodzic zapisuje to do `popup_order`, tego samego miejsca co oko
+   * na nagłówku bloku. Bez tego były dwa niezależne przełączniki jednego
+   * bloku, które się rozjeżdżały. Brak (edytor samodzielnej room-card,
+   * bez nagłówków bloków) = dotychczasowe `section.hidden`.
+   */
+  @property({ attribute: false })
+  public coreVisibility?: Partial<Record<CoreSectionType, SectionVisibility>>;
+
   @state() private _open = new Set<number>();
 
   @state() private _showPresets = false;
@@ -414,8 +429,29 @@ export class StratumSectionsEditor extends LitElement {
     this._open = open;
   }
 
+  /** Stan oka sekcji: z rodzica dla rdzeniowych (gdy podany), inaczej section.hidden. */
+  private _visibility(section: RoomSectionConfig): SectionVisibility {
+    const managed = this.coreVisibility && isCoreSectionType(section.type)
+      ? this.coreVisibility[section.type]
+      : undefined;
+    if (managed) return managed;
+    return section.hidden ? 'hidden' : 'visible';
+  }
+
   private _toggleHidden(index: number): void {
-    this._updateAt(index, { hidden: !this.sections[index]?.hidden });
+    const section = this.sections[index];
+    if (!section) return;
+    if (this.coreVisibility && isCoreSectionType(section.type)) {
+      this.dispatchEvent(
+        new CustomEvent('core-section-toggle', {
+          detail: { type: section.type },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      return;
+    }
+    this._updateAt(index, { hidden: !section.hidden });
   }
 
   private _toggleEdit(index: number): void {
@@ -432,7 +468,9 @@ export class StratumSectionsEditor extends LitElement {
           const open = this._open.has(idx);
           const label = section.title ?? SECTION_LABEL[section.type];
           const icon = section.icon ?? SECTION_ICON[section.type];
-          const rowClass = `stratum-row ${!section.hidden ? 'active' : ''} ${section.hidden ? 'section-hidden' : ''}`;
+          const visibility = this._visibility(section);
+          const hidden = visibility === 'hidden';
+          const rowClass = `stratum-row ${!hidden ? 'active' : ''} ${hidden ? 'section-hidden' : ''}`;
           return html`
             <div class=${rowClass}>
               <div class="stratum-row-head">
@@ -440,8 +478,10 @@ export class StratumSectionsEditor extends LitElement {
                   <ha-icon .icon=${icon}></ha-icon>
                 </span>
                 <span class="stratum-row-title">${label}</span>
-                ${section.hidden
+                ${hidden
                   ? html`<span class="stratum-badge ghost">ukryta</span>`
+                  : visibility === 'partial'
+                  ? html`<span class="stratum-badge ghost">częściowo ukryta</span>`
                   : nothing}
                 <div class="stratum-row-actions">
                   <button
@@ -462,11 +502,15 @@ export class StratumSectionsEditor extends LitElement {
                   </button>
                   <button
                     class="stratum-icon-btn"
-                    title=${section.hidden ? 'Pokaż' : 'Ukryj'}
+                    title=${hidden
+                      ? 'Pokaż'
+                      : visibility === 'partial'
+                      ? 'Ukryj oba bloki świateł'
+                      : 'Ukryj'}
                     @click=${() => this._toggleHidden(idx)}
                   >
                     <ha-icon
-                      .icon=${section.hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}
+                      .icon=${hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}
                     ></ha-icon>
                   </button>
                   <button
