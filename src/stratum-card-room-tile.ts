@@ -11,7 +11,7 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { TileDisplayConfig, TileField } from './types.js';
 import { resolveColor } from './colors.js';
-import { resolveSceneImage } from './scene-presets.js';
+import { resolveSceneBackground } from './scene-presets.js';
 import { DEFAULT_FIELDS, type ConditionOverride } from './tile-data.js';
 import { ALARM_ICONS, topAlarmField, withoutBadgeFields } from './row-fields.js';
 
@@ -146,7 +146,8 @@ export class StratumCardRoomTile extends LitElement {
     const borderWidthOvr =
       typeof ovr?.border_width === 'number' ? `${ovr.border_width}px` : undefined;
     const bgColorOvr = resolveColor(ovr?.background_color);
-    const bgImage = resolveSceneImage(cfg.background_image);
+    // Lista warstw z fallbackami dla presetów `stratum:` (scene-photo-url.ts).
+    const bgImage = resolveSceneBackground(cfg.background_image);
 
     const iconPos = cfg.icon_position ?? 'top-left';
     const iconStyle = cfg.icon_style ?? 'bubble';
@@ -183,7 +184,7 @@ export class StratumCardRoomTile extends LitElement {
       opacityOvr !== undefined ? `opacity: ${opacityOvr};` : '',
       iconScaleOvr !== undefined ? `--stratum-room-tile-icon-scale: ${iconScaleOvr};` : '',
       bgImage
-        ? `background-image: url("${bgImage}"); background-size: cover; background-position: center;`
+        ? `background-image: ${bgImage}; background-size: cover; background-position: center;`
         : '',
       this.styleOverride ?? '',
     ];

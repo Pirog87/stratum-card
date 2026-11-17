@@ -7,15 +7,26 @@
 //
 // Użycie: `image: 'stratum:<id>'` w configu — runtime zamienia na data URI.
 
+import {
+  cssImageLayers,
+  photoBaseFromModuleUrl,
+  scenePhotoFile,
+  scenePhotoUrls,
+} from './scene-photo-url.js';
+
 /**
  * Zdjęcia scen jako osobne assety releasu (`sceny-<id>.webp`) — HACS
  * pobiera wszystkie assety do www/community/stratum-card/ (płasko).
  * Trzyma bundle JS małym (CLAUDE.md), zdjęcia ładują się leniwie.
  * Instalacja ręczna (bez HACS): pobierz z releasu stratum-card.js
- * i wszystkie sceny-*.webp do jednego katalogu w www.
+ * i wszystkie sceny-*.webp do jednego katalogu w www (np. /local/) —
+ * adresy liczymy względem bundla, więc zdjęcia znajdą się same.
+ * Fallbacki (HACS, SVG) opisuje scene-photo-url.ts.
  */
+const PHOTO_BASE = photoBaseFromModuleUrl(import.meta.url);
+
 function photoUrl(id: string): string {
-  return `/hacsfiles/stratum-card/sceny-${id}.webp`;
+  return `${PHOTO_BASE}${scenePhotoFile(id)}`;
 }
 
 export interface ScenePreset {
@@ -23,7 +34,7 @@ export interface ScenePreset {
   label: string;
   /** Grafika wektorowa (fallback dla scen bez zdjęcia). */
   svg?: string;
-  /** URL zdjęcia WebP (/hacsfiles/...) — wygrywa nad `svg`. */
+  /** URL zdjęcia WebP (obok bundla) — wygrywa nad `svg`. */
   photo?: string;
 }
 
@@ -391,8 +402,44 @@ export function resolveSceneImage(value: string | undefined): string | undefined
   const preset = SCENE_PRESETS.find((p) => p.id === id);
   if (!preset) return undefined;
   if (preset.photo) return preset.photo;
-  if (preset.svg) return `data:image/svg+xml;utf8,${encodeURIComponent(preset.svg)}`;
+  if (preset.svg) return svgDataUri(preset.svg);
   return undefined;
+}
+
+function svgDataUri(svg: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+// Wynik zależy tylko od wartości z configu, a kodowanie SVG do data URI
+// kosztuje — render kafla scen nie powinien go powtarzać przy każdym hass.
+const backgroundCache = new Map<string, string | undefined>();
+
+/**
+ * Gotowa wartość CSS `background-image` dla grafiki sceny/kafla — z łańcuchem
+ * fallbacków dla presetów ze zdjęciem: obok bundla → /hacsfiles/ → SVG
+ * (o ile scena ma jeszcze wersję wektorową). Dla zwykłego URL-a jedna warstwa.
+ * `resolveSceneImage` zostaje dla miejsc, które potrzebują jednego adresu.
+ */
+export function resolveSceneBackground(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (backgroundCache.has(value)) return backgroundCache.get(value);
+  let result: string | undefined;
+  if (!value.startsWith(PRESET_PREFIX)) {
+    result = cssImageLayers([value]);
+  } else {
+    const id = value.slice(PRESET_PREFIX.length);
+    const preset = SCENE_PRESETS.find((p) => p.id === id);
+    const svg = preset?.svg ?? SCENES[id];
+    if (preset?.photo) {
+      const layers = scenePhotoUrls(id, PHOTO_BASE);
+      if (svg) layers.push(svgDataUri(svg));
+      result = cssImageLayers(layers);
+    } else if (preset && svg) {
+      result = cssImageLayers([svgDataUri(svg)]);
+    }
+  }
+  backgroundCache.set(value, result);
+  return result;
 }
 
 export function presetIdFromValue(value: string | undefined): string | undefined {
