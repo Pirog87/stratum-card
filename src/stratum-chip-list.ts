@@ -792,12 +792,21 @@ export class StratumChipList extends LitElement {
       transition: background 0.12s ease, transform 0.08s ease;
       flex-shrink: 0;
     }
-    .close:hover {
-      background: color-mix(in srgb, var(--error-color, #e53935) 22%, transparent);
-      color: var(--error-color, #e53935);
+    /* Hover tylko przy prawdziwym wskaźniku: na telefonie :hover zostaje po
+       tapnięciu i × wyglądał na „uzbrojony". Bez czerwieni — czerwony w
+       karcie znaczy alarm, a zamknięcie listy niczego nie niszczy;
+       przyciemnienie/rozjaśnienie tła z koloru tekstu działa w obu motywach. */
+    @media (hover: hover) {
+      .close:hover {
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color) 82%,
+          var(--primary-text-color)
+        );
+      }
     }
     .close:active {
-      transform: scale(0.95);
+      transform: scale(0.96);
     }
 
     .tabs {
@@ -888,10 +897,21 @@ export class StratumChipList extends LitElement {
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: transform 0.08s ease;
+      transition: background 0.12s ease, transform 0.08s ease;
     }
-    .crow .bub:hover { transform: scale(1.06); }
-    .crow .bub:active { transform: scale(0.94); }
+    /* Hover = mocniejsze podbarwienie, nie powiększenie: scale(1.06)
+       przesuwał treść i na dotyku zostawał po tapnięciu (CLAUDE.md §3).
+       :active w widełkach 0.96–0.98 — 0.94 było za mocnym skokiem. */
+    @media (hover: hover) {
+      .crow .bub:hover {
+        background: color-mix(
+          in srgb,
+          var(--c, var(--accent, var(--primary-color))) 30%,
+          transparent
+        );
+      }
+    }
+    .crow .bub:active { transform: scale(0.96); }
     .crow .bub ha-icon { --mdc-icon-size: 20px; }
 
     .mid {
@@ -1008,6 +1028,11 @@ export class StratumChipList extends LitElement {
       outline-offset: 2px;
     }
 
+    /* × , zakładki i przycisk zbiorczy nie miały własnego obrysu — zostawał
+       tylko domyślny przeglądarki, inny w każdym silniku. */
+    .close:focus-visible,
+    .tab:focus-visible,
+    .master:focus-visible,
     .toggle:focus-visible,
     .crow .bub:focus-visible,
     .prow:focus-visible {
@@ -1033,12 +1058,14 @@ export class StratumChipList extends LitElement {
       transition: background 0.12s ease, transform 0.1s ease;
       width: 100%;
     }
-    .prow:hover {
-      background: color-mix(
-        in srgb,
-        var(--accent, var(--primary-color)) 8%,
-        var(--secondary-background-color)
-      );
+    @media (hover: hover) {
+      .prow:hover {
+        background: color-mix(
+          in srgb,
+          var(--accent, var(--primary-color)) 8%,
+          var(--secondary-background-color)
+        );
+      }
     }
     .prow:active {
       transform: scale(0.98);
@@ -1160,23 +1187,40 @@ export class StratumChipList extends LitElement {
       background: color-mix(in srgb, var(--error-color, #e53935) 16%, transparent);
       color: var(--error-color, #e53935);
       cursor: pointer;
-      transition: background 0.12s ease;
+      transition: background 0.12s ease, transform 0.08s ease;
     }
-    .master:hover {
-      background: color-mix(in srgb, var(--error-color, #e53935) 26%, transparent);
+    @media (hover: hover) {
+      .master:hover {
+        background: color-mix(in srgb, var(--error-color) 26%, transparent);
+      }
+    }
+    /* Zakładki i przycisk zbiorczy nie dawały żadnego feedbacku dotyku. */
+    .tab:active,
+    .master:active {
+      transform: scale(0.98);
     }
     .master ha-icon { --mdc-icon-size: 18px; }
 
+    /* Furtka ruchu (§4) obejmuje też przyciski — wcześniej ×, bąbel i
+       zakładki dalej skakały pod palcem przy „Usuń animacje". */
     @media (prefers-reduced-motion: reduce) {
       .backdrop,
       .panel,
       .toggle-knob,
       .bri-slider,
-      .prow {
+      .prow,
+      .close,
+      .tab,
+      .crow .bub,
+      .master {
         animation: none;
         transition: none;
       }
-      .prow:active {
+      .prow:active,
+      .close:active,
+      .tab:active,
+      .crow .bub:active,
+      .master:active {
         transform: none;
       }
     }

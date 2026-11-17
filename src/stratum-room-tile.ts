@@ -1333,6 +1333,9 @@ export class StratumRoomTile extends LitElement {
 
   private _onGroupClick = (ev: Event): void => {
     if (this._clickSuppressed()) return;
+    // Klik bez pointerdown (czytnik ekranu, el.click()) też kończy serię
+    // strzałek, zanim przełączy — kolejność komend w HA = kolejność gestów.
+    this._commitKeyDim();
     if (this._customTap(ev)) return;
     this._callService(ev, 'light', 'toggle');
   };
@@ -1362,8 +1365,19 @@ export class StratumRoomTile extends LitElement {
   private _onGroupKey = (ev: KeyboardEvent): void => {
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
+      // Seria strzałek w toku — zatwierdzamy ją PRZED przełączeniem, jak
+      // przy pointerdown. Bez tego timer serii odpalał turn_on z jasnością
+      // ~450 ms po Enterze i cofał świeże „wyłącz" użytkownika.
+      const hadSeries = this._keyDimState !== undefined;
+      this._commitKeyDim();
       // Klawiatura = to samo co tap: override akcji z listy najpierw.
       if (this._customTap(ev)) return;
+      // Przełączenie ma ostatnie słowo — trzymana wartość serii (np. 40%)
+      // nie może wisieć na pasku do 6 s nad zgaszonym światłem.
+      if (hadSeries) {
+        this._clearHold();
+        this._dragPct = undefined;
+      }
       if (!tapPower(this.hass, this.entity)) {
         void this.hass?.callService('light', 'toggle', { entity_id: this.entity });
       }
@@ -2523,7 +2537,7 @@ export class StratumRoomTile extends LitElement {
     .icon-tile:focus-visible,
     .tile-icon-wrap:focus-visible,
     .player-tag:focus-visible {
-      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--primary-color));
       outline-offset: 2px;
     }
 
@@ -2546,7 +2560,8 @@ export class StratumRoomTile extends LitElement {
     }
 
     /* Kolory binarnych z motywu (--stratum-alarm / --stratum-ok delegują do
-       --error-color / --success-color) — Mushroom czy Catppuccin
+       --stratum-chip-leak-color → --error-color / --success-color, definicje
+       w surface-tokens.ts) — Mushroom czy Catppuccin
        przemalowują je razem z resztą dashboardu. */
     .tile.binary.on .tile-icon {
       color: var(--stratum-alarm);
@@ -2930,7 +2945,7 @@ export class StratumRoomTile extends LitElement {
     }
 
     .ambient-icon:focus-visible {
-      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--primary-color));
       outline-offset: 2px;
     }
 
@@ -3221,7 +3236,7 @@ export class StratumRoomTile extends LitElement {
     }
 
     .player-btn:focus-visible {
-      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--primary-color));
       outline-offset: 2px;
     }
 
@@ -3318,7 +3333,7 @@ export class StratumRoomTile extends LitElement {
     }
 
     .player-volume:focus-visible {
-      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--primary-color));
       outline-offset: 2px;
     }
 
@@ -3391,7 +3406,7 @@ export class StratumRoomTile extends LitElement {
     }
 
     .glight:focus-visible {
-      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--primary-color));
       outline-offset: -2px;
     }
 

@@ -456,7 +456,7 @@ export class StratumSceneBar extends LitElement {
     }
 
     .tile:focus-visible {
-      outline: 2px solid var(--stratum-focus, var(--primary-color));
+      outline: 2px solid var(--stratum-focus-ring, var(--primary-color));
       outline-offset: 2px;
     }
 

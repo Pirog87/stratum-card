@@ -538,11 +538,18 @@ export const roomCardStyles = css`
       margin: 6px 0;
     }
 
+    /* overflow-x: auto przycina też w pionie, więc obrys fokusa przycisku
+       (2px + 2px offsetu) był ucięty z każdej strony. 4px zapasu na obrys,
+       z boków i od dołu zjedzone ujemnym marginesem (dół jak dawniej: 2px
+       pod paskiem przewijania). Od góry tylko -2px: nagłówek sekcji ma
+       margin-bottom: -6px i nieprzezroczyste tło, więc pełne -4px chowało
+       górną krawędź obrysu pod nagłówkiem. Przyciski schodzą przez to o 2px. */
     .cover-master {
       display: flex;
       gap: 8px;
       overflow-x: auto;
-      padding-bottom: 2px;
+      padding: 4px;
+      margin: -2px -4px -2px;
     }
 
     .cm-btn {
@@ -887,7 +894,7 @@ export const roomCardStyles = css`
   .media-group-btn:focus-visible,
   .mg-cb:focus-visible,
   .ms-row:focus-visible {
-    outline: 2px solid var(--stratum-focus);
+    outline: 2px solid var(--stratum-focus-ring);
     outline-offset: 2px;
   }
 
