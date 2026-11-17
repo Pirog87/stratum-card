@@ -24,6 +24,15 @@ export const PENDING_TTL_MS = 5000;
 interface Pending {
   want: PowerWant;
   at: number;
+  /**
+   * Czy od zaznaczenia HA pokazał choć raz stan INNY niż oczekiwany. Bez
+   * tego drugi tap w trakcie potwierdzania psuł sprawę: tap 1 = zgaś, tap 2
+   * = zapal, HA wciąż pokazuje „on" sprzed tapu 1 — i wpis „on" od razu
+   * uznawał się za potwierdzony, a spóźnione echo „off" z tapu 1 przestawiało
+   * przełącznik z powrotem. Potwierdzeniem jest dopiero przejście
+   * „inny stan → oczekiwany".
+   */
+  sawOther: boolean;
 }
 
 const pending = new Map<string, Pending>();
@@ -56,23 +65,36 @@ export function markPower(
   ids: readonly string[],
   want: PowerWant,
   now: number = Date.now(),
-): void {
+): Set<string> {
   const all = new Set<string>(ids);
   for (const id of ids) {
     if (!id.startsWith('light.')) continue;
     for (const leaf of expandLightIds(hass, [id])) all.add(leaf);
   }
-  for (const id of all) pending.set(id, { want, at: now });
+  for (const id of [...all]) {
+    const actual = hass?.states?.[id]?.state;
+    // Encja niedostępna nie dostaje stanu w toku — ma wyglądać na martwą,
+    // a nie na działającą lampę, która zaraz się zapali.
+    if (actual === 'unavailable' || actual === undefined) {
+      all.delete(id);
+      continue;
+    }
+    pending.set(id, { want, at: now, sawOther: actual !== want });
+  }
   notify(all);
   // Po wygaśnięciu przerysuj — jeśli HA nie potwierdził, przełącznik ma
   // wrócić do prawdy, a nie wisieć w stanie, którego nie ma.
   setTimeout(() => notify(all), PENDING_TTL_MS + 50);
+  return all;
 }
 
-/** Komenda się nie udała — od razu wracamy do stanu z HA. */
-export function clearPower(ids: readonly string[]): void {
+/**
+ * Komenda się nie udała — od razu wracamy do stanu z HA. Przyjmuje zbiór
+ * zwrócony przez `markPower` (z rozwiniętymi członkami grup).
+ */
+export function clearPower(ids: Iterable<string>): void {
   const all = new Set(ids);
-  for (const id of ids) pending.delete(id);
+  for (const id of all) pending.delete(id);
   notify(all);
 }
 
@@ -85,9 +107,19 @@ export function pendingWant(
   const p = pending.get(id);
   if (!p) return undefined;
   const actual = hass?.states?.[id]?.state;
-  // HA potwierdził albo minął czas: wpis znika. Nie kasujemy na samą zmianę
-  // tożsamości stanu — obiekt grupy zmienia się przy raporcie KAŻDEGO członka.
-  if (now - p.at > PENDING_TTL_MS || actual === p.want) {
+  // Minął czas albo encja padła: wraca prawda z HA. Nie kasujemy na samą
+  // zmianę tożsamości stanu — obiekt grupy zmienia się przy raporcie
+  // KAŻDEGO członka.
+  if (now - p.at > PENDING_TTL_MS || actual === 'unavailable' || actual === undefined) {
+    pending.delete(id);
+    return undefined;
+  }
+  if (actual !== p.want) {
+    p.sawOther = true;
+    return p.want;
+  }
+  // HA pokazuje oczekiwany stan — potwierdzenie tylko po przejściu z innego.
+  if (p.sawOther) {
     pending.delete(id);
     return undefined;
   }
@@ -100,7 +132,22 @@ export function effectiveState(
   id: string,
   now: number = Date.now(),
 ): string | undefined {
-  return pendingWant(hass, id, now) ?? hass?.states?.[id]?.state;
+  const own = pendingWant(hass, id, now);
+  if (own) return own;
+  const raw = hass?.states?.[id];
+  // Grupa świateł: gdy któryś członek czeka na potwierdzenie, stan grupy
+  // wyliczamy z członków — inaczej kafel grupy po głównym włączniku pokoju
+  // świecił „on, 0%" aż do raportu ostatniego członka. Bez członków w toku
+  // zostaje stan z HA (szanuje np. grupy `all: true`).
+  if (id.startsWith('light.') && groupMemberIds(raw)) {
+    const leaves = expandLightIds(hass, [id]);
+    if (leaves.some((l) => pending.has(l))) {
+      return leaves.some((l) => (pendingWant(hass, l, now) ?? hass?.states?.[l]?.state) === 'on')
+        ? 'on'
+        : 'off';
+    }
+  }
+  return raw?.state;
 }
 
 export function isOnEffective(
@@ -159,10 +206,10 @@ export function tapPower(hass: HomeAssistant | undefined, entityId: string): boo
   if (!hass || !TOGGLEABLE.has(domain)) return false;
   const on = isOnEffective(hass, entityId);
   const want: PowerWant = on ? 'off' : 'on';
-  markPower(hass, [entityId], want);
+  const marked = markPower(hass, [entityId], want);
   void Promise.resolve(
     hass.callService(domain, want === 'on' ? 'turn_on' : 'turn_off', {}, { entity_id: entityId }),
-  ).catch(() => clearPower([entityId]));
+  ).catch(() => clearPower(marked));
   return true;
 }
 
@@ -186,27 +233,31 @@ export function toggleRoomLights(
   const now = Date.now();
   const leaves = expandLightIds(hass, ids);
   const scope = leaves.length > 0 ? leaves : [...ids];
-  const lit = scope.filter((id) => {
-    const s = effectiveState(hass, id, now);
-    // `unknown` też gasimy — lepiej wysłać o jedną komendę za dużo niż
+  // Decyzja tym samym kryterium, co wyświetlany stan przełącznika
+  // (`anyLightOn`): inaczej pokój z jedną lampą „unknown" pokazywał
+  // „wyłączone", a tapnięcie gasiło zamiast zapalić.
+  const anyOn = scope.some((id) => isOnEffective(hass, id, now));
+  if (anyOn) {
+    // Gasząc, bierzemy też `unknown` — lepiej o jedną komendę za dużo niż
     // zostawić światło, którego stanu nie znamy.
-    return s === 'on' || s === 'unknown';
-  });
-  if (lit.length > 0) {
+    const lit = scope.filter((id) => {
+      const s = effectiveState(hass, id, now);
+      return s === 'on' || s === 'unknown';
+    });
     if (rememberKey) rememberBeforeOff(rememberKey, hass, ids, now);
     markOff(hass, lit, now);
-    markPower(hass, [...ids, ...lit], 'off', now);
+    const marked = markPower(hass, lit, 'off', now);
     void Promise.resolve(
       hass.callService('light', 'turn_off', {}, { entity_id: lit }),
-    ).catch(() => clearPower([...ids, ...lit]));
+    ).catch(() => clearPower(marked));
     return;
   }
   const targets = scope.filter((id) => hass.states?.[id]?.state !== 'unavailable');
   if (targets.length === 0) return;
-  markPower(hass, [...ids, ...targets], 'on', now);
+  const marked = markPower(hass, targets, 'on', now);
   void Promise.resolve(
     hass.callService('light', 'turn_on', {}, { entity_id: targets }),
-  ).catch(() => clearPower([...ids, ...targets]));
+  ).catch(() => clearPower(marked));
 }
 
 /** Czy cokolwiek z zestawu świeci — z uwzględnieniem stanu w toku. */

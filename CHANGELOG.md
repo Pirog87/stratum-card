@@ -25,7 +25,12 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 - **Lista „Włączone światła" nie ucieka spod palca.** Zgaszona lampa
   zostaje w liście (z przełącznikiem „wyłączone") do jej zamknięcia — dawniej
   wiersz znikał, reszta podjeżdżała i drugi tap trafiał w inną lampę.
-  „Wyłącz wszystkie" gasi tylko to, co świeci.
+  „Wyłącz wszystkie" gasi tylko to, co świeci, a jego licznik pokazuje,
+  ile naprawdę wyłączy. Listy alarmów, ruchu i niedostępnych urządzeń
+  dalej pokazują stan bieżący.
+- Lampa niedostępna nie dostaje stanu „w toku" — dalej wygląda na
+  niedostępną. Kafel grupy świateł reaguje od razu także na główny
+  włącznik pokoju.
 
 ## [1.107.2] — 2026-11-17
 

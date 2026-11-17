@@ -113,3 +113,65 @@ describe('włącznik świateł pokoju', () => {
     expect(effectiveState(hass, 'light.grupa')).toBe('off');
   });
 });
+
+describe('poprawki z przeglądu', () => {
+  it('pokój z jedną lampą „unknown" i resztą zgaszonych: tap zapala, nie gasi', () => {
+    const { hass, calls } = ha([off('light.a'), off('light.b'), entity('light.c', 'unknown')]);
+    const ids = ['light.a', 'light.b', 'light.c'];
+    expect(anyLightOn(hass, ids)).toBe(false);
+    toggleRoomLights(hass, ids, 'k');
+    expect(calls).toEqual([{ service: 'turn_on', ids: ['light.a', 'light.b', 'light.c'] }]);
+  });
+
+  it('gasząc, bierze też lampy „unknown"', () => {
+    const { hass, calls } = ha([on('light.a'), entity('light.c', 'unknown')]);
+    toggleRoomLights(hass, ['light.a', 'light.c']);
+    expect(calls).toEqual([{ service: 'turn_off', ids: ['light.a', 'light.c'] }]);
+  });
+
+  it('niedostępna lampa nie dostaje stanu w toku i wygląda na martwą', () => {
+    const { hass } = ha([off('light.a'), entity('light.x', 'unavailable')]);
+    toggleRoomLights(hass, ['light.a', 'light.x']);
+    expect(effectiveState(hass, 'light.x')).toBe('unavailable');
+    expect(effectiveState(hass, 'light.a')).toBe('on');
+  });
+
+  it('drugi tap w trakcie potwierdzania: spóźnione echo pierwszego nie przestawia przełącznika', () => {
+    const { hass, states } = ha([on('light.a')]);
+    tapPower(hass, 'light.a'); // zgaś
+    tapPower(hass, 'light.a'); // zapal — HA wciąż pokazuje „on" sprzed tapu 1
+    expect(effectiveState(hass, 'light.a')).toBe('on');
+    // Spóźnione echo „off" z tapu 1:
+    states['light.a'] = off('light.a');
+    expect(effectiveState(hass, 'light.a')).toBe('on');
+    // Echo „on" z tapu 2 — potwierdzenie:
+    states['light.a'] = on('light.a');
+    expect(pendingWant(hass, 'light.a')).toBeUndefined();
+    expect(effectiveState(hass, 'light.a')).toBe('on');
+  });
+
+  it('grupa świateł po głównym włączniku pokoju od razu pokazuje „off"', () => {
+    const { hass } = ha([
+      entity('light.grupa', 'on', { entity_id: ['light.a', 'light.b'] }),
+      on('light.a'),
+      on('light.b'),
+    ]);
+    toggleRoomLights(hass, ['light.a', 'light.b']);
+    expect(effectiveState(hass, 'light.grupa')).toBe('off');
+  });
+
+  it('nieudana komenda na grupie czyści też członków', async () => {
+    const states: Record<string, HassEntity> = {
+      'light.grupa': entity('light.grupa', 'on', { entity_id: ['light.a', 'light.b'] }),
+      'light.a': on('light.a'),
+      'light.b': on('light.b'),
+    };
+    const hass = { states, callService: () => Promise.reject(new Error('x')) } as unknown as HomeAssistant;
+    tapPower(hass, 'light.grupa');
+    expect(effectiveState(hass, 'light.a')).toBe('off');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(effectiveState(hass, 'light.a')).toBe('on');
+    expect(effectiveState(hass, 'light.grupa')).toBe('on');
+  });
+});

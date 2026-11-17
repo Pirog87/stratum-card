@@ -120,9 +120,10 @@ export class StratumSceneBar extends LitElement {
    * sygnału klik nie zostawia śladu przez sekundę czy dwie, zanim światła
    * zdążą się przestawić — i użytkownik klika drugi raz.
    */
-  @state() private _ack?: string;
+  @state() private _acks = new Set<string>();
 
-  private _ackTimer?: number;
+  /** Osobny timer na scenę — dwie sceny tapnięte po sobie gasną niezależnie. */
+  private _ackTimers = new Map<string, number>();
 
   /**
    * Sceny „w toku": od tapnięcia, aż światła przestaną się zmieniać
@@ -135,8 +136,9 @@ export class StratumSceneBar extends LitElement {
   private _pendingTimer?: number;
 
   public disconnectedCallback(): void {
-    if (this._ackTimer !== undefined) window.clearTimeout(this._ackTimer);
-    this._ackTimer = undefined;
+    for (const t of this._ackTimers.values()) window.clearTimeout(t);
+    this._ackTimers.clear();
+    this._acks = new Set();
     if (this._pendingTimer !== undefined) window.clearInterval(this._pendingTimer);
     this._pendingTimer = undefined;
     this._pending = new Map();
@@ -165,12 +167,18 @@ export class StratumSceneBar extends LitElement {
 
   private _flashAck(entity?: string): void {
     if (!entity) return;
-    if (this._ackTimer !== undefined) window.clearTimeout(this._ackTimer);
-    this._ack = entity;
-    this._ackTimer = window.setTimeout(() => {
-      this._ack = undefined;
-      this._ackTimer = undefined;
-    }, 900);
+    const prev = this._ackTimers.get(entity);
+    if (prev !== undefined) window.clearTimeout(prev);
+    this._acks = new Set(this._acks).add(entity);
+    this._ackTimers.set(
+      entity,
+      window.setTimeout(() => {
+        this._ackTimers.delete(entity);
+        const next = new Set(this._acks);
+        next.delete(entity);
+        this._acks = next;
+      }, 900),
+    );
   }
 
   private _defaultActivate(scene: SceneConfig): void {
@@ -270,7 +278,7 @@ export class StratumSceneBar extends LitElement {
         class="tile ${hasBackdrop ? 'has-image' : 'no-image'} ${scene.entity &&
         this._pending.has(scene.entity)
           ? 'ack pending'
-          : scene.entity && this._ack === scene.entity
+          : scene.entity && this._acks.has(scene.entity)
           ? 'ack'
           : ''}"
         aria-busy=${scene.entity && this._pending.has(scene.entity) ? 'true' : 'false'}

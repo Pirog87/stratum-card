@@ -27,6 +27,7 @@ import { lightColorOf } from './tile-data.js';
 import { groupMemberIds } from './area-entities.js';
 import { roomLevelFromHass } from './light-dimming.js';
 import {
+  effectiveState,
   effectiveView,
   pendingWant,
   subscribePower,
@@ -511,7 +512,8 @@ export class StratumRoomTile extends LitElement {
   private _state(): HassEntity | undefined {
     const raw = this.hass?.states?.[this.entity];
     if (!raw) return raw;
-    const want = pendingWant(this.hass, this.entity);
+    // Stan „w toku" — własny albo (dla grupy) wyliczony z członków w toku.
+    const want = pendingWant(this.hass, this.entity) ?? effectiveState(this.hass, this.entity);
     if (!want || raw.state === want) return raw;
     let byWant = patchedStates.get(raw);
     if (!byWant) {
