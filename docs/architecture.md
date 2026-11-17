@@ -125,17 +125,33 @@ musimy się dostosować. Ale stabilne od lat.
 
 ---
 
-## ADR-007: Localization — JSON + runtime lookup
+## ADR-007: Localization — słowniki TS + runtime lookup
 
-**Decyzja:** Stringi UI w `src/localize/{pl,en}.json`. Runtime wybiera na
-podstawie `hass.language`.
+**Status:** wdrożone w v1.109.3 (wcześniej JSON-y istniały, ale nic ich nie
+czytało — cały UI był po polsku na sztywno).
 
-**Dlaczego:**
+**Decyzja:** Stringi UI w `src/localize/pl.ts` (baza) i `src/localize/en.ts`.
+Runtime wybiera słownik z `hass.locale.language`, potem `hass.language`:
+`pl*` → polski, każdy inny język → angielski, brak języka → polski.
+Komponenty wołają `localize(hass, 'grupa.klucz', { param })`
+(`src/localize/localize.ts`, czyste funkcje, testy w `tests/localize.test.ts`).
+Podkomponenty bez `hass` dostają `.uiLang=${langOf(hass)}`. Napisy sprzed
+`hass` (katalog kart, błąd `setConfig`, ostrzeżenia w konsoli) biorą język
+z `<html lang>` (`docLanguage()`).
+
+**Dlaczego TS, a nie JSON:**
+- Rollup nie ma pluginu JSON, a dokładanie zależności łamie zasadę „Lit
+  i nic więcej"
+- `en.ts` jest typowany kształtem `pl.ts` — brak klucza po angielsku to błąd
+  kompilacji, nie pusty napis; klucze w `localize()` też są typowane
 - Prostsze niż `i18next` / `lit-translate` dla projektu tej wielkości
-- JSON jest łatwo edytowalny
-- Community może dodawać języki przez PR bez kodu
 
-**Konwencja:** klucze nested (`chips.lights_on`), placeholdery `{count}`.
+**Konwencja:** klucze nested (`chip_list.items`), placeholdery `{count}`,
+`{name}`. Liczba mnoga to obiekt form: PL `{ one, few, many }` (2–4 bez
+12–14 = few), EN `{ one, other }`; wybór przez `Intl.PluralRules`
+z deterministyczną regułą awaryjną. Fragmenty kodu w podpowiedziach edytora
+zapisujemy jako `<…>` — komponent renderuje je jako `<code>` bez innerHTML.
+Nowy język = nowy plik typu `Messages` + wpis w `DICTS` i `langOf`.
 
 ---
 
