@@ -781,12 +781,15 @@ export class StratumRoomTile extends LitElement {
       cancelAnimationFrame(this._dragRaf);
       this._dragRaf = undefined;
     }
-    // Seria strzałek przerwana odłączeniem — jak niepuszczony palec: nic nie
-    // zatwierdzamy (dispose() niżej porzuca gest).
-    if (this._keyDimState) {
-      window.clearTimeout(this._keyDimState.timer);
-      this._keyDimState = undefined;
-    }
+    // Seria strzałek przerwana odłączeniem — zatwierdzamy ją. Każde
+    // naciśnięcie to skończona decyzja (klawisz puszczony), nie palec wciąż
+    // na ekranie. Zwykle i tak już jest zatwierdzona: Chromium przy
+    // usuwaniu sfokusowanego kafla wysyła najpierw blur, a @blur woła
+    // _commitKeyDim (zmierzone: turn_on ~10 ms po remove()). To wywołanie
+    // tutaj obejmuje przeglądarki, które przy odłączeniu blur nie wysyłają
+    // — bez niego wynik zależałby od silnika. Komenda końcowa czekająca na
+    // falę w locie wychodzi w dispose() niżej (flush).
+    this._commitKeyDim();
     this._clearHold();
     this._swipe?.dispose();
     this._swipe = undefined;
@@ -1337,8 +1340,20 @@ export class StratumRoomTile extends LitElement {
     // strzałek, zanim przełączy — kolejność komend w HA = kolejność gestów.
     this._commitKeyDim();
     if (this._customTap(ev)) return;
+    // Przełączenie ma ostatnie słowo — jak w _onGroupKey. Trzymana wartość
+    // (seria strzałek zatwierdzona przez pointerdown albo linijkę wyżej,
+    // świeży gest palcem) nie może wisieć na pasku do 6 s nad światłem,
+    // które tap właśnie zgasił: willUpdate zdejmuje ją tylko, gdy HA
+    // potwierdzi poziom w okolicy trzymanej wartości, a zgaszone = 0.
+    this._dropHeldLevel();
     this._callService(ev, 'light', 'toggle');
   };
+
+  /** Pasek wraca do stanu z HA — porzuca trzymaną wartość końca gestu. */
+  private _dropHeldLevel(): void {
+    this._clearHold();
+    this._dragPct = undefined;
+  }
 
   /** Klik w ikonę kafla = domyślna akcja encji HA (dialog more-info). */
   private _onIconMoreInfo = (ev: Event): void => {
@@ -1368,16 +1383,13 @@ export class StratumRoomTile extends LitElement {
       // Seria strzałek w toku — zatwierdzamy ją PRZED przełączeniem, jak
       // przy pointerdown. Bez tego timer serii odpalał turn_on z jasnością
       // ~450 ms po Enterze i cofał świeże „wyłącz" użytkownika.
-      const hadSeries = this._keyDimState !== undefined;
       this._commitKeyDim();
       // Klawiatura = to samo co tap: override akcji z listy najpierw.
       if (this._customTap(ev)) return;
       // Przełączenie ma ostatnie słowo — trzymana wartość serii (np. 40%)
-      // nie może wisieć na pasku do 6 s nad zgaszonym światłem.
-      if (hadSeries) {
-        this._clearHold();
-        this._dragPct = undefined;
-      }
+      // nie może wisieć na pasku do 6 s nad zgaszonym światłem. Tak samo
+      // jak w _onGroupClick: bez względu na to, kto ją ustawił.
+      this._dropHeldLevel();
       if (!tapPower(this.hass, this.entity)) {
         void this.hass?.callService('light', 'toggle', { entity_id: this.entity });
       }

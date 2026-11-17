@@ -1023,20 +1023,23 @@ export class StratumChipList extends LitElement {
       cursor: pointer;
     }
 
-    .bri-slider:focus-visible {
-      outline: 2px solid var(--c, var(--accent, var(--primary-color)));
-      outline-offset: 2px;
-    }
-
     /* × , zakładki i przycisk zbiorczy nie miały własnego obrysu — zostawał
-       tylko domyślny przeglądarki, inny w każdym silniku. */
+       tylko domyślny przeglądarki, inny w każdym silniku.
+       Kolor obrysu to token fokusa karty, NIE --accent/--c: --accent jest
+       kolorem chipa (na liście alarmu/wycieku czerwony), a --c kolorem
+       żarówki — obrys fokusa wychodził „alarmowy" albo żółty i ignorował
+       --stratum-focus z motywu. Jeden kolor = jedno znaczenie: fokus.
+       --stratum-focus-ring przychodzi z karty (surface-tokens, :host
+       i ha-card); lista poza kartą bierze --stratum-focus wprost. */
+    .bri-slider:focus-visible,
     .close:focus-visible,
     .tab:focus-visible,
     .master:focus-visible,
     .toggle:focus-visible,
     .crow .bub:focus-visible,
     .prow:focus-visible {
-      outline: 2px solid var(--accent, var(--primary-color));
+      outline: 2px solid
+        var(--stratum-focus-ring, var(--stratum-focus, var(--primary-color)));
       outline-offset: 2px;
     }
 
