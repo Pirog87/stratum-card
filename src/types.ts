@@ -934,7 +934,8 @@ export interface TileDisplayConfig {
   aspect?: string;
   /**
    * Lista pól w sekcji info (kolejność znaczy).
-   * Default `[temperature, lights, motion]`.
+   * Default: `DEFAULT_FIELDS` z tile-data.ts (temperatura, światła, obecność,
+   * okna, drzwi, wyciek, problem); pusta lista = żadnych pól.
    */
   fields?: TileField[];
   /** Kolor akcentu gdy aktywny (lights on / motion). Default amber. */
@@ -972,13 +973,19 @@ export interface TileDisplayConfig {
   show_name?: boolean;
 
   // --- prymitywy stylu (v1.18) ---
-  /** Zaokrąglenie rogów (px). Default 14 dla kafla, 6 dla wiersza w hover. */
+  /**
+   * Prymitywy wymiarów. Domyślne zależą od presetu wiersza — jedno źródło
+   * to `rowStyleDefaults` w display-config-clean.ts (pilnowane testem
+   * zgodności z CSS): fill/pill — pigułka, padding 14, wysokość 85, ikona
+   * 0,4 × wysokość; rail — 8 / 6 / 48 / 20; karty — 14 / 8 / 54 / 20.
+   */
+  /** Zaokrąglenie rogów (px). */
   border_radius?: number;
-  /** Minimalna wysokość kafla (px). Wiersz ignoruje. Default 110. */
+  /** Minimalna wysokość wiersza/kafla (px). */
   min_height?: number;
-  /** Wewnętrzny padding pozycji (px). Default 12 dla kafla, „10 4" dla wiersza. */
+  /** Wewnętrzny padding (px). */
   padding?: number;
-  /** Rozmiar ikony area (px). Default 22 (kafel) / 20 (wiersz). */
+  /** Rozmiar ikony area (px). */
   icon_size?: number;
   /**
    * Przesunięcie samej ikonki w poziomie względem jej tła (px,

@@ -245,7 +245,10 @@ export class StratumSceneEditor extends LitElement {
     if (!merged.hidden) delete merged.hidden;
     if (!merged.label) delete merged.label;
     if (!merged.separator) delete merged.separator;
-    if (!merged.tap_action || (merged.tap_action as TapActionConfig).action === 'none') {
+    // „Nic" (none) to świadomy wybór — kafel sceny ma wtedy nie robić nic.
+    // Usuwamy tylko brak akcji i „default" z ha-form (= zachowanie domyślne).
+    const act = (merged.tap_action as TapActionConfig | undefined)?.action;
+    if (!merged.tap_action || !act || (act as string) === 'default') {
       delete merged.tap_action;
     }
     items[index] = merged;
