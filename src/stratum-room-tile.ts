@@ -26,9 +26,20 @@ import { buildDefaultCustomConfig } from './custom-cards.js';
 import { lightColorOf } from './tile-data.js';
 import { groupMemberIds } from './area-entities.js';
 import { roomLevelFromHass } from './light-dimming.js';
+import {
+  effectiveState,
+  effectiveView,
+  pendingWant,
+  subscribePower,
+  tapPower,
+  touches,
+} from './power-pending.js';
 import { LightSwipe } from './light-swipe.js';
 import { appBrandGradient } from './media-brands.js';
 import { encodeWav } from './audio-wav.js';
+
+/** Stany z podmienionym `state` (w toku) — ta sama tożsamość między renderami. */
+const patchedStates = new WeakMap<HassEntity, Map<string, HassEntity>>();
 
 function domainOf(entityId: string): string {
   return entityId.split('.')[0] ?? '';
@@ -284,7 +295,9 @@ export class StratumRoomTile extends LitElement {
 
   /** Poziom (0..100) ze stanów HA — dla grupy: średnia świecących członków. */
   private _lightRestPct(): number {
-    return roomLevelFromHass(this.hass, [this.entity]) ?? 0;
+    return (
+      roomLevelFromHass(this.hass, [this.entity], (id) => effectiveView(this.hass, id)) ?? 0
+    );
   }
 
   protected willUpdate(changed: PropertyValues): void {
@@ -374,6 +387,8 @@ export class StratumRoomTile extends LitElement {
   }
 
   public disconnectedCallback(): void {
+    this._unsubPower?.();
+    this._unsubPower = undefined;
     if (this._progressTimer !== undefined) {
       window.clearInterval(this._progressTimer);
       this._progressTimer = undefined;
@@ -489,8 +504,39 @@ export class StratumRoomTile extends LitElement {
     return performance.now() - this._dragEndedAt < 350;
   }
 
+  /**
+   * Stan encji do pokazania — z uwzględnieniem stanu „w toku" po tapnięciu
+   * (power-pending.ts). Obiekt podmieniony trzymamy w pamięci podręcznej,
+   * żeby kolejne rendery dostawały tę samą tożsamość.
+   */
   private _state(): HassEntity | undefined {
-    return this.hass?.states?.[this.entity];
+    const raw = this.hass?.states?.[this.entity];
+    if (!raw) return raw;
+    // Stan „w toku" — własny albo (dla grupy) wyliczony z członków w toku.
+    const want = pendingWant(this.hass, this.entity) ?? effectiveState(this.hass, this.entity);
+    if (!want || raw.state === want) return raw;
+    let byWant = patchedStates.get(raw);
+    if (!byWant) {
+      byWant = new Map();
+      patchedStates.set(raw, byWant);
+    }
+    let patched = byWant.get(want);
+    if (!patched) {
+      patched = { ...raw, state: want };
+      byWant.set(want, patched);
+    }
+    return patched;
+  }
+
+  private _unsubPower?: () => void;
+
+  public connectedCallback(): void {
+    super.connectedCallback();
+    // Przerysuj od razu po tapnięciu (własnym albo głównego włącznika) —
+    // ale tylko kafel, którego encji / członków grupy to dotyczy.
+    this._unsubPower = subscribePower((ids) => {
+      if (touches(this.hass, this.entity, ids)) this.requestUpdate();
+    });
   }
 
   private _callService(
@@ -501,6 +547,11 @@ export class StratumRoomTile extends LitElement {
   ): void {
     ev.stopPropagation();
     ev.preventDefault();
+    // Przełączniki: jawne włącz/wyłącz ze stanu, który widać (także „w
+    // toku"), zamiast `toggle` — drugi tap w trakcie nie odwraca akcji.
+    if (service === 'toggle' && Object.keys(data).length === 0) {
+      if (tapPower(this.hass, this.entity)) return;
+    }
     void this.hass?.callService(domain, service, {
       entity_id: this.entity,
       ...data,
@@ -844,7 +895,9 @@ export class StratumRoomTile extends LitElement {
   private _onGroupKey = (ev: KeyboardEvent): void => {
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
-      void this.hass?.callService('light', 'toggle', { entity_id: this.entity });
+      if (!tapPower(this.hass, this.entity)) {
+        void this.hass?.callService('light', 'toggle', { entity_id: this.entity });
+      }
     }
   };
 

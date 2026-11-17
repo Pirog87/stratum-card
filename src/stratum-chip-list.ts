@@ -10,11 +10,26 @@
 //
 // Zamykany: klik w backdrop, ×, Escape, Android wstecz.
 
-import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  type PropertyValues,
+  type TemplateResult,
+  nothing,
+} from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { ChipConfig, HomeAssistant } from './types.js';
 import { ago } from './chip-defaults.js';
 import { AgoTicker } from './ago-ticker.js';
+import {
+  clearPower,
+  isOnEffective,
+  markPower,
+  subscribePower,
+  tapPower,
+} from './power-pending.js';
 import { ALARM_CLASS_LABELS } from './chip-list-helpers.js';
 import { lightColorOf } from './tile-data.js';
 
@@ -70,14 +85,60 @@ export class StratumChipList extends LitElement {
     }
   };
 
+  private _unsubPower?: () => void;
+
   public connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener('keydown', this._onKeydown);
+    this._unsubPower = subscribePower((ids) => {
+      if (this._shown.some((id) => ids.has(id))) this.requestUpdate();
+    });
   }
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener('keydown', this._onKeydown);
+    this._unsubPower?.();
+    this._unsubPower = undefined;
+  }
+
+  /**
+   * Wiersze listy — „przypięte" na czas otwarcia. Rodzic podaje świeżą listę
+   * aktywnych encji przy każdym renderze; dawniej wiersz znikał zaraz po
+   * zgaszeniu lampy, wiersze niżej podjeżdżały o wysokość wiersza i drugi
+   * tap trafiał w przełącznik INNEJ lampy. Teraz wiersz zostaje (pokazuje
+   * „wyłączone"), a nowe aktywne encje dopisujemy na końcu — nic nie
+   * przesuwa się pod palcem. Lista odświeża się przy następnym otwarciu.
+   */
+  private _shown: string[] = [];
+
+  private _shownChip?: ChipConfig;
+
+  private _pinnable(): boolean {
+    if (this.showClassBadge) return false;
+    const ids = this.entityIds;
+    if (this.chip?.type === 'lights') return true;
+    return ids.length > 0 && ids.every((id) => this._canControl(id.split('.')[0] ?? ''));
+  }
+
+  protected willUpdate(changed: PropertyValues): void {
+    if (!changed.has('entityIds') && !changed.has('chip')) return;
+    // Przypinamy tylko listy, w których coś się przełącza. Lista alarmów,
+    // ruchu czy niedostępnych ma pokazywać, co dzieje się TERAZ — wiersz
+    // wyłączonego alarmu nie ma tam czego szukać.
+    if (!this._pinnable()) {
+      this._shownChip = this.chip;
+      this._shown = [...this.entityIds];
+      return;
+    }
+    if (this.chip !== this._shownChip) {
+      this._shownChip = this.chip;
+      this._shown = [...this.entityIds];
+      return;
+    }
+    const known = new Set(this._shown);
+    const added = this.entityIds.filter((id) => !known.has(id));
+    if (added.length > 0) this._shown = [...this._shown, ...added];
   }
 
   private _areaOf(id: string): { key: string; name: string } {
@@ -93,7 +154,7 @@ export class StratumChipList extends LitElement {
   /** Grupy encji wg area — do zakładek. */
   private _groupByArea(): AreaGroup[] {
     const groups = new Map<string, AreaGroup>();
-    for (const id of this.entityIds) {
+    for (const id of this._shown) {
       const { key, name } = this._areaOf(id);
       if (!groups.has(key)) {
         groups.set(key, { area_id: key, area_name: name, entity_ids: [] });
@@ -130,7 +191,14 @@ export class StratumChipList extends LitElement {
     for (const [domain, list] of byDomain) {
       if (!this._canControl(domain)) continue;
       const service = domain === 'cover' ? 'close_cover' : 'turn_off';
-      void this.hass.callService(domain, service, { entity_id: list });
+      // Tylko to, co faktycznie włączone — bez komend do już zgaszonych.
+      const targets =
+        domain === 'cover' ? list : list.filter((id) => isOnEffective(this.hass, id));
+      if (targets.length === 0) continue;
+      if (domain !== 'cover') markPower(this.hass, targets, 'off');
+      void Promise.resolve(
+        this.hass.callService(domain, service, {}, { entity_id: targets }),
+      ).catch(() => clearPower(targets));
     }
   }
 
@@ -139,7 +207,7 @@ export class StratumChipList extends LitElement {
     return ids.some((id) => {
       const domain = id.split('.')[0] ?? '';
       if (!this._canControl(domain)) return false;
-      return this.hass?.states?.[id]?.state === 'on';
+      return isOnEffective(this.hass, id);
     });
   }
 
@@ -147,6 +215,9 @@ export class StratumChipList extends LitElement {
     if (!this.hass) return;
     const domain = entity_id.split('.')[0] ?? '';
     if (!this._canControl(domain)) return;
+    // Jawne włącz/wyłącz ze stanu, który widać — drugi tap w trakcie nie
+    // odwraca akcji, a przełącznik przestawia się od razu (power-pending.ts).
+    if (tapPower(this.hass, entity_id)) return;
     void this.hass.callService(domain, 'toggle', { entity_id });
   }
 
@@ -187,7 +258,11 @@ export class StratumChipList extends LitElement {
 
   protected render(): TemplateResult {
     const groups = this._groupByArea();
-    const total = this.entityIds.length;
+    // Jedna podstawa liczników: ile z widocznych wierszy jest nadal
+    // aktywnych (przypięte, już zgaszone wiersze nie są liczone).
+    const active = new Set(this.entityIds);
+    const isActive = (id: string): boolean => active.has(id);
+    const total = this._shown.filter(isActive).length;
     // Zakładka może wskazywać pokój, który właśnie zniknął z listy
     // (ostatnia encja zgasła) — wtedy wracamy na „Wszystkie".
     const filter =
@@ -199,6 +274,11 @@ export class StratumChipList extends LitElement {
       ? groups.find((g) => g.area_id === filter)!.entity_ids
       : groups.flatMap((g) => g.entity_ids);
     const showFooter = this._hasControllableOn(visible);
+    // Tyle, ile „Wyłącz wszystkie" naprawdę wyłączy.
+    const offCount = visible.filter((id) => {
+      const domain = id.split('.')[0] ?? '';
+      return this._canControl(domain) && (domain === 'cover' || isOnEffective(this.hass, id));
+    }).length;
     return html`
       <div
         class="backdrop"
@@ -241,19 +321,19 @@ export class StratumChipList extends LitElement {
                     class="tab ${filter === g.area_id ? 'on' : ''}"
                     @click=${() => (this._areaFilter = g.area_id)}
                   >
-                    ${g.area_name} · ${g.entity_ids.length}
+                    ${g.area_name} · ${g.entity_ids.filter(isActive).length}
                   </button>`,
                 )}
               </div>`
             : nothing}
 
-          ${total === 0
+          ${this._shown.length === 0
             ? html`<div class="empty">
                 <ha-icon .icon=${'mdi:check-circle-outline'}></ha-icon>
                 <span>Nic aktywnego — wszystko pod kontrolą.</span>
               </div>`
             : html`<div class="list">
-                ${visible.map((id) => this._renderRow(id))}
+                ${repeat(visible, (id) => id, (id) => this._renderRow(id))}
               </div>`}
           ${showFooter
             ? html`<div class="foot">
@@ -262,7 +342,7 @@ export class StratumChipList extends LitElement {
                   @click=${() => this._masterOffAll(visible)}
                 >
                   <ha-icon .icon=${'mdi:power'}></ha-icon>
-                  <span>Wyłącz wszystkie (${visible.length})</span>
+                  <span>Wyłącz wszystkie (${offCount})</span>
                 </button>
               </div>`
             : nothing}
@@ -284,7 +364,7 @@ export class StratumChipList extends LitElement {
     domain: string,
   ): TemplateResult {
     const state = this.hass?.states?.[entity_id];
-    const isOn = state?.state === 'on';
+    const isOn = isOnEffective(this.hass, entity_id);
     const name = this._friendlyName(entity_id);
     const icon =
       (state?.attributes?.icon as string | undefined) ??

@@ -10,6 +10,7 @@ import type { HomeAssistant, SceneBarConfig, SceneConfig } from './types.js';
 import { resolveColor } from './colors.js';
 import { resolveSceneImage } from './scene-presets.js';
 import { runTapAction } from './tap-action.js';
+import { sceneSettled, startScenePending, type ScenePending } from './scene-pending.js';
 import { lightColorOf } from './tile-data.js';
 import {
   buildGradient,
@@ -119,24 +120,65 @@ export class StratumSceneBar extends LitElement {
    * sygnału klik nie zostawia śladu przez sekundę czy dwie, zanim światła
    * zdążą się przestawić — i użytkownik klika drugi raz.
    */
-  @state() private _ack?: string;
+  @state() private _acks = new Set<string>();
 
-  private _ackTimer?: number;
+  /** Osobny timer na scenę — dwie sceny tapnięte po sobie gasną niezależnie. */
+  private _ackTimers = new Map<string, number>();
+
+  /**
+   * Sceny „w toku": od tapnięcia, aż światła przestaną się zmieniać
+   * (scene-pending.ts). W tym czasie obwódka stoi, a powtórny tap nie
+   * wysyła sceny drugi raz — każde powtórzenie to kolejne komendy w kolejce
+   * Zigbee i lampy, które jeszcze nie zdążyły, reagowały przez to później.
+   */
+  @state() private _pending = new Map<string, ScenePending>();
+
+  private _pendingTimer?: number;
 
   public disconnectedCallback(): void {
-    if (this._ackTimer !== undefined) window.clearTimeout(this._ackTimer);
-    this._ackTimer = undefined;
+    for (const t of this._ackTimers.values()) window.clearTimeout(t);
+    this._ackTimers.clear();
+    this._acks = new Set();
+    if (this._pendingTimer !== undefined) window.clearInterval(this._pendingTimer);
+    this._pendingTimer = undefined;
+    this._pending = new Map();
     super.disconnectedCallback();
   }
 
+  /** Sprawdza postęp scen w toku (co 200 ms, tylko gdy jakaś trwa). */
+  private _checkPending = (): void => {
+    const now = Date.now();
+    let changed = false;
+    const next = new Map(this._pending);
+    for (const [entity, p] of next) {
+      if (sceneSettled(p, this.hass, now)) {
+        next.delete(entity);
+        changed = true;
+        // Zakończenie: ta sama obwódka gaśnie płynnie (dawny błysk).
+        this._flashAck(entity);
+      }
+    }
+    if (changed) this._pending = next;
+    if (next.size === 0 && this._pendingTimer !== undefined) {
+      window.clearInterval(this._pendingTimer);
+      this._pendingTimer = undefined;
+    }
+  };
+
   private _flashAck(entity?: string): void {
     if (!entity) return;
-    if (this._ackTimer !== undefined) window.clearTimeout(this._ackTimer);
-    this._ack = entity;
-    this._ackTimer = window.setTimeout(() => {
-      this._ack = undefined;
-      this._ackTimer = undefined;
-    }, 900);
+    const prev = this._ackTimers.get(entity);
+    if (prev !== undefined) window.clearTimeout(prev);
+    this._acks = new Set(this._acks).add(entity);
+    this._ackTimers.set(
+      entity,
+      window.setTimeout(() => {
+        this._ackTimers.delete(entity);
+        const next = new Set(this._acks);
+        next.delete(entity);
+        this._acks = next;
+      }, 900),
+    );
   }
 
   private _defaultActivate(scene: SceneConfig): void {
@@ -150,10 +192,21 @@ export class StratumSceneBar extends LitElement {
   }
 
   private _onTap(scene: SceneConfig): void {
-    this._flashAck(scene.entity);
     if (scene.tap_action) {
+      this._flashAck(scene.entity);
       void runTapAction(this.hass, scene.tap_action, { source: this });
       return;
+    }
+    const entity = scene.entity;
+    // Scena już się wykonuje — drugi tap tylko potwierdza, nie wysyła.
+    if (entity && this._pending.has(entity)) return;
+    if (entity && entity.startsWith('scene.')) {
+      const next = new Map(this._pending);
+      next.set(entity, startScenePending(this.hass, entity, Date.now()));
+      this._pending = next;
+      this._pendingTimer ??= window.setInterval(this._checkPending, 200);
+    } else {
+      this._flashAck(entity);
     }
     this._defaultActivate(scene);
   }
@@ -223,9 +276,12 @@ export class StratumSceneBar extends LitElement {
     return html`
       <button
         class="tile ${hasBackdrop ? 'has-image' : 'no-image'} ${scene.entity &&
-        this._ack === scene.entity
+        this._pending.has(scene.entity)
+          ? 'ack pending'
+          : scene.entity && this._acks.has(scene.entity)
           ? 'ack'
           : ''}"
+        aria-busy=${scene.entity && this._pending.has(scene.entity) ? 'true' : 'false'}
         part="scene"
         style=${style}
         title=${name}
@@ -368,6 +424,19 @@ export class StratumSceneBar extends LitElement {
       animation: stratum-scene-ack 0.9s ease-out forwards;
     }
 
+    /* Scena w toku: obwódka stoi bez gaśnięcia, dopóki lampy się zmieniają
+       (bez pulsowania — puls w tej karcie znaczy alarm). Po dojechaniu klasa
+       pending znika i obwódka gaśnie zwykłą animacją potwierdzenia. */
+    .tile.ack.pending::before {
+      animation: none;
+      opacity: 1;
+    }
+
+    .tile:active {
+      transform: scale(0.97);
+      transition-duration: 80ms;
+    }
+
     @keyframes stratum-scene-ack {
       from {
         opacity: 1;
@@ -383,7 +452,8 @@ export class StratumSceneBar extends LitElement {
       .tile.ack::before {
         animation: none;
       }
-      .tile:hover {
+      .tile:hover,
+      .tile:active {
         transform: none;
       }
     }

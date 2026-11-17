@@ -49,6 +49,7 @@ import {
   watchedStateChanged,
 } from './hass-watch.js';
 import { AgoTicker } from './ago-ticker.js';
+import { anyLightOn, subscribePower, toggleRoomLights } from './power-pending.js';
 import { runTapAction } from './tap-action.js';
 import {
   autoRoomChips,
@@ -135,13 +136,18 @@ export class StratumRoomCard extends LitElement {
     // popup dowiadywał się o nich przy okazji — bo karta piętra i tak
     // renderowała go bez przerwy. Z bramką musi nasłuchiwać sam.
     this._unsubRegistry = subscribeRegistry(() => this.requestUpdate());
+    this._unsubPower = subscribePower(() => this.requestUpdate());
   }
+
+  private _unsubPower?: () => void;
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     this._templates.destroy();
     this._unsubRegistry?.();
     this._unsubRegistry = undefined;
+    this._unsubPower?.();
+    this._unsubPower = undefined;
   }
 
   /** Encje, które popup pokazuje — przeliczane tylko po zmianie rejestru/configu. */
@@ -696,6 +702,18 @@ export class StratumRoomCard extends LitElement {
    * nic nie świeci → włącz wszystko. Działa na encjach bezpośrednich
    * (bez pomocników-grup — unikamy podwójnych wywołań).
    */
+  /**
+   * Klucz pamięci suwaka wiersza (light-swipe) dla tej strefy — taki sam,
+   * jaki wylicza karta piętra dla wiersza bez jawnej listy świateł. Dla
+   * wiersza z `field_entities.lights` klucz jest inny i pamięć się nie
+   * zapisze — wtedy suwak po prostu nie ma czego przywracać (bezpiecznie).
+   */
+  private _swipeKeyFor(areaId?: string): string | undefined {
+    if (!this._config) return undefined;
+    if (areaId) return areaId;
+    return [this._config.area_id, ...(this._config.merge_with ?? [])].join('+');
+  }
+
   private _lightPowerIds(areaId?: string): string[] {
     const entries = areaId
       ? getEntitiesInArea(this.hass!, areaId)
@@ -708,7 +726,9 @@ export class StratumRoomCard extends LitElement {
   private _renderLightsPower(areaId?: string): TemplateResult | typeof nothing {
     const ids = this._lightPowerIds(areaId);
     if (ids.length === 0) return nothing;
-    const anyOn = ids.some((id) => this.hass?.states?.[id]?.state === 'on');
+    // Ze stanem „w toku": po tapnięciu przełącznik przestawia się od razu,
+    // a nie dopiero gdy zaraportuje ostatnia z kilkudziesięciu lamp.
+    const anyOn = anyLightOn(this.hass, ids);
     // Wariant E2 z makiety: duży switch z żarówką w gałce.
     return html`
       <button
@@ -720,11 +740,9 @@ export class StratumRoomCard extends LitElement {
           : 'Włącz wszystkie światła w pomieszczeniu'}
         @click=${(ev: Event) => {
           ev.stopPropagation();
-          void this.hass?.callService(
-            'light',
-            anyOn ? 'turn_off' : 'turn_on',
-            { entity_id: ids },
-          );
+          // Gasi tylko świecące; pamięć dla suwaka wiersza pod tym samym
+          // kluczem, którego używa wiersz pokoju bez jawnej listy świateł.
+          toggleRoomLights(this.hass, ids, this._swipeKeyFor(areaId));
         }}
       >
         <span class="knob"><ha-icon .icon=${'mdi:lightbulb'}></ha-icon></span>

@@ -200,9 +200,10 @@ export function roomLevel(lights: OnLights): number | undefined {
 export function roomLevelFromHass(
   hass: HomeAssistant | undefined,
   ids: readonly string[],
+  view: (id: string) => LightView = (id) => viewOf(hass?.states?.[id]),
 ): number | undefined {
   const leaves = expandLightIds(hass, ids);
-  return roomLevel(onLights(leaves, (id) => viewOf(hass?.states?.[id])));
+  return roomLevel(onLights(leaves, view));
 }
 
 /**
