@@ -5,6 +5,8 @@ import {
   chipEntityIds,
   chipMoreInfoEntity,
   chipSupportsList,
+  MASTER_OFF_CLOSE_WINDOW_MS,
+  masterOffVerdict,
 } from '../src/chip-list-helpers.js';
 import type { ChipConfig, HomeAssistant } from '../src/types.js';
 import { entity, entry, makeHass } from './helpers.js';
@@ -268,5 +270,21 @@ describe('alarmEntityIds', () => {
       'binary_sensor.dym',
       'binary_sensor.wyciek',
     ]);
+  });
+});
+
+describe('masterOffVerdict', () => {
+  const shown = ['light.a', 'light.b'];
+  it('bez kliknięcia stopki nic nie robi', () => {
+    expect(masterOffVerdict(shown, [], undefined, 1000)).toBe('idle');
+  });
+  it('czeka, aż wszystkie pokazane zgasną', () => {
+    expect(masterOffVerdict(shown, ['light.b'], 1000, 1500)).toBe('wait');
+  });
+  it('zamyka, gdy nic z pokazanych nie jest aktywne', () => {
+    expect(masterOffVerdict(shown, ['light.zzz'], 1000, 1500)).toBe('close');
+  });
+  it('po oknie czasu nie zamyka — późniejsze zgaśnięcie nie zamyka listy', () => {
+    expect(masterOffVerdict(shown, [], 1000, 1000 + MASTER_OFF_CLOSE_WINDOW_MS + 1)).toBe('idle');
   });
 });

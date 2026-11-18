@@ -266,3 +266,31 @@ export const CHIP_LIST_COLORS: Record<string, string> = {
   battery_low: 'var(--stratum-chip-battery-color, #ff5252)',
   filter: 'var(--primary-color, #ff9b42)',
 };
+
+/**
+ * Ile czekamy po „Wyłącz wszystkie" na potwierdzenie z HA, zanim lista
+ * przestanie się sama zamykać. Grupy Zigbee i mosty potrafią odpowiadać
+ * kilka sekund; dłużej nie trzymamy „uzbrojenia", bo późniejsze zgaśnięcie
+ * (np. automatyką) nie powinno zamykać listy, którą ktoś akurat ogląda.
+ */
+export const MASTER_OFF_CLOSE_WINDOW_MS = 8000;
+
+/**
+ * Czy lista ma się zamknąć po „Wyłącz wszystkie". Wiersze są przypięte na
+ * czas otwarcia (żeby pojedynczy tap nie przesuwał listy pod palcem), więc
+ * po zgaszeniu wszystkiego zostawała ściana wyłączonych wierszy z licznikiem
+ * „0 pozycji" — wyglądało to jak zawieszony widok. Po master-off zadanie
+ * listy jest wykonane: gdy żaden pokazany wiersz nie jest już aktywny,
+ * zamykamy ją. `armedAt` = chwila kliknięcia stopki (undefined = nie klikano).
+ */
+export function masterOffVerdict(
+  shown: readonly string[],
+  active: readonly string[],
+  armedAt: number | undefined,
+  now: number,
+): 'idle' | 'wait' | 'close' {
+  if (armedAt === undefined) return 'idle';
+  if (now - armedAt > MASTER_OFF_CLOSE_WINDOW_MS) return 'idle';
+  const on = new Set(active);
+  return shown.some((id) => on.has(id)) ? 'wait' : 'close';
+}

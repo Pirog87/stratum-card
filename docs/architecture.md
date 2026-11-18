@@ -109,7 +109,7 @@ od najprostszego do najbardziej zaawansowanego:
 
 | Plik | Wejście | Co zawiera | v1.110.0 (surowy / gzip -9) |
 |---|---|---|---|
-| `dist/stratum-card.js` | `src/stratum-card.ts` | obie karty, cały runtime dashboardu, słowniki `pl.ts`/`en.ts` | 339 545 B / 89 113 B |
+| `dist/stratum-card.js` | `src/stratum-card.ts` | obie karty, cały runtime dashboardu, słowniki `pl.ts`/`en.ts` | 340 618 B / 89 329 B |
 | `dist/stratum-card-editors.js` | `src/editors-entry.ts` | wszystkie edytory (`*-editor.ts`), ich słowniki `editor-pl.ts`/`editor-en.ts`, style i helpery tylko-edytorowe — plus własne kopie `lit`, słowników karty `pl.ts`/`en.ts` i wspólnych helperów (`tap-action`, `area-entities`, `tile-data`, `room-sections`, `scene-presets`, `custom-cards`…) | 278 217 B / 69 584 B |
 
 Dla porównania v1.109.3 (jeden plik): 573 094 B / 142 059 B. Dashboard
@@ -272,7 +272,7 @@ Od v1.110.0 (PKG-3, ADR-005) słowniki edytorów jadą w pliku
 Budżet: 1.109.2 → 1.109.3 bundle 482 306 → 573 094 B
 (gzip −9: 121 722 → 142 059 B; build wydanego 502cb62 — CHANGELOG 1.109.3
 podaje 573 151 / 142 073 B z pomiaru sprzed wydania), z czego słowniki
-~65 KB po minifikacji; w v1.110.0 dashboard 339 545 B (gzip −9: 89 113 B).
+~65 KB po minifikacji; w v1.110.0 dashboard 340 618 B (gzip −9: 89 329 B).
 
 > Status: obowiązuje — mechanizm. Decyzję, który język widzi użytkownik,
 > opisuje ADR-009.

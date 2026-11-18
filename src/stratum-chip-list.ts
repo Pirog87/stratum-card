@@ -32,7 +32,11 @@ import {
   subscribePower,
   tapPower,
 } from './power-pending.js';
-import { alarmClassLabel } from './chip-list-helpers.js';
+import {
+  alarmClassLabel,
+  MASTER_OFF_CLOSE_WINDOW_MS,
+  masterOffVerdict,
+} from './chip-list-helpers.js';
 import { localize } from './localize/localize.js';
 import { flushSwipesTouching } from './light-swipe.js';
 import { lightColorOf } from './tile-data.js';
@@ -120,6 +124,9 @@ export class StratumChipList extends LitElement {
     this._releaseEscape = undefined;
     this._unsubPower?.();
     this._unsubPower = undefined;
+    if (this._closeTimer !== undefined) window.clearTimeout(this._closeTimer);
+    this._closeTimer = undefined;
+    this._masterOffAt = undefined;
   }
 
   /**
@@ -269,6 +276,33 @@ export class StratumChipList extends LitElement {
         this.hass.callService(domain, 'turn_off', {}, { entity_id: targets }),
       ).catch(() => clearPower(marked));
     }
+  }
+
+  /** Chwila kliknięcia „Wyłącz wszystkie" — patrz masterOffVerdict. */
+  private _masterOffAt?: number;
+
+  private _closeTimer?: number;
+
+  private _onMasterOff(visible: string[]): void {
+    this._masterOffAll(visible);
+    this._masterOffAt = Date.now();
+    // Bez potwierdzenia z HA w oknie czasu „uzbrojenie" wygasa — render
+    // po oknie gasi je, żeby późniejsze zgaśnięcie nie zamknęło listy.
+    window.setTimeout(() => this.requestUpdate(), MASTER_OFF_CLOSE_WINDOW_MS + 50);
+  }
+
+  protected updated(changed: PropertyValues): void {
+    super.updated(changed);
+    const verdict = masterOffVerdict(this._shown, this.entityIds, this._masterOffAt, Date.now());
+    if (verdict === 'idle') this._masterOffAt = undefined;
+    if (verdict !== 'close' || this._closeTimer !== undefined) return;
+    this._masterOffAt = undefined;
+    // Krótka pauza: przełączniki zdążą się przestawić na oczach
+    // użytkownika — widać, że komenda poszła, zanim lista zniknie.
+    this._closeTimer = window.setTimeout(() => {
+      this._closeTimer = undefined;
+      if (this.isConnected) this._close();
+    }, 450);
   }
 
   /** Przełącznik rolety przestawia się od razu, zanim silnik zgłosi kierunek. */
@@ -462,7 +496,7 @@ export class StratumChipList extends LitElement {
             ? html`<div class="foot">
                 <button
                   class="master"
-                  @click=${() => this._masterOffAll(visible)}
+                  @click=${() => this._onMasterOff(visible)}
                 >
                   <ha-icon .icon=${'mdi:power'}></ha-icon>
                   <span>${localize(this.hass, 'chip_list.off_all', { count: offCount })}</span>
@@ -1029,6 +1063,25 @@ export class StratumChipList extends LitElement {
        wybranym poziomie. */
     .crow:not(.active) .bri-slider {
       opacity: 0.45;
+      /* Wypełnienie zgaszonej lampy neutralne, nie w kolorze świateł —
+         żółty pasek przy wyłączonym przełączniku czytał się jak „świeci". */
+      background: linear-gradient(
+        90deg,
+        var(--secondary-text-color) var(--pct, 0%),
+        color-mix(in srgb, var(--primary-text-color) 22%, transparent) var(--pct, 0%)
+      );
+    }
+
+    /* Ikona zgaszonej lampy szara — ten sam powód: kolor świateł niesie
+       znaczenie „włączone" (CLAUDE.md §1, kolor ma jedno znaczenie). */
+    .crow:not(.active) .bub {
+      background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+      color: var(--secondary-text-color);
+    }
+    @media (hover: hover) {
+      .crow:not(.active) .bub:hover {
+        background: color-mix(in srgb, var(--primary-text-color) 14%, transparent);
+      }
     }
 
     .bri-slider::-webkit-slider-thumb {

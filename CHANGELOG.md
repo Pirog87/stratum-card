@@ -7,8 +7,8 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 ## [1.110.0] — 2026-11-17
 
 Edytory wizualne w osobnym pliku ładowanym na żądanie (PKG-3). Dashboard
-pobiera i parsuje o 41% mniej kodu: `stratum-card.js` 573 094 → 339 545 B
-(gzip −9: 142 059 → 89 113 B). Edytory i ich słowniki
+pobiera i parsuje o 41% mniej kodu: `stratum-card.js` 573 094 → 340 618 B
+(gzip −9: 142 059 → 89 329 B). Edytory i ich słowniki
 (`stratum-card-editors.js`, 278 217 B / 69 584 B gzip) przychodzą dopiero,
 gdy otworzysz edycję karty.
 
@@ -38,6 +38,18 @@ gdy otworzysz edycję karty.
 - `npm run build` czyści `dist/` przed buildem; buduje dwa niezależne pliki
   i zatrzymuje się, gdy edytory trafiłyby do pliku dashboardu albo runtime
   karty do pliku edytorów (plugin `stratum-boundary`).
+
+### Fixed
+- **Lista „Włączone światła" po „Wyłącz wszystkie" wyglądała na
+  zawieszoną:** wiersze są przypięte na czas otwarcia (żeby pojedynczy tap
+  nie przesuwał listy pod palcem), więc po zgaszeniu wszystkiego zostawała
+  ściana wyłączonych lamp z licznikiem „0 pozycji", a ikony i paski nadal
+  świeciły na żółto. Teraz lista zamyka się sama, gdy HA potwierdzi
+  zgaszenie wszystkich pokazanych encji (do 8 s po kliknięciu; bez
+  potwierdzenia zostaje otwarta — widać, co nie zgasło). Pojedyncze
+  zgaszenie lampy listy nie zamyka.
+- Zgaszona lampa w liście ma szarą ikonę i szary pasek jasności — kolor
+  świateł znaczy tylko „włączone".
 
 ### Unchanged
 - Edytory działają i wyglądają tak samo (wszystkie 11, PL/EN, pasek
