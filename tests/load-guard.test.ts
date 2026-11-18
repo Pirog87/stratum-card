@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EDITORS_SENTINEL_TAG,
+  EDITORS_VERSION_KEY,
   SENTINEL_TAG,
   VERSION_KEY,
   consoleBanner,
@@ -89,6 +91,53 @@ describe('installLoadGuard', () => {
     reg.define(SENTINEL_TAG, Ctor);
     const guard = installLoadGuard(reg, {}, '2.0.0');
     expect(guard.activeVersion).toBeUndefined();
+  });
+});
+
+describe('installLoadGuard — plik edytorów (PKG-3)', () => {
+  const opts = { sentinel: EDITORS_SENTINEL_TAG, versionKey: EDITORS_VERSION_KEY };
+
+  it('osobny klucz wersji: edytory nie nadpisują wersji karty', () => {
+    const reg = new FakeRegistry();
+    const store: Record<symbol, unknown> = { [VERSION_KEY]: '1.110.0' };
+    reg.define(SENTINEL_TAG, Ctor);
+    const guard = installLoadGuard(reg, store, '1.110.1', opts);
+    // Karta zarejestrowana, ale wartownikiem edytorów jest ich własny tag.
+    expect(guard.duplicate).toBe(false);
+    expect(store[EDITORS_VERSION_KEY]).toBe('1.110.1');
+    expect(store[VERSION_KEY]).toBe('1.110.0');
+  });
+
+  it('druga ewaluacja edytorów: stratum-* pominięte bez wyjątku, cudze przechodzą', () => {
+    const reg = new FakeRegistry();
+    const store: Record<symbol, unknown> = {};
+    installLoadGuard(reg, store, '1.110.0', opts);
+    reg.define(EDITORS_SENTINEL_TAG, Ctor);
+    reg.define('stratum-chips-editor', Ctor);
+
+    const guard = installLoadGuard(reg, store, '1.110.0', opts);
+    expect(guard.duplicate).toBe(true);
+    expect(guard.activeVersion).toBe('1.110.0');
+    const Other = class {} as unknown as CustomElementConstructor;
+    expect(() => reg.define(EDITORS_SENTINEL_TAG, Other)).not.toThrow();
+    expect(() => reg.define('stratum-chips-editor', Other)).not.toThrow();
+    expect(reg.get('stratum-chips-editor')).toBe(Ctor);
+    reg.define('ha-cos-cudzego', Other);
+    expect(reg.get('ha-cos-cudzego')).toBe(Other);
+    guard.release();
+    guard.release();
+    expect(Object.prototype.hasOwnProperty.call(reg, 'define')).toBe(false);
+    expect(() => reg.define('stratum-chips-editor', Other)).toThrow(/already been used/);
+  });
+
+  it('wartownik karty nie uznaje edytorów za duplikat (domyślne opcje bez zmian)', () => {
+    const reg = new FakeRegistry();
+    reg.define(EDITORS_SENTINEL_TAG, Ctor);
+    const store: Record<symbol, unknown> = {};
+    const guard = installLoadGuard(reg, store, '2.0.0');
+    expect(guard.duplicate).toBe(false);
+    expect(store[VERSION_KEY]).toBe('2.0.0');
+    expect(store[EDITORS_VERSION_KEY]).toBeUndefined();
   });
 });
 

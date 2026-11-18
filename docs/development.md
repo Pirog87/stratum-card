@@ -16,8 +16,15 @@ Wymagane: Node 20+, npm 10+.
 npm run build
 ```
 
-Produkcyjny build (z terser-em) → `dist/stratum-card.js`. Ten plik kopiujesz
-do HA żeby go użyć.
+Produkcyjny build (z terser-em) → dwa pliki w `dist/`:
+
+- `stratum-card.js` — obie karty; to jest zasób Lovelace,
+- `stratum-card-editors.js` — edytory wizualne, które karta dociąga sama
+  (z tego samego katalogu) dopiero przy „Edytuj" (ADR-005).
+
+Oba kopiujesz do HA, **do jednego katalogu**. `npm run build` najpierw
+czyści `dist/`, więc nie zostają tam pozostałości (np. `.map` z watcha) —
+`validate.yml` przepuszcza wyłącznie te dwa pliki.
 
 ## Watch mode (zalecane do dev)
 
@@ -25,8 +32,22 @@ do HA żeby go użyć.
 npm run watch
 ```
 
-Rollup będzie rebuildował przy każdym save do `dist/stratum-card.js`.
-Build watch jest bez terser-a (czytalne + sourcemaps).
+Rollup będzie rebuildował przy każdym save oba pliki (`dist/stratum-card.js`
+i `dist/stratum-card-editors.js`). Build watch jest bez terser-a (czytalne
++ sourcemaps). W dev-buildzie adres edytorów dostaje znacznik czasu
+ładowania strony (`?sv=<wersja>-dev-<znacznik>`), więc po odświeżeniu
+przeglądarka nie poda starych edytorów z cache, choć wersja w
+`package.json` się nie zmieniła.
+
+**Jak karta dobiera plik edytorów do siebie.** Build produkcyjny wstrzykuje
+do obu plików to samo *id builda*: wersję + 8 znaków skrótu źródeł
+(`src/`, `package.json`, `package-lock.json`, `rollup.config.js`,
+`tsconfig.json`), np. `1.110.0.c77785ec`. Karta prosi o
+`stratum-card-editors.js?<query zasobu>&sv=<id>` i używa edytorów tylko
+wtedy, gdy plik edytorów zgłosi to samo id. Zmiana kodu = nowe id = nowy
+adres, także bez podbicia wersji, więc po `npm run build` + kopiowaniu +
+Ctrl+Shift+R edytory nie przychodzą z cache sprzed poprawki. Ten sam kod =
+ten sam adres = cache działa.
 
 ## Podpięcie do Home Assistant
 
@@ -35,15 +56,24 @@ Build watch jest bez terser-a (czytalne + sourcemaps).
 Po każdym buildzie:
 
 ```bash
-cp dist/stratum-card.js /path/to/ha/config/www/stratum-card.js
+cp dist/stratum-card.js dist/stratum-card-editors.js /path/to/ha/config/www/
 ```
 
 W HA raz: *Settings → Dashboards → Resources → Add resource*
 - URL: `/local/stratum-card.js?v=1`
 - Type: `JavaScript Module`
 
-Przy każdej zmianie: zmień `?v=2`, `?v=3` żeby wymusić cache bust.
-Albo Ctrl+Shift+R.
+Po każdym buildzie wystarczy Ctrl+Shift+R: kartę odświeża sam hard
+reload, a adres edytorów zmienia się razem z id builda (wyżej). Uwaga —
+HA serwuje `/local/` z `Cache-Control: max-age` 31 dni, a Ctrl+Shift+R
+omija cache tylko dla plików pobieranych w trakcie ładowania strony.
+Edytory są pobierane później, przy „Edytuj", więc na Ctrl+Shift+R nie
+licz przy samym pliku edytorów: jeśli przeglądarka zapamiętała pod
+bieżącym adresem zły plik (np. edytor otwarty, gdy w `www/` leżała już
+nowa karta, a jeszcze stare edytory), pomoże tylko zmiana `?v=2`, `?v=3`
+w adresie zasobu albo wyczyszczenie cache. Query zasobu (`?v=…`, a u HACS
+`?hacstag=…`) karta przepisuje do adresu edytorów, więc podbicie `?v=`
+odświeża oba pliki. `stratum-card-editors.js` **nie** dodawaj jako zasobu.
 
 ### Opcja B — symlink (szybszy dev loop)
 
@@ -51,7 +81,16 @@ Jeśli masz HA jako docker / HAOS z dostępem do `/config`:
 
 ```bash
 ln -s /path/to/stratum-card/dist/stratum-card.js /path/to/ha/config/www/stratum-card.js
+ln -s /path/to/stratum-card/dist/stratum-card-editors.js /path/to/ha/config/www/stratum-card-editors.js
 ```
+
+Albo jeden symlink na cały katalog (`ln -s /path/to/stratum-card/dist
+/path/to/ha/config/www/stratum`) i zasób `/local/stratum/stratum-card.js` —
+karta szuka edytorów obok siebie, więc podkatalog działa. Zdjęć scen ta
+droga nie załatwia: `dist/` zawiera tylko dwa pliki JS i jest czyszczony
+przy każdym `npm run build` (a `validate.yml` odrzuca w nim cokolwiek
+innego), więc zdjęcia kopiuj z prefiksem `sceny-` do katalogu spoza
+`dist/` (sekcja niżej) albo bierz z instalacji HACS.
 
 Teraz `npm run watch` automatycznie aktualizuje plik w HA. Tylko F5 w
 przeglądarce i widzisz zmiany.
@@ -85,8 +124,8 @@ Jeśli HA jest na innej maszynie (np. raspberry), użyj `rsync`:
 npm run watch
 
 # w drugim — restartuje się w pętli po zmianie
-while inotifywait -e close_write dist/stratum-card.js; do
-  rsync dist/stratum-card.js user@ha-host:/config/www/stratum-card.js
+while inotifywait -e close_write dist/stratum-card.js dist/stratum-card-editors.js; do
+  rsync dist/stratum-card.js dist/stratum-card-editors.js user@ha-host:/config/www/
 done
 ```
 
@@ -160,8 +199,10 @@ Patrz `examples/` w repo.
 2. Wpis w `CHANGELOG.md`.
 3. Merge do `main`. Workflow `release.yml` czyta wersję z `package.json`;
    jeśli tagu `v<wersja>` jeszcze nie ma, odpala typecheck, testy i build,
-   tworzy tag i release z assetami: `stratum-card.js`, `stratum-card.js.gz`
-   i zdjęciami scen `sceny-*.webp`.
+   tworzy tag i release z assetami: `stratum-card.js`, `stratum-card.js.gz`,
+   `stratum-card-editors.js`, `stratum-card-editors.js.gz` i zdjęciami scen
+   `sceny-*.webp`. Każdy `.gz` jest sprawdzany (`gzip -t` + porównanie
+   z `.js`) przed publikacją.
 
 ## Częste problemy
 
@@ -173,3 +214,26 @@ jest jeszcze wstrzyknięty. Zawsze `if (!this.hass) return nothing`.
 
 **Zmiana w TS nie widać w HA** — sprawdź czy `npm run watch` chodzi
 i czy `dist/stratum-card.js` został zaktualizowany (timestamp pliku).
+
+**„Edytor wizualny nie jest obsługiwany" przy edycji karty Stratum** — karta
+nie dostała pliku edytorów; edycja w YAML-u działa, „Zapisz" też. W konsoli
+jest jedno ostrzeżenie `Stratum: edytor wizualny niedostępny (<powód>)`:
+
+- *nie udało się wczytać pliku* — `stratum-card-editors.js` nie leży w tym
+  samym katalogu co `stratum-card.js` (instalacja ręczna, symlink tylko na
+  kartę) albo serwer zwrócił błąd. W zakładce Network widać żądanie
+  `stratum-card-editors.js?…&sv=<id builda>` z błędem. Skopiuj plik,
+  zmień `?v=` w adresie zasobu i odśwież. Karta sama ponawia próbę
+  najwcześniej po 30 s (pod nowym adresem `&retry=<n>`);
+- *plik edytorów pochodzi z innego builda niż karta* — obok nowej karty
+  leży stary plik edytorów (podmieniony tylko jeden plik), przeglądarka ma
+  stary plik edytorów w cache pod bieżącym adresem, albo na stronie są dwie
+  kopie karty z różnych buildów. Podmień oba pliki **i zmień `?v=`
+  w adresie zasobu** (`?v=1` → `?v=2`) — samo Ctrl+Shift+R nie odświeża
+  pliku edytorów, bo ten jest pobierany dopiero przy „Edytuj", a HA trzyma
+  `/local/` w cache 31 dni;
+- *plik ładuje się zbyt długo* — brak odpowiedzi przez 20 s (wolna sieć,
+  uśpiona aplikacja mobilna). Karta nie czeka na tę próbę drugi raz:
+  kolejne „Edytuj" od razu daje YAML, a po 30 s karta pyta o plik ponownie
+  (`&retry=<n>`). Jeśli spóźniony plik jednak dojdzie, następne otwarcie
+  edytora pokaże już wersję wizualną.

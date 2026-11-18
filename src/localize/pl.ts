@@ -140,10 +140,6 @@ export const pl = {
     leak: 'Wyciek',
     leak_detected: 'wykryty',
   },
-  undo: {
-    removed: 'Usunięto: {label}',
-    undo: 'Cofnij',
-  },
   // Teksty kafla encji (`stratum-room-tile`), dawniej src/localize/tile.ts.
   tile: {
     on: 'włączone',
@@ -209,5 +205,17 @@ export const pl = {
       'została pominięta. Usuń zdublowany zasób Lovelace (np. /local/stratum-card.js ' +
       'obok /hacsfiles/stratum-card/stratum-card.js) i odśwież przeglądarkę.',
     unknown_section: 'Nieznany typ sekcji „{type}" — pomijam. Dostępne: {known}.',
+    // Plik edytorów ładowany na żądanie (PKG-3). Karta działa bez niego —
+    // komunikat ma powiedzieć to wprost i dać dwie drogi wyjścia. Samo
+    // Ctrl+Shift+R nie wystarcza przy /local/: plik edytorów pobierany przy
+    // „Edytuj" idzie z cache przeglądarki (HA trzyma /local/ 31 dni), stąd
+    // podbicie ?v= w adresie zasobu.
+    editors_unavailable:
+      'Stratum: edytor wizualny niedostępny ({reason}). Karta działa normalnie — ' +
+      'edytuj ją w YAML albo skopiuj {file} do tego samego katalogu co stratum-card.js, ' +
+      'zmień ?v= w adresie zasobu Lovelace (np. ?v=1 → ?v=2) i odśwież przeglądarkę.',
+    editors_reason_missing: 'nie udało się wczytać pliku',
+    editors_reason_mismatch: 'plik edytorów pochodzi z innego builda niż karta',
+    editors_reason_timeout: 'plik ładuje się zbyt długo',
   },
 };

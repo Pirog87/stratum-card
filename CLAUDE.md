@@ -18,9 +18,14 @@ ma mieć pełną kontrolę nad tym, które metryki się pokazują i jak wygląda
   jako publiczne API stylizacji, `::part()` dla głębszej kustomizacji
 - **Ikony**: MDI przez wbudowany `<ha-icon>` z HA (nie bundlujemy własnej biblioteki)
 - **Testy**: Vitest (`npm test`) — czyste funkcje, bez DOM-u i bez Lita
-- **Dystrybucja**: HACS. Jeden plik `dist/stratum-card.js`, dwa custom elementy
-  (`stratum-card` + `stratum-room-card`) w jednym bundlu. Tag `vX.Y.Z` → GitHub
-  Action buduje i podpina artefakt do release'u; HACS ciągnie asset z release'u.
+- **Dystrybucja**: HACS. Dwa pliki ES: `dist/stratum-card.js` (oba custom
+  elementy `stratum-card` + `stratum-room-card`, jedyny zasób Lovelace) i
+  `dist/stratum-card-editors.js` (edytory, ładowane na żądanie
+  z `getConfigElement()` z tego samego katalogu). Karta nie importuje
+  edytorów, edytory nie importują runtime karty — pilnuje tego plugin
+  `stratum-boundary` w `rollup.config.js` (ADR-005). Tag `vX.Y.Z` → GitHub
+  Action buduje i podpina oba pliki (+ `.gz`) do release'u; HACS ciągnie
+  wszystkie assety z release'u.
 - **Brak zależności runtime poza Lit.** Bundle ma być mały.
 
 ## Zasady kodu
@@ -53,7 +58,8 @@ ma mieć pełną kontrolę nad tym, które metryki się pokazują i jak wygląda
 ## Dev loop
 
 1. `npm run watch` — rollup w trybie watch, rebuild on save do `dist/`
-2. Skopiuj `dist/stratum-card.js` do `/config/www/` w HA (symlink działa szybciej
+2. Skopiuj `dist/stratum-card.js` i `dist/stratum-card-editors.js` do tego
+   samego katalogu w `/config/www/` w HA (symlink działa szybciej
    — patrz `docs/development.md`)
 3. Ctrl+Shift+R w przeglądarce po każdej zmianie
 4. DevTools Console — karta loguje swoją wersję przy starcie
@@ -330,4 +336,5 @@ Bump wersji w `package.json` idzie w tym samym commicie co zmiana.
 Semver. Tag `v0.1.0`, `v0.2.0` etc. Minor bump przy każdym ukończonym
 milestone. Patch gdy bugfix. Major na v1.0 przy stabilnym API.
 
-Release: push taga → GitHub Action buildu + attach `dist/stratum-card.js` jako asset.
+Release: push taga → GitHub Action buildu + attach `dist/stratum-card.js`
+i `dist/stratum-card-editors.js` (oba z `.gz`) jako assety.

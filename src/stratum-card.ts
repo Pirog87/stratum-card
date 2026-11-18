@@ -63,16 +63,17 @@ import { firstTabbable, lastTabbable, type FocusProbe } from './focus-order.js';
 import { subscribePower, swipePowerHook, toggleRoomLights } from './power-pending.js';
 import type { RowBrightnessDetail } from './stratum-card-room-row.js';
 import './stratum-card-chip.js';
-// Edytory importowane statycznie — to NIE jest rozwiązanie PKG-3, tylko stan
-// do decyzji użytkownika. Edytory to ~184 kB / ~43 kB gzip (~36% bundla
-// v1.109.3), które telefon pobiera przy zimnym starcie, choć prawie nigdy nie
-// otwiera edytora. Te bajty da się zdjąć tylko osobnym chunkiem ładowanym
-// przez `import()` w getConfigElement — a to łamie dystrybucję jednym plikiem
-// (ADR-005, krok „Verify single-file output” w validate.yml), więc bez zgody
-// użytkownika zostaje tak. Półśrodki w jednym pliku nie pomagają: przy
-// output.inlineDynamicImports wklejony moduł ewaluuje się od razu, a ręczne
-// zszycie leniwej funkcji oszczędzało 5–8 ms ewaluacji przy 4x CPU (szum).
-import './stratum-card-editor.js';
+// Edytory NIE są importowane (PKG-3, v1.110.0). Leżą w osobnym pliku
+// stratum-card-editors.js, który loadEditor() dociąga dopiero przy „Edytuj"
+// — telefon przy zimnym starcie nie pobiera ani nie parsuje ~41% kodu,
+// którego dashboard nie pokazuje. Osobny samodzielny build, a nie chunk
+// rollupa: chunk importowałby `./stratum-card.js` bez `?hacstag=…` z adresu
+// zasobu HACS, przeglądarka uznałaby to za inny moduł i ewaluowała kartę
+// drugi raz (podwójny define, drugi obserwator hass). Granicę (karta nie
+// importuje edytorów, edytory nie importują runtime karty) pilnuje plugin
+// `stratum-boundary` w rollup.config.js. Uzasadnienie i odrzucone warianty:
+// docs/architecture.md, ADR-005.
+import { loadEditor } from './editor-loader.js';
 import './stratum-card-room-row.js';
 import './stratum-card-room-tile.js';
 import './stratum-chip-list.js';
@@ -523,9 +524,14 @@ export class StratumCard extends LitElement {
     return this._expanded ? 4 : 1;
   }
 
-  /** Powiązuje wizualny editor z kartą — UI dashboardu HA wywoła to przy „Edit". */
-  public static async getConfigElement(): Promise<HTMLElement> {
-    return document.createElement('stratum-card-editor');
+  /**
+   * Powiązuje wizualny editor z kartą — UI dashboardu HA wywoła to przy „Edit".
+   * Edytor przychodzi z osobnego pliku; gdy go brak, `undefined` (nie
+   * odrzucenie!) — HA pokazuje wtedy YAML z działającym „Zapisz"
+   * (uzasadnienie w editor-loader.ts).
+   */
+  public static async getConfigElement(): Promise<HTMLElement | undefined> {
+    return loadEditor('stratum-card-editor');
   }
 
   /** Sensowny default gdy user dodaje kartę przez wizard „Add card". */

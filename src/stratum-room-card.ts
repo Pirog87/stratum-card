@@ -68,9 +68,11 @@ import {
 import { roomCardStyles } from './stratum-room-card-styles.js';
 import { SECTION_ICON, SECTION_LAYOUT, sectionLabel } from './section-defaults.js';
 import { docLanguage, localize } from './localize/localize.js';
+// Edytor nie jest importowany — przychodzi z osobnego pliku na żądanie
+// (PKG-3, ADR-005; patrz komentarz w stratum-card.ts).
+import { loadEditor } from './editor-loader.js';
 import './stratum-card-chip.js';
 import './stratum-chip-list.js';
-import './stratum-room-card-editor.js';
 import './stratum-room-tile.js';
 import './stratum-scene-bar.js';
 
@@ -121,9 +123,9 @@ export class StratumRoomCard extends LitElement {
     return 6;
   }
 
-  /** Powiązuje wizualny editor z kartą. */
-  public static async getConfigElement(): Promise<HTMLElement> {
-    return document.createElement('stratum-room-card-editor');
+  /** Powiązuje wizualny editor z kartą; `undefined` = YAML (editor-loader.ts). */
+  public static async getConfigElement(): Promise<HTMLElement | undefined> {
+    return loadEditor('stratum-room-card-editor');
   }
 
   /** Sensowny default gdy user dodaje kartę przez wizard „Add card". */

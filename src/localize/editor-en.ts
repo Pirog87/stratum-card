@@ -769,5 +769,9 @@ export const editorEn: EditorMessages = {
     custom_badge: 'custom',
     open_room: 'Open room settings',
   },
+  undo: {
+    removed: 'Removed: {label}',
+    undo: 'Undo',
+  },
   // EDITOR_GROUPS
 };

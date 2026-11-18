@@ -99,6 +99,35 @@ Widok detalu pomieszczenia. Header z chipami specyficznymi dla pokoju, sekcje au
 6. Zaakceptuj dodanie resource (albo ręcznie: *Settings → Dashboards → Resources* → URL `/hacsfiles/stratum-card/stratum-card.js`, type `JavaScript Module`)
 7. Ctrl+Shift+R
 
+HACS pobiera wszystkie pliki releasu do jednego katalogu — także
+`stratum-card-editors.js` (edytor wizualny, ładowany dopiero przy „Edytuj")
+i zdjęcia scen. Zasobem Lovelace jest tylko `stratum-card.js`.
+
+## Instalacja ręczna (bez HACS)
+
+1. Z [ostatniego releasu](https://github.com/Pirog87/stratum-card/releases/latest)
+   pobierz `stratum-card.js` **i** `stratum-card-editors.js` (opcjonalnie
+   zdjęcia scen `sceny-*.webp`) i wgraj je **do jednego katalogu**, np.
+   `/config/www/`.
+2. *Settings → Dashboards → Resources → Add resource*: URL
+   `/local/stratum-card.js?v=1`, type `JavaScript Module`. Pliku edytorów
+   **nie** dodawaj jako zasobu — karta dociąga go sama, z tego samego
+   katalogu.
+3. Ctrl+Shift+R.
+
+Bez `stratum-card-editors.js` karta działa normalnie, ale edycja jest tylko
+w YAML-u: HA pokaże „Edytor wizualny nie jest obsługiwany", a konsola
+przeglądarki jedno ostrzeżenie `Stratum: edytor wizualny niedostępny…`.
+
+**Aktualizacja:** podmień oba pliki naraz **i** zmień numer w adresie
+zasobu (`/local/stratum-card.js?v=1` → `?v=2`, przy następnej aktualizacji
+`?v=3` itd.), potem odśwież przeglądarkę. HA każe przeglądarce trzymać
+pliki z `/local/` w cache przez 31 dni, a plik edytorów jest pobierany
+dopiero przy „Edytuj" — Ctrl+Shift+R go nie odświeża. Bez zmiany `?v=`
+przeglądarka zostaje przy starej karcie albo paruje nową kartę ze starymi
+edytorami, a wtedy karta odmawia edytora wizualnego (ostrzeżenie *„plik
+edytorów pochodzi z innego builda niż karta"*) i zostaje YAML.
+
 ## Przykłady
 
 Konkretne konfiguracje YAML w katalogu [`examples/`](examples/):
@@ -143,7 +172,7 @@ npm run build      # jednorazowy
 npm run watch      # rebuild on save
 ```
 
-Plik wyjściowy: `dist/stratum-card.js`. Skopiuj do `/config/www/` swojej instancji HA żeby testować zmiany — razem ze zdjęciami scen (`assets/sceny/<id>.webp` jako `sceny-<id>.webp` w tym samym katalogu), jeśli nie masz instalacji z HACS.
+Pliki wyjściowe: `dist/stratum-card.js` (karta — to jest zasób Lovelace) i `dist/stratum-card-editors.js` (edytory, ładowane na żądanie). Skopiuj **oba** do tego samego katalogu w `/config/www/` swojej instancji HA żeby testować zmiany — razem ze zdjęciami scen (`assets/sceny/<id>.webp` jako `sceny-<id>.webp` w tym samym katalogu), jeśli nie masz instalacji z HACS. Bez pliku edytorów karta działa, ale edytuje się tylko w YAML-u.
 
 Szczegóły dev loopu w [`docs/development.md`](docs/development.md).
 

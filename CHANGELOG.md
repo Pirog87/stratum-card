@@ -4,6 +4,67 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.110.0] — 2026-11-17
+
+Edytory wizualne w osobnym pliku ładowanym na żądanie (PKG-3). Dashboard
+pobiera i parsuje o 41% mniej kodu: `stratum-card.js` 573 094 → 340 618 B
+(gzip −9: 142 059 → 89 329 B). Edytory i ich słowniki
+(`stratum-card-editors.js`, 278 217 B / 69 584 B gzip) przychodzą dopiero,
+gdy otworzysz edycję karty.
+
+### Changed (uwaga przy instalacji ręcznej)
+- **Release ma drugi plik JS: `stratum-card-editors.js` (+ `.gz`).** HACS
+  pobiera go sam, obok `stratum-card.js` — u użytkowników HACS nic się nie
+  zmienia, zasób Lovelace zostaje ten sam. Przy instalacji ręcznej
+  i w dev-loopie skopiuj **oba** pliki do jednego katalogu; zasobem jest
+  tylko `stratum-card.js`. Bez pliku edytorów karta działa, a edycja jest
+  tylko w YAML-u („Edytor wizualny nie jest obsługiwany", „Zapisz" działa)
+  i w konsoli pojawia się jedno ostrzeżenie z powodem.
+- Adres edytorów to katalog karty + jej query (`?hacstag=…` z HACS,
+  `?v=…` z instalacji ręcznej) + `sv=<id builda>` (wersja + skrót źródeł).
+  Po aktualizacji i po każdym przebudowaniu ze zmienionym kodem — także bez
+  podbicia wersji — adres jest nowy, więc przeglądarka nie łączy nowej
+  karty ze starymi edytorami z cache. Edytory z innego builda niż karta nie
+  są używane (YAML + ostrzeżenie).
+- **Instalacja ręczna — aktualizacja:** podmień oba pliki **i** zmień `?v=`
+  w adresie zasobu (`?v=1` → `?v=2`). HA trzyma `/local/` w cache 31 dni,
+  a plik edytorów pobierany przy „Edytuj" nie jest odświeżany przez
+  Ctrl+Shift+R.
+- Gdy plik edytorów nie odpowiada przez 20 s, karta oddaje YAML i nie
+  czeka na tę próbę ponownie — kolejne „Edytuj" nie stoi 20 s na
+  szkielecie, a po 30 s karta pyta o plik jeszcze raz.
+- Napisy paska „Cofnij" (`undo.*`) przeniesione do słownika edytorów
+  (`editor.undo.*`) — w pliku dashboardu nie zostaje żaden tekst edytorów.
+- `npm run build` czyści `dist/` przed buildem; buduje dwa niezależne pliki
+  i zatrzymuje się, gdy edytory trafiłyby do pliku dashboardu albo runtime
+  karty do pliku edytorów (plugin `stratum-boundary`).
+
+### Fixed
+- **Lista „Włączone światła" po „Wyłącz wszystkie" wyglądała na
+  zawieszoną:** wiersze są przypięte na czas otwarcia (żeby pojedynczy tap
+  nie przesuwał listy pod palcem), więc po zgaszeniu wszystkiego zostawała
+  ściana wyłączonych lamp z licznikiem „0 pozycji", a ikony i paski nadal
+  świeciły na żółto. Teraz lista zamyka się sama, gdy HA potwierdzi
+  zgaszenie wszystkich pokazanych encji (do 8 s po kliknięciu; bez
+  potwierdzenia zostaje otwarta — widać, co nie zgasło). Pojedyncze
+  zgaszenie lampy listy nie zamyka.
+- Zgaszona lampa w liście ma szarą ikonę i szary pasek jasności — kolor
+  świateł znaczy tylko „włączone".
+
+### Unchanged
+- Edytory działają i wyglądają tak samo (wszystkie 11, PL/EN, pasek
+  cofania, sub-edytory) — zrzut tekstów identyczny z v1.109.3.
+- Katalog kart („Dodaj kartę") i domyślny config nowej karty nie
+  potrzebują pliku edytorów.
+
+### Docs
+- ADR-005 przepisany: dwa samodzielne pliki ES zamiast jednego, z
+  uzasadnieniem i odrzuconymi wariantami (chunk rollupa = druga instancja
+  karty bez `?hacstag=`). ADR-007 i ADR-010 zaktualizowane.
+- README: sekcja „Instalacja ręczna (bez HACS)" z aktualizacją przez `?v=`.
+  `docs/development.md`: kopiowanie/symlink/rsync obu plików, id builda
+  i cache `/local/`, nowy wpis w „Częstych problemach".
+
 ## [1.109.3] — 2026-11-17
 
 Dostępność, kontrast i porządki z pełnego audytu karty: klawiatura
