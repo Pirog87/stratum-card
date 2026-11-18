@@ -4,6 +4,38 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.111.0] — 2026-11-18
+
+Listy aktywnych (klik w chip: światła, obecność, okna, alarmy, rolety…)
+w nowym, zwartym układzie — wariant E1 + F z makiet.
+
+### Changed
+- **Wąski wiersz (~40 px) zamiast wysokiej karty.** Przy 36 lampach na
+  ekranie mieści się ~14 wierszy zamiast 6.
+- **Pokój raz, nie w każdym wierszu.** Gdy któryś pokój ma 2+ pozycje,
+  lista dzieli się na sekcje z nagłówkiem „Igor · 8" i przyciskiem
+  „Zgaś" (rolety: „Zamknij") dla całego pokoju. Gdy każdy pokój ma jedną
+  pozycję, pokój stoi pogrubiony w wierszu, bez nagłówków. Zakładki
+  pokojów usunięte — sekcje je zastąpiły.
+- **Krótsze nazwy.** Z nazwy encji znika nazwa pokoju („Igor żarówka 8" →
+  „żarówka 8") i słowa wspólne dla całej listy („Czujka obecności
+  Korytarz piętro schody Zajętość" → „Korytarz piętro · schody").
+- **Światła i przełączniki:** tło wiersza to jasność — przeciągnięcie
+  w bok ściemnia, tap w wiersz albo przełącznik po prawej włącza
+  i wyłącza. Suwak ma też obsługę klawiatury (strzałki, Home/End).
+- **Rolety:** tło = stopień otwarcia (przeciągnięcie ustawia pozycję),
+  po prawej przyciski góra/dół; w trakcie jazdy przycisk kierunku
+  zatrzymuje roletę. Stopka listy samych rolet: „Zamknij wszystkie".
+- **Czujki:** po prawej czas od zmiany albo poziom (bateria w %); cały
+  wiersz otwiera szczegóły HA. Kolejność wg rodzaju listy: obecność —
+  najświeższe na górze, okna i drzwi — najdłużej otwarte, alarmy — wg
+  wagi (gaz/CO, dym, wyciek, problem), bateria — od najniższej, światła
+  — alfabetycznie (z liczbami naturalnie: 2 przed 10).
+- Nowe party: `chip-list-section`, `chip-list-section-action`,
+  `chip-list-row`, `chip-list-row-icon`, `chip-list-row-switch`,
+  `chip-list-row-cover-btn` (docs/styling.md). Party `chip-list-popup`
+  bez zmian.
+
 ## [1.110.1] — 2026-11-18
 
 ### Changed
