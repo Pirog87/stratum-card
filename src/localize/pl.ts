@@ -60,6 +60,16 @@ export const pl = {
     all: 'Wszystkie · {count}',
     empty: 'Nic aktywnego — wszystko pod kontrolą.',
     off_all: 'Wyłącz wszystkie ({count})',
+    close_all: 'Zamknij wszystkie ({count})',
+    room_off: 'Zgaś',
+    room_close: 'Zamknij',
+    room_off_aria: 'Wyłącz wszystko w pokoju: {room}',
+    room_close_aria: 'Zamknij wszystko w pokoju: {room}',
+    brightness_aria: 'Jasność: {name}',
+    position_aria: 'Pozycja: {name}',
+    cover_open: 'Otwórz: {name}',
+    cover_close: 'Zamknij: {name}',
+    cover_stop: 'Zatrzymaj: {name}',
     no_room: 'Bez pomieszczenia',
     // Tytuł popupu listy dla typu chipa.
     titles: {

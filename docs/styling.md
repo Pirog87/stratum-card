@@ -361,6 +361,12 @@ elementu przed `::part`:
 | `scene-bar` | `stratum-scene-bar` | cały pasek scen |
 | `scene` | `stratum-scene-bar` | pojedynczy kafel sceny (klasy `photo`, `ack`, `failed`) |
 | `chip-list-popup` | `stratum-chip-list` | tło listy encji chipa |
+| `chip-list-section` | `stratum-chip-list` | nagłówek sekcji pokoju w liście (nazwa · liczba aktywnych); tylko gdy któryś pokój ma 2+ pozycje |
+| `chip-list-section-action` | `stratum-chip-list` | przycisk „Zgaś"/„Zamknij" w nagłówku sekcji |
+| `chip-list-row` | `stratum-chip-list` | wąski wiersz encji (klasy `ctl`/`sens`/`unav`, `on`/`off`, `cover`, `alarm`); tło = poziom przez `--p` |
+| `chip-list-row-icon` | `stratum-chip-list` | ikona wiersza (w wierszu sterowalnym przycisk szczegółów encji) |
+| `chip-list-row-switch` | `stratum-chip-list` | przełącznik włącz/wyłącz w wierszu światła/przełącznika |
+| `chip-list-row-cover-btn` | `stratum-chip-list` | przyciski góra/dół rolety (w ruchu: stop, klasa `stop`) |
 
 Popup pokoju zawiera `stratum-room-card` — jego party (tabela niżej) z
 card-moda karty piętra: `stratum-room-card::part(section)`.
@@ -392,6 +398,12 @@ card-moda karty piętra: `stratum-room-card::part(section)`.
 | `scene-bar`, `scene` | `stratum-scene-bar` | pasek scen sekcji „Sceny" |
 | `chip` | `stratum-card-chip` | chip w headerze pokoju |
 | `chip-list-popup` | `stratum-chip-list` | tło listy encji chipa |
+| `chip-list-section` | `stratum-chip-list` | nagłówek sekcji pokoju w liście (nazwa · liczba aktywnych); tylko gdy któryś pokój ma 2+ pozycje |
+| `chip-list-section-action` | `stratum-chip-list` | przycisk „Zgaś"/„Zamknij" w nagłówku sekcji |
+| `chip-list-row` | `stratum-chip-list` | wąski wiersz encji (klasy `ctl`/`sens`/`unav`, `on`/`off`, `cover`, `alarm`); tło = poziom przez `--p` |
+| `chip-list-row-icon` | `stratum-chip-list` | ikona wiersza (w wierszu sterowalnym przycisk szczegółów encji) |
+| `chip-list-row-switch` | `stratum-chip-list` | przełącznik włącz/wyłącz w wierszu światła/przełącznika |
+| `chip-list-row-cover-btn` | `stratum-chip-list` | przyciski góra/dół rolety (w ruchu: stop, klasa `stop`) |
 
 Przykład dla samodzielnej karty pokoju (card-mod tej karty):
 `stratum-room-tile::part(player-controls) { … }`.
