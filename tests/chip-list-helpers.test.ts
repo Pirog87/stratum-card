@@ -5,8 +5,7 @@ import {
   chipEntityIds,
   chipMoreInfoEntity,
   chipSupportsList,
-  MASTER_OFF_CLOSE_WINDOW_MS,
-  masterOffVerdict,
+  listRowsUpdate,
 } from '../src/chip-list-helpers.js';
 import type { ChipConfig, HomeAssistant } from '../src/types.js';
 import { entity, entry, makeHass } from './helpers.js';
@@ -273,18 +272,20 @@ describe('alarmEntityIds', () => {
   });
 });
 
-describe('masterOffVerdict', () => {
-  const shown = ['light.a', 'light.b'];
-  it('bez kliknięcia stopki nic nie robi', () => {
-    expect(masterOffVerdict(shown, [], undefined, 1000)).toBe('idle');
+describe('listRowsUpdate', () => {
+  it('przypięte: zgaszony wiersz zostaje, nowy dopisany na końcu', () => {
+    expect(listRowsUpdate(['light.a', 'light.b'], ['light.b', 'light.c'], false)).toEqual({
+      shown: ['light.a', 'light.b', 'light.c'],
+      leaving: [],
+    });
   });
-  it('czeka, aż wszystkie pokazane zgasną', () => {
-    expect(masterOffVerdict(shown, ['light.b'], 1000, 1500)).toBe('wait');
+  it('po „Wyłącz wszystkie": zgaszone wychodzą, aktywne zostają', () => {
+    expect(listRowsUpdate(['light.a', 'light.b'], ['light.b'], true)).toEqual({
+      shown: ['light.a', 'light.b'],
+      leaving: ['light.a'],
+    });
   });
-  it('zamyka, gdy nic z pokazanych nie jest aktywne', () => {
-    expect(masterOffVerdict(shown, ['light.zzz'], 1000, 1500)).toBe('close');
-  });
-  it('po oknie czasu nie zamyka — późniejsze zgaśnięcie nie zamyka listy', () => {
-    expect(masterOffVerdict(shown, [], 1000, 1000 + MASTER_OFF_CLOSE_WINDOW_MS + 1)).toBe('idle');
+  it('po „Wyłącz wszystkie": wszystko zgaszone = wszystko wychodzi', () => {
+    expect(listRowsUpdate(['light.a', 'light.b'], [], true).leaving).toEqual(['light.a', 'light.b']);
   });
 });

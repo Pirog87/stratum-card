@@ -34,8 +34,8 @@ import {
 } from './power-pending.js';
 import {
   alarmClassLabel,
-  MASTER_OFF_CLOSE_WINDOW_MS,
-  masterOffVerdict,
+  listRowsUpdate,
+  ROW_LEAVE_MS,
 } from './chip-list-helpers.js';
 import { localize } from './localize/localize.js';
 import { flushSwipesTouching } from './light-swipe.js';
@@ -124,9 +124,9 @@ export class StratumChipList extends LitElement {
     this._releaseEscape = undefined;
     this._unsubPower?.();
     this._unsubPower = undefined;
-    if (this._closeTimer !== undefined) window.clearTimeout(this._closeTimer);
-    this._closeTimer = undefined;
-    this._masterOffAt = undefined;
+    for (const t of this._leaving.values()) window.clearTimeout(t);
+    this._leaving.clear();
+    this._unpinned = false;
   }
 
   /**
@@ -161,11 +161,13 @@ export class StratumChipList extends LitElement {
     if (this.chip !== this._shownChip) {
       this._shownChip = this.chip;
       this._shown = [...this.entityIds];
+      this._unpinned = false;
+      this._syncLeaving([]);
       return;
     }
-    const known = new Set(this._shown);
-    const added = this.entityIds.filter((id) => !known.has(id));
-    if (added.length > 0) this._shown = [...this._shown, ...added];
+    const next = listRowsUpdate(this._shown, this.entityIds, this._unpinned);
+    this._shown = next.shown;
+    this._syncLeaving(next.leaving);
   }
 
   private _areaOf(id: string): { key: string; name: string } {
@@ -278,31 +280,42 @@ export class StratumChipList extends LitElement {
     }
   }
 
-  /** Chwila kliknięcia „Wyłącz wszystkie" — patrz masterOffVerdict. */
-  private _masterOffAt?: number;
+  /**
+   * Po „Wyłącz wszystkie" lista przestaje przypinać wiersze: każda lampa
+   * znika, gdy HA potwierdzi jej zgaszenie, i na końcu zostaje pusta lista
+   * („Nic aktywnego"). Widać, co już zgasło, a co jeszcze nie.
+   */
+  private _unpinned = false;
 
-  private _closeTimer?: number;
+  /** Wiersze w trakcie zwijania → timer usunięcia. */
+  private _leaving = new Map<string, number>();
 
   private _onMasterOff(visible: string[]): void {
+    this._unpinned = true;
     this._masterOffAll(visible);
-    this._masterOffAt = Date.now();
-    // Bez potwierdzenia z HA w oknie czasu „uzbrojenie" wygasa — render
-    // po oknie gasi je, żeby późniejsze zgaśnięcie nie zamknęło listy.
-    window.setTimeout(() => this.requestUpdate(), MASTER_OFF_CLOSE_WINDOW_MS + 50);
   }
 
-  protected updated(changed: PropertyValues): void {
-    super.updated(changed);
-    const verdict = masterOffVerdict(this._shown, this.entityIds, this._masterOffAt, Date.now());
-    if (verdict === 'idle') this._masterOffAt = undefined;
-    if (verdict !== 'close' || this._closeTimer !== undefined) return;
-    this._masterOffAt = undefined;
-    // Krótka pauza: przełączniki zdążą się przestawić na oczach
-    // użytkownika — widać, że komenda poszła, zanim lista zniknie.
-    this._closeTimer = window.setTimeout(() => {
-      this._closeTimer = undefined;
-      if (this.isConnected) this._close();
-    }, 450);
+  private _syncLeaving(leaving: readonly string[]): void {
+    const want = new Set(leaving);
+    // Lampa zapaliła się z powrotem w trakcie zwijania — zostaje.
+    for (const [id, t] of this._leaving) {
+      if (!want.has(id)) {
+        window.clearTimeout(t);
+        this._leaving.delete(id);
+      }
+    }
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    for (const id of leaving) {
+      if (this._leaving.has(id)) continue;
+      this._leaving.set(
+        id,
+        window.setTimeout(() => {
+          this._leaving.delete(id);
+          this._shown = this._shown.filter((x) => x !== id);
+          this.requestUpdate();
+        }, reduce ? 0 : ROW_LEAVE_MS),
+      );
+    }
   }
 
   /** Przełącznik rolety przestawia się od razu, zanim silnik zgłosi kierunek. */
@@ -490,7 +503,13 @@ export class StratumChipList extends LitElement {
                 <span>${localize(this.hass, 'chip_list.empty')}</span>
               </div>`
             : html`<div class="list">
-                ${repeat(visible, (id) => id, (id) => this._renderRow(id))}
+                ${repeat(
+                  visible,
+                  (id) => id,
+                  (id) => html`<div class="row-wrap ${this._leaving.has(id) ? 'leaving' : ''}">
+                    <div class="row-in"><div class="row-pad">${this._renderRow(id)}</div></div>
+                  </div>`,
+                )}
               </div>`}
           ${showFooter
             ? html`<div class="foot">
@@ -918,7 +937,30 @@ export class StratumChipList extends LitElement {
       padding: 12px 16px 14px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+    }
+
+    /* Wiersz w opakowaniu, które umie się zwinąć (grid 1fr → 0fr, ten sam
+       wzór co expander karty). Odstęp między wierszami siedzi w .row-pad,
+       a nie w gap listy — inaczej po zwinięciu wiersza zostawałaby dziura
+       i lista podskakiwała na końcu. */
+    .row-wrap {
+      display: grid;
+      grid-template-rows: 1fr;
+      transition: grid-template-rows 0.26s ease, opacity 0.18s ease;
+    }
+    .row-wrap.leaving {
+      grid-template-rows: 0fr;
+      opacity: 0;
+    }
+    .row-in {
+      min-height: 0;
+    }
+    /* overflow tylko przy zwijaniu — na stałe ciąłby obrys fokusu wiersza. */
+    .row-wrap.leaving .row-in {
+      overflow: hidden;
+    }
+    .row-wrap:not(:last-child) .row-pad {
+      padding-bottom: 10px;
     }
 
     /* --- wiersz sterowalny (światła / przełączniki / rolety) --- */
@@ -1314,6 +1356,7 @@ export class StratumChipList extends LitElement {
     /* Furtka ruchu (§4) obejmuje też przyciski — wcześniej ×, bąbel i
        zakładki dalej skakały pod palcem przy „Usuń animacje". */
     @media (prefers-reduced-motion: reduce) {
+      .row-wrap,
       .backdrop,
       .panel,
       .toggle-knob,

@@ -4,6 +4,17 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.110.1] — 2026-11-18
+
+### Changed
+- **Lista „Włączone światła" po „Wyłącz wszystkie":** zamiast zamykać się
+  sama (1.110.0), lista zostaje otwarta, a każda lampa zwija się z niej
+  w chwili, gdy HA potwierdzi jej zgaszenie — widać, jak gasną po kolei.
+  Na końcu zostaje pusta lista („Nic aktywnego — wszystko pod kontrolą.").
+  Lampa, która nie zgaśnie, zostaje na liście. Pojedynczy tap w przełącznik
+  dalej niczego nie usuwa (wiersze nie przesuwają się pod palcem).
+  Zwijanie ~260 ms, wyłączone przy `prefers-reduced-motion`.
+
 ## [1.110.0] — 2026-11-17
 
 Edytory wizualne w osobnym pliku ładowanym na żądanie (PKG-3). Dashboard
