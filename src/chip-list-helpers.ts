@@ -267,30 +267,27 @@ export const CHIP_LIST_COLORS: Record<string, string> = {
   filter: 'var(--primary-color, #ff9b42)',
 };
 
-/**
- * Ile czekamy po „Wyłącz wszystkie" na potwierdzenie z HA, zanim lista
- * przestanie się sama zamykać. Grupy Zigbee i mosty potrafią odpowiadać
- * kilka sekund; dłużej nie trzymamy „uzbrojenia", bo późniejsze zgaśnięcie
- * (np. automatyką) nie powinno zamykać listy, którą ktoś akurat ogląda.
- */
-export const MASTER_OFF_CLOSE_WINDOW_MS = 8000;
+/** Czas zwijania wiersza, który zgasł po „Wyłącz wszystkie" (ms). */
+export const ROW_LEAVE_MS = 260;
 
 /**
- * Czy lista ma się zamknąć po „Wyłącz wszystkie". Wiersze są przypięte na
- * czas otwarcia (żeby pojedynczy tap nie przesuwał listy pod palcem), więc
- * po zgaszeniu wszystkiego zostawała ściana wyłączonych wierszy z licznikiem
- * „0 pozycji" — wyglądało to jak zawieszony widok. Po master-off zadanie
- * listy jest wykonane: gdy żaden pokazany wiersz nie jest już aktywny,
- * zamykamy ją. `armedAt` = chwila kliknięcia stopki (undefined = nie klikano).
+ * Wiersze listy po zmianie aktywnych encji. Domyślnie wiersze są przypięte
+ * na czas otwarcia: zgaszony wiersz zostaje, żeby pojedynczy tap nie
+ * przesuwał listy pod palcem (drugi tap trafiałby w INNĄ lampę). Po
+ * „Wyłącz wszystkie" (`unpinned`) nikt już nie celuje w pojedyncze wiersze
+ * — wtedy każdy wiersz, który HA potwierdzi jako zgaszony, wychodzi
+ * z listy (`leaving`), aż lista zostanie pusta. Nowe aktywne encje zawsze
+ * dopisujemy na końcu.
  */
-export function masterOffVerdict(
+export function listRowsUpdate(
   shown: readonly string[],
   active: readonly string[],
-  armedAt: number | undefined,
-  now: number,
-): 'idle' | 'wait' | 'close' {
-  if (armedAt === undefined) return 'idle';
-  if (now - armedAt > MASTER_OFF_CLOSE_WINDOW_MS) return 'idle';
+  unpinned: boolean,
+): { shown: string[]; leaving: string[] } {
+  const known = new Set(shown);
+  const added = active.filter((id) => !known.has(id));
+  const next = added.length > 0 ? [...shown, ...added] : [...shown];
+  if (!unpinned) return { shown: next, leaving: [] };
   const on = new Set(active);
-  return shown.some((id) => on.has(id)) ? 'wait' : 'close';
+  return { shown: next, leaving: next.filter((id) => !on.has(id)) };
 }
