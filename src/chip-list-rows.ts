@@ -18,6 +18,38 @@ export function needsSections(areaKeys: readonly string[]): boolean {
   return false;
 }
 
+/** Od ilu wierszy lista z sekcjami otwiera się ze zwiniętymi pokojami. */
+export const FOLD_ROWS_MIN = 9;
+
+/**
+ * Czy sekcje pokojów startują zwinięte. Dopiero gdy pokoi jest kilka,
+ * a wierszy tyle, że nie mieszczą się na ekranie telefonu — wtedy najpierw
+ * chcemy zobaczyć „gdzie się świeci" (i zgasić cały pokój), a nie przewijać
+ * 30 lamp. Krótka lista zostaje rozwinięta: zwijanie pięciu wierszy to
+ * tylko dodatkowy tap.
+ */
+export function sectionsStartCollapsed(groupCount: number, rowCount: number): boolean {
+  return groupCount >= 2 && rowCount >= FOLD_ROWS_MIN;
+}
+
+/**
+ * Kolory kropek w nagłówku zwiniętego pokoju: różne kolory świecenia,
+ * w kolejności wierszy, najwyżej `max`. `undefined` = światło bez
+ * raportowanego koloru (kropka w domyślnym kolorze świateł) — też liczy
+ * się jako jeden „kolor", żeby pokój z samymi takimi lampami miał kropkę.
+ */
+export function sectionDots(
+  colors: readonly (string | undefined)[],
+  max = 3,
+): (string | undefined)[] {
+  const out: (string | undefined)[] = [];
+  for (const c of colors) {
+    if (out.length >= max) break;
+    if (!out.includes(c)) out.push(c);
+  }
+  return out;
+}
+
 const SPACES = /\s+/g;
 // Separator zostający po wycięciu nazwy pokoju („Igor – żarówka", „Igor: lampa").
 const EDGE_PUNCT = /^[\s\-–—:·,|/]+|[\s\-–—:·,|/]+$/g;
