@@ -4,6 +4,21 @@ Wszystkie znaczące zmiany projektu. Format zgodny z
 [Keep a Changelog](https://keepachangelog.com/), wersjonowanie
 [SemVer](https://semver.org/).
 
+## [1.112.0] — 2026-11-26
+
+Lista aktywnych z kilku pokojów (np. „Włączone światła" całego piętra)
+dzieli się na zwijane pokoje — wariant „Całe piętro - pokoje zwinięte"
+z makiety.
+
+### Added
+- **Zwijane sekcje pokojów.** Gdy lista obejmuje kilka pokojów, nagłówek
+  pokoju jest przyciskiem: tap zwija / rozwija jego wiersze. „Zgaś"
+  (rolety: „Zamknij") działa także na zwiniętym pokoju.
+- **Długa lista otwiera się zwinięta.** Od 9 pozycji w co najmniej dwóch
+  pokojach widać najpierw same pokoje: nazwa, liczba aktywnych i kropki
+  w kolorach świecących lamp. Krótsza lista zostaje rozwinięta jak dotąd.
+- Shadow part `chip-list-section-toggle`.
+
 ## [1.111.0] — 2026-11-18
 
 Listy aktywnych (klik w chip: światła, obecność, okna, alarmy, rolety…)

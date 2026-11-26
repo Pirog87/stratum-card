@@ -3,6 +3,8 @@
 // Klik w chip nagłówka otwiera ten panel. Układ „wąskie wiersze" (v1.111):
 // - wiersz 36 px dla każdej encji; pokój jako nagłówek sekcji tylko wtedy,
 //   gdy któryś pokój ma 2+ pozycje — inaczej pogrubiony w wierszu,
+// - przy kilku pokojach sekcje się zwijają; długa lista (całe piętro)
+//   otwiera się zwinięta: pokój, liczba, kropki kolorów, „Zgaś",
 // - nazwa bez pokoju i bez słów wspólnych dla całej listy
 //   („Czujka obecności … Zajętość" → „schody"),
 // - światło/przełącznik: tło = jasność (przeciągnięcie w bok), tap
@@ -42,6 +44,8 @@ import {
   commonWords,
   dragIntent,
   needsSections,
+  sectionDots,
+  sectionsStartCollapsed,
   pctFromX,
   sortModeFor,
   sortRows,
@@ -165,8 +169,32 @@ export class StratumChipList extends LitElement {
     return ids.length > 0 && ids.every((id) => this._canControl(id.split('.')[0] ?? ''));
   }
 
+  /**
+   * Zwijanie sekcji pokojów. Stan domyślny (zwinięte / rozwinięte) ustalamy
+   * raz na otwarcie listy — inaczej zgaszenie paru lamp przekraczałoby próg
+   * i wszystkie sekcje przeskakiwałyby pod palcem. `_flipped` to pokoje,
+   * które użytkownik przestawił względem domyślnego.
+   */
+  private _foldDefault?: boolean;
+
+  private _flipped = new Set<string>();
+
+  private _secOpen(areaId: string): boolean {
+    return this._flipped.has(areaId) !== !(this._foldDefault ?? false);
+  }
+
+  private _toggleSection(areaId: string): void {
+    if (this._flipped.has(areaId)) this._flipped.delete(areaId);
+    else this._flipped.add(areaId);
+    this.requestUpdate();
+  }
+
   protected willUpdate(changed: PropertyValues): void {
     if (!changed.has('entityIds') && !changed.has('chip')) return;
+    if (this.chip !== this._shownChip) {
+      this._foldDefault = undefined;
+      this._flipped.clear();
+    }
     // Przypinamy tylko listy, w których coś się przełącza. Lista alarmów,
     // ruchu czy niedostępnych ma pokazywać, co dzieje się TERAZ — wiersz
     // wyłączonego alarmu nie ma tam czego szukać.
@@ -601,6 +629,12 @@ export class StratumChipList extends LitElement {
     // (każdy pokój ma jedną pozycję) pokój stoi pogrubiony w wierszu.
     const sections = needsSections(this._shown.map((id) => this._areaOf(id).key));
     const visible = sections ? groups.flatMap((g) => sort(g.entity_ids)) : sort(this._shown);
+    // Zwijanie ma sens dopiero przy kilku pokojach — jedyna sekcja zawsze
+    // stoi otwarta i nie udaje przycisku.
+    const foldable = sections && groups.length > 1;
+    if (foldable && this._foldDefault === undefined) {
+      this._foldDefault = sectionsStartCollapsed(groups.length, this._shown.length);
+    }
     // Tyle, ile „Wyłącz wszystkie" naprawdę wyłączy — stopka tylko wtedy.
     const offTargets = this._offTargets(visible);
     const offCount = offTargets.length;
@@ -654,11 +688,10 @@ export class StratumChipList extends LitElement {
                   ? repeat(
                       groups,
                       (g) => g.area_id,
-                      (g) => html`${this._renderSection(g, isActive)}${repeat(
-                        sort(g.entity_ids),
-                        (id) => id,
-                        row,
-                      )}`,
+                      (g) => html`${this._renderSection(g, isActive, foldable)}${!foldable ||
+                      this._secOpen(g.area_id)
+                        ? repeat(sort(g.entity_ids), (id) => id, row)
+                        : nothing}`,
                     )
                   : repeat(visible, (id) => id, row)}
               </div>`}
@@ -682,13 +715,50 @@ export class StratumChipList extends LitElement {
     `;
   }
 
-  /** Nagłówek sekcji pokoju: nazwa · liczba aktywnych + „Zgaś"/„Zamknij". */
-  private _renderSection(g: AreaGroup, isActive: (id: string) => boolean): TemplateResult {
+  /**
+   * Nagłówek sekcji pokoju: nazwa · liczba aktywnych + „Zgaś"/„Zamknij".
+   * Przy kilku pokojach nazwa jest przyciskiem zwijania; zwinięty pokój
+   * pokazuje kropki w kolorach świecących lamp, żeby było widać „co tam
+   * jest" bez rozwijania.
+   */
+  private _renderSection(
+    g: AreaGroup,
+    isActive: (id: string) => boolean,
+    foldable: boolean,
+  ): TemplateResult {
     const targets = this._offTargets(g.entity_ids);
     const covers = targets.length > 0 && targets.every((id) => id.startsWith('cover.'));
-    return html`<div class="sec" part="chip-list-section">
-      <span class="sec-t">${g.area_name}
-        <span class="cnt">· ${g.entity_ids.filter(isActive).length}</span></span>
+    const activeIds = g.entity_ids.filter(isActive);
+    const open = !foldable || this._secOpen(g.area_id);
+    const title = html`<span class="sec-t">${g.area_name}
+      <span class="cnt">· ${activeIds.length}</span></span>`;
+    const dots = open
+      ? []
+      : sectionDots(
+          activeIds
+            .filter((id) => id.startsWith('light.') && this._isOn(id))
+            .map((id) => lightColorOf(this.hass?.states?.[id])),
+        );
+    return html`<div
+      class="sec ${foldable ? 'fold' : ''} ${foldable && open ? 'open' : ''}"
+      part="chip-list-section"
+    >
+      ${foldable
+        ? html`<button
+            class="sec-tog"
+            part="chip-list-section-toggle"
+            aria-expanded=${open ? 'true' : 'false'}
+            @click=${() => this._toggleSection(g.area_id)}
+          >
+            ${title}
+            ${dots.length > 0
+              ? html`<span class="dots" aria-hidden="true"
+                  >${dots.map((c) => html`<i style=${c ? `--k:${c}` : ''}></i>`)}</span
+                >`
+              : nothing}
+            <ha-icon class="chev" .icon=${'mdi:chevron-down'} aria-hidden="true"></ha-icon>
+          </button>`
+        : title}
       ${targets.length > 0
         ? html`<button
             class="sec-btn"

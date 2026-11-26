@@ -362,6 +362,7 @@ elementu przed `::part`:
 | `scene` | `stratum-scene-bar` | pojedynczy kafel sceny (klasy `photo`, `ack`, `failed`) |
 | `chip-list-popup` | `stratum-chip-list` | tło listy encji chipa |
 | `chip-list-section` | `stratum-chip-list` | nagłówek sekcji pokoju w liście (nazwa · liczba aktywnych); tylko gdy któryś pokój ma 2+ pozycje |
+| `chip-list-section-toggle` | `stratum-chip-list` | nazwa pokoju jako przycisk zwijania sekcji (z kropkami kolorów i strzałką); tylko gdy lista ma kilka pokojów |
 | `chip-list-section-action` | `stratum-chip-list` | przycisk „Zgaś"/„Zamknij" w nagłówku sekcji |
 | `chip-list-row` | `stratum-chip-list` | wąski wiersz encji (klasy `ctl`/`sens`/`unav`, `on`/`off`, `cover`, `alarm`); tło = poziom przez `--p` |
 | `chip-list-row-icon` | `stratum-chip-list` | ikona wiersza (w wierszu sterowalnym przycisk szczegółów encji) |
@@ -399,6 +400,7 @@ card-moda karty piętra: `stratum-room-card::part(section)`.
 | `chip` | `stratum-card-chip` | chip w headerze pokoju |
 | `chip-list-popup` | `stratum-chip-list` | tło listy encji chipa |
 | `chip-list-section` | `stratum-chip-list` | nagłówek sekcji pokoju w liście (nazwa · liczba aktywnych); tylko gdy któryś pokój ma 2+ pozycje |
+| `chip-list-section-toggle` | `stratum-chip-list` | nazwa pokoju jako przycisk zwijania sekcji (z kropkami kolorów i strzałką); tylko gdy lista ma kilka pokojów |
 | `chip-list-section-action` | `stratum-chip-list` | przycisk „Zgaś"/„Zamknij" w nagłówku sekcji |
 | `chip-list-row` | `stratum-chip-list` | wąski wiersz encji (klasy `ctl`/`sens`/`unav`, `on`/`off`, `cover`, `alarm`); tło = poziom przez `--p` |
 | `chip-list-row-icon` | `stratum-chip-list` | ikona wiersza (w wierszu sterowalnym przycisk szczegółów encji) |

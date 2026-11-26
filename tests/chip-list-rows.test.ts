@@ -3,6 +3,8 @@ import {
   commonWords,
   dragIntent,
   needsSections,
+  sectionDots,
+  sectionsStartCollapsed,
   pctFromX,
   sortModeFor,
   sortRows,
@@ -16,6 +18,37 @@ describe('needsSections', () => {
   });
   it('pokój z dwiema pozycjami = sekcje', () => {
     expect(needsSections(['igor', 'lenka', 'igor'])).toBe(true);
+  });
+});
+
+describe('sectionsStartCollapsed', () => {
+  it('jeden pokój nigdy nie startuje zwinięty', () => {
+    expect(sectionsStartCollapsed(1, 30)).toBe(false);
+  });
+  it('krótka lista w kilku pokojach zostaje rozwinięta', () => {
+    expect(sectionsStartCollapsed(3, 8)).toBe(false);
+  });
+  it('długa lista w kilku pokojach startuje zwinięta', () => {
+    expect(sectionsStartCollapsed(2, 9)).toBe(true);
+    expect(sectionsStartCollapsed(5, 17)).toBe(true);
+  });
+});
+
+describe('sectionDots', () => {
+  it('różne kolory w kolejności wierszy, bez powtórzeń', () => {
+    expect(sectionDots(['rgb(1, 2, 3)', 'rgb(1, 2, 3)', 'rgb(9, 9, 9)'])).toEqual([
+      'rgb(1, 2, 3)',
+      'rgb(9, 9, 9)',
+    ]);
+  });
+  it('najwyżej trzy kropki', () => {
+    expect(sectionDots(['a', 'b', 'c', 'd'])).toEqual(['a', 'b', 'c']);
+  });
+  it('światło bez koloru daje jedną kropkę domyślną', () => {
+    expect(sectionDots([undefined, undefined, 'a'])).toEqual([undefined, 'a']);
+  });
+  it('pusta lista = brak kropek', () => {
+    expect(sectionDots([])).toEqual([]);
   });
 });
 

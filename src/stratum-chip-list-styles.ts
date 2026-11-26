@@ -241,6 +241,75 @@ export const chipListStyles = css`
       transition: background 0.12s ease, transform 0.08s ease;
     }
 
+    /* Sekcja zwijana (kilka pokojów): nagłówek wygląda jak wiersz listy,
+       bo po zwinięciu JEST wierszem — pokój, liczba, kropki kolorów, „Zgaś".
+       Mikro-etykieta wersalikami zostaje dla listy z jednym pokojem. */
+    .sec.fold {
+      min-height: 44px;
+      box-sizing: border-box;
+      padding: 4px 8px 4px 4px;
+      margin-top: 8px;
+      border-radius: 12px;
+      background: var(--stratum-surface-1, color-mix(in srgb, var(--card-background-color) 96%, var(--primary-text-color)));
+      font-size: 14px;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--primary-text-color);
+    }
+    .sec.fold:first-child {
+      margin-top: 0;
+      padding-top: 4px;
+    }
+    .sec.fold.open {
+      margin-bottom: 8px;
+    }
+    /* min-width: 0 — bez tego długa nazwa pokoju wypycha „Zgaś" poza panel. */
+    .sec-tog {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      padding: 0 4px 0 8px;
+      border: 0;
+      border-radius: 12px;
+      background: none;
+      font: inherit;
+      letter-spacing: inherit;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.12s ease, transform 0.08s ease;
+    }
+    .sec.fold .cnt {
+      color: var(--secondary-text-color);
+    }
+    .dots {
+      display: flex;
+      flex-shrink: 0;
+      padding-left: 4px;
+    }
+    /* Obwódka w kolorze tła nagłówka rozdziela nachodzące na siebie kropki. */
+    .dots i {
+      width: 12px;
+      height: 12px;
+      box-sizing: border-box;
+      margin-left: -4px;
+      border-radius: 999px;
+      border: 2px solid var(--stratum-surface-1, color-mix(in srgb, var(--card-background-color) 96%, var(--primary-text-color)));
+      background: var(--k, var(--stratum-lights, var(--accent, var(--primary-color))));
+    }
+    .chev {
+      --mdc-icon-size: 20px;
+      flex-shrink: 0;
+      color: var(--secondary-text-color);
+      transition: transform 0.2s ease;
+    }
+    .sec.open .chev {
+      transform: rotate(180deg);
+    }
+
     /* --- wąski wiersz (wszystkie rodzaje) --- */
 
     /* Wiersz bez overflow: hidden — obcinałby obrys fokusu przycisków przy
@@ -517,6 +586,9 @@ export const chipListStyles = css`
       .sec-btn:hover {
         background: color-mix(in srgb, var(--primary-text-color) 12%, transparent);
       }
+      .sec-tog:hover {
+        background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+      }
       .r.sens:hover,
       .r.unav:hover {
         background: color-mix(
@@ -537,6 +609,7 @@ export const chipListStyles = css`
     .r.sens:active,
     .r.unav:active,
     .sec-btn:active,
+    .sec-tog:active,
     .master:active {
       transform: scale(0.98);
     }
@@ -548,6 +621,7 @@ export const chipListStyles = css`
     .close:focus-visible,
     .master:focus-visible,
     .sec-btn:focus-visible,
+    .sec-tog:focus-visible,
     button.ic:focus-visible,
     .sw:focus-visible,
     .cb:focus-visible,
@@ -573,6 +647,8 @@ export const chipListStyles = css`
       .cb,
       button.ic,
       .sec-btn,
+      .sec-tog,
+      .chev,
       .r.sens,
       .r.unav,
       .close,
@@ -586,6 +662,7 @@ export const chipListStyles = css`
       .r.sens:active,
       .r.unav:active,
       .sec-btn:active,
+      .sec-tog:active,
       .close:active,
       .master:active {
         transform: none;
